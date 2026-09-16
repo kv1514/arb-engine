@@ -1,0 +1,5 @@
+# Core engine has no third-party dependencies.
+# Optional: authenticated Kalshi trading (request signing)
+cryptography>=42
+# Optional: test runner (the suite also runs under `python -m unittest`)
+pytest>=8

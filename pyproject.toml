@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arb-engine"
+version = "0.1.0"
+description = "Fee-aware arbitrage and fair-value engine for sports prediction markets (Kalshi, Polymarket, Robinhood/Rothera)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "kv1514" }]
+# The core engine is standard-library only so it runs anywhere Python does.
+dependencies = []
+
+[project.optional-dependencies]
+# Needed only for authenticated Kalshi endpoints (RSA-PSS request signing).
+trading = ["cryptography>=42"]
+dev = ["pytest>=8", "cryptography>=42"]
+
+[project.scripts]
+arb-engine = "arb_engine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["arb_engine*"]
+
+[tool.setuptools.package-data]
+arb_engine = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

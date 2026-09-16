@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"><title>Arb Engine</title></head>
+<body>
+  <h1>Arb Engine</h1>
+  <p class="muted">Overlay settings. Fees follow each venue's published schedule (see docs/VENUES.md).</p>
+  <label><input type="checkbox" id="gold"> Robinhood Gold (5% commission constant instead of 10%)</label>
+  <label>Reference size (contracts) <input type="number" id="contracts" min="1" step="1"></label>
+  <label>Target locked margin per $1 <input type="number" id="targetMargin" min="0" max="0.5" step="0.005"></label>
+  <label>Refresh every (seconds) <input type="number" id="refreshSeconds" min="5" step="1"></label>
+  <label>Kalshi fee rounding <select id="kalshiRounding"><option value="cent">cent (conservative)</option><option value="centicent">centicent</option></select></label>
+  <label>Local engine bridge <select id="bridge"><option value="auto">auto (use if running)</option><option value="on">required</option><option value="off">never</option></select></label>
+  <label><input type="checkbox" id="venue_kalshi"> Compare with Kalshi</label>
+  <label><input type="checkbox" id="venue_polymarket"> Compare with Polymarket</label>
+  <button id="save">Save</button> <span id="status" class="muted"></span>
+  <p class="muted small">Informational only. Nothing here places orders.</p>
+  <script src="popup.js"></script>
+</body></html>

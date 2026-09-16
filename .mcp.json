@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kalshi": {
+      "command": "uvx",
+      "args": ["mcp-server-kalshi"],
+      "env": {
+        "KALSHI_ENV": "${KALSHI_ENV:-demo}",
+        "KALSHI_API_KEY": "${KALSHI_API_KEY}",
+        "KALSHI_PRIVATE_KEY_PATH": "${KALSHI_PRIVATE_KEY_PATH}"
+      }
+    }
+  }
+}

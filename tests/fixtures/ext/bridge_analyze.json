@@ -1,0 +1,188 @@
+{
+ "ok": true,
+ "event": {
+  "id": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+  "name": "September 20 Philadelphia vs Tennessee",
+  "sport": "nfl",
+  "url": "https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-philadelphia-vs-tennessee-sep-20-2026/",
+  "key": "nfl:PHI|TEN:2026-09-20"
+ },
+ "analysis": {
+  "event_key": "nfl:PHI|TEN:2026-09-20",
+  "title": "Philadelphia vs Tennessee",
+  "sport": "nfl",
+  "start_time": null,
+  "venues": [
+   "kalshi",
+   "polymarket",
+   "robinhood"
+  ],
+  "outcomes": [
+   {
+    "outcome": "PHI",
+    "label": "Philadelphia",
+    "fair": 0.7551406174538886,
+    "venues": [
+     {
+      "venue": "polymarket",
+      "market_id": "109209997828071213817969462717223275528051682448664568373712884721472147278327",
+      "ask": 0.76,
+      "bid": 0.75,
+      "ask_size": null,
+      "fee_per_contract": 0.00912,
+      "all_in": 0.76912,
+      "max_buy_price": 0.73,
+      "url": "https://polymarket.com/event/nfl-phi-ten-2026-09-20",
+      "exchange": null,
+      "max_buy_maker": 0.74,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     },
+     {
+      "venue": "kalshi",
+      "market_id": "KXNFLGAME-26SEP20PHITEN-PHI",
+      "ask": 0.76,
+      "bid": 0.75,
+      "ask_size": 59529.25,
+      "fee_per_contract": 0.0128,
+      "all_in": 0.7728,
+      "max_buy_price": 0.72,
+      "url": "https://kalshi.com/markets/kxnflgame/kxnflgame-26sep20phiten",
+      "exchange": null,
+      "max_buy_maker": 0.73,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     },
+     {
+      "venue": "robinhood",
+      "market_id": "0afcaff6-d9ae-4755-b78b-911aeadbffee",
+      "ask": 0.77,
+      "bid": 0.75,
+      "ask_size": 2000.0,
+      "fee_per_contract": 0.02,
+      "all_in": 0.79,
+      "max_buy_price": 0.72,
+      "url": "https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-philadelphia-vs-tennessee-sep-20-2026/",
+      "exchange": "rothera",
+      "max_buy_maker": 0.72,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     }
+    ],
+    "best_buy_venue": "polymarket",
+    "best_buy_all_in": 0.76912,
+    "edge_at_best": -0.013979382546111419
+   },
+   {
+    "outcome": "TEN",
+    "label": "Tennessee",
+    "fair": 0.24485938254611134,
+    "venues": [
+     {
+      "venue": "polymarket",
+      "market_id": "78610244483434611584443934443376567739991837259551107167462251353514864045445",
+      "ask": 0.25,
+      "bid": 0.24,
+      "ask_size": null,
+      "fee_per_contract": 0.009375,
+      "all_in": 0.259375,
+      "max_buy_price": 0.22,
+      "url": "https://polymarket.com/event/nfl-phi-ten-2026-09-20",
+      "exchange": null,
+      "max_buy_maker": 0.23,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     },
+     {
+      "venue": "kalshi",
+      "market_id": "KXNFLGAME-26SEP20PHITEN-TEN",
+      "ask": 0.25,
+      "bid": 0.24,
+      "ask_size": 457214.47,
+      "fee_per_contract": 0.0132,
+      "all_in": 0.2632,
+      "max_buy_price": 0.21,
+      "url": "https://kalshi.com/markets/kxnflgame/kxnflgame-26sep20phiten",
+      "exchange": null,
+      "max_buy_maker": 0.22,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     },
+     {
+      "venue": "robinhood",
+      "market_id": "a733129c-b215-4dd2-8c7e-a1e9775faf67",
+      "ask": 0.26,
+      "bid": 0.23,
+      "ask_size": 5000.0,
+      "fee_per_contract": 0.02,
+      "all_in": 0.28,
+      "max_buy_price": 0.21,
+      "url": "https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-philadelphia-vs-tennessee-sep-20-2026/",
+      "exchange": "rothera",
+      "max_buy_maker": 0.21,
+      "age_s": null,
+      "mirror_of": null,
+      "stale": false
+     }
+    ],
+    "best_buy_venue": "polymarket",
+    "best_buy_all_in": 0.259375,
+    "edge_at_best": -0.014515617453888685
+   }
+  ],
+  "arb": {
+   "contracts": 100.0,
+   "total_cost": 102.8495,
+   "payout": 100.0,
+   "profit": -2.8495,
+   "margin": -0.028495,
+   "roi": -0.027705530897087494,
+   "legs": [
+    {
+     "outcome": "PHI",
+     "venue": "polymarket",
+     "price": 0.76,
+     "contracts": 100.0,
+     "fee": 0.912,
+     "cost": 76.912,
+     "all_in_per_contract": 0.76912,
+     "role": "taker",
+     "label": "Eagles",
+     "market_id": "109209997828071213817969462717223275528051682448664568373712884721472147278327",
+     "url": "https://polymarket.com/event/nfl-phi-ten-2026-09-20",
+     "vwap": null
+    },
+    {
+     "outcome": "TEN",
+     "venue": "polymarket",
+     "price": 0.25,
+     "contracts": 100.0,
+     "fee": 0.9375,
+     "cost": 25.9375,
+     "all_in_per_contract": 0.259375,
+     "role": "taker",
+     "label": "Titans",
+     "market_id": "78610244483434611584443934443376567739991837259551107167462251353514864045445",
+     "url": "https://polymarket.com/event/nfl-phi-ten-2026-09-20",
+     "vwap": null
+    }
+   ],
+   "is_arb": false,
+   "gross_sum": 1.01
+  },
+  "sized_arb": null,
+  "gross_sum": 1.01,
+  "margin": -0.028495,
+  "tie_rule": "unknown",
+  "flags": [
+   "tie-rule-unverified"
+  ],
+  "live": false,
+  "errors": []
+ }
+}

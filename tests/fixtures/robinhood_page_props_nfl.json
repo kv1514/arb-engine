@@ -1,0 +1,432 @@
+{
+ "events": [
+  {
+   "id": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+   "name": "September 17 Detroit vs Buffalo",
+   "eventContracts": {
+    "0": {
+     "id": "90efc89f-0754-444d-8416-f5caedee185d",
+     "eventId": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+     "description": "Will Detroit win the September 17 Detroit vs Buffalo Pro Football game?",
+     "symbol": "NFLGAME-26SEP17DETBUF-DET",
+     "tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+     "displayShortName": "DET",
+     "displayLongName": "Detroit",
+     "exchangeSource": 3,
+     "bannerText": "",
+     "name": "Detroit wins",
+     "expirationDate": "2026-09-20T15:00:00Z",
+     "openDate": "2026-09-10T13:00:00Z",
+     "multiplier": "1",
+     "imageStyle": "IMAGE_STYLE_GENERIC",
+     "receiptShortname": "DET",
+     "disableHeaderImageFlip": false,
+     "parentEventId": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+     "floorStrikeValue": "",
+     "isTeamContract": true,
+     "selectedLegs": [],
+     "isCombo": false,
+     "tickPriceRanges": [
+      {
+       "start": "0.000000",
+       "end": "1.000000",
+       "step": "0.010000"
+      }
+     ],
+     "contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+     "isFractionable": false,
+     "quantityDecimals": 0,
+     "comboType": "COMBO_TYPE_NOT_COMBO",
+     "locationRequirement": "LOCATION_REQUIREMENT_NONE",
+     "discoverable": true,
+     "seriesId": "39df0362-5d44-4d9e-b90e-24f7426f9634",
+     "exchange": "EXCHANGE_SOURCE_ROTHERA"
+    },
+    "1": {
+     "id": "68a948d7-0087-436b-86ce-78a24d2677a6",
+     "eventId": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+     "description": "Will Buffalo win the September 17 Detroit vs Buffalo Pro Football game?",
+     "symbol": "NFLGAME-26SEP17DETBUF-BUF",
+     "tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+     "displayShortName": "BUF",
+     "displayLongName": "Buffalo",
+     "exchangeSource": 3,
+     "bannerText": "",
+     "name": "Buffalo wins",
+     "expirationDate": "2026-09-20T15:00:00Z",
+     "openDate": "2026-09-10T13:00:00Z",
+     "multiplier": "1",
+     "imageStyle": "IMAGE_STYLE_GENERIC",
+     "receiptShortname": "BUF",
+     "disableHeaderImageFlip": false,
+     "parentEventId": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+     "floorStrikeValue": "",
+     "isTeamContract": true,
+     "selectedLegs": [],
+     "isCombo": false,
+     "tickPriceRanges": [
+      {
+       "start": "0.000000",
+       "end": "1.000000",
+       "step": "0.010000"
+      }
+     ],
+     "contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+     "isFractionable": false,
+     "quantityDecimals": 0,
+     "comboType": "COMBO_TYPE_NOT_COMBO",
+     "locationRequirement": "LOCATION_REQUIREMENT_NONE",
+     "discoverable": true,
+     "seriesId": "39df0362-5d44-4d9e-b90e-24f7426f9634",
+     "exchange": "EXCHANGE_SOURCE_ROTHERA"
+    }
+   },
+   "timeline": {
+    "entries": [
+     {
+      "title": "Trading hours",
+      "description": "24 hours a day, except Thursday 3AM-5AM ET",
+      "timestamp": "2026-09-10T13:00:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_OPEN"
+     },
+     {
+      "title": "Event day",
+      "description": "September 17, 2026",
+      "timestamp": "2026-09-18T00:15:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_EVENT_DAY"
+     },
+     {
+      "title": "Contract resolves",
+      "description": "Determines the outcome of the contract",
+      "timestamp": "2026-09-18T03:15:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_OTHER"
+     },
+     {
+      "title": "Payout",
+      "description": "Usually within 1 hour of event resolution",
+      "timestamp": "2026-09-18T04:15:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_PAYOUT"
+     }
+    ]
+   },
+   "urlSlugs": [
+    "september-17-detroit-vs-buffalo-sep-17-2026"
+   ],
+   "category": "Pro Football",
+   "eventType": "EVENT_TYPE_WINNER",
+   "mutuallyExclusive": true
+  },
+  {
+   "id": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+   "name": "September 20 Philadelphia vs Tennessee",
+   "eventContracts": {
+    "0": {
+     "id": "0afcaff6-d9ae-4755-b78b-911aeadbffee",
+     "eventId": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+     "description": "Will Philadelphia win the September 20 Philadelphia vs Tennessee Pro Football game?",
+     "symbol": "NFLGAME-26SEP20PHITEN-PHI",
+     "tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+     "displayShortName": "PHI",
+     "displayLongName": "Philadelphia",
+     "exchangeSource": 3,
+     "bannerText": "",
+     "name": "Philadelphia wins",
+     "expirationDate": "2026-09-22T15:00:00Z",
+     "openDate": "2026-09-10T13:00:00Z",
+     "multiplier": "1",
+     "imageStyle": "IMAGE_STYLE_GENERIC",
+     "receiptShortname": "PHI",
+     "disableHeaderImageFlip": false,
+     "parentEventId": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+     "floorStrikeValue": "",
+     "isTeamContract": true,
+     "selectedLegs": [],
+     "isCombo": false,
+     "tickPriceRanges": [
+      {
+       "start": "0.000000",
+       "end": "1.000000",
+       "step": "0.010000"
+      }
+     ],
+     "contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+     "isFractionable": false,
+     "quantityDecimals": 0,
+     "comboType": "COMBO_TYPE_NOT_COMBO",
+     "locationRequirement": "LOCATION_REQUIREMENT_NONE",
+     "discoverable": true,
+     "seriesId": "39df0362-5d44-4d9e-b90e-24f7426f9634",
+     "exchange": "EXCHANGE_SOURCE_ROTHERA"
+    },
+    "1": {
+     "id": "a733129c-b215-4dd2-8c7e-a1e9775faf67",
+     "eventId": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+     "description": "Will Tennessee win the September 20 Philadelphia vs Tennessee Pro Football game?",
+     "symbol": "NFLGAME-26SEP20PHITEN-TEN",
+     "tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+     "displayShortName": "TEN",
+     "displayLongName": "Tennessee",
+     "exchangeSource": 3,
+     "bannerText": "",
+     "name": "Tennessee wins",
+     "expirationDate": "2026-09-22T15:00:00Z",
+     "openDate": "2026-09-10T13:00:00Z",
+     "multiplier": "1",
+     "imageStyle": "IMAGE_STYLE_GENERIC",
+     "receiptShortname": "TEN",
+     "disableHeaderImageFlip": false,
+     "parentEventId": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+     "floorStrikeValue": "",
+     "isTeamContract": true,
+     "selectedLegs": [],
+     "isCombo": false,
+     "tickPriceRanges": [
+      {
+       "start": "0.000000",
+       "end": "1.000000",
+       "step": "0.010000"
+      }
+     ],
+     "contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+     "isFractionable": false,
+     "quantityDecimals": 0,
+     "comboType": "COMBO_TYPE_NOT_COMBO",
+     "locationRequirement": "LOCATION_REQUIREMENT_NONE",
+     "discoverable": true,
+     "seriesId": "39df0362-5d44-4d9e-b90e-24f7426f9634",
+     "exchange": "EXCHANGE_SOURCE_ROTHERA"
+    }
+   },
+   "timeline": {
+    "entries": [
+     {
+      "title": "Trading hours",
+      "description": "24 hours a day, except Thursday 3AM-5AM ET",
+      "timestamp": "2026-09-10T13:00:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_OPEN"
+     },
+     {
+      "title": "Event day",
+      "description": "September 20, 2026",
+      "timestamp": "2026-09-20T17:00:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_EVENT_DAY"
+     },
+     {
+      "title": "Contract resolves",
+      "description": "Determines the outcome of the contract",
+      "timestamp": "2026-09-20T20:00:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_OTHER"
+     },
+     {
+      "title": "Payout",
+      "description": "Usually within 1 hour of event resolution",
+      "timestamp": "2026-09-20T21:00:00Z",
+      "type": "TIMELINE_ENTRY_TYPE_PAYOUT"
+     }
+    ]
+   },
+   "urlSlugs": [
+    "september-20-philadelphia-vs-tennessee-sep-20-2026"
+   ],
+   "category": "Pro Football",
+   "eventType": "EVENT_TYPE_WINNER",
+   "mutuallyExclusive": true
+  }
+ ],
+ "eventStates": {
+  "ff08790a-1c49-4365-8a4a-c29d639517d3": {
+   "eventStatus": "EVENT_STATUS_UPCOMING",
+   "eventProgress": "",
+   "contractIdToEventScores": {},
+   "contractIdToVisualIndicator": {
+    "68a948d7-0087-436b-86ce-78a24d2677a6": false,
+    "90efc89f-0754-444d-8416-f5caedee185d": false
+   },
+   "contractIdToColor": {
+    "90efc89f-0754-444d-8416-f5caedee185d": {
+     "hex": {
+      "light": "#0076B6",
+      "dark": "#0076B6"
+     }
+    },
+    "68a948d7-0087-436b-86ce-78a24d2677a6": {
+     "hex": {
+      "light": "#C60C30",
+      "dark": "#C60C30"
+     }
+    }
+   },
+   "openInterest": "0",
+   "gameStart": "2026-09-18T00:15:00Z",
+   "contractIdToVisualEmphasis": {
+    "68a948d7-0087-436b-86ce-78a24d2677a6": true,
+    "90efc89f-0754-444d-8416-f5caedee185d": true
+   },
+   "eventId": "ff08790a-1c49-4365-8a4a-c29d639517d3",
+   "supportsLiveData": true,
+   "gameStartFormat": "GAME_START_FORMAT_MONTH_DAY_TIME_AM_PM",
+   "category": "Pro Football",
+   "contractIdToTertiaryText": {},
+   "contractIdToQuaternaryText": {
+    "68a948d7-0087-436b-86ce-78a24d2677a6": "1-0",
+    "90efc89f-0754-444d-8416-f5caedee185d": "1-0"
+   },
+   "gdpTitle": "DET 0 - 0 BUF",
+   "pageType": "PAGE_TYPE_GDP",
+   "eventTags": [],
+   "totalVolumeOfAllContractsV2": "100269",
+   "totalOpenInterestOfAllContractsV2": "1150717",
+   "eventProgressOverrides": [],
+   "contractIdToActiveIndicator": {},
+   "textAlignment": "TEXT_ALIGNMENT_UNSPECIFIED",
+   "isSport": true,
+   "viewMode": "EVENT_VIEW_MODE_PAIR"
+  },
+  "8435b4b9-1696-4b4d-b379-70bbd559280e": {
+   "eventStatus": "EVENT_STATUS_UPCOMING",
+   "eventProgress": "",
+   "contractIdToEventScores": {},
+   "contractIdToVisualIndicator": {
+    "a733129c-b215-4dd2-8c7e-a1e9775faf67": false,
+    "0afcaff6-d9ae-4755-b78b-911aeadbffee": false
+   },
+   "contractIdToColor": {
+    "0afcaff6-d9ae-4755-b78b-911aeadbffee": {
+     "hex": {
+      "light": "#000000",
+      "dark": "#FFFFFF"
+     }
+    },
+    "a733129c-b215-4dd2-8c7e-a1e9775faf67": {
+     "hex": {
+      "light": "#0C2340",
+      "dark": "#5A6B8D"
+     }
+    }
+   },
+   "openInterest": "0",
+   "gameStart": "2026-09-20T17:00:00Z",
+   "contractIdToVisualEmphasis": {
+    "a733129c-b215-4dd2-8c7e-a1e9775faf67": true,
+    "0afcaff6-d9ae-4755-b78b-911aeadbffee": true
+   },
+   "eventId": "8435b4b9-1696-4b4d-b379-70bbd559280e",
+   "supportsLiveData": true,
+   "gameStartFormat": "GAME_START_FORMAT_MONTH_DAY_TIME_AM_PM",
+   "category": "Pro Football",
+   "contractIdToTertiaryText": {},
+   "contractIdToQuaternaryText": {
+    "a733129c-b215-4dd2-8c7e-a1e9775faf67": "0-1",
+    "0afcaff6-d9ae-4755-b78b-911aeadbffee": "1-0"
+   },
+   "gdpTitle": "PHI 0 - 0 TEN",
+   "pageType": "PAGE_TYPE_GDP",
+   "eventTags": [],
+   "totalVolumeOfAllContractsV2": "59802",
+   "totalOpenInterestOfAllContractsV2": "118672",
+   "eventProgressOverrides": [],
+   "contractIdToActiveIndicator": {},
+   "textAlignment": "TEXT_ALIGNMENT_UNSPECIFIED",
+   "isSport": true,
+   "viewMode": "EVENT_VIEW_MODE_PAIR"
+  }
+ },
+ "quotes": {
+  "90efc89f-0754-444d-8416-f5caedee185d": {
+   "yes_bid_price": "0.32",
+   "yes_ask_price": "0.34",
+   "no_bid_price": "0.66",
+   "no_ask_price": "0.68",
+   "ask_price": "0.34",
+   "ask_size": 5000,
+   "ask_size_fractional": "5000",
+   "ask_venue_timestamp": "2026-09-15T23:46:31.275833362Z",
+   "bid_price": "0.32",
+   "bid_size": 50000,
+   "bid_size_fractional": "50000",
+   "bid_venue_timestamp": "2026-09-16T01:43:11.297653797Z",
+   "last_trade_price": "0.34",
+   "last_trade_size": 14,
+   "last_trade_size_fractional": "14",
+   "last_trade_venue_timestamp": "2026-09-16T04:39:06.686997016Z",
+   "display_yes_bid": "0.32",
+   "display_no_bid": "0.66",
+   "symbol": "NFLGAME-26SEP17DETBUF-DET",
+   "instrument_id": "90efc89f-0754-444d-8416-f5caedee185d",
+   "state": "active",
+   "updated_at": "2026-09-16T04:39:06.686997016Z"
+  },
+  "68a948d7-0087-436b-86ce-78a24d2677a6": {
+   "yes_bid_price": "0.67",
+   "yes_ask_price": "0.69",
+   "no_bid_price": "0.31",
+   "no_ask_price": "0.33",
+   "ask_price": "0.69",
+   "ask_size": 5000,
+   "ask_size_fractional": "5000",
+   "ask_venue_timestamp": "2026-09-16T04:10:09.24168553Z",
+   "bid_price": "0.67",
+   "bid_size": 1,
+   "bid_size_fractional": "1",
+   "bid_venue_timestamp": "2026-09-16T02:35:21.922787197Z",
+   "last_trade_price": "0.69",
+   "last_trade_size": 1,
+   "last_trade_size_fractional": "1",
+   "last_trade_venue_timestamp": "2026-09-16T04:36:20.592943608Z",
+   "display_yes_bid": "0.67",
+   "display_no_bid": "0.31",
+   "symbol": "NFLGAME-26SEP17DETBUF-BUF",
+   "instrument_id": "68a948d7-0087-436b-86ce-78a24d2677a6",
+   "state": "active",
+   "updated_at": "2026-09-16T04:36:20.592943608Z"
+  },
+  "0afcaff6-d9ae-4755-b78b-911aeadbffee": {
+   "yes_bid_price": "0.75",
+   "yes_ask_price": "0.77",
+   "no_bid_price": "0.23",
+   "no_ask_price": "0.25",
+   "ask_price": "0.77",
+   "ask_size": 2000,
+   "ask_size_fractional": "2000",
+   "ask_venue_timestamp": "2026-09-15T22:47:42.498000851Z",
+   "bid_price": "0.75",
+   "bid_size": 25,
+   "bid_size_fractional": "25",
+   "bid_venue_timestamp": "2026-09-15T19:11:46.408545262Z",
+   "last_trade_price": "0.77",
+   "last_trade_size": 127,
+   "last_trade_size_fractional": "127",
+   "last_trade_venue_timestamp": "2026-09-16T04:29:07.812569123Z",
+   "display_yes_bid": "0.75",
+   "display_no_bid": "0.23",
+   "symbol": "NFLGAME-26SEP20PHITEN-PHI",
+   "instrument_id": "0afcaff6-d9ae-4755-b78b-911aeadbffee",
+   "state": "active",
+   "updated_at": "2026-09-16T04:29:07.812569123Z"
+  },
+  "a733129c-b215-4dd2-8c7e-a1e9775faf67": {
+   "yes_bid_price": "0.23",
+   "yes_ask_price": "0.25",
+   "no_bid_price": "0.75",
+   "no_ask_price": "0.77",
+   "ask_price": "0.25",
+   "ask_size": 50,
+   "ask_size_fractional": "50",
+   "ask_venue_timestamp": "2026-09-15T23:27:29.247831393Z",
+   "bid_price": "0.23",
+   "bid_size": 1,
+   "bid_size_fractional": "1",
+   "bid_venue_timestamp": "2026-09-15T17:44:15.52599834Z",
+   "last_trade_price": "0.25",
+   "last_trade_size": 56,
+   "last_trade_size_fractional": "56",
+   "last_trade_venue_timestamp": "2026-09-16T03:59:21.329545813Z",
+   "display_yes_bid": "0.23",
+   "display_no_bid": "0.75",
+   "symbol": "NFLGAME-26SEP20PHITEN-TEN",
+   "instrument_id": "a733129c-b215-4dd2-8c7e-a1e9775faf67",
+   "state": "active",
+   "updated_at": "2026-09-16T03:59:21.329545813Z"
+  }
+ }
+}

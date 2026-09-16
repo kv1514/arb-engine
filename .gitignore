@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Secrets — never commit keys
+.env
+*.pem
+*.key
+secrets/
+
+# Local output
+out/
+*.log
+.DS_Store
+
+# Node (extension tooling, optional)
+node_modules/
+
+# Claude Code session scratch
+.claude/

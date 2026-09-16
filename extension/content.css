@@ -1,0 +1,26 @@
+#arbe-panel { position: fixed; right: 16px; bottom: 16px; width: 520px; max-height: 70vh; overflow: auto; z-index: 2147483000; background: #111418; color: #e6e6e6; border: 1px solid #2c333b; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5); font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+#arbe-panel.arbe-collapsed { width: 180px; max-height: 40px; overflow: hidden; }
+#arbe-panel .arbe-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #181c22; border-bottom: 1px solid #2c333b; position: sticky; top: 0; }
+#arbe-panel .arbe-title { font-weight: 700; color: #7fe0a0; }
+#arbe-panel .arbe-status { margin-left: auto; color: #9aa4ad; }
+#arbe-panel .arbe-btn { background: #242a31; color: #ddd; border: 1px solid #333b44; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+#arbe-panel .arbe-body { padding: 8px 10px; }
+#arbe-panel .arbe-row { margin: 8px 0 10px; }
+#arbe-panel .arbe-rowhead { display: flex; gap: 12px; align-items: baseline; margin-bottom: 4px; }
+#arbe-panel .arbe-outcome { font-weight: 700; font-size: 13px; }
+#arbe-panel .arbe-table { width: 100%; border-collapse: collapse; }
+#arbe-panel .arbe-table th, #arbe-panel .arbe-table td { text-align: right; padding: 2px 4px; border-bottom: 1px solid #22282f; white-space: nowrap; }
+#arbe-panel .arbe-table th:first-child, #arbe-panel .arbe-table td:first-child { text-align: left; }
+#arbe-panel .arbe-table th { color: #9aa4ad; font-weight: 500; }
+#arbe-panel .arbe-here td { background: #1a2230; }
+#arbe-panel a { color: #8ab4f8; text-decoration: none; }
+#arbe-panel .arbe-tag { color: #c9a227; font-size: 10px; margin-left: 4px; }
+#arbe-panel .arbe-arb { padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; background: #1a1f26; }
+#arbe-panel .arbe-good { color: #7fe0a0; }
+#arbe-panel .arbe-bad { color: #f28b82; }
+#arbe-panel .arbe-err { color: #f28b82; }
+#arbe-panel .arbe-muted { color: #9aa4ad; }
+#arbe-panel .arbe-small { font-size: 11px; margin-top: 6px; }
+.arbe-badge { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 10px; background: #1a1f26; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.arbe-badge.arbe-good { color: #7fe0a0; border: 1px solid #2f5d43; }
+.arbe-badge.arbe-bad { color: #f28b82; border: 1px solid #5d2f2f; }
