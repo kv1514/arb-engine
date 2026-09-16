@@ -93,11 +93,14 @@ The overlay is read-only. It never places orders and reads nothing from your acc
 
 ### Kalshi MCP server (Claude Code / Codex)
 
-`.mcp.json` registers `uvx mcp-server-kalshi` with `KALSHI_ENV`, `KALSHI_API_KEY` and
-`KALSHI_PRIVATE_KEY_PATH` taken from your environment (defaults to demo). Install
-[uv](https://docs.astral.sh/uv/) and set the variables in your shell or `.env`; Claude Code
-picks the server up from the project. For Codex add the same command to `~/.codex/config.toml`
-under `[mcp_servers.kalshi]`.
+`.mcp.json` registers the [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi)
+server (`pip install mcp-server-kalshi`, then it runs as
+`python3 -c "from mcp_server_kalshi.server import main; main()"`) with `KALSHI_ENV`,
+`KALSHI_API_KEY` and `KALSHI_PRIVATE_KEY_PATH` taken from your environment (defaults to the
+demo exchange). Set the variables in your shell; Claude Code picks the server up from the
+project and its tools cover markets, order books, rules PDFs, balance, positions and
+(with `confirm=true`) orders. For Codex add the same command to `~/.codex/config.toml` under
+`[mcp_servers.kalshi]`; if you use `uv`, `uvx mcp-server-kalshi` works too.
 
 ## What the numbers mean
 

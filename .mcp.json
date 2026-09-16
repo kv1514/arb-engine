@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "kalshi": {
-      "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "command": "python3",
+      "args": ["-c", "from mcp_server_kalshi.server import main; main()"],
       "env": {
         "KALSHI_ENV": "${KALSHI_ENV:-demo}",
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",
