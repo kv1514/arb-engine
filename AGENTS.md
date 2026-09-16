@@ -42,7 +42,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (59)
+python -m unittest discover -s tests -t .      # Python tests (68)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>
@@ -55,7 +55,9 @@ python scripts/capture_fixtures.py             # refresh offline fixtures from t
 - Prices are dollars per $1-payout contract (`0.52`), never cents, in Python and JS.
 - `OutcomeQuote.ask` is always "what you pay to buy this outcome" — adapters fold NO-side
   quotes into the other outcome.
-- Event keys: `nfl:<CODE>|<CODE>:<YYYY-MM-DD ET>`, `tennis:<surname>|<surname>:<date>`.
+- Event keys: `nfl:<CODE>|<CODE>:<YYYY-MM-DD ET>`, `tennis:<surname>|<surname>:<date>`,
+  lines append `:spread:<FAV>-<line>` / `:total:<line>` (half-point lines; match on the
+  numeric line, never on venue ticker suffixes — Kalshi uses ⌈line⌉, Rothera ⌊line⌋).
 - Money math in `Decimal` (Python) / `BigInt` (JS). Do not introduce float rounding into fees.
 - Keep functions small and tested; fixtures are trimmed live responses in `tests/fixtures`.
 

@@ -106,3 +106,47 @@ def nfl_event_key(team_names: list[str], date_str: Optional[str]) -> Optional[st
     if any(c is None for c in codes):
         return None
     return "nfl:" + "|".join(sorted(codes)) + ":" + (date_str or "")  # type: ignore[arg-type]
+
+
+# ---- spreads / totals ---------------------------------------------------------------------
+
+def fmt_line(x: float) -> str:
+    """1.5 -> '1.5', 49.5 -> '49.5', 3.0 -> '3' (stable text for keys and labels)."""
+    return f"{float(x):g}"
+
+
+def spread_outcomes(fav: str, dog: str, line: float) -> tuple[str, str]:
+    """Outcome keys for 'fav wins by more than line': ('BUF-1.5', 'DET+1.5')."""
+    return f"{fav}-{fmt_line(line)}", f"{dog}+{fmt_line(line)}"
+
+
+def spread_event_key(sport: str, codes: list[str], date_str: Optional[str], fav: str, line: float) -> str:
+    return f"{sport}:" + "|".join(sorted(codes)) + f":{date_str or ''}:spread:{fav}-{fmt_line(line)}"
+
+
+def total_event_key(sport: str, codes: list[str], date_str: Optional[str], line: float) -> str:
+    return f"{sport}:" + "|".join(sorted(codes)) + f":{date_str or ''}:total:{fmt_line(line)}"
+
+
+def split_pair(pair: str, known: str) -> Optional[str]:
+    """'DETBUF' with known 'BUF' -> 'DET' (the other code in a Kalshi/Rothera ticker pair)."""
+    if pair.endswith(known) and len(pair) > len(known):
+        return pair[: -len(known)]
+    if pair.startswith(known) and len(pair) > len(known):
+        return pair[len(known):]
+    return None
+
+
+def ticker_pair(event_ticker: str) -> Optional[str]:
+    """'KXNFLSPREAD-26SEP17DETBUF' -> 'DETBUF' (codes after the date block)."""
+    m = re.search(r"-\d{2}[A-Z]{3}\d{2}([A-Z0-9]+)$", event_ticker or "")
+    return m.group(1) if m else None
+
+
+def strip_digits(s: str) -> str:
+    return re.sub(r"\d+$", "", s or "")
+
+
+def push_rule_for_line(line: float) -> str:
+    """Half-point lines cannot push; integer lines can (venues settle pushes differently)."""
+    return "no_push" if abs(float(line) * 2 - round(float(line) * 2)) < 1e-9 and round(float(line) * 2) % 2 == 1 else "push_possible"

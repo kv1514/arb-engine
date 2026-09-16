@@ -38,11 +38,21 @@ async function bridgeAvailable() {
 }
 
 // Convert the Python engine's EventReport into the shape content.js renders.
+function rowsFromReport(a) {
+  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
+}
+function arbFromReport(a) {
+  return a.arb ? { grossSum: a.arb.gross_sum, margin: a.arb.margin, profit: a.arb.profit, contracts: a.arb.contracts, isArb: a.arb.is_arb, legs: (a.arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, fee: l.fee })) } : null;
+}
 function fromBridge(res, cfg) {
   if (!res || !res.ok || !res.analysis) return res;
   const a = res.analysis;
-  const rows = (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
-  const arb = a.arb ? { grossSum: a.arb.gross_sum, margin: a.arb.margin, profit: a.arb.profit, contracts: a.arb.contracts, isArb: a.arb.is_arb, legs: (a.arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, fee: l.fee })) } : null;
+  if (a.lines) {
+    const lines = a.lines.map((d) => ({ key: d.event_key, title: d.title, line: d.line, marketType: d.market_type, fillable: !!d.fillable, flags: d.flags || [], contractId: d.contract_id, rows: rowsFromReport(d), arb: arbFromReport(d), sizedContracts: d.sized_arb ? d.sized_arb.contracts : null, sizedProfit: d.sized_arb ? d.sized_arb.profit : null }));
+    return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, marketType: a.market_type, lines, errors: a.errors || [], fetchedAt: Date.now(), venues: a.venues || [], source: "bridge" } };
+  }
+  const rows = rowsFromReport(a);
+  const arb = arbFromReport(a);
   return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: a.venues || [], source: "bridge" } };
 }
 
@@ -87,7 +97,7 @@ async function robinhoodEvent(url) {
     const ev = pp.event;
     if (!ev) throw new Error("not an event page");
     const contracts = Object.values(ev.eventContracts || {});
-    return { id: ev.id, name: ev.name, category: ev.category, mutuallyExclusive: ev.mutuallyExclusive, contracts: contracts.map((c) => ({ id: c.id, symbol: c.symbol, exchange: c.exchange, short: c.displayShortName, long: c.displayLongName })), ssrQuotes: pp.quotes || {} };
+    return { id: ev.id, name: ev.name, category: ev.category, mutuallyExclusive: ev.mutuallyExclusive, eventType: ev.eventType, contracts: contracts.map((c) => ({ id: c.id, symbol: c.symbol, exchange: c.exchange, short: c.displayShortName, long: c.displayLongName, floor: c.floorStrikeValue })), ssrQuotes: pp.quotes || {} };
   });
 }
 async function robinhoodQuotes(ids) {
@@ -117,6 +127,154 @@ async function kalshiMarket(ticker) {
       throw e;
     }
   });
+}
+async function kalshiEventMarkets(eventTicker) {
+  return cached("ke:" + eventTicker, 10_000, async () => {
+    try { return (await getJson(`${KALSHI}/markets?event_ticker=${eventTicker}&limit=200`)).markets || []; }
+    catch (e) {
+      if (await bridgeAvailable()) return (await getJson(`${BRIDGE}/kalshi/markets?event_ticker=${eventTicker}&limit=200`)).markets || [];
+      throw e;
+    }
+  });
+}
+async function polymarketGame(teams, date) {
+  return cached("pm:game:" + teams.join("") + date, 60_000, async () => {
+    for (const slug of ArbCore.polymarketNflSlugs(teams, date)) {
+      const evs = await getJson(`${GAMMA}/events?slug=${slug}`);
+      if (evs && evs.length) return evs[0];
+    }
+    return null;
+  });
+}
+const LINE_FAMILIES = { NFLSPREAD: "spread", NFLTOTAL: "total" };
+function fmtLine(x) { return String(Number(x)); }
+function analyzeTwoOutcome(byVenue, outcomes, labels, cfg) {
+  const fair = ArbCore.consensusFair(byVenue, outcomes);
+  const quotesByOutcome = {};
+  outcomes.forEach((o) => { quotesByOutcome[o] = Object.values(byVenue).flat().filter((q) => q.outcome === o); });
+  const legs = ArbCore.bestLegPerOutcome(quotesByOutcome, cfg.contracts);
+  const complete = legs.length === outcomes.length;
+  const arb = complete ? ArbCore.evaluate(legs, cfg.contracts) : null;
+  const rows = outcomes.map((o) => {
+    const others = legs.filter((l) => l.outcome !== o);
+    const hedgeable = complete && others.length === outcomes.length - 1;
+    const venues = quotesByOutcome[o].map((q) => {
+      const feePc = q.ask != null ? q.fee(q.ask, cfg.contracts, "taker") / cfg.contracts : null;
+      return { venue: q.venue, exchange: q.exchange || null, mirror: q.mirror || null, ask: q.ask, bid: q.bid, askSize: q.askSize == null ? null : q.askSize, feePerContract: feePc, allIn: q.ask != null ? q.ask + feePc : null, maxBuyTaker: hedgeable ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "taker") : null, maxBuyMaker: hedgeable ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "maker") : null, url: q.url || null, feeNote: q.feeNote || "", contractId: q.contractId || null };
+    }).sort((a, b) => (a.allIn == null) - (b.allIn == null) || a.allIn - b.allIn);
+    const best = venues.find((v) => v.allIn != null && !v.mirror) || null;
+    return { outcome: o, label: labels[o], fair: fair[o], venues, best: best ? best.venue : null, bestAllIn: best ? best.allIn : null, edge: best && fair[o] != null ? fair[o] - best.allIn : null };
+  });
+  // Fillable = every arb leg has at least 1 contract at the quoted size (unknown size = unlimited).
+  let fillable = false, sizedContracts = null;
+  if (arb && arb.isArb) {
+    const caps = legs.map((l) => (l.quote && l.quote.askSize != null ? l.quote.askSize : Infinity));
+    const cap = Math.min(...caps);
+    fillable = cap >= 1;
+    sizedContracts = Number.isFinite(cap) ? Math.floor(cap) : cfg.contracts;
+  }
+  return { rows, arb, fillable, sizedContracts, legs };
+}
+async function analyzeLines(url, ev, cfg, mtype) {
+  const contracts = ev.contracts;
+  const p0 = ArbCore.parseSymbol(contracts[0].symbol);
+  const pair = p0.pair;
+  let codes = null;
+  for (let cut = 2; cut < pair.length - 1; cut++) {
+    const a = ArbCore.nflTeamCode(pair.slice(0, cut)), b = ArbCore.nflTeamCode(pair.slice(cut));
+    if (a && b) { codes = [a, b]; break; }
+  }
+  if (!codes) return { ok: true, event: ev, analysis: null, note: "could not split team pair " + pair };
+  const [away, home] = codes;
+  const errors = [];
+  let live = {};
+  try { live = await robinhoodQuotes(contracts.map((c) => c.id)); } catch (e) { errors.push("robinhood quotes: " + e.message); }
+  const kalshiEvent = "KX" + p0.family + "-" + contracts[0].symbol.split("-")[1];
+  const kIndex = new Map();
+  let kFee = () => 0;
+  if (cfg.venues.kalshi !== false) {
+    try {
+      const series = await kalshiSeries(kalshiEvent.split("-")[0]).catch(() => ({}));
+      kFee = ArbCore.feeFn("kalshi", { fee_type: series.fee_type, fee_multiplier: series.fee_multiplier }, cfg);
+      for (const m of await kalshiEventMarkets(kalshiEvent)) {
+        if (m.status && m.status !== "active" && m.status !== "open") continue;
+        if (m.floor_strike == null) continue;
+        const team = mtype === "spread" ? m.ticker.split("-").pop().replace(/\d+$/, "") : "";
+        kIndex.set(team + "|" + fmtLine(m.floor_strike), m);
+      }
+    } catch (e) { errors.push("kalshi: " + e.message); }
+  }
+  const pmIndex = new Map();
+  let pmEvent = null;
+  if (cfg.venues.polymarket !== false) {
+    try {
+      pmEvent = await polymarketGame([away, home], p0.date);
+      if (!pmEvent) errors.push("polymarket: game not found");
+      for (const m of (pmEvent && pmEvent.markets) || []) {
+        const ln = m.line == null ? null : Number(m.line);
+        if (ln == null) continue;
+        if (m.sportsMarketType === "spreads") {
+          const oc = parseJsonList(m.outcomes).map((o) => ArbCore.nflTeamCode(o));
+          if (oc.length === 2 && oc[0] && oc[1]) pmIndex.set("spread|" + (ln < 0 ? oc[0] : oc[1]) + "-" + fmtLine(Math.abs(ln)), m);
+        } else if (m.sportsMarketType === "totals") pmIndex.set("total|" + fmtLine(ln), m);
+      }
+    } catch (e) { errors.push("polymarket: " + e.message); }
+  }
+  const lines = [];
+  const missingK = new Set();
+  for (const c of contracts) {
+    const line = c.floor == null ? null : Number(c.floor);
+    if (line == null || !Number.isFinite(line)) continue;
+    const exch = rhExchange(c);
+    let yesKey, noKey, labels, title, km, pm, teamRaw = "";
+    if (mtype === "spread") {
+      teamRaw = c.symbol.split("-").pop().replace(/\d+$/, "");
+      const fav = ArbCore.nflTeamCode(teamRaw);
+      const otherRaw = pair.endsWith(teamRaw) ? pair.slice(0, pair.length - teamRaw.length) : pair.slice(teamRaw.length);
+      const dog = ArbCore.nflTeamCode(otherRaw);
+      if (!fav || !dog) continue;
+      yesKey = fav + "-" + fmtLine(line); noKey = dog + "+" + fmtLine(line);
+      labels = { [yesKey]: fav + " -" + fmtLine(line), [noKey]: dog + " +" + fmtLine(line) };
+      title = labels[yesKey] + " / " + labels[noKey];
+      km = kIndex.get(teamRaw + "|" + fmtLine(line));
+      pm = pmIndex.get("spread|" + fav + "-" + fmtLine(line));
+    } else {
+      yesKey = "over"; noKey = "under";
+      labels = { over: "Over " + fmtLine(line), under: "Under " + fmtLine(line) };
+      title = away + " @ " + home + " total " + fmtLine(line);
+      km = kIndex.get("|" + fmtLine(line));
+      pm = pmIndex.get("total|" + fmtLine(line));
+    }
+    const outcomes = [yesKey, noKey];
+    const q = live[c.id] || ev.ssrQuotes[c.id] || {};
+    const rhFee = ArbCore.feeFn("robinhood", { exchange: exch }, cfg);
+    const bookId = exch === "kalshi" ? "kalshi" : exch;
+    const byVenue = { robinhood: [
+      { venue: "robinhood", outcome: yesKey, label: labels[yesKey], ask: q.yes_ask_price != null ? Number(q.yes_ask_price) : null, bid: q.yes_bid_price != null ? Number(q.yes_bid_price) : null, askSize: q.ask_size != null ? Number(q.ask_size) : null, fee: rhFee, exchange: exch, bookId, contractId: c.id },
+      { venue: "robinhood", outcome: noKey, label: labels[noKey], ask: q.no_ask_price != null ? Number(q.no_ask_price) : null, bid: q.no_bid_price != null ? Number(q.no_bid_price) : null, askSize: q.bid_size != null ? Number(q.bid_size) : null, fee: rhFee, exchange: exch, bookId, contractId: c.id },
+    ] };
+    if (km) {
+      const n = (x) => (x == null ? null : Number(x));
+      const url = `https://kalshi.com/markets/${kalshiEvent.split("-")[0].toLowerCase()}/${kalshiEvent.toLowerCase()}`;
+      byVenue.kalshi = [
+        { venue: "kalshi", outcome: yesKey, label: labels[yesKey], ask: n(km.yes_ask_dollars) && n(km.yes_ask_dollars) < 1 ? n(km.yes_ask_dollars) : null, bid: n(km.yes_bid_dollars) > 0 ? n(km.yes_bid_dollars) : null, askSize: n(km.yes_ask_size_fp), fee: kFee, bookId: "kalshi", url, ticker: km.ticker },
+        { venue: "kalshi", outcome: noKey, label: labels[noKey], ask: n(km.no_ask_dollars) && n(km.no_ask_dollars) < 1 ? n(km.no_ask_dollars) : null, bid: n(km.no_bid_dollars) > 0 ? n(km.no_bid_dollars) : null, askSize: n(km.yes_bid_size_fp), fee: kFee, bookId: "kalshi", url, ticker: km.ticker },
+      ];
+    } else if (cfg.venues.kalshi !== false) missingK.add(fmtLine(line));
+    if (pm) {
+      const ln = Number(pm.line);
+      const keys = mtype === "spread" ? (ln < 0 ? [yesKey, noKey] : [noKey, yesKey]) : (String(parseJsonList(pm.outcomes)[0]).toLowerCase().startsWith("over") ? ["over", "under"] : ["under", "over"]);
+      const qs = polymarketQuotes(pm, (label, i) => keys[i]);
+      qs.forEach((x) => { x.url = `https://polymarket.com/event/${pmEvent.slug}`; x.label = labels[x.outcome]; });
+      byVenue.polymarket = qs;
+    }
+    if (byVenue.kalshi) byVenue.robinhood.forEach((x) => { if (x.bookId === "kalshi") x.mirror = "kalshi"; });
+    const r = analyzeTwoOutcome(byVenue, outcomes, labels, cfg);
+    lines.push({ key: `nfl:${[away, home].sort().join("|")}:${p0.date}:${mtype}:${mtype === "spread" ? yesKey : fmtLine(line)}`, title, line, marketType: mtype, fillable: r.fillable, flags: [], contractId: c.id, rows: r.rows, arb: r.arb, sizedContracts: r.sizedContracts, sizedProfit: r.arb && r.sizedContracts ? r.arb.margin * r.sizedContracts : null });
+  }
+  if (missingK.size) errors.push("kalshi lists no market for lines: " + [...missingK].join(", "));
+  lines.sort((a, b) => (b.fillable - a.fillable) || ((b.arb ? b.arb.margin : -9) - (a.arb ? a.arb.margin : -9)));
+  return { ok: true, event: { id: ev.id, name: ev.name, sport: "nfl", url, marketType: mtype, game: `${away} @ ${home}` }, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, marketType: mtype, lines, errors, fetchedAt: Date.now(), venues: ["robinhood", "kalshi", "polymarket"], source: "direct" } };
 }
 async function kalshiSeries(series) {
   return cached("ks:" + series, 3_600_000, async () => (await getJson(`${KALSHI}/series/${series}`)).series);
@@ -171,7 +329,9 @@ async function analyze(url) {
   }
   const ev = await robinhoodEvent(url);
   const contracts = ev.contracts;
-  if (contracts.length !== 2) return { ok: true, event: ev, analysis: null, note: `${contracts.length} contracts — the overlay handles two-outcome game/match markets` };
+  const lineTypes = new Set(contracts.map((c) => { const p = ArbCore.parseSymbol(c.symbol); return p && LINE_FAMILIES[p.family]; }).filter(Boolean));
+  if (contracts.length && lineTypes.size === 1 && contracts.every((c) => { const p = ArbCore.parseSymbol(c.symbol); return p && LINE_FAMILIES[p.family]; })) return analyzeLines(url, ev, cfg, [...lineTypes][0]);
+  if (contracts.length !== 2) return { ok: true, event: ev, analysis: null, note: `${contracts.length} contracts — the overlay handles game winners, spreads, totals and matches` };
   const parsed = contracts.map((c) => ArbCore.parseSymbol(c.symbol));
   if (parsed.some((p) => !p)) return { ok: true, event: ev, analysis: null, note: "unrecognised contract symbols: " + contracts.map((c) => c.symbol).join(", ") };
   const family = parsed[0].family;

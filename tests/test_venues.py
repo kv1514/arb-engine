@@ -13,36 +13,66 @@ from .helpers import FakeHttp, load
 
 class KalshiAdapterTests(unittest.TestCase):
     def setUp(self):
+        lines = load("kalshi_markets_nfl_lines.json")
         self.http = FakeHttp({
-            "/markets/KXNFLGAME-26SEP17DETBUF-DET/orderbook": load("kalshi_orderbook.json"),
-            "/markets/KXNFLGAME-26SEP17DETBUF-BUF/orderbook": load("kalshi_orderbook.json"),
-            "/markets?": load("kalshi_markets_nfl.json"),
+            "/orderbook": load("kalshi_orderbook.json"),
+            "series_ticker=KXNFLGAME&": load("kalshi_markets_nfl.json"),
+            "series_ticker=KXNFLSPREAD&": {"markets": lines["spreads"]},
+            "series_ticker=KXNFLTOTAL&": {"markets": lines["totals"]},
             "/series/KXNFLGAME": load("kalshi_series_kxnflgame.json"),
+            "/series/KXNFLSPREAD": {"series": {"ticker": "KXNFLSPREAD", "fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}},
+            "/series/KXNFLTOTAL": {"series": {"ticker": "KXNFLTOTAL", "fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}},
         })
         self.adapter = KalshiAdapter(client=KalshiClient(env="prod", http=self.http))
 
     def test_fetch_nfl(self):
         snap = self.adapter.fetch("nfl")
         self.assertEqual(snap.errors, [])
-        self.assertEqual(list(snap.events), ["nfl:BUF|DET:2026-09-17"])
+        self.assertEqual(sorted(snap.events), ["nfl:BUF|DET:2026-09-17", "nfl:BUF|DET:2026-09-17:spread:BUF-1.5", "nfl:BUF|DET:2026-09-17:spread:DET-1.5", "nfl:BUF|DET:2026-09-17:total:49.5"])
         info = snap.events["nfl:BUF|DET:2026-09-17"]
         self.assertEqual(info.outcomes, ["BUF", "DET"])
         self.assertEqual(info.labels["DET"], "Detroit")
         self.assertEqual(info.tie_rule, "half")
-        self.assertEqual(len(snap.quotes), 2)
+        self.assertEqual(len(snap.quotes), 2 + 3 * 2)  # moneyline pair + YES/NO per line market
         det = next(q for q in snap.quotes if q.outcome == "DET")
         self.assertEqual(det.ask, 0.33)
         self.assertEqual(det.bid, 0.32)
         self.assertEqual(det.fee_params["fee_type"], "quadratic_with_maker_fees")
         self.assertEqual(det.book_id, "kalshi")
 
+    def test_spread_and_total_lines(self):
+        snap = self.adapter.fetch("nfl")
+        sp = snap.events["nfl:BUF|DET:2026-09-17:spread:BUF-1.5"]
+        self.assertEqual(sp.market_type, "spread")
+        self.assertEqual(sp.line, 1.5)
+        self.assertEqual(sp.outcomes, ["BUF-1.5", "DET+1.5"])
+        self.assertEqual(sp.labels, {"BUF-1.5": "Buffalo -1.5", "DET+1.5": "Detroit +1.5"})
+        self.assertEqual(sp.tie_rule, "no_push")
+        cover = next(q for q in snap.quotes if q.outcome == "BUF-1.5")
+        other = next(q for q in snap.quotes if q.outcome == "DET+1.5")
+        self.assertEqual((cover.ask, cover.bid), (0.65, 0.63))
+        self.assertEqual((other.ask, other.bid), (0.37, 0.35))  # NO side of the same market
+        self.assertEqual(other.venue_market_id, "KXNFLSPREAD-26SEP17DETBUF-BUF2#no")
+        self.assertEqual(other.meta["side"], "no")
+        # The mirror line (Detroit -1.5) is a different event.
+        self.assertIn("nfl:BUF|DET:2026-09-17:spread:DET-1.5", snap.events)
+        tot = snap.events["nfl:BUF|DET:2026-09-17:total:49.5"]
+        self.assertEqual((tot.market_type, tot.line, tot.outcomes), ("total", 49.5, ["over", "under"]))
+        self.assertEqual(tot.title(), "DET @ BUF total 49.5 (over / under)")
+        over = next(q for q in snap.quotes if q.outcome == "over" and q.event_key == tot.event_key)
+        under = next(q for q in snap.quotes if q.outcome == "under" and q.event_key == tot.event_key)
+        self.assertEqual((over.ask, under.ask), (0.64, 0.38))
+
     def test_fetch_with_books(self):
         adapter = KalshiAdapter(client=KalshiClient(env="prod", http=self.http), with_books=True)
         snap = adapter.fetch("nfl")
-        q = snap.quotes[0]
+        q = next(x for x in snap.quotes if x.outcome == "DET")
         self.assertIsInstance(q.book, Book)
         self.assertTrue(q.book.asks)
         self.assertEqual(q.book.asks, sorted(q.book.asks, key=lambda l: l.price))
+        self.assertEqual(q.ask, q.book.asks[0].price)  # top of book overrides the market summary
+        no_side = next(x for x in snap.quotes if x.venue_market_id.endswith("#no"))
+        self.assertIsInstance(no_side.book, Book)
 
     def test_parse_orderbook_mirrors_no_bids_into_yes_asks(self):
         yes, no = parse_orderbook({"orderbook_fp": {"yes_dollars": [["0.54", "10"], ["0.55", "5"]], "no_dollars": [["0.40", "7"], ["0.41", "3"]]}})
@@ -69,11 +99,21 @@ class PolymarketAdapterTests(unittest.TestCase):
         self.http = FakeHttp({"gamma-api.polymarket.com/events": lambda: list(events), "clob.polymarket.com/books": [dict(load("polymarket_book.json"), asset_id=json.loads(events[0]["markets"][0]["clobTokenIds"])[0])]})
         self.adapter = PolymarketAdapter(http=self.http)
 
-    def test_fetch_nfl_moneyline_only(self):
+    def test_fetch_nfl_all_market_types(self):
         snap = self.adapter.fetch("nfl")
         self.assertEqual(snap.errors, [])
-        self.assertEqual(list(snap.events), ["nfl:BUF|DET:2026-09-17"])
-        self.assertEqual(len(snap.quotes), 2)  # spreads market skipped
+        self.assertEqual(sorted(snap.events), ["nfl:BUF|DET:2026-09-17", "nfl:BUF|DET:2026-09-17:spread:BUF-1.5", "nfl:BUF|DET:2026-09-17:total:49.5"])
+        self.assertEqual(len(snap.quotes), 6)
+        # Spread: "Spread: Bills (-1.5)", outcomes [Bills, Lions] -> Bills cover / Lions +1.5.
+        cover = next(q for q in snap.quotes if q.outcome == "BUF-1.5")
+        dog = next(q for q in snap.quotes if q.outcome == "DET+1.5")
+        self.assertEqual((cover.bid, cover.ask), (0.64, 0.65))
+        self.assertEqual((dog.bid, dog.ask), (0.35, 0.36))
+        self.assertEqual(cover.outcome_label, "Bills -1.5")
+        self.assertEqual(dog.outcome_label, "Lions +1.5")
+        over = next(q for q in snap.quotes if q.outcome == "over")
+        self.assertEqual((over.bid, over.ask), (0.6, 0.63))
+        self.assertEqual(snap.events["nfl:BUF|DET:2026-09-17:total:49.5"].title(), "DET @ BUF total 49.5 (over / under)")
         det = next(q for q in snap.quotes if q.outcome == "DET")
         buf = next(q for q in snap.quotes if q.outcome == "BUF")
         self.assertEqual((det.bid, det.ask), (0.33, 0.34))
@@ -81,6 +121,17 @@ class PolymarketAdapterTests(unittest.TestCase):
         self.assertEqual(det.fee_params["feeSchedule"]["rate"], 0.05)
         self.assertEqual(det.outcome_label, "Lions")
         self.assertEqual(snap.events["nfl:BUF|DET:2026-09-17"].start_time.hour, 0)
+
+    def test_positive_line_means_outcome0_is_the_underdog(self):
+        events = load("polymarket_events_nfl.json")
+        m = json.loads(json.dumps(next(x for x in events[0]["markets"] if x["sportsMarketType"] == "spreads")))
+        m["question"], m["outcomes"], m["line"] = "Spread: Lions (+1.5)", json.dumps(["Lions", "Bills"]), 1.5
+        from arb_engine.models import VenueSnapshot
+        snap = VenueSnapshot(venue="polymarket")
+        self.adapter._ingest_line_market(snap, "nfl", events[0], m, "spread")
+        self.assertEqual(list(snap.events), ["nfl:BUF|DET:2026-09-17:spread:BUF-1.5"])
+        lions = next(q for q in snap.quotes if q.outcome == "DET+1.5")
+        self.assertEqual((lions.bid, lions.ask), (0.64, 0.65))  # outcome0's token prices now belong to the dog side
 
     def test_fetch_with_books(self):
         snap = PolymarketAdapter(http=self.http, with_books=True).fetch("nfl")
@@ -113,6 +164,19 @@ class RobinhoodAdapterTests(unittest.TestCase):
         self.assertEqual(snap.errors, [])
         self.assertIn("nfl:BUF|DET:2026-09-17", snap.events)
         self.assertIn("nfl:PHI|TEN:2026-09-20", snap.events)
+        self.assertIn("nfl:BUF|DET:2026-09-17:spread:BUF-1.5", snap.events)
+        self.assertIn("nfl:BUF|DET:2026-09-17:spread:DET-1.5", snap.events)
+        self.assertIn("nfl:BUF|DET:2026-09-17:total:49.5", snap.events)
+        sp = snap.events["nfl:BUF|DET:2026-09-17:spread:BUF-1.5"]
+        self.assertEqual(sp.labels["DET+1.5"], "Detroit +1.5")
+        self.assertEqual(sp.venues["robinhood"]["exchange"], "rothera")
+        dog = next(q for q in snap.quotes if q.outcome == "DET+1.5")
+        self.assertTrue(dog.venue_market_id.endswith("#no"))
+        self.assertEqual(dog.meta["side"], "no")
+        self.assertIsNotNone(dog.ask)  # from no_ask_price
+        cover = next(q for q in snap.quotes if q.outcome == "BUF-1.5")
+        self.assertAlmostEqual(cover.ask + dog.bid, 1.0, places=6)  # NO bid mirrors YES ask
+        self.assertEqual(snap.events["nfl:BUF|DET:2026-09-17:total:49.5"].line, 49.5)
         det = next(q for q in snap.quotes if q.outcome == "DET")
         self.assertEqual((det.bid, det.ask), (0.32, 0.34))
         self.assertEqual(det.fee_params["exchange"], "rothera")

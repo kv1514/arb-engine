@@ -29,9 +29,12 @@ class MergedEvent:
         return [q for qs in self.quotes_by_venue.values() for q in qs if q.outcome == outcome]
 
 
-def _split_key(key: str) -> tuple[str, str, str]:
-    sport, participants, date = key.split(":", 2)
-    return sport, participants, date
+def _split_key(key: str) -> tuple[str, str, str, str]:
+    """'nfl:BUF|DET:2026-09-17:spread:BUF-1.5' -> (sport, participants, date, suffix)."""
+    parts = key.split(":", 3)
+    sport, participants, date = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
+    suffix = parts[3] if len(parts) > 3 else ""
+    return sport, participants, date, suffix
 
 
 def _days_apart(a: str, b: str) -> int:
@@ -48,16 +51,17 @@ def merge_snapshots(snapshots: list[VenueSnapshot], date_tolerance_days: int = 1
     by_participants: dict[tuple[str, str], list[str]] = {}
 
     def register(key: str, info: EventInfo) -> str:
-        sport, parts, date = _split_key(key)
+        sport, parts, date, suffix = _split_key(key)
         if key in merged:
             return key
-        # Look for an existing event with the same participants within the date tolerance.
-        for existing in by_participants.get((sport, parts), []):
-            _, _, edate = _split_key(existing)
+        # Look for an existing event with the same participants (and market/line) within the
+        # date tolerance.
+        for existing in by_participants.get((sport, parts, suffix), []):
+            _, _, edate, _ = _split_key(existing)
             if _days_apart(date, edate) <= date_tolerance_days:
                 return existing
         merged[key] = MergedEvent(event_key=key, info=info)
-        by_participants.setdefault((sport, parts), []).append(key)
+        by_participants.setdefault((sport, parts, suffix), []).append(key)
         return key
 
     for snap in snapshots:
@@ -77,11 +81,11 @@ def merge_snapshots(snapshots: list[VenueSnapshot], date_tolerance_days: int = 1
             if me.info.tie_rule == "unknown" and info.tie_rule != "unknown":
                 me.info.tie_rule = info.tie_rule
         for q in snap.quotes:
-            sport, parts, date = _split_key(q.event_key)
+            sport, parts, date, suffix = _split_key(q.event_key)
             canonical = q.event_key if q.event_key in merged else None
             if canonical is None:
-                for existing in by_participants.get((sport, parts), []):
-                    _, _, edate = _split_key(existing)
+                for existing in by_participants.get((sport, parts, suffix), []):
+                    _, _, edate, _ = _split_key(existing)
                     if _days_apart(date, edate) <= date_tolerance_days:
                         canonical = existing
                         break

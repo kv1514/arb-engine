@@ -208,37 +208,41 @@ def _cost_with_fills(leg: Leg, fills: list[tuple[float, float]]) -> Decimal:
 
 
 def size_from_books(legs: Sequence[Leg], max_contracts: Optional[float] = None, min_margin: float = 0.0, step: float = 1.0) -> Optional[ArbResult]:
-    """Largest whole contract count (multiple of ``step``) such that filling every leg from
-    its order book still clears ``min_margin``. Legs without a book use their top-of-book
-    size (or unlimited if unknown). Returns the ArbResult at that size, or None."""
+    """Profit-maximising size: evaluate every size at which some leg's book changes level
+    (plus the overall cap) and keep the one with the highest dollar profit whose average
+    margin still clears ``min_margin``. Legs without a book use their top-of-book size (or
+    unlimited when unknown). Profit is concave in size (marginal cost is non-decreasing), so
+    the best size is where the marginal leg cost crosses $1 — not the largest size that is
+    still break-even. Returns None if no size of at least ``step`` qualifies."""
     caps: list[float] = []
+    breakpoints: set[float] = set()
     for leg in legs:
         q = leg.quote
         if q is not None and q.book is not None and q.book.asks:
-            caps.append(sum(l.size for l in q.book.asks))
+            cum = 0.0
+            for lvl in q.book.asks:
+                cum += lvl.size
+                breakpoints.add(cum)
+            caps.append(cum)
         elif q is not None and q.ask_size:
             caps.append(float(q.ask_size))
     cap = min(caps) if caps else (max_contracts or 100.0)
     if max_contracts is not None:
         cap = min(cap, float(max_contracts))
-    n = int(cap // step) * step
-    best: Optional[ArbResult] = None
-    # Marginal cost is non-decreasing in size, so scan down from the cap and stop at the
-    # first size that clears the margin.
-    size = n
-    while size >= step:
+    cap = int(cap // step) * step
+    if cap < step:
+        return None
+    candidates = sorted({int(b // step) * step for b in breakpoints if step <= b <= cap} | {cap})
+
+    def evaluate_at(size: float) -> Optional[ArbResult]:
         total = Decimal("0")
         leg_results: list[LegResult] = []
-        ok = True
         for leg in legs:
             q = leg.quote
-            fills: list[tuple[float, float]]
-            vwap: Optional[float]
             if q is not None and q.book is not None and q.book.asks:
                 walked = walk_book(q.book.asks, size)
                 if walked is None:
-                    ok = False
-                    break
+                    return None
                 vwap, fills = walked
             else:
                 vwap, fills = float(leg.price), [(float(leg.price), float(size))]
@@ -253,15 +257,19 @@ def size_from_books(legs: Sequence[Leg], max_contracts: Optional[float] = None, 
                     url=q.url if q else None, vwap=vwap,
                 )
             )
-        if ok:
-            profit = D(size) - total
-            margin = profit / D(size)
-            if float(margin) >= min_margin:
-                best = ArbResult(
-                    contracts=float(size), total_cost=float(total), payout=float(size), profit=float(profit),
-                    margin=float(margin), roi=float(profit / total) if total else 0.0, legs=leg_results,
-                    is_arb=profit > 0, gross_sum=sum(l.price for l in legs),
-                )
-                break
-        size -= step
+        profit = D(size) - total
+        margin = profit / D(size)
+        if float(margin) < min_margin:
+            return None
+        return ArbResult(
+            contracts=float(size), total_cost=float(total), payout=float(size), profit=float(profit),
+            margin=float(margin), roi=float(profit / total) if total else 0.0, legs=leg_results,
+            is_arb=profit > 0, gross_sum=sum(l.price for l in legs),
+        )
+
+    best: Optional[ArbResult] = None
+    for size in candidates:
+        r = evaluate_at(size)
+        if r is not None and (best is None or r.profit > best.profit):
+            best = r
     return best

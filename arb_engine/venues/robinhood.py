@@ -27,8 +27,8 @@ from typing import Any, Iterable, Optional
 
 from ..fees.robinhood import exchange_from_symbol_or_enum
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, nfl_event_key, parse_iso, person_keys, tennis_event_key
-from ..matching.teams import nfl_team_code
+from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key
+from ..matching.teams import nfl_team_city, nfl_team_code
 from .http import HttpClient
 
 WEB = "https://robinhood.com"
@@ -52,6 +52,12 @@ SPORT_SYMBOL_PREFIXES: dict[str, tuple[str, ...]] = {
     "nba": ("NBAGAME-", "KXNBAGAME-"),
     "nhl": ("NHLGAME-", "KXNHLGAME-"),
     "mlb": ("MLBGAME-", "KXMLBGAME-"),
+}
+
+
+# One binary contract per line; each contract is its own two-outcome event.
+LINE_SYMBOL_PREFIXES: dict[str, dict[str, str]] = {
+    "nfl": {"NFLSPREAD-": "spread", "KXNFLSPREAD-": "spread", "NFLTOTAL-": "total", "KXNFLTOTAL-": "total"},
 }
 
 
@@ -108,9 +114,10 @@ def extract_next_data(html: str) -> dict:
 class RobinhoodAdapter:
     venue = VENUE_ROBINHOOD
 
-    def __init__(self, http: Optional[HttpClient] = None, refresh_quotes: bool = True):
+    def __init__(self, http: Optional[HttpClient] = None, refresh_quotes: bool = True, with_lines: bool = True):
         self.http = http or HttpClient(headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/json"})
         self.refresh_quotes = refresh_quotes
+        self.with_lines = with_lines
 
     # ---- raw calls -------------------------------------------------------------------
     def _page_props(self, url: str) -> dict:
@@ -131,16 +138,23 @@ class RobinhoodAdapter:
     def event_page(self, category: str, slug: str) -> dict:
         return self._page_props(f"{WEB}/us/en/prediction-markets/{category}/events/{slug}/")
 
-    def quotes(self, contract_ids: Iterable[str]) -> dict[str, dict]:
-        ids = list(contract_ids)
+    def quotes(self, contract_ids: Iterable[str], workers: int = 8) -> dict[str, dict]:
+        """Batched (20 ids/call) and parallel — a full NFL category is ~1,500 contracts."""
+        ids = list(dict.fromkeys(contract_ids))
+        chunks = [ids[i : i + 20] for i in range(0, len(ids), 20)]
         out: dict[str, dict] = {}
-        for i in range(0, len(ids), 20):
-            chunk = ids[i : i + 20]
+
+        def one(chunk: list[str]) -> list[dict]:
             data = self.http.get(f"{API}/marketdata/event/contract/quotes/v1/", {"ids": ",".join(chunk)}, headers={"Accept": "application/json"})
-            for item in data.get("data", []):
-                d = item.get("data") or {}
-                if d.get("instrument_id"):
-                    out[d["instrument_id"]] = d
+            return [item.get("data") or {} for item in data.get("data", [])]
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=max(1, min(workers, len(chunks) or 1))) as pool:
+            for items in pool.map(one, chunks):
+                for d in items:
+                    if d.get("instrument_id"):
+                        out[d["instrument_id"]] = d
         return out
 
     def events_by_id(self, event_ids: Iterable[str]) -> list[dict]:
@@ -173,13 +187,16 @@ class RobinhoodAdapter:
         quotes: dict[str, dict] = dict(pp.get("quotes") or {})
         states: dict[str, dict] = dict(pp.get("eventStates") or {})
         events = self.select_game_events(sport, pp.get("events") or [])
+        lines = self.select_line_contracts(sport, pp.get("events") or []) if self.with_lines else []
         if self.refresh_quotes:
-            ids = [c["id"] for ev in events for c in ev["contracts"]]
+            ids = [c["id"] for ev in events for c in ev["contracts"]] + [x["contract"]["id"] for x in lines]
             try:
                 quotes.update(self.quotes(ids))
             except Exception as e:
                 snap.errors.append(f"quotes refresh: {e}")
         self.ingest(snap, sport, category, events, quotes, states)
+        if lines:
+            self.ingest_lines(snap, sport, category, lines, quotes, states)
         return snap
 
     @staticmethod
@@ -195,6 +212,20 @@ class RobinhoodAdapter:
             if not ev.get("mutuallyExclusive", True):
                 continue
             out.append({"event": ev, "contracts": contracts})
+        return out
+
+    @staticmethod
+    def select_line_contracts(sport: str, events: list[dict]) -> list[dict]:
+        """Spread/total contracts: [{event, contract, market_type}] — one per line."""
+        fams = LINE_SYMBOL_PREFIXES.get(sport, {})
+        out: list[dict] = []
+        for ev in events:
+            for c in (ev.get("eventContracts") or {}).values():
+                sym = c.get("symbol", "")
+                for prefix, mtype in fams.items():
+                    if sym.startswith(prefix):
+                        out.append({"event": ev, "contract": c, "market_type": mtype})
+                        break
         return out
 
     def ingest(self, snap: VenueSnapshot, sport: str, category: str, events: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:
@@ -244,3 +275,63 @@ class RobinhoodAdapter:
                     quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")),
                 )
                 snap.quotes.append(q)
+
+
+    def ingest_lines(self, snap: VenueSnapshot, sport: str, category: str, items: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:
+        """Spread/total contracts (Rothera ``NFLSPREAD-…``/``NFLTOTAL-…`` or Kalshi-routed)."""
+        for item in items:
+            ev, c, mtype = item["event"], item["contract"], item["market_type"]
+            sym = c.get("symbol", "")
+            line = _f(c.get("floorStrikeValue"))
+            pair = ticker_pair(sym.rsplit("-", 1)[0])
+            if line is None or not pair:
+                continue
+            st = states.get(ev.get("id"), {})
+            start = parse_iso(st.get("gameStart")) or _event_day_from_timeline(ev.get("timeline"))
+            date = et_date(start)
+            if date is None:
+                from ..matching.normalize import kalshi_ticker_date
+                date = kalshi_ticker_date(sym)
+            exch = exchange_from_symbol_or_enum(sym, c.get("exchange"))
+            slug = (ev.get("urlSlugs") or [ev.get("id")])[0]
+            url = f"{WEB}/us/en/prediction-markets/{category}/events/{slug}/"
+            if mtype == "spread":
+                team_raw = strip_digits(sym.rsplit("-", 1)[-1])
+                other_raw = split_pair(pair, team_raw)
+                fav = nfl_team_code(team_raw) if sport == "nfl" else team_raw
+                dog = (nfl_team_code(other_raw) if sport == "nfl" else other_raw) if other_raw else None
+                if not fav or not dog:
+                    continue
+                key = spread_event_key(sport, [fav, dog], date, fav, line)
+                yes_key, no_key = spread_outcomes(fav, dog, line)
+                labels = {yes_key: f"{nfl_team_city(fav) if sport == 'nfl' else fav} -{fmt_line(line)}", no_key: f"{nfl_team_city(dog) if sport == 'nfl' else dog} +{fmt_line(line)}"}
+                outcomes = [yes_key, no_key]
+            else:
+                codes: list[str] = []
+                for cut in range(2, len(pair) - 1):
+                    a, b = pair[:cut], pair[cut:]
+                    if sport == "nfl" and nfl_team_code(a) and nfl_team_code(b):
+                        codes = [nfl_team_code(a), nfl_team_code(b)]  # type: ignore[list-item]
+                        break
+                if not codes:
+                    continue
+                key = total_event_key(sport, codes, date, line)
+                yes_key, no_key = "over", "under"
+                labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
+                outcomes = ["over", "under"]
+            progress = str(st.get("eventProgress") or "").strip()
+            info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=outcomes, labels=labels, start_time=start, line=line, tie_rule=push_rule_for_line(line), venues={self.venue: {"event_id": ev.get("id"), "contract_id": c["id"], "slug": slug, "url": url, "exchange": exch}, "_teams": {"title": _pair_title(pair, sport)}}, in_play=_in_play_from_progress(progress, st.get("eventStatus")))
+            snap.events.setdefault(key, info)
+            qd = quotes.get(c["id"]) or {}
+            common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": sym}, url=url, ts=snap.fetched_at, book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
+            snap.quotes.append(OutcomeQuote(venue_market_id=c["id"], outcome=yes_key, outcome_label=labels[yes_key], ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), bid_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), meta={"symbol": sym, "exchange": exch, "side": "yes", "line": line, "contract_id": c["id"]}, **common))
+            snap.quotes.append(OutcomeQuote(venue_market_id=c["id"] + "#no", outcome=no_key, outcome_label=labels[no_key], ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), meta={"symbol": sym, "exchange": exch, "side": "no", "line": line, "contract_id": c["id"]}, **common))
+
+
+def _pair_title(pair: str, sport: str) -> str:
+    """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
+    for cut in range(2, len(pair) - 1):
+        a, b = pair[:cut], pair[cut:]
+        if sport != "nfl" or (nfl_team_code(a) and nfl_team_code(b)):
+            return f"{a} @ {b}"
+    return pair

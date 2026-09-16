@@ -58,6 +58,9 @@ class EventReport:
     tie_rule: str
     flags: list[str] = field(default_factory=list)
     live: bool = False
+    market_type: str = "moneyline"
+    line: Optional[float] = None
+    fillable: bool = False  # positive margin AND enough depth for min_size contracts
 
 
 @dataclass
@@ -68,8 +71,8 @@ class ScanResult:
     events: list[EventReport]
     errors: dict[str, list[str]]
 
-    def arbs(self, min_margin: float = 0.0, include_live: bool = False) -> list[EventReport]:
-        return [e for e in self.events if e.margin is not None and e.margin > min_margin and (include_live or not e.live) and "stale-quote" not in e.flags]
+    def arbs(self, min_margin: float = 0.0, include_live: bool = False, include_thin: bool = False) -> list[EventReport]:
+        return [e for e in self.events if e.margin is not None and e.margin > min_margin and (include_live or not e.live) and "stale-quote" not in e.flags and (include_thin or e.fillable)]
 
 
 def _arb_to_dict(r: Optional[ArbResult]) -> Optional[dict]:
@@ -97,7 +100,7 @@ def _dedupe_same_book(quotes: list[OutcomeQuote]) -> tuple[list[OutcomeQuote], d
     return keep, mirrors
 
 
-def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None) -> EventReport:
+def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None, min_size: float = 1.0) -> EventReport:
     info = me.info
     now = now or time.time()
     fee_for = lambda q: fee_model_for_quote(q, settings)  # noqa: E731
@@ -123,7 +126,10 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
     legs = best_leg_per_outcome(tradable, fee_for, contracts=contracts, allowed_venues=allowed_venues)
     complete = len(legs) == len(info.outcomes)
     arb = evaluate(legs, contracts) if complete else None
+    # Depth check: the largest size (book depth, else top-of-book size, else unlimited) that
+    # still clears the target margin. A tail quote backed by 0.01 contracts is not an arb.
     sized = size_from_books(legs, min_margin=target_margin) if complete and arb and arb.is_arb else None
+    fillable = sized is not None and sized.contracts >= min_size
     fair = consensus_fair_value(me.quotes_by_venue, info.outcomes, venue_weights=settings.get("venue_weights"))
 
     outcomes: list[OutcomeReport] = []
@@ -154,6 +160,8 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
         outcomes.append(OutcomeReport(outcome=o, label=info.labels.get(o, o), fair=fv.fair if fv else None, venues=sorted(vps, key=lambda v: (v.all_in is None, v.all_in or 9)), best_buy_venue=best_venue, best_buy_all_in=best_all_in, edge_at_best=edge))
     if stale_ids:
         flags.append("stale-quote")
+    if arb and arb.is_arb and not fillable:
+        flags.append("thin")  # positive margin at the reference size but not fillable for min_size contracts
     if arb and arb.is_arb:
         books_in_arb = {l.quote.book_id if l.quote else l.venue for l in legs}
         if len(books_in_arb) == 1:
@@ -161,12 +169,17 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
     return EventReport(
         event_key=me.event_key, title=info.title(), sport=info.sport, start_time=info.start_time.isoformat() if info.start_time else None,
         venues=me.venues, outcomes=outcomes, arb=_arb_to_dict(arb), sized_arb=_arb_to_dict(sized), gross_sum=arb.gross_sum if arb else None,
-        margin=arb.margin if arb else None, tie_rule=info.tie_rule, flags=flags, live=live,
+        margin=arb.margin if arb else None, tie_rule=info.tie_rule, flags=flags, live=live, market_type=info.market_type, line=info.line,
+        fillable=fillable,
     )
 
 
-def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0) -> ScanResult:
+def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0, market_types: Optional[set[str]] = None, depth_for_candidates: bool = False, candidate_margin: float = -0.01) -> ScanResult:
+    """Two passes when ``depth_for_candidates``: top-of-book for everything, then real order
+    books only for events whose margin is above ``candidate_margin`` (keeps Kalshi's
+    rate limit happy: dozens of book requests instead of hundreds)."""
     settings = settings or {}
+    adapters = list(adapters)
     snapshots: list[VenueSnapshot] = []
     errors: dict[str, list[str]] = {}
     for ad in adapters:
@@ -177,9 +190,31 @@ def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]]
     merged = merge_snapshots(snapshots)
     reports: list[EventReport] = []
     now = time.time()
+    selected: list[MergedEvent] = []
     for me in merged.values():
+        if market_types and me.info.market_type not in market_types:
+            continue
         if only_cross_venue and len(me.quotes_by_venue) < 2:
             continue
+        selected.append(me)
         reports.append(analyze_event(me, settings, contracts=contracts, target_margin=target_margin, allowed_venues=allowed_venues, max_quote_age=max_quote_age, now=now))
-    reports.sort(key=lambda r: (r.live, -(r.margin if r.margin is not None else -9), r.start_time or ""))
+    if depth_for_candidates:
+        cand_keys = {r.event_key for r in reports if r.margin is not None and r.margin >= candidate_margin and not r.live}
+        by_venue: dict[str, list[OutcomeQuote]] = {}
+        for me in selected:
+            if me.event_key in cand_keys:
+                for v, qs in me.quotes_by_venue.items():
+                    by_venue.setdefault(v, []).extend(qs)
+        for ad in adapters:
+            fn = getattr(ad, "attach_books_for", None)
+            if fn and by_venue.get(ad.venue):
+                errs: list[str] = []
+                fn(by_venue[ad.venue], errs)
+                if errs:
+                    errors.setdefault(ad.venue, []).extend(errs[:5] + ([f"... {len(errs) - 5} more"] if len(errs) > 5 else []))
+        reports = [analyze_event(me, settings, contracts=contracts, target_margin=target_margin, allowed_venues=allowed_venues, max_quote_age=max_quote_age, now=now) if me.event_key in cand_keys else r for me, r in zip(selected, reports)]
+        for r in reports:
+            if r.event_key in cand_keys:
+                r.flags.append("depth-checked")
+    reports.sort(key=lambda r: (r.live, not r.fillable, -(r.margin if r.margin is not None else -9), r.start_time or ""))
     return ScanResult(sport=sport, fetched_at=now, venues=[s.venue for s in snapshots], events=reports, errors=errors)

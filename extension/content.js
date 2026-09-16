@@ -50,6 +50,7 @@
     if (!res.analysis) { body.innerHTML = `<div class="arbe-muted">${esc(res.note || "Nothing to analyse on this page.")}</div>`; return; }
     const a = res.analysis;
     lastAnalysis = a;
+    if (a.lines) { renderLines(res); return; }
     let html = "";
     if (a.arb) {
       const cls = a.arb.isArb ? "arbe-good" : "arbe-bad";
@@ -69,6 +70,46 @@
     html += `<div class="arbe-muted arbe-small">Size ${a.contracts} contracts · target margin ${fmtPct(a.targetMargin)} · fees: Robinhood commission (Gold ${a.gold ? "on" : "off"}) + $0.01/ct exchange; Kalshi 7% taker / 1.75% maker × p(1−p); Polymarket 5% taker × p(1−p). Max buy = highest price on this venue that still locks the margin after hedging the other side at its cheapest current ask. Informational only — verify before trading.</div>`;
     body.innerHTML = html;
     decorateTabs(a);
+  }
+
+  // Spread / total pages: one row per line, arbs first.
+  function renderLines(res) {
+    const a = res.analysis;
+    const body = ensurePanel().querySelector(".arbe-body");
+    const arbs = a.lines.filter((l) => l.arb && l.arb.isArb && l.fillable);
+    let html = `<div class="arbe-arb ${arbs.length ? "arbe-good" : "arbe-muted"}"><b>${esc(res.event.name)}</b> — ${a.lines.length} ${esc(a.marketType)} lines, <b>${arbs.length}</b> fee-adjusted arb${arbs.length === 1 ? "" : "s"} fillable ≥ 1 contract</div>`;
+    html += `<table class="arbe-table"><thead><tr><th>line</th><th>side</th><th>here</th><th>all-in</th><th>max buy</th><th>best hedge</th><th>margin</th></tr></thead><tbody>`;
+    for (const l of a.lines) {
+      const m = l.arb ? l.arb.margin : null;
+      const cls = l.arb && l.arb.isArb ? (l.fillable ? "arbe-good" : "arbe-thin") : "";
+      l.rows.forEach((row, i) => {
+        const here = row.venues.find((v) => v.venue === "robinhood");
+        const hedgeRow = l.rows.find((r) => r !== row);
+        const hedge = hedgeRow ? hedgeRow.venues.find((v) => v.allIn != null && !v.mirror) : null;
+        html += `<tr class="${cls}">${i === 0 ? `<td rowspan="2"><b>${esc(l.title)}</b>${l.arb && l.arb.isArb ? `<div class="arbe-small">${l.fillable ? "fillable " + (l.sizedContracts || "?") + " ct" : "thin"}</div>` : ""}</td>` : ""}<td>${esc(row.label)}</td><td>${fmtP(here ? here.ask : null)}</td><td>${fmtP(here ? here.allIn : null)}</td><td><b>${fmtP(here ? here.maxBuyTaker : null)}</b></td><td>${hedge ? esc(hedgeRow.label) + " @ " + fmtP(hedge.allIn) + " " + esc(hedge.venue) : "–"}</td>${i === 0 ? `<td rowspan="2" class="${m != null && m > 0 ? "arbe-good" : "arbe-bad"}">${fmtPct(m, true)}</td>` : ""}</tr>`;
+      });
+    }
+    html += `</tbody></table>`;
+    if (a.errors && a.errors.length) html += `<div class="arbe-muted arbe-small">${a.errors.map(esc).join("<br>")}</div>`;
+    html += `<div class="arbe-muted arbe-small">here = Robinhood ask for that side; all-in includes commission + exchange fee; max buy = highest price here that still locks the margin against the cheapest hedge of the other side. Half-point lines cannot push. Informational only.</div>`;
+    body.innerHTML = html;
+    decorateLineTabs(a);
+  }
+  function decorateLineTabs(a) {
+    const tabs = document.querySelectorAll('[role="tablist"][aria-label="Contracts"] [role="tab"]');
+    const byContract = new Map(a.lines.map((l) => [l.contractId, l]));
+    tabs.forEach((tab) => {
+      const text = (tab.textContent || "").toLowerCase();
+      // Tab text is the contract's long name, e.g. "Buffalo wins by over 1.5 points 65¢" / "Over 49.5 points 64¢".
+      const l = a.lines.find((x) => { const yes = x.rows[0]; return yes && text.indexOf(String(x.line)) >= 0 && (x.marketType === "total" || text.indexOf(yes.label.split(" ")[0].toLowerCase()) >= 0); });
+      let badge = tab.querySelector(".arbe-badge");
+      if (!l) { if (badge) badge.remove(); return; }
+      const here = l.rows[0].venues.find((v) => v.venue === "robinhood");
+      if (!badge) { badge = document.createElement("span"); badge.className = "arbe-badge"; tab.appendChild(badge); }
+      const good = l.arb && l.arb.isArb && l.fillable;
+      badge.className = "arbe-badge " + (good ? "arbe-good" : "arbe-bad");
+      badge.textContent = `max ${fmtP(here ? here.maxBuyTaker : null)}` + (good ? ` · arb ${fmtPct(l.arb.margin, true)}` : "");
+    });
   }
 
   // Badge the contract tabs ("Philadelphia 77¢") with fair value and the max-buy price.

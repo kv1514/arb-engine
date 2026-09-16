@@ -24,3 +24,5 @@
 .arbe-badge { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 10px; background: #1a1f26; font-size: 11px; font-weight: 600; vertical-align: middle; }
 .arbe-badge.arbe-good { color: #7fe0a0; border: 1px solid #2f5d43; }
 .arbe-badge.arbe-bad { color: #f28b82; border: 1px solid #5d2f2f; }
+#arbe-panel .arbe-thin td { color: #c9a227; }
+#arbe-panel tr.arbe-good td { background: #17261d; }

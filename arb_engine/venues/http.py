@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -29,13 +30,37 @@ class HttpError(Exception):
         super().__init__(f"HTTP {status} for {url}: {body[:300]}")
 
 
+class RateLimiter:
+    """Thread-safe token bucket: at most ``rate`` requests per second (burst ``burst``)."""
+
+    def __init__(self, rate: float, burst: int = 1):
+        self.rate = float(rate)
+        self.capacity = float(max(1, burst))
+        self.tokens = self.capacity
+        self.updated = time.monotonic()
+        self.lock = threading.Lock()
+
+    def acquire(self) -> None:
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                self.tokens = min(self.capacity, self.tokens + (now - self.updated) * self.rate)
+                self.updated = now
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return
+                wait = (1 - self.tokens) / self.rate
+            time.sleep(wait)
+
+
 class HttpClient:
-    def __init__(self, timeout: float = 20.0, retries: int = 2, user_agent: str = DEFAULT_UA, headers: Optional[Mapping[str, str]] = None, transport: Optional[str] = None):
+    def __init__(self, timeout: float = 20.0, retries: int = 2, user_agent: str = DEFAULT_UA, headers: Optional[Mapping[str, str]] = None, transport: Optional[str] = None, rate_limit: Optional[float] = None):
         self.timeout = timeout
         self.retries = retries
         self.headers = {"User-Agent": user_agent, "Accept": "application/json", **(headers or {})}
         self.transport = transport or os.environ.get("ARB_HTTP_TRANSPORT", "auto")
         self._curl = shutil.which("curl")
+        self.limiter = RateLimiter(rate_limit, burst=int(rate_limit)) if rate_limit else None
 
     # ---- public -----------------------------------------------------------------------
     def request(self, method: str, url: str, params: Optional[Mapping[str, Any]] = None, json_body: Any = None, headers: Optional[Mapping[str, str]] = None, raw: bool = False) -> Any:
@@ -50,6 +75,8 @@ class HttpClient:
             hdrs["Content-Type"] = "application/json"
         last_err: Optional[Exception] = None
         for attempt in range(self.retries + 1):
+            if self.limiter:
+                self.limiter.acquire()
             try:
                 if self.transport == "curl" and self._curl:
                     status, body = self._via_curl(method, url, hdrs, data)
@@ -64,7 +91,7 @@ class HttpClient:
             except HttpError as e:
                 last_err = e
                 if e.status in (429, 500, 502, 503, 504) and attempt < self.retries:
-                    time.sleep(0.5 * (attempt + 1))
+                    time.sleep((2.0 if e.status == 429 else 0.5) * (2 ** attempt))
                     continue
                 raise
             except (urllib.error.URLError, TimeoutError, http.client.HTTPException, subprocess.SubprocessError) as e:

@@ -38,6 +38,29 @@
   eq(calls.some((u) => u.includes("markets/KXNFLGAME-26SEP20PHITEN-PHI")), true, "kalshi ticker derived from RH symbol");
   eq(calls.some((u) => u.includes("slug=nfl-phi-ten-2026-09-20")), true, "polymarket slug derived from RH symbol");
 
+  // --- totals page (direct) ----------------------------------------------------------------
+  globalThis.__totalsMode = true; cache.clear();
+  const t = await analyze("https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/");
+  globalThis.__totalsMode = false;
+  eq(t.ok, true, "totals ok");
+  eq(t.analysis.marketType, "total", "totals market type");
+  eq(t.event.game, "CAR @ ATL", "totals game");
+  eq(t.analysis.lines.length, 3, "totals lines");
+  const l65 = t.analysis.lines.find((l) => l.line === 65.5), l44 = t.analysis.lines.find((l) => l.line === 44.5), l17 = t.analysis.lines.find((l) => l.line === 17.5);
+  eq(!!l65 && !!l44 && !!l17, true, "lines present");
+  eq(l65.arb.isArb, true, "65.5 is an arb");
+  eq(l65.fillable, true, "65.5 fillable");
+  eq(l65.sizedContracts, 200, "65.5 sized by Kalshi under depth");
+  eq(l65.arb.legs.map((x) => x.venue + ":" + (x.outcome || x.label)).sort().join(","), "kalshi:under,robinhood:over", "65.5 legs");
+  eq(Math.round(l65.arb.margin * 1e4) / 1e4, 0.0115, "65.5 margin");
+  eq(l44.rows.length, 2, "44.5 rows");
+  eq(l44.rows.find((r) => r.outcome === "over").venues.map((v) => v.venue).sort().join(","), "kalshi,polymarket,robinhood", "44.5 venues incl polymarket");
+  eq(l44.rows.find((r) => r.outcome === "over").venues.find((v) => v.venue === "polymarket").ask, 0.47, "44.5 polymarket ask");
+  eq(l44.arb.isArb, false, "44.5 no arb");
+  eq(l17.arb, null, "17.5 no yes ask -> no arb");
+  eq(t.analysis.lines[0].line, 65.5, "arbs sort first");
+  eq(t.analysis.errors.some((e) => e.indexOf("17.5") >= 0), true, "missing kalshi line reported");
+
   // --- bridge mode ---------------------------------------------------------------------
   stored.bridge = "auto"; globalThis.__bridgeOnline = true; bridgeUp = null; bridgeChecked = 0; cache.clear();
   const b = await analyze(url);
@@ -48,6 +71,16 @@
   eq(typeof brh.allIn, "number", "bridge all-in mapped");
   eq(typeof brh.maxBuyMaker, "number", "bridge maker max mapped");
   eq(b.analysis.arb && typeof b.analysis.arb.margin, "number", "bridge arb mapped");
+
+  // --- bridge mapping for line pages (pure function on the Python engine's output) --------
+  const bl = fromBridge(JSON.parse(FIXTURES["bridge_lines.json"]), { contracts: 100, targetMargin: 0, gold: false });
+  eq(bl.analysis.source, "bridge", "bridge lines source");
+  eq(bl.analysis.lines.length, 3, "bridge lines count");
+  const b65 = bl.analysis.lines.find((l) => l.line === 65.5);
+  eq(b65.fillable, true, "bridge 65.5 fillable");
+  eq(b65.sizedContracts, 200, "bridge 65.5 sized");
+  eq(b65.rows[0].venues[0].allIn != null, true, "bridge line rows mapped");
+  eq(b65.arb.isArb, true, "bridge line arb mapped");
 
   // --- bridge required but down --------------------------------------------------------
   stored.bridge = "on"; globalThis.__bridgeOnline = false; bridgeUp = null; bridgeChecked = 0; cache.clear();

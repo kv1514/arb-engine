@@ -2,8 +2,8 @@
 
     GET /health
     GET /analyze?url=<robinhood event url>[&contracts=100&target_margin=0&gold=0]
-    GET /kalshi/market/<ticker>          proxy for the extension (Kalshi's API refuses
-                                          browser Origins other than kalshi.com)
+    GET /kalshi/market/<ticker>          proxies for the extension (Kalshi's API refuses
+    GET /kalshi/markets?event_ticker=…    browser Origins other than kalshi.com)
 
 Binds to 127.0.0.1 only and adds permissive CORS headers so the extension (and the page)
 can call it. It never places orders.
@@ -51,6 +51,9 @@ class Handler(BaseHTTPRequestHandler):
                     settings["robinhood_gold"] = True
                 res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)), target_margin=float(qs.get("target_margin", 0)))
                 self._send(200, res)
+            elif u.path == "/kalshi/markets":
+                data = self.kalshi.get("/markets", {k: v for k, v in qs.items() if k in ("event_ticker", "series_ticker", "status", "limit")})
+                self._send(200, data)
             elif u.path.startswith("/kalshi/market/"):
                 ticker = u.path.rsplit("/", 1)[-1]
                 self._send(200, {"market": self.kalshi.market(ticker), "series": self.analyzer._series(ticker)})

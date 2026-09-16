@@ -30,6 +30,13 @@ def main() -> None:
     (OUT / "kalshi_markets_nfl.json").write_text(json.dumps({"markets": by_event[ev]}, indent=1))
     (OUT / "kalshi_series_kxnflgame.json").write_text(json.dumps({"series": k.client.series("KXNFLGAME")}, indent=1))
     (OUT / "kalshi_orderbook.json").write_text(json.dumps(k.client.orderbook(by_event[ev][0]["ticker"], 5), indent=1))
+    # Spread + total lines for the same game (two spread markets, one total).
+    game_code = ev.split("-", 1)[1]  # 26SEP17DETBUF
+    spreads = [m for m in k.client.markets("KXNFLSPREAD") if m["event_ticker"] == f"KXNFLSPREAD-{game_code}" and m.get("floor_strike") == 1.5]
+    totals = [m for m in k.client.markets("KXNFLTOTAL") if m["event_ticker"] == f"KXNFLTOTAL-{game_code}" and m.get("floor_strike") == 49.5]
+    for m in spreads + totals:
+        m.pop("rules_primary", None); m.pop("rules_secondary", None)
+    (OUT / "kalshi_markets_nfl_lines.json").write_text(json.dumps({"spreads": spreads, "totals": totals}, indent=1))
 
     p = PolymarketAdapter()
     evs = p.events("nfl")
@@ -41,7 +48,10 @@ def main() -> None:
         return has_ml and len(parts) >= 3 and sorted(parts[1:3]) == codes
     game = next((e for e in evs if _same_game(e)), None) or next(e for e in evs if any(m.get("sportsMarketType") == "moneyline" for m in e.get("markets", [])))
     slim = dict(game)
-    slim["markets"] = [m for m in game["markets"] if m.get("sportsMarketType") in ("moneyline", "spreads")][:2]
+    ml = [m for m in game["markets"] if m.get("sportsMarketType") == "moneyline"][:1]
+    sp = [m for m in game["markets"] if m.get("sportsMarketType") == "spreads" and m.get("line") == -1.5][:1]
+    tt = [m for m in game["markets"] if m.get("sportsMarketType") == "totals" and m.get("line") == 49.5][:1]
+    slim["markets"] = ml + sp + tt
     for m in slim["markets"]:
         m.pop("description", None)
     (OUT / "polymarket_events_nfl.json").write_text(json.dumps([slim], indent=1))
@@ -52,11 +62,25 @@ def main() -> None:
     pp = r.category_page("nfl")
     games = r.select_game_events("nfl", pp["events"])
     games = sorted(games, key=lambda g: 0 if sorted(c["symbol"].rsplit("-", 1)[-1].lower() for c in g["contracts"]) == codes else 1)[:2]
-    ids = [c["id"] for g in games for c in g["contracts"]]
+    # Spread/total events for the first game, trimmed to the 1.5 spreads and the 49.5 total.
+    line_events = []
+    for x in r.select_line_contracts("nfl", pp["events"]):
+        sym = x["contract"]["symbol"]
+        if game_code not in sym:
+            continue
+        fl = float(x["contract"].get("floorStrikeValue") or 0)
+        if (x["market_type"] == "spread" and fl == 1.5) or (x["market_type"] == "total" and fl == 49.5):
+            line_events.append(x)
+    line_by_event: dict[str, dict] = {}
+    for x in line_events:
+        e = line_by_event.setdefault(x["event"]["id"], dict(x["event"], eventContracts={}))
+        e["eventContracts"][str(len(e["eventContracts"]))] = x["contract"]
+    events_out = [g["event"] for g in games] + list(line_by_event.values())
+    ids = [c["id"] for g in games for c in g["contracts"]] + [x["contract"]["id"] for x in line_events]
     quotes = r.quotes(ids)
     slim_pp = {
-        "events": [{k2: v for k2, v in g["event"].items() if k2 in ("id", "name", "eventContracts", "urlSlugs", "category", "mutuallyExclusive", "timeline", "eventType")} for g in games],
-        "eventStates": {g["event"]["id"]: pp["eventStates"].get(g["event"]["id"], {}) for g in games},
+        "events": [{k2: v for k2, v in e.items() if k2 in ("id", "name", "eventContracts", "urlSlugs", "category", "mutuallyExclusive", "timeline", "eventType")} for e in events_out],
+        "eventStates": {e["id"]: pp["eventStates"].get(e["id"], {}) for e in events_out},
         "quotes": {i: quotes[i] for i in ids if i in quotes},
     }
     for e in slim_pp["events"]:

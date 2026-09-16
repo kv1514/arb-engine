@@ -33,3 +33,9 @@ def nfl_team_code(name: Optional[str]) -> Optional[str]:
         if len(k) >= 4 and k in key:
             return _INDEX[k]
     return None
+
+
+def nfl_team_city(code: Optional[str]) -> str:
+    """'BUF' -> 'Buffalo' (falls back to the code)."""
+    info = NFL_TEAMS.get(code or "")
+    return info["city"] if info else (code or "")

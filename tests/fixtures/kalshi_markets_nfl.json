@@ -22,11 +22,11 @@
    "no_sub_title": "Detroit",
    "notional_value_dollars": "1.0000",
    "occurrence_datetime": "2026-09-18T03:15:00Z",
-   "open_interest_fp": "330436.98",
+   "open_interest_fp": "336746.19",
    "open_time": "2026-08-25T15:33:00Z",
    "previous_price_dollars": "0.3400",
    "previous_yes_ask_dollars": "0.3400",
-   "previous_yes_bid_dollars": "0.3200",
+   "previous_yes_bid_dollars": "0.3300",
    "price_level_structure": "linear_cent",
    "price_ranges": [
     {
@@ -44,12 +44,12 @@
    "ticker": "KXNFLGAME-26SEP17DETBUF-DET",
    "title": "Detroit wins",
    "updated_time": "2026-08-25T15:33:00.987327Z",
-   "volume_24h_fp": "188986.33",
-   "volume_fp": "379898.72",
+   "volume_24h_fp": "191438.46",
+   "volume_fp": "386542.38",
    "yes_ask_dollars": "0.3300",
-   "yes_ask_size_fp": "8565985.10",
+   "yes_ask_size_fp": "8583916.85",
    "yes_bid_dollars": "0.3200",
-   "yes_bid_size_fp": "2063924.29",
+   "yes_bid_size_fp": "2070176.84",
    "yes_sub_title": "Detroit"
   },
   {
@@ -65,7 +65,7 @@
    "expected_expiration_time": "2026-09-18T03:15:00Z",
    "expiration_time": "2026-09-20T00:15:00Z",
    "expiration_value": "",
-   "last_price_dollars": "0.6800",
+   "last_price_dollars": "0.6700",
    "latest_expiration_time": "2026-09-20T00:15:00Z",
    "liquidity_dollars": "0.0000",
    "market_type": "binary",
@@ -74,11 +74,11 @@
    "no_sub_title": "Buffalo",
    "notional_value_dollars": "1.0000",
    "occurrence_datetime": "2026-09-18T03:15:00Z",
-   "open_interest_fp": "575925.64",
+   "open_interest_fp": "579318.39",
    "open_time": "2026-08-25T15:33:00Z",
    "previous_price_dollars": "0.6800",
    "previous_yes_ask_dollars": "0.6800",
-   "previous_yes_bid_dollars": "0.6600",
+   "previous_yes_bid_dollars": "0.6700",
    "price_level_structure": "linear_cent",
    "price_ranges": [
     {
@@ -96,12 +96,12 @@
    "ticker": "KXNFLGAME-26SEP17DETBUF-BUF",
    "title": "Buffalo wins",
    "updated_time": "2026-08-25T15:33:00.987327Z",
-   "volume_24h_fp": "299960.96",
-   "volume_fp": "661069.39",
+   "volume_24h_fp": "297866.88",
+   "volume_fp": "666552.78",
    "yes_ask_dollars": "0.6800",
-   "yes_ask_size_fp": "11524668.71",
+   "yes_ask_size_fp": "11575481.29",
    "yes_bid_dollars": "0.6700",
-   "yes_bid_size_fp": "328319.33",
+   "yes_bid_size_fp": "333392.36",
    "yes_sub_title": "Buffalo"
   }
  ]

@@ -19,8 +19,23 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
 from ..models import VENUE_KALSHI, Book, EventInfo, Level, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, kalshi_ticker_date, nfl_event_key, parse_iso, person_keys, tennis_event_key
-from ..matching.teams import nfl_team_code
+from ..matching.normalize import (
+    et_date,
+    fmt_line,
+    kalshi_ticker_date,
+    nfl_event_key,
+    parse_iso,
+    person_keys,
+    push_rule_for_line,
+    split_pair,
+    spread_event_key,
+    spread_outcomes,
+    strip_digits,
+    tennis_event_key,
+    ticker_pair,
+    total_event_key,
+)
+from ..matching.teams import nfl_team_city, nfl_team_code
 from .http import HttpClient
 
 ENV_REST_BASE = {
@@ -30,7 +45,11 @@ ENV_REST_BASE = {
 
 # Series we scan per sport. Game-level series carry maker fees (quadratic_with_maker_fees).
 SPORT_SERIES: dict[str, list[dict[str, Any]]] = {
-    "nfl": [{"series": "KXNFLGAME", "market_type": "moneyline"}],
+    "nfl": [
+        {"series": "KXNFLGAME", "market_type": "moneyline"},
+        {"series": "KXNFLSPREAD", "market_type": "spread"},
+        {"series": "KXNFLTOTAL", "market_type": "total"},
+    ],
     "ncaaf": [{"series": "KXNCAAFGAME", "market_type": "moneyline"}],
     "tennis": [
         {"series": "KXATPMATCH", "market_type": "moneyline"},
@@ -57,7 +76,7 @@ class KalshiClient:
         self.base_url = (base_url or os.environ.get("KALSHI_BASE_URL") or ENV_REST_BASE.get(self.env, ENV_REST_BASE["demo"])).rstrip("/")
         self.api_key = api_key or os.environ.get("KALSHI_API_KEY")
         self.private_key_path = private_key_path or os.environ.get("KALSHI_PRIVATE_KEY_PATH")
-        self.http = http or HttpClient()
+        self.http = http or HttpClient(rate_limit=float(os.environ.get("KALSHI_RATE_LIMIT", "8")), retries=3)
         self._private_key = None
 
     # ---- auth -----------------------------------------------------------------------
@@ -224,9 +243,50 @@ class KalshiAdapter:
             series = self.series_info(spec["series"])
             fee_params = {"fee_type": series.get("fee_type"), "fee_multiplier": series.get("fee_multiplier", 1), "series": spec["series"]}
             self._ingest_markets(snap, sport, spec, markets, fee_params)
+        if self.with_books:
+            self._attach_books(snap)
         return snap
 
+    def _attach_books(self, snap: VenueSnapshot, workers: int = 4) -> None:
+        self.attach_books_for(snap.quotes, snap.errors, workers=workers)
+
+    def attach_books_for(self, quotes: list[OutcomeQuote], errors: Optional[list[str]] = None, workers: int = 4) -> None:
+        """Fetch order books (rate-limited, parallel) and attach the YES/NO side to each quote."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        errors = errors if errors is not None else []
+        tickers = sorted({q.meta.get("ticker") or q.venue_market_id.split("#")[0] for q in quotes})
+
+        def one(t: str):
+            try:
+                return t, parse_orderbook(self.client.orderbook(t, self.book_depth))
+            except Exception as e:
+                return t, e
+
+        books: dict[str, tuple[Book, Book]] = {}
+        with ThreadPoolExecutor(max_workers=max(1, min(workers, len(tickers) or 1))) as pool:
+            for t, res in pool.map(one, tickers):
+                if isinstance(res, Exception):
+                    errors.append(f"orderbook {t}: {res}")
+                else:
+                    books[t] = res
+        for q in quotes:
+            t = q.meta.get("ticker") or q.venue_market_id.split("#")[0]
+            if t not in books:
+                continue
+            yes_book, no_book = books[t]
+            q.book = no_book if q.meta.get("side") == "no" else yes_book
+            if q.book.asks:
+                q.ask = q.book.asks[0].price
+                q.ask_size = q.book.asks[0].size
+            if q.book.bids:
+                q.bid = q.book.bids[0].price
+                q.bid_size = q.book.bids[0].size
+
     def _ingest_markets(self, snap: VenueSnapshot, sport: str, spec: dict, markets: Iterable[dict], fee_params: dict) -> None:
+        if spec["market_type"] in ("spread", "total"):
+            self._ingest_line_markets(snap, sport, spec, markets, fee_params)
+            return
         by_event: dict[str, list[dict]] = {}
         for m in markets:
             if m.get("status") not in (None, "active", "open"):
@@ -268,11 +328,6 @@ class KalshiAdapter:
                 yes_ask = _f(m.get("yes_ask_dollars")) or (_f(m.get("yes_ask")) / 100.0 if _f(m.get("yes_ask")) else None)
                 yes_bid = _f(m.get("yes_bid_dollars")) or (_f(m.get("yes_bid")) / 100.0 if _f(m.get("yes_bid")) else None)
                 book = None
-                if self.with_books:
-                    try:
-                        book, _ = parse_orderbook(self.client.orderbook(m["ticker"], self.book_depth))
-                    except Exception as e:
-                        snap.errors.append(f"orderbook {m['ticker']}: {e}")
                 q = OutcomeQuote(
                     venue=self.venue, venue_market_id=m["ticker"], event_key=key, outcome=codes[m["ticker"]],
                     outcome_label=labels[m["ticker"]], ask=yes_ask if yes_ask and yes_ask < 1.0 else None,
@@ -280,6 +335,72 @@ class KalshiAdapter:
                     ask_size=_f(m.get("yes_ask_size_fp")), bid_size=_f(m.get("yes_bid_size_fp")), book=book,
                     fee_params=dict(fee_params), url=f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}",
                     ts=snap.fetched_at,
-                    meta={"exchange_index": m.get("exchange_index"), "close_time": m.get("close_time"), "volume": _f(m.get("volume_fp")), "open_interest": _f(m.get("open_interest_fp")), "last": _f(m.get("last_price_dollars"))},
+                    meta={"ticker": m["ticker"], "side": "yes", "exchange_index": m.get("exchange_index"), "close_time": m.get("close_time"), "volume": _f(m.get("volume_fp")), "open_interest": _f(m.get("open_interest_fp")), "last": _f(m.get("last_price_dollars"))},
                 )
                 snap.quotes.append(q)
+
+
+    # ---- spreads / totals: one binary market per line -------------------------------------
+    def _ingest_line_markets(self, snap: VenueSnapshot, sport: str, spec: dict, markets: Iterable[dict], fee_params: dict) -> None:
+        mtype = spec["market_type"]
+        for m in markets:
+            if m.get("status") not in (None, "active", "open"):
+                continue
+            line = _f(m.get("floor_strike"))
+            if line is None:
+                continue
+            event_ticker = m.get("event_ticker", "")
+            pair = ticker_pair(event_ticker)
+            if not pair:
+                continue
+            start = parse_iso(m.get("occurrence_datetime"))
+            date = et_date(start) or kalshi_ticker_date(event_ticker)
+            url = f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}"
+            if mtype == "spread":
+                team_raw = strip_digits(m["ticker"].rsplit("-", 1)[-1])
+                other_raw = split_pair(pair, team_raw)
+                fav = nfl_team_code(team_raw) if sport == "nfl" else team_raw
+                dog = (nfl_team_code(other_raw) if sport == "nfl" else other_raw) if other_raw else None
+                if not fav or not dog:
+                    continue
+                key = spread_event_key(sport, [fav, dog], date, fav, line)
+                yes_key, no_key = spread_outcomes(fav, dog, line)
+                labels = {yes_key: f"{nfl_team_city(fav) if sport == 'nfl' else fav} -{fmt_line(line)}", no_key: f"{nfl_team_city(dog) if sport == 'nfl' else dog} +{fmt_line(line)}"}
+                outcomes = [yes_key, no_key]
+            else:
+                codes: list[str] = []
+                for cut in range(2, len(pair) - 1):  # split 'DETBUF' into two known codes
+                    a, b = pair[:cut], pair[cut:]
+                    if sport == "nfl" and nfl_team_code(a) and nfl_team_code(b):
+                        codes = [nfl_team_code(a), nfl_team_code(b)]  # type: ignore[list-item]
+                        break
+                if not codes:
+                    codes = [pair[: len(pair) // 2], pair[len(pair) // 2:]]
+                key = total_event_key(sport, codes, date, line)
+                yes_key, no_key = "over", "under"
+                labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
+                outcomes = ["over", "under"]
+            info = EventInfo(
+                event_key=key, sport=sport, market_type=mtype, outcomes=outcomes, labels=labels, start_time=start,
+                line=line, tie_rule=push_rule_for_line(line),
+                venues={self.venue: {"event_ticker": event_ticker, "ticker": m["ticker"], "url": url}, "_teams": {"title": _pair_title(pair, sport)}},
+            )
+            snap.events.setdefault(key, info)
+            yes_ask, yes_bid = _f(m.get("yes_ask_dollars")), _f(m.get("yes_bid_dollars"))
+            no_ask, no_bid = _f(m.get("no_ask_dollars")), _f(m.get("no_bid_dollars"))
+            if no_ask is None and yes_bid is not None:
+                no_ask = round(1.0 - yes_bid, 4)
+            if no_bid is None and yes_ask is not None:
+                no_bid = round(1.0 - yes_ask, 4)
+            common = dict(venue=self.venue, event_key=key, fee_params=dict(fee_params), url=url, ts=snap.fetched_at)
+            snap.quotes.append(OutcomeQuote(venue_market_id=m["ticker"], outcome=yes_key, outcome_label=labels[yes_key], ask=yes_ask if yes_ask and yes_ask < 1 else None, bid=yes_bid if yes_bid and yes_bid > 0 else None, ask_size=_f(m.get("yes_ask_size_fp")), bid_size=_f(m.get("yes_bid_size_fp")), meta={"ticker": m["ticker"], "side": "yes", "exchange_index": m.get("exchange_index"), "line": line}, **common))
+            snap.quotes.append(OutcomeQuote(venue_market_id=m["ticker"] + "#no", outcome=no_key, outcome_label=labels[no_key], ask=no_ask if no_ask and no_ask < 1 else None, bid=no_bid if no_bid and no_bid > 0 else None, ask_size=_f(m.get("yes_bid_size_fp")), bid_size=_f(m.get("yes_ask_size_fp")), meta={"ticker": m["ticker"], "side": "no", "exchange_index": m.get("exchange_index"), "line": line}, **common))
+
+
+def _pair_title(pair: str, sport: str) -> str:
+    """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
+    for cut in range(2, len(pair) - 1):
+        a, b = pair[:cut], pair[cut:]
+        if sport != "nfl" or (nfl_team_code(a) and nfl_team_code(b)):
+            return f"{a} @ {b}"
+    return pair

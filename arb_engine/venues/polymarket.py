@@ -17,8 +17,8 @@ import time
 from typing import Any, Optional
 
 from ..models import VENUE_POLYMARKET, Book, EventInfo, Level, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, nfl_event_key, parse_iso, person_keys, tennis_event_key
-from ..matching.teams import nfl_team_code
+from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, spread_event_key, spread_outcomes, tennis_event_key, total_event_key
+from ..matching.teams import nfl_team_city, nfl_team_code
 from .http import HttpClient
 
 GAMMA = "https://gamma-api.polymarket.com"
@@ -102,19 +102,37 @@ class PolymarketAdapter:
                 seen.add(ev.get("id"))
                 self._ingest_event(snap, sport, ev)
         if self.with_books and snap.quotes:
-            tokens = [q.venue_market_id for q in snap.quotes]
-            books = {}
-            for i in range(0, len(tokens), 50):
-                books.update(self.books(tokens[i : i + 50]))
-            for q in snap.quotes:
-                q.book = books.get(q.venue_market_id)
+            self.attach_books_for(snap.quotes, snap.errors)
         return snap
+
+    def attach_books_for(self, quotes: list[OutcomeQuote], errors: Optional[list[str]] = None) -> None:
+        tokens = list(dict.fromkeys(q.venue_market_id for q in quotes if q.venue_market_id))
+        books: dict[str, Book] = {}
+        for i in range(0, len(tokens), 50):
+            try:
+                books.update(self.books(tokens[i : i + 50]))
+            except Exception as e:
+                if errors is not None:
+                    errors.append(f"books: {e}")
+        for q in quotes:
+            b = books.get(q.venue_market_id)
+            if b is None:
+                continue
+            q.book = b
+            if b.asks:
+                q.ask, q.ask_size = b.asks[0].price, b.asks[0].size
+            if b.bids:
+                q.bid, q.bid_size = b.bids[0].price, b.bids[0].size
 
     def _ingest_event(self, snap: VenueSnapshot, sport: str, ev: dict) -> None:
         for m in ev.get("markets", []):
-            if m.get("sportsMarketType") != "moneyline":
-                continue  # v1: moneylines only (spreads/totals need line matching)
+            mt = m.get("sportsMarketType")
             if m.get("closed") or not m.get("active", True):
+                continue
+            if mt in ("spreads", "totals") and sport == "nfl":
+                self._ingest_line_market(snap, sport, ev, m, "spread" if mt == "spreads" else "total")
+                continue
+            if mt != "moneyline":
                 continue
             outcomes = _jl(m.get("outcomes"))
             prices = [_f(p) for p in _jl(m.get("outcomePrices"))]
@@ -160,3 +178,46 @@ class PolymarketAdapter:
                     meta={"mid_price": prices[i] if i < len(prices) else None, "condition_id": m.get("conditionId"), "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "volume24h": _f(m.get("volume24hr")), "liquidity": _f(m.get("liquidityNum")), "neg_risk": m.get("negRisk")},
                 )
                 snap.quotes.append(q)
+
+
+    def _ingest_line_market(self, snap: VenueSnapshot, sport: str, ev: dict, m: dict, mtype: str) -> None:
+        outcomes = _jl(m.get("outcomes"))
+        tokens = _jl(m.get("clobTokenIds"))
+        line = _f(m.get("line"))
+        if len(outcomes) != 2 or len(tokens) != 2 or line is None:
+            return
+        start = parse_iso(m.get("gameStartTime"))
+        date = et_date(start)
+        url = f"https://polymarket.com/event/{ev.get('slug')}"
+        # Event slug is away-home; needed to name totals and to sanity-check codes.
+        slug_parts = str(ev.get("slug", "")).split("-")
+        game_codes = [nfl_team_code(slug_parts[1]), nfl_team_code(slug_parts[2])] if len(slug_parts) >= 3 else [None, None]
+        if mtype == "spread":
+            codes = [nfl_team_code(o) for o in outcomes]
+            if any(c is None for c in codes):
+                return
+            if line < 0:
+                fav, dog, L = codes[0], codes[1], -line
+                keys = list(spread_outcomes(fav, dog, L))          # outcome0 = fav covers
+            else:
+                fav, dog, L = codes[1], codes[0], line
+                yk, nk = spread_outcomes(fav, dog, L)
+                keys = [nk, yk]                                      # outcome0 = dog with +line
+            key = spread_event_key(sport, [fav, dog], date, fav, L)  # type: ignore[list-item]
+            labels = {keys[0]: f"{outcomes[0]} {'-' if line < 0 else '+'}{fmt_line(abs(line))}", keys[1]: f"{outcomes[1]} {'+' if line < 0 else '-'}{fmt_line(abs(line))}"}
+            out_keys = sorted(keys)
+        else:
+            if None in game_codes:
+                return
+            key = total_event_key(sport, game_codes, date, line)  # type: ignore[arg-type]
+            keys = ["over" if outcomes[0].lower().startswith("over") else "under", "under" if outcomes[0].lower().startswith("over") else "over"]
+            labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
+            out_keys = ["over", "under"]
+        info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=out_keys, labels=labels, start_time=start, line=abs(line) if mtype == "spread" else line, tie_rule=push_rule_for_line(abs(line)), venues={self.venue: {"event_id": ev.get("id"), "market_id": m.get("id"), "slug": m.get("slug"), "url": url}, "_teams": {"title": f"{slug_parts[1].upper()} @ {slug_parts[2].upper()}" if len(slug_parts) >= 3 else ""}})
+        snap.events.setdefault(key, info)
+        fee_params = {"feeSchedule": m.get("feeSchedule"), "feesEnabled": m.get("feesEnabled", True), "feeType": m.get("feeType")}
+        bb, ba = _f(m.get("bestBid")), _f(m.get("bestAsk"))
+        sides = [(bb, ba), ((1 - ba) if ba is not None else None, (1 - bb) if bb is not None else None)]
+        for i in range(2):
+            bid, ask = sides[i]
+            snap.quotes.append(OutcomeQuote(venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None, fee_params=fee_params, url=url, ts=snap.fetched_at, meta={"condition_id": m.get("conditionId"), "slug": m.get("slug"), "line": line, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize"))}))

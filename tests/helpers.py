@@ -12,6 +12,11 @@ def load(name: str) -> Any:
         return json.load(f)
 
 
+def load_text(name: str) -> str:
+    with open(FIXTURES / name, encoding="utf-8") as f:
+        return f.read()
+
+
 class FakeHttp:
     """Routes URLs to fixture payloads; records every request."""
 

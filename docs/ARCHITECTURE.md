@@ -22,7 +22,13 @@
 
 * **Per-outcome normalisation.** Every venue quote becomes "price to buy this outcome",
   so a NO quote on side B is just a YES quote on side A. Arbitrage is then
-  `sum(all-in cost of the cheapest leg per outcome) < 1`.
+  `sum(all-in cost of the cheapest leg per outcome) < 1`. Spread/total lines are the same
+  shape: one binary market per line becomes a two-outcome event (`BUF-1.5` / `DET+1.5`,
+  `over` / `under`) whose NO quote is stored as `<market id>#no`.
+* **Fillable, not just positive.** A positive margin at the reference size only counts as an
+  arb when every leg has depth for at least one contract; `--books` then fetches real
+  order books for candidate events (two passes, so Kalshi's rate limit is respected) and
+  `size_from_books` returns the profit-maximising size.
 * **Fees are exact.** `Decimal` in Python, `BigInt` in JS; both are checked against the
   venues' published tables and against each other (2,160 vectors).
 * **Max-buy price** is computed on the venue's tick grid with the real fee function, for a

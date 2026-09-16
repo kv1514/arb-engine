@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from arb_engine.matching import et_date, kalshi_ticker_date, merge_snapshots, nfl_event_key, nfl_team_code, parse_iso, person_key, person_keys, tennis_event_key
+from arb_engine.matching import et_date, fmt_line, kalshi_ticker_date, merge_snapshots, nfl_event_key, nfl_team_code, parse_iso, person_key, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key
 from arb_engine.models import EventInfo, OutcomeQuote, VenueSnapshot
 
 
@@ -75,3 +75,28 @@ class MergeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LineKeyTests(unittest.TestCase):
+    def test_helpers(self):
+        self.assertEqual(fmt_line(1.5), "1.5")
+        self.assertEqual(fmt_line(49.5), "49.5")
+        self.assertEqual(fmt_line(3.0), "3")
+        self.assertEqual(spread_outcomes("BUF", "DET", 1.5), ("BUF-1.5", "DET+1.5"))
+        self.assertEqual(spread_event_key("nfl", ["DET", "BUF"], "2026-09-17", "BUF", 1.5), "nfl:BUF|DET:2026-09-17:spread:BUF-1.5")
+        self.assertEqual(total_event_key("nfl", ["DET", "BUF"], "2026-09-17", 49.5), "nfl:BUF|DET:2026-09-17:total:49.5")
+        self.assertEqual(split_pair("DETBUF", "BUF"), "DET")
+        self.assertEqual(split_pair("NYGLAR", "NYG"), "LAR")
+        self.assertIsNone(split_pair("DETBUF", "KC"))
+        self.assertEqual(ticker_pair("KXNFLSPREAD-26SEP17DETBUF"), "DETBUF")
+        self.assertEqual(strip_digits("BUF12"), "BUF")
+        self.assertEqual(push_rule_for_line(1.5), "no_push")
+        self.assertEqual(push_rule_for_line(3), "push_possible")
+
+    def test_merge_keeps_lines_separate(self):
+        def snap(venue, key, line):
+            info = EventInfo(event_key=key, sport="nfl", market_type="spread", outcomes=["BUF-1.5", "DET+1.5"], line=line)
+            return VenueSnapshot(venue=venue, events={key: info}, quotes=[OutcomeQuote(venue, venue + key, key, "BUF-1.5", ask=0.6)])
+        merged = merge_snapshots([snap("kalshi", "nfl:BUF|DET:2026-09-17:spread:BUF-1.5", 1.5), snap("polymarket", "nfl:BUF|DET:2026-09-17:spread:BUF-1.5", 1.5), snap("polymarket", "nfl:BUF|DET:2026-09-17:spread:BUF-2.5", 2.5), snap("robinhood", "nfl:BUF|DET:2026-09-18:spread:BUF-1.5", 1.5)])
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged["nfl:BUF|DET:2026-09-17:spread:BUF-1.5"].venues, ["kalshi", "polymarket", "robinhood"])  # date drift tolerated

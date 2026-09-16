@@ -49,22 +49,27 @@ def _p(x: Optional[float]) -> str:
     return "  -  " if x is None else f"{x:.3f}"
 
 
-def print_scan(res: ScanResult, min_margin: float, limit: int, show_all: bool, include_live: bool = False) -> None:
-    arbs = res.arbs(min_margin, include_live=include_live)
+def print_scan(res: ScanResult, min_margin: float, limit: int, show_all: bool, include_live: bool = False, include_thin: bool = False) -> None:
+    arbs = res.arbs(min_margin, include_live=include_live, include_thin=include_thin)
     live_n = sum(1 for e in res.events if e.live)
-    print(f"# {res.sport.upper()} scan  venues={','.join(res.venues)}  events={len(res.events)} (live/in-play: {live_n})  arbs(margin>{min_margin:.2%}{'' if include_live else ', pre-game only'})={len(arbs)}")
+    by_type = {}
+    for e in res.events:
+        by_type[e.market_type] = by_type.get(e.market_type, 0) + 1
+    print(f"# {res.sport.upper()} scan  venues={','.join(res.venues)}  events={len(res.events)} {by_type} (live/in-play: {live_n})  arbs(margin>{min_margin:.2%}{'' if include_live else ', pre-game only'})={len(arbs)}")
     for v, errs in res.errors.items():
         for e in errs:
             print(f"  ! {v}: {e}")
     rows = res.events if show_all else arbs
     for ev in rows[:limit]:
         m = ev.margin
-        head = f"\n{ev.title}  [{ev.event_key}]  start={ev.start_time or '?'}  venues={','.join(ev.venues)}"
+        head = f"\n[{ev.market_type}] {ev.title}  [{ev.event_key}]  start={ev.start_time or '?'}  venues={','.join(ev.venues)}"
         if m is not None:
             head += f"\n  sum-of-asks={ev.gross_sum:.3f}  fee-adjusted margin={_pct(m)} per $1 payout"
             if ev.sized_arb:
                 sa = ev.sized_arb
-                head += f"  | depth-sized: {sa['contracts']:.0f} contracts -> profit ${sa['profit']:.2f} ({sa['roi']:.2%} on ${sa['total_cost']:.2f})"
+                head += f"  | fillable: {sa['contracts']:.0f} contracts -> profit ${sa['profit']:.2f} ({sa['roi']:.2%} on ${sa['total_cost']:.2f})"
+            elif m > 0:
+                head += "  | NOT fillable at quoted sizes"
         if ev.flags:
             head += f"  flags={','.join(ev.flags)}"
         if ev.live:
@@ -92,13 +97,14 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if args.gold:
         settings["robinhood_gold"] = True
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
-    res = scan(args.sport, build_adapters(venues, args.books), settings=settings, contracts=args.contracts, target_margin=args.target_margin, only_cross_venue=args.cross_only, max_quote_age=args.max_quote_age)
+    markets = {m.strip() for m in args.markets.split(",") if m.strip()}
+    res = scan(args.sport, build_adapters(venues, False), settings=settings, contracts=args.contracts, target_margin=args.target_margin, only_cross_venue=args.cross_only, max_quote_age=args.max_quote_age, market_types=markets, depth_for_candidates=args.books, candidate_margin=args.candidate_margin)
     if args.json:
         payload = asdict(res)
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=1, default=str)
         print(f"wrote {args.json}")
-    print_scan(res, args.min_margin, args.limit, args.all, include_live=args.include_live)
+    print_scan(res, args.min_margin, args.limit, args.all, include_live=args.include_live, include_thin=args.include_thin)
     return 0
 
 
@@ -107,7 +113,8 @@ def cmd_quote(args: argparse.Namespace) -> int:
     if args.gold:
         settings["robinhood_gold"] = True
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
-    res = scan(args.sport, build_adapters(venues, args.books), settings=settings, contracts=args.contracts, target_margin=args.target_margin, max_quote_age=args.max_quote_age)
+    markets = {m.strip() for m in args.markets.split(",") if m.strip()}
+    res = scan(args.sport, build_adapters(venues, args.books), settings=settings, contracts=args.contracts, target_margin=args.target_margin, max_quote_age=args.max_quote_age, market_types=markets)
     needle = args.query.lower()
     hits = [e for e in res.events if needle in e.event_key.lower() or needle in e.title.lower()]
     if not hits:
@@ -161,6 +168,12 @@ def cmd_rh_event(args: argparse.Namespace) -> int:
     from .scanner import EventReport, OutcomeReport, VenuePrice
 
     a = res["analysis"]
+    if "lines" in a:
+        reps = [EventReport(**{k: v for k, v in d.items() if k not in ("outcomes", "contract_id", "symbol")}, outcomes=[OutcomeReport(**{**o, "venues": [VenuePrice(**v) for v in o["venues"]]}) for o in d["outcomes"]]) for d in a["lines"]]
+        fake = ScanResult(sport="nfl", fetched_at=0, venues=a["venues"], events=reps, errors={"lookup": a.get("errors", [])} if a.get("errors") else {})
+        print(f"{res['event']['name']}  ({res['event']['game']}, {a['market_type']} lines: {len(reps)})")
+        print_scan(fake, args.min_margin if hasattr(args, "min_margin") else -1.0, args.limit, args.all, include_live=True, include_thin=args.include_thin)
+        return 0
     rep = EventReport(**{k: v for k, v in a.items() if k not in ("outcomes", "errors")}, outcomes=[OutcomeReport(**{**o, "venues": [VenuePrice(**v) for v in o["venues"]]}) for o in a["outcomes"]])
     fake = ScanResult(sport=res["event"]["sport"], fetched_at=0, venues=rep.venues, events=[rep], errors={"lookup": a.get("errors", [])} if a.get("errors") else {})
     print_scan(fake, -1.0, 1, True, include_live=True)
@@ -201,9 +214,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         sp.add_argument("--venues", default=",".join(ALL_VENUES))
         sp.add_argument("--contracts", type=float, default=100, help="reference size for fee rounding")
         sp.add_argument("--target-margin", type=float, default=0.0, help="required locked-in margin per $1 payout for max-buy prices")
-        sp.add_argument("--books", action="store_true", help="fetch order-book depth (slower) for depth-limited sizing")
+        sp.add_argument("--books", action="store_true", help="second pass: fetch real order books for candidate events (margin above --candidate-margin) and re-size")
+        sp.add_argument("--candidate-margin", type=float, default=-0.01, help="events at or above this top-of-book margin get real depth in the --books pass")
         sp.add_argument("--gold", action="store_true", help="price Robinhood commission at the Gold rate")
         sp.add_argument("--max-quote-age", type=float, default=600, help="seconds; snapshots older than this are excluded from arb legs")
+        sp.add_argument("--markets", default="moneyline,spread,total", help="comma list of market types to include")
 
     s = sub.add_parser("scan", help="scan a sport across venues")
     common(s)
@@ -212,6 +227,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     s.add_argument("--all", action="store_true", help="print every event, not only arbs")
     s.add_argument("--cross-only", action="store_true", help="only events quoted on 2+ venues")
     s.add_argument("--include-live", action="store_true", help="count in-play events as arbs (default: pre-game only)")
+    s.add_argument("--include-thin", action="store_true", help="count arbs that are not fillable for >= 1 contract at the quoted size")
     s.add_argument("--json", help="write full result to this file")
     s.set_defaults(func=cmd_scan)
 
@@ -246,6 +262,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     re_.add_argument("--target-margin", type=float, default=0.0)
     re_.add_argument("--gold", action="store_true")
     re_.add_argument("--json", action="store_true")
+    re_.add_argument("--all", action="store_true", help="print every line, not only arbs (line pages)")
+    re_.add_argument("--limit", type=int, default=60)
+    re_.add_argument("--min-margin", type=float, default=0.0)
+    re_.add_argument("--include-thin", action="store_true")
     re_.set_defaults(func=cmd_rh_event)
 
     b = sub.add_parser("bridge", help="local HTTP bridge for the browser overlay (127.0.0.1:8765)")

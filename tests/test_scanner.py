@@ -13,7 +13,8 @@ from .helpers import FakeHttp, load
 
 
 def _adapters():
-    kal = FakeHttp({"/markets?": load("kalshi_markets_nfl.json"), "/series/KXNFLGAME": load("kalshi_series_kxnflgame.json")})
+    lines = load("kalshi_markets_nfl_lines.json")
+    kal = FakeHttp({"series_ticker=KXNFLGAME&": load("kalshi_markets_nfl.json"), "series_ticker=KXNFLSPREAD&": {"markets": lines["spreads"]}, "series_ticker=KXNFLTOTAL&": {"markets": lines["totals"]}, "/series/KXNFLGAME": load("kalshi_series_kxnflgame.json"), "/series/": {"series": {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}}})
     events = load("polymarket_events_nfl.json")
     poly = FakeHttp({"gamma-api.polymarket.com/events": lambda: list(events)})
     pp = load("robinhood_page_props_nfl.json")
@@ -51,6 +52,45 @@ class ScannerTests(unittest.TestCase):
             self.assertGreaterEqual(v.max_buy_maker, v.max_buy_price)
         self.assertLess(venues["kalshi"].max_buy_price, 0.33)  # no arb today
         self.assertEqual(res.arbs(), [])
+
+    def test_spread_and_total_merge_across_three_venues(self):
+        res = scan("nfl", _adapters(), settings={})
+        sp = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17:spread:BUF-1.5")
+        self.assertEqual(sp.venues, ["kalshi", "polymarket", "robinhood"])
+        self.assertEqual((sp.market_type, sp.line, sp.tie_rule), ("spread", 1.5, "no_push"))
+        self.assertEqual(sp.title, "Buffalo -1.5 vs Detroit +1.5")
+        cover = next(o for o in sp.outcomes if o.outcome == "BUF-1.5")
+        self.assertEqual({v.venue for v in cover.venues}, {"kalshi", "polymarket", "robinhood"})
+        tot = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17:total:49.5")
+        self.assertEqual(tot.venues, ["kalshi", "polymarket", "robinhood"])
+        self.assertEqual(tot.title, "DET @ BUF total 49.5 (over / under)")
+        under = next(o for o in tot.outcomes if o.outcome == "under")
+        kal = next(v for v in under.venues if v.venue == "kalshi")
+        self.assertEqual(kal.ask, 0.38)  # NO side of the over market
+        # Market-type filter.
+        only_ml = scan("nfl", _adapters(), settings={}, market_types={"moneyline"})
+        self.assertTrue(all(e.market_type == "moneyline" for e in only_ml.events))
+        self.assertEqual(len(only_ml.events), 2)
+
+    def test_thin_arb_is_not_fillable(self):
+        adapters = _adapters()
+        snaps = [a.fetch("nfl") for a in adapters]
+        # Force a fee-beating price on the Robinhood under with tiny size.
+        for q in snaps[2].quotes:
+            if q.outcome == "under":
+                q.ask, q.ask_size = 0.30, 0.5
+        merged = merge_snapshots(snaps)
+        rep = analyze_event(merged["nfl:BUF|DET:2026-09-17:total:49.5"], settings={})
+        self.assertGreater(rep.margin, 0)
+        self.assertFalse(rep.fillable)
+        self.assertIn("thin", rep.flags)
+        for q in snaps[2].quotes:
+            if q.outcome == "under":
+                q.ask_size = 50
+        merged = merge_snapshots(snaps)
+        rep = analyze_event(merged["nfl:BUF|DET:2026-09-17:total:49.5"], settings={})
+        self.assertTrue(rep.fillable)
+        self.assertEqual(rep.sized_arb["contracts"], 50)
 
     def test_kalshi_routed_robinhood_quote_is_marked_mirror(self):
         adapters = _adapters()

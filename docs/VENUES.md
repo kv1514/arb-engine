@@ -19,6 +19,8 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 | Market fields | `yes_bid_dollars`, `yes_ask_dollars`, `yes_ask_size_fp` (contracts), `occurrence_datetime` (game start, NFL), `exchange_index`, `price_level_structure` | live API |
 | Order book | `GET /markets/{ticker}/orderbook` → `orderbook_fp.yes_dollars` / `no_dollars` = resting **bids** `[price, size]`; YES ask = 1 − best NO bid | live API |
 | NFL tie rule | "$0.50 for each team" | market `rules_secondary` |
+| Spreads / totals | `KXNFLSPREAD-{date}{pair}-{TEAM}{⌈line⌉}` = "{team} wins by over {line} points?" (`floor_strike`, `strike_type: greater`, both teams listed); `KXNFLTOTAL-{date}{pair}-{⌈line⌉}` = "over {line} points scored?". NO = other side. Both series `quadratic_with_maker_fees`. `GET /markets?event_ticker=` returns all lines of a game in one call | live API 2026-09-16 |
+| Rate limit | ~10 req/s on the public tier; the client rate-limits to 8/s (`KALSHI_RATE_LIMIT`) and backs off on 429 | observed |
 | Browser access | The prod API returns **403 to any browser `Origin` other than kalshi.com** (extension origins included). The extension strips the header with a `declarativeNetRequest` rule and otherwise falls back to the local bridge | tested with curl |
 
 ## Robinhood event contracts (Robinhood Derivatives, LLC)
@@ -31,7 +33,8 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 | Charged on | open and close (held-to-settlement pays only the open side) | same article |
 | Order types | limit only: IOC or GTD (expires 3 AM ET next day); dollar orders are IOC | Support article "Trading event contracts" |
 | Public data | Category pages are SSR Next.js with `__NEXT_DATA__` (`props.pageProps.events[*].eventContracts`, `quotes`, `eventStates`): `https://robinhood.com/us/en/prediction-markets/nfl/`, `/tennis/`. Quotes: `GET https://api.robinhood.com/marketdata/event/contract/quotes/v1/?ids=…` (also `?symbols=`), ≤20 per call, unauthenticated. Events: `/prediction-markets/v1/events?ids=…`; state: `/prediction-markets/v1/event_state?event_ids=…` (`eventProgress` = date before kickoff, "Live"/"Interrupted"/… in play) | observed 2026-09-15 |
-| Routing observed | NFL game winners/spreads/totals → Rothera (separate book from Kalshi); NFL props & quarters, all tennis (ATP/WTA/ITF/challengers) → KalshiEX (same book as Kalshi, higher fees) | observed 2026-09-15 |
+| Routing observed | NFL game winners/spreads/totals → Rothera (separate book from Kalshi); NFL props, first-half/quarter lines and all tennis (ATP/WTA/ITF/challengers) → KalshiEX (same book as Kalshi, higher fees) | observed 2026-09-15 |
+| Spreads / totals | Event types `EVENT_TYPE_SPREAD` (48 contracts: `NFLSPREAD-{date}{pair}-{TEAM}{⌊line⌋}`, "Buffalo wins by over 1.5 points", `floorStrikeValue`) and `EVENT_TYPE_TOTALS` (45 contracts: `NFLTOTAL-…-{⌊line⌋}`, "Over 49.5 points"); quotes API returns `yes_*` and `no_*` prices and sizes per contract | observed 2026-09-16 |
 | Tie rule (Rothera NFL) | not spelled out in the public blurb → flagged `tie-rule-unverified` | robinhood.com event page |
 | Trading API | none public; the overlay is read-only | — |
 
@@ -40,7 +43,7 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 | Item | Value | Source |
 |---|---|---|
 | Metadata | `https://gamma-api.polymarket.com/events?tag_slug=nfl&active=true&closed=false` (heavy: every market per event); `GET /markets?slug=nfl-{away}-{home}-{utc-date}` (5 KB, exact moneyline); `GET /public-search?q=…` | live API |
-| Sports fields | `sportsMarketType` (`moneyline`, `spreads`, `totals`, `tennis_completed_match`…), `gameStartTime` (UTC), `line`, `outcomes`/`outcomePrices`/`clobTokenIds` (JSON strings), `bestBid`/`bestAsk` (outcome[0] token), `feeSchedule` | live API |
+| Sports fields | `sportsMarketType` (`moneyline`, `spreads`, `totals`, `first_half_spreads`, `team_totals`, `q1_spreads`…, `tennis_completed_match`), `gameStartTime` (UTC), `line` (negative = outcome[0] is the favourite: "Spread: Bills (-1.5)" outcomes `[Bills, Lions]`), `outcomes`/`outcomePrices`/`clobTokenIds` (JSON strings), `bestBid`/`bestAsk` (outcome[0] token), `feeSchedule`. Slugs: `{event}-spread-{home|away}-{L}pt5`, `{event}-total-{L}pt5`; `GET /events?slug=` returns the whole game (all lines, ~1 MB) | live API |
 | Taker fee | `C × rate × (P × (1−P))^exponent`, USDC, 5 dp; sports `rate 0.05`, `exponent 1` → peak $1.25 per 100 shares at 50¢ | docs.polymarket.com/trading/fees; changelog 2026-07-10 (0.03 → 0.05) |
 | Maker | no fee; 15% of sports taker fees rebated to makers (`rebateRate`) | same |
 | Books | `GET https://clob.polymarket.com/book?token_id=…`, batch `POST /books` | live API |

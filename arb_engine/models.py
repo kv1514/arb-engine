@@ -111,6 +111,10 @@ class EventInfo:
     in_play: Optional[bool] = None
 
     def title(self) -> str:
+        if self.market_type == "total" and self.line is not None:
+            teams = self.venues.get("_teams") or {}
+            game = teams.get("title", "")
+            return f"{game} total {self.line:g} (over / under)".strip()
         return " vs ".join(self.labels.get(o, o) for o in self.outcomes)
 
 

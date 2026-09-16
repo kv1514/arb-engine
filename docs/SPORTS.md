@@ -10,10 +10,17 @@
   Robinhood catalogue where a real cross-venue price gap can exist against Kalshi.
 * Kalshi books are very deep (millions of contracts resting on Thursday-night games), so
   the binding constraint is usually Rothera/Polymarket depth.
-* Series used: Kalshi `KXNFLGAME`; Polymarket tag `nfl` / slug `nfl-{away}-{home}-{date}`;
-  Robinhood category `nfl`. Spreads/totals (`KXNFLSPREAD`, `KXNFLTOTAL`, Polymarket
-  `spreads`/`totals`, Rothera `NFLSPREAD`/`NFLTOTAL`) are the next step — they need exact
-  line matching (`line` field) which the data model already carries.
+* Series used: Kalshi `KXNFLGAME` / `KXNFLSPREAD` / `KXNFLTOTAL`; Polymarket tag `nfl`, slugs
+  `nfl-{away}-{home}-{utc date}` (+ `-spread-{home|away}-{L}pt5`, `-total-{L}pt5`);
+  Robinhood category `nfl` (Rothera `NFLGAME-…`, `NFLSPREAD-…`, `NFLTOTAL-…`).
+* **Spreads and totals are one binary market per line** on every venue ("Buffalo wins by
+  over 1.5 points", "Over 49.5 points"): YES = cover/over, NO = the other side. A game has
+  ~24 spread lines per team and ~45 totals lines, so the NFL week is ~1,000 events. The
+  arbs found so far are all in the tails (totals 60+, spreads 14+), where the quadratic
+  fee is tiny and Rothera's maker prices the tails differently from Kalshi's.
+* Kalshi ticker suffix = ⌈line⌉ (`BUF2` = 1.5, `-50` = 49.5); Rothera suffix = ⌊line⌋
+  (`BUF1` = 1.5, `-49` = 49.5); Polymarket encodes it in the slug. Always match on the
+  numeric line (`floor_strike` / `floorStrikeValue` / `line`), never on the suffix.
 
 ## Tennis
 
