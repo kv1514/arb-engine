@@ -181,11 +181,12 @@ class EventAnalyzer:
         else:
             errors.append("polymarket: no matching market found")
 
-        info = EventInfo(event_key=event_key, sport=sport, market_type="moneyline", outcomes=sorted(outcomes), labels=labels)
+        info = EventInfo(event_key=event_key, sport=sport, market_type="moneyline", outcomes=sorted(outcomes), labels=labels, in_play=_in_play_from_progress(str((pp.get("eventStates") or {}).get(ev.get("id"), {}).get("eventProgress") or "").strip(), None) if isinstance(pp.get("eventStates"), dict) else None)
         from .matching.matcher import MergedEvent
         from .scanner import analyze_event
 
         me = MergedEvent(event_key=event_key, info=info, quotes_by_venue=quotes_by_venue)
+        self.last_event = me  # reused by the in-play watcher
         report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now)
         out = asdict(report)
         out["errors"] = errors
@@ -327,6 +328,8 @@ class EventAnalyzer:
                     for i in range(2)
                 ]
             me = MergedEvent(event_key=key, info=info, quotes_by_venue=qbv)
+            self.last_lines = getattr(self, "last_lines", {})
+            self.last_lines[key] = me
             rep = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now)
             d = asdict(rep)
             d["contract_id"] = c["id"]

@@ -37,7 +37,7 @@ arb_engine/
   matching/    canonical team/player keys, Eastern-date event keys, cross-venue merge
   scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
   execution/   Kalshi order plans + gated executor
-  strategy/    maker runner (maker.py), brokers (paper / Kalshi), alerts + JSONL journal
+  strategy/    maker runner (maker.py), in-play lock/steal watcher (inplay.py), brokers, alerts + journal
 extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/)
 tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh
 docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROADMAP.md
@@ -46,7 +46,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (80)
+python -m unittest discover -s tests -t .      # Python tests (87)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>

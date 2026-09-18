@@ -234,6 +234,40 @@ def cmd_maker(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_inplay(args: argparse.Namespace) -> int:
+    """Watch one Robinhood event with your open lots; alert on STEAL / LOCK NOW."""
+    from .eventlookup import EventAnalyzer
+    from .strategy.alerts import Alerter
+    from .strategy.inplay import InplayWatcher, Lot
+
+    settings = settings_from_env()
+    if args.gold:
+        settings["robinhood_gold"] = True
+    lots = [Lot.parse(p) for p in (args.position or [])]
+    an = EventAnalyzer()
+
+    def fetch():
+        res = an.analyze_url(args.url, settings=settings, contracts=args.contracts)
+        if not res.get("ok"):
+            raise RuntimeError(res.get("error"))
+        if "lines" in (res.get("analysis") or {}):
+            raise RuntimeError("inplay watches a game-winner (moneyline) page; open the game's main event page")
+        return an.last_event
+
+    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin)
+    if args.iterations == 1 or args.once:
+        view = w.step()
+        print(f"{view.title}  live={view.live}  cost=${view.total_cost:.2f}  payout_if={ {k: round(v, 1) for k, v in view.payout_if.items()} }" + (f"  locked P&L=${view.locked_pnl:.2f}" if view.balanced else ""))
+        for sv in view.sides:
+            print(f"  {sv.label:<20} held={sv.held:g} avg={_p(sv.avg_all_in)} fair={_p(sv.fair)} best={sv.best_venue or '-'} ask={_p(sv.best_ask)} all-in={_p(sv.best_all_in)} edge={_pct(sv.steal_edge)}" + (f"  need={sv.need:g} lock<= {_p(sv.lock_price)} {'AVAILABLE' if sv.lock_available else ''}" if sv.need else ""))
+        for a in view.actions:
+            print("  ->", a)
+        return 0
+    print(f"watching {args.url} every {args.interval}s with {len(lots)} lot(s); journal={args.journal}")
+    w.run(interval=args.interval, duration=args.duration, max_iterations=args.iterations)
+    return 0
+
+
 def cmd_kalshi(args: argparse.Namespace) -> int:
     from .execution.kalshi import KalshiExecutor
 
@@ -337,6 +371,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     mk.add_argument("--journal", default="out/maker_journal.jsonl")
     mk.add_argument("--state", default=None, help="write watches/orders/fills JSON here on exit")
     mk.set_defaults(func=cmd_maker)
+
+    ip = sub.add_parser("inplay", help="watch one game with your open lots: STEAL (below fair) and LOCK NOW (other side cheap enough to guarantee profit)")
+    ip.add_argument("url", help="Robinhood game event URL")
+    ip.add_argument("--position", action="append", help="lot you hold, venue:outcome:price:count[:exchange], e.g. robinhood:DEN:0.50:100 (repeatable)")
+    ip.add_argument("--steal-edge", type=float, default=0.03, help="all-in must be this far below consensus fair to flag STEAL")
+    ip.add_argument("--target-margin", type=float, default=0.0, help="extra locked margin required per $1 for LOCK")
+    ip.add_argument("--contracts", type=float, default=100)
+    ip.add_argument("--gold", action="store_true")
+    ip.add_argument("--interval", type=float, default=5.0)
+    ip.add_argument("--duration", type=float, default=4 * 3600)
+    ip.add_argument("--iterations", type=int, default=None)
+    ip.add_argument("--once", action="store_true", help="evaluate once and print")
+    ip.add_argument("--journal", default="out/inplay_journal.jsonl")
+    ip.set_defaults(func=cmd_inplay)
 
     ka = sub.add_parser("kalshi", help="authenticated Kalshi actions (demo env unless KALSHI_ENV=prod)")
     ka.add_argument("action", choices=["balance", "positions", "orders", "order"])

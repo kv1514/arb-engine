@@ -76,6 +76,21 @@ python -m arb_engine kelly --bankroll 2000 --fair 0.58 --cost 0.53
 python -m arb_engine bridge                           # serves the overlay on 127.0.0.1:8765
 ```
 
+### In-play: buy one side, wait, lock the other on the dip
+
+```bash
+python -m arb_engine inplay "https://robinhood.com/us/en/prediction-markets/nfl/events/<game>/" --position robinhood:DEN:0.50:100 --once
+python -m arb_engine inplay "<game url>" --position robinhood:DEN:0.50:100 --position robinhood:DEN:0.40:100   # keeps watching
+```
+
+Prints, per side: what you hold and its all-in average, the consensus fair value, the
+cheapest venue's all-in, and — for the side you are short of — the **lock price**: the most
+you can pay for it (fees included) so that the pair pays $1 either way for less than you
+spent. Alerts `LOCK NOW` when that price is available and `STEAL` when a side's all-in is
+below fair by `--steal-edge`. In-play the "fair" is the market consensus across venues, not
+a game model. Plain-English fee mechanics and the Chiefs/Broncos worked example:
+[docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
+
 ### Maker runner
 
 ```bash
