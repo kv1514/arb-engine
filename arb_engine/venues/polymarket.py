@@ -175,7 +175,7 @@ class PolymarketAdapter:
                     venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=codes[i], outcome_label=outcomes[i],
                     ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None,
                     fee_params=fee_params, url=url, ts=snap.fetched_at,
-                    meta={"mid_price": prices[i] if i < len(prices) else None, "condition_id": m.get("conditionId"), "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "volume24h": _f(m.get("volume24hr")), "liquidity": _f(m.get("liquidityNum")), "neg_risk": m.get("negRisk")},
+                    meta={"mid_price": prices[i] if i < len(prices) else None, "condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "volume24h": _f(m.get("volume24hr")), "liquidity": _f(m.get("liquidityNum")), "neg_risk": m.get("negRisk")},
                 )
                 snap.quotes.append(q)
 
@@ -220,4 +220,4 @@ class PolymarketAdapter:
         sides = [(bb, ba), ((1 - ba) if ba is not None else None, (1 - bb) if bb is not None else None)]
         for i in range(2):
             bid, ask = sides[i]
-            snap.quotes.append(OutcomeQuote(venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None, fee_params=fee_params, url=url, ts=snap.fetched_at, meta={"condition_id": m.get("conditionId"), "slug": m.get("slug"), "line": line, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize"))}))
+            snap.quotes.append(OutcomeQuote(venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None, fee_params=fee_params, url=url, ts=snap.fetched_at, meta={"condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "line": line, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize"))}))

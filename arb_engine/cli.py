@@ -16,6 +16,8 @@ import sys
 from dataclasses import asdict
 from typing import Any, Optional
 
+import os
+
 from . import __version__
 from .config import load_dotenv, settings_from_env
 from .fees import KalshiFees, PolymarketFees, PolymarketUSFees, RobinhoodFees
@@ -25,13 +27,13 @@ from .scanner import ScanResult, scan
 ALL_VENUES = ("kalshi", "polymarket", "robinhood")
 
 
-def build_adapters(venues: list[str], with_books: bool):
+def build_adapters(venues: list[str], with_books: bool, kalshi_client=None):
     from .venues import KalshiAdapter, PolymarketAdapter, RobinhoodAdapter
 
     out = []
     for v in venues:
         if v == "kalshi":
-            out.append(KalshiAdapter(with_books=with_books))
+            out.append(KalshiAdapter(client=kalshi_client, with_books=with_books))
         elif v == "polymarket":
             out.append(PolymarketAdapter(with_books=with_books))
         elif v == "robinhood":
@@ -187,6 +189,51 @@ def cmd_bridge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_maker(args: argparse.Namespace) -> int:
+    from .matching.matcher import merge_snapshots
+    from .strategy.alerts import Alerter
+    from .strategy.broker import KalshiBroker, PaperBroker
+    from .strategy.maker import MakerConfig, MakerRunner, MarketFeed
+    from .venues import KalshiClient, PolymarketAdapter, RobinhoodAdapter
+
+    settings = settings_from_env()
+    if args.gold:
+        settings["robinhood_gold"] = True
+    venues = [v.strip() for v in args.venues.split(",") if v.strip()]
+    if "kalshi" not in venues:
+        raise SystemExit("the maker runner rests orders on Kalshi; include kalshi in --venues")
+    data_client = KalshiClient(env=os.environ.get("KALSHI_DATA_ENV", "prod"))
+    adapters = build_adapters(venues, False, kalshi_client=data_client)
+    markets = tuple(m.strip() for m in args.markets.split(",") if m.strip())
+
+    def scan_fn():
+        snaps = [a.fetch(args.sport) for a in adapters]
+        failed = [s.venue for s in snaps if s.errors and not s.events]
+        if failed:
+            raise RuntimeError(f"venue fetch failed: {', '.join(failed)}")
+        merged = merge_snapshots(snaps)
+        return [me for me in merged.values() if len(me.quotes_by_venue) >= 2 and me.info.market_type in markets]
+
+    feed = MarketFeed(data_client, RobinhoodAdapter(), PolymarketAdapter())
+    if args.mode == "paper":
+        broker = PaperBroker()
+    else:
+        env = "demo" if args.mode == "demo" else "prod"
+        broker = KalshiBroker(KalshiClient(env=env), confirm=args.confirm)
+    cfg = MakerConfig(sport=args.sport, market_types=markets, size=args.size, min_margin=args.min_margin, target_margin=args.target_margin, max_orders=args.max_orders, max_notional=args.max_notional, max_per_event=args.max_per_event, queue_ahead=not args.deep_queue, interval=args.interval, rescan=args.rescan)
+    runner = MakerRunner(cfg, feed, broker, Alerter(journal_path=args.journal), settings, scan_fn)
+    print(f"mode={args.mode}  broker={broker.name}  journal={args.journal}  (Ctrl-C cancels all resting orders and exits)")
+    try:
+        runner.run(duration=args.duration, max_iterations=args.iterations)
+    except KeyboardInterrupt:
+        runner.shutdown()
+    if args.state:
+        with open(args.state, "w", encoding="utf-8") as f:
+            json.dump(runner.snapshot(), f, indent=1, default=str)
+        print(f"wrote {args.state}")
+    return 0
+
+
 def cmd_kalshi(args: argparse.Namespace) -> int:
     from .execution.kalshi import KalshiExecutor
 
@@ -272,6 +319,24 @@ def main(argv: Optional[list[str]] = None) -> int:
     b.add_argument("--host", default="127.0.0.1")
     b.add_argument("--port", type=int, default=8765)
     b.set_defaults(func=cmd_bridge)
+
+    mk = sub.add_parser("maker", help="rest Kalshi orders at arb-creating prices vs the cheapest hedge elsewhere; alert on fills")
+    common(mk)
+    mk.add_argument("--mode", default="paper", choices=["paper", "demo", "live"], help="paper = simulated fills from live prices (default); demo = real orders on Kalshi demo; live = prod (needs --confirm + ARB_LIVE_TRADING=1)")
+    mk.add_argument("--confirm", action="store_true", help="required for demo/live order placement")
+    mk.add_argument("--size", type=float, default=100, help="contracts per resting order")
+    mk.add_argument("--min-margin", type=float, default=0.01, help="required margin per $1 if filled and hedged at the current ask")
+    mk.add_argument("--max-orders", type=int, default=8)
+    mk.add_argument("--max-notional", type=float, default=500.0, help="max dollars resting across all orders")
+    mk.add_argument("--max-per-event", type=int, default=1)
+    mk.add_argument("--deep-queue", action="store_true", help="also rest below the current best bid (default: only at/above it)")
+    mk.add_argument("--interval", type=float, default=10.0, help="seconds between quote refreshes")
+    mk.add_argument("--rescan", type=float, default=300.0, help="seconds between full cross-venue scans")
+    mk.add_argument("--duration", type=float, default=3600.0, help="seconds to run")
+    mk.add_argument("--iterations", type=int, default=None, help="stop after N loops (testing)")
+    mk.add_argument("--journal", default="out/maker_journal.jsonl")
+    mk.add_argument("--state", default=None, help="write watches/orders/fills JSON here on exit")
+    mk.set_defaults(func=cmd_maker)
 
     ka = sub.add_parser("kalshi", help="authenticated Kalshi actions (demo env unless KALSHI_ENV=prod)")
     ka.add_argument("action", choices=["balance", "positions", "orders", "order"])

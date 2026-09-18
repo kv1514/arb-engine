@@ -21,6 +21,7 @@ and you place orders in the app yourself.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from typing import Any, Iterable, Optional
@@ -114,10 +115,15 @@ def extract_next_data(html: str) -> dict:
 class RobinhoodAdapter:
     venue = VENUE_ROBINHOOD
 
-    def __init__(self, http: Optional[HttpClient] = None, refresh_quotes: bool = True, with_lines: bool = True):
-        self.http = http or HttpClient(headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/json"})
+    def __init__(self, http: Optional[HttpClient] = None, refresh_quotes: bool = True, with_lines: bool = True, catalogue_ttl: float = 1800.0, cache_dir: Optional[str] = None):
+        self.http = http or HttpClient(headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/json"}, timeout=90)
         self.refresh_quotes = refresh_quotes
         self.with_lines = with_lines
+        # The category page (~30 MB of HTML) only changes when contracts are listed/delisted,
+        # so it is cached on disk; quotes are always refreshed from the API.
+        # Caching is only on for the real HTTP client; injected (test) clients never touch disk.
+        self.catalogue_ttl = catalogue_ttl if http is None else 0.0
+        self.cache_dir = cache_dir if cache_dir is not None else os.environ.get("ARB_CACHE_DIR", os.path.join("out", "cache"))
 
     # ---- raw calls -------------------------------------------------------------------
     def _page_props(self, url: str) -> dict:
@@ -132,8 +138,24 @@ class RobinhoodAdapter:
                 return extract_next_data(html)["props"]["pageProps"]
             raise
 
-    def category_page(self, category: str) -> dict:
-        return self._page_props(f"{WEB}/us/en/prediction-markets/{category}/")
+    def category_page(self, category: str, use_cache: bool = True) -> dict:
+        path = os.path.join(self.cache_dir, f"robinhood_{category}_catalogue.json") if self.cache_dir else None
+        if use_cache and path and self.catalogue_ttl > 0 and os.path.exists(path) and time.time() - os.path.getmtime(path) < self.catalogue_ttl:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, ValueError):
+                pass
+        pp = self._page_props(f"{WEB}/us/en/prediction-markets/{category}/")
+        if path and self.catalogue_ttl > 0:
+            try:
+                os.makedirs(self.cache_dir, exist_ok=True)
+                slim = {"events": pp.get("events"), "eventStates": pp.get("eventStates"), "quotes": pp.get("quotes"), "cached_at": time.time()}
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(slim, f)
+            except (OSError, TypeError):
+                pass
+        return pp
 
     def event_page(self, category: str, slug: str) -> dict:
         return self._page_props(f"{WEB}/us/en/prediction-markets/{category}/events/{slug}/")

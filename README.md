@@ -46,6 +46,7 @@ book (taker) or as a resting order (maker, lower fees on Kalshi, none on Polymar
 | `arb_engine/scanner.py` | Sport-wide scan: merge → fees → arbs/edges/max-buy; an arb must be **fillable** (≥ 1 contract at quoted depth); `--books` runs a second pass with real order books for candidate events and reports the profit-maximising size. Flags live matches, stale snapshots, thin quotes and same-book quotes. |
 | `arb_engine/eventlookup.py`, `bridge.py` | One Robinhood event across venues; local HTTP server for the overlay. |
 | `arb_engine/execution` | Kalshi order plans + executor with three safety gates (dry-run → demo → prod needs `ARB_LIVE_TRADING=1`). |
+| `arb_engine/strategy` | **Maker runner**: rests post-only Kalshi orders at the price where a fill *creates* an arb against the cheapest hedge elsewhere, re-prices/cancels as the hedge moves, and fires a HEDGE-NOW alert (bell, macOS notification, webhook, JSONL journal) with the exact hedge instruction when a fill lands. Paper broker (simulated fills from live prices), demo and live Kalshi brokers. |
 | `extension/` | Chrome MV3 overlay for `robinhood.com/us/en/prediction-markets/…/events/…`: panel + badges with fair value, all-in cost, edge, max-buy; direct mode or via the bridge. |
 | `.mcp.json` | Wires the [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi) MCP server so Claude Code / Codex can browse and (with your keys) trade Kalshi. |
 
@@ -74,6 +75,25 @@ python -m arb_engine fees --venue robinhood --price 0.52 --contracts 100 --gold
 python -m arb_engine kelly --bankroll 2000 --fair 0.58 --cost 0.53
 python -m arb_engine bridge                           # serves the overlay on 127.0.0.1:8765
 ```
+
+### Maker runner
+
+```bash
+python -m arb_engine maker --sport nfl --markets total,spread --mode paper --min-margin 0.005 --duration 3600
+python -m arb_engine maker --sport nfl --mode demo --confirm --size 50 --max-orders 5 --max-notional 300   # real orders on Kalshi's demo exchange
+KALSHI_ENV=prod ARB_LIVE_TRADING=1 python -m arb_engine maker --sport nfl --mode live --confirm --size 20 --max-notional 200
+```
+
+What it does every `--interval` seconds: refresh Kalshi (batched) and hedge quotes for the
+watchlist, cancel/re-price resting orders whose margin-if-filled decayed, poll fills, and
+alert `HEDGE NOW: buy N x <other side> on <venue> at ≤ <price>`; every `--rescan` seconds it
+re-runs the cross-venue scan. The price it rests at is
+`min(max_buy_maker(hedge ask), Kalshi ask − 1 tick)`, only when the margin-if-filled clears
+`--min-margin` and (by default) the price is at or above Kalshi's best bid — resting behind
+the bid rarely fills; `--deep-queue` allows it. Limits: `--max-orders`, `--max-notional`,
+`--max-per-event`. Ctrl-C cancels everything resting. The hedge leg is manual (Robinhood
+has no API; Polymarket needs a wallet), so keep sizes at what you can hedge by hand within
+a minute.
 
 Kalshi account (needs `KALSHI_API_KEY` + `KALSHI_PRIVATE_KEY_PATH`; demo environment by default):
 
@@ -130,12 +150,13 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
   moneyline), `stale-quote` (snapshot older than `--max-quote-age`). Spread/total lines are
   half-points on all three venues, so they cannot push.
 
-## Status (2026-09-16)
+## Status (2026-09-18)
 
-Live data verified for all three venues; 68 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 80 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
-efficient to within fees; the ~1,000 spread/total lines produced 16 fillable, depth-checked
-arbs at build time (Rothera far-tail overs vs Kalshi unders, ≈1% on capital). Tennis on
+efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
+depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone
+by Friday — the maker runner exists to sit at the prices where they reappear. Tennis on
 Robinhood is Kalshi's book re-sold, so the useful answer there is fee routing. See
 `docs/ROADMAP.md`.
 

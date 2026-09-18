@@ -16,7 +16,10 @@ fee schedules and API facts every change must respect.
    optional dependency, for Kalshi request signing). No pandas/requests/pydantic.
 3. **Never place orders by default.** Anything that can submit an order must be dry-run
    unless `confirm=True` *and* the environment is demo, or `KALSHI_ENV=prod` with
-   `ARB_LIVE_TRADING=1`. Keep the three gates in `arb_engine/execution/kalshi.py`.
+   `ARB_LIVE_TRADING=1`. Keep the three gates in `arb_engine/execution/kalshi.py` and
+   `strategy/broker.py` (`KalshiBroker` refuses to construct without them). The maker
+   runner must cancel everything on shutdown and must never rest on a market whose hedge
+   has disappeared.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
    Those quotes carry `book_id="kalshi"` and must never be arbed against Kalshi direct;
@@ -34,6 +37,7 @@ arb_engine/
   matching/    canonical team/player keys, Eastern-date event keys, cross-venue merge
   scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
   execution/   Kalshi order plans + gated executor
+  strategy/    maker runner (maker.py), brokers (paper / Kalshi), alerts + JSONL journal
 extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/)
 tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh
 docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROADMAP.md
@@ -42,11 +46,12 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (68)
+python -m unittest discover -s tests -t .      # Python tests (80)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>
 python -m arb_engine bridge                    # local server the extension uses when running
+python -m arb_engine maker --mode paper        # rest Kalshi orders at arb-creating prices (paper by default)
 python scripts/capture_fixtures.py             # refresh offline fixtures from the live APIs
 ```
 

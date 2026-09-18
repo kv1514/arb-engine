@@ -44,3 +44,6 @@ class FakeHttp:
 
     def post(self, url: str, json_body: Any = None, headers: dict | None = None) -> Any:
         return self._match(url)
+
+    def delete(self, url: str, headers: dict | None = None) -> Any:
+        return self._match(url)

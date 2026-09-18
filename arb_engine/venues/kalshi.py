@@ -161,6 +161,16 @@ class KalshiClient:
     def orders(self, **params: Any) -> dict:
         return self.get("/portfolio/orders", params or None, auth=True)
 
+    def order(self, order_id: str) -> dict:
+        return self.get(f"/portfolio/orders/{order_id}", auth=True).get("order", {})
+
+    def fills(self, **params: Any) -> dict:
+        return self.get("/portfolio/fills", params or None, auth=True)
+
+    def trades(self, ticker: str, limit: int = 100, min_ts: Optional[int] = None) -> list[dict]:
+        """Public trade prints for a market (newest first)."""
+        return self.get("/markets/trades", {"ticker": ticker, "limit": limit, "min_ts": min_ts}).get("trades", [])
+
     def create_order(self, payload: dict) -> dict:
         """V2 order endpoint: ``side`` is ``bid`` (buy YES) / ``ask`` (sell YES), ``price``
         is the YES price in dollars as a 4-dp string, ``count`` a string."""

@@ -9,11 +9,11 @@ Ordered by expected value for the NFL/tennis focus.
 2. **Depth everywhere.** Kalshi and Polymarket books are wired (`--books` = second pass for
    candidate events, rate-limited); Robinhood only exposes top-of-book size. Show the sized
    result in the overlay via the bridge.
-3. **Maker strategy runner.** The tail arbs are the natural target: rest the Kalshi under at
-   its max-buy (maker fee 1.75%) and take the Rothera over when it fills. Post resting
-   orders at `max_buy_maker` on Kalshi (post-only),
-   watch fills via `GET /portfolio/fills`, hedge the other leg on the cheapest venue, with
-   per-event exposure limits. Dry-run first; demo environment second.
+3. ~~Maker strategy runner~~ — done 2026-09-18 (`python -m arb_engine maker`, see README):
+   paper / demo / live brokers, batched Kalshi polling, hedge alerts, journal. Next: auto-hedge
+   on Polymarket once the CLOB client is wired; partial-fill handling in paper mode; a
+   queue-position estimate from the order book (rest only when expected fill time is short);
+   run the demo broker against a demo API key to verify the V2 order/fill field names.
 4. **Streaming quotes.** Kalshi websocket (`wss://api.elections.kalshi.com/trade-api/ws/v2`)
    and Polymarket market channel instead of polling; the Robinhood quotes API polls fine at
    ~2 s.

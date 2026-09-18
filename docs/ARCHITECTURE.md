@@ -54,3 +54,22 @@
 4. Polymarket: NFL → `/markets?slug=nfl-{away}-{home}-{date}` (both team orders, date and
    date+1 UTC); tennis → `/public-search?q=<surnames>` filtered to the matching moneyline.
 5. `analyze_event()` → per-venue all-in, fair, edge, max-buy (taker/maker), arb legs.
+
+## Maker runner (`arb_engine/strategy`)
+
+```
+scan (every --rescan s) ──► discover(): Watch per (event, Kalshi side) with the cheapest
+                             hedgeable ask on another venue for the other side
+loop (every --interval s):
+   refresh():   GET /markets?tickers=…  (batched)  +  Robinhood quotes API  +  Polymarket /markets?slug=
+   _price():    price = min(max_buy_maker(hedge), Kalshi ask − tick); margin_if_filled;
+                skip if < --min-margin or (queue_ahead) below Kalshi's best bid
+   check_fills(): broker.poll → HEDGE NOW alert with max hedge price for the filled size
+   reconcile(): cancel decayed / re-priced orders, place new ones within limits
+shutdown: cancel every resting order
+```
+
+Brokers: `PaperBroker` (fills when the venue's best ask reaches our price — optimistic about
+queue position), `KalshiBroker` (post-only V2 orders; demo unless `KALSHI_ENV=prod` +
+`ARB_LIVE_TRADING=1` + `--confirm`). All venue data goes through one rate-limited Kalshi
+client (8 req/s) shared by the scan adapter and the feed.

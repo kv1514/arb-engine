@@ -7,6 +7,7 @@ binary when it is available. Force it with ``ARB_HTTP_TRANSPORT=curl``.
 
 from __future__ import annotations
 
+import gzip
 import http.client
 import json
 import os
@@ -57,7 +58,7 @@ class HttpClient:
     def __init__(self, timeout: float = 20.0, retries: int = 2, user_agent: str = DEFAULT_UA, headers: Optional[Mapping[str, str]] = None, transport: Optional[str] = None, rate_limit: Optional[float] = None):
         self.timeout = timeout
         self.retries = retries
-        self.headers = {"User-Agent": user_agent, "Accept": "application/json", **(headers or {})}
+        self.headers = {"User-Agent": user_agent, "Accept": "application/json", "Accept-Encoding": "gzip", **(headers or {})}
         self.transport = transport or os.environ.get("ARB_HTTP_TRANSPORT", "auto")
         self._curl = shutil.which("curl")
         self.limiter = RateLimiter(rate_limit, burst=int(rate_limit)) if rate_limit else None
@@ -127,13 +128,16 @@ class HttpClient:
                     if not chunk:
                         break
                     buf.extend(chunk)
-                return resp.status, bytes(buf).decode("utf-8", errors="replace")
+                raw = bytes(buf)
+                if (resp.headers.get("Content-Encoding") or "").lower() == "gzip":
+                    raw = gzip.decompress(raw)
+                return resp.status, raw.decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace") if e.fp else ""
             return e.code, body
 
     def _via_curl(self, method: str, url: str, hdrs: dict, data: Optional[bytes]) -> tuple[int, str]:
-        cmd = [self._curl or "curl", "-sS", "-L", "--max-time", str(int(self.timeout) + 5), "-X", method.upper(), "-w", "\n__STATUS__:%{http_code}"]
+        cmd = [self._curl or "curl", "-sS", "-L", "--compressed", "--max-time", str(int(self.timeout) + 5), "-X", method.upper(), "-w", "\n__STATUS__:%{http_code}"]
         for k, v in hdrs.items():
             cmd += ["-H", f"{k}: {v}"]
         if data is not None:
