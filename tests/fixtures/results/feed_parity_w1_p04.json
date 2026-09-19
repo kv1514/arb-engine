@@ -1,0 +1,825 @@
+{
+ "season": 2026,
+ "week": 1,
+ "clock_tolerance": 10,
+ "timeouts": "text",
+ "nflverse_file": "play_by_play_2026.csv.gz",
+ "pooled": {
+  "down": {
+   "n": 2292,
+   "agree": 2291,
+   "rate": 0.9996
+  },
+  "distance": {
+   "n": 2292,
+   "agree": 2288,
+   "rate": 0.9983
+  },
+  "yardline_100": {
+   "n": 2463,
+   "agree": 2459,
+   "rate": 0.9984
+  },
+  "possession": {
+   "n": 2510,
+   "agree": 2509,
+   "rate": 0.9996
+  },
+  "home_timeouts": {
+   "n": 2633,
+   "agree": 2632,
+   "rate": 0.9996
+  },
+  "away_timeouts": {
+   "n": 2633,
+   "agree": 2633,
+   "rate": 1.0
+  },
+  "clock": {
+   "n": 2633,
+   "agree": 2494,
+   "rate": 0.9472
+  },
+  "_alignment": {
+   "games": 16,
+   "matched": 2633,
+   "espn_unmatched": 8,
+   "nfl_unmatched": 107,
+   "espn_admin": 263,
+   "nfl_admin": 16,
+   "shifted": 115,
+   "id_match_rate": 0.9609
+  },
+  "wallclock_anomalies": 12
+ },
+ "games": [
+  {
+   "game": "NE@SEA",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 142,
+    "agree": 142,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 142,
+    "agree": 142,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 149,
+    "agree": 149,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 152,
+    "agree": 152,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 163,
+    "agree": 163,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 163,
+    "agree": 163,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 163,
+    "agree": 158,
+    "rate": 0.9693
+   },
+   "_alignment": {
+    "matched": 163,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 2,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 3,
+    "id_match_rate": 0.9571
+   }
+  },
+  {
+   "game": "SF@LAR",
+   "wallclock_anomalies": 11,
+   "down": {
+    "n": 135,
+    "agree": 134,
+    "rate": 0.9926
+   },
+   "distance": {
+    "n": 135,
+    "agree": 134,
+    "rate": 0.9926
+   },
+   "yardline_100": {
+    "n": 143,
+    "agree": 142,
+    "rate": 0.993
+   },
+   "possession": {
+    "n": 146,
+    "agree": 146,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 152,
+    "agree": 152,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 152,
+    "agree": 152,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 152,
+    "agree": 146,
+    "rate": 0.9605
+   },
+   "_alignment": {
+    "matched": 152,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 4,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 5,
+    "id_match_rate": 0.9671
+   }
+  },
+  {
+   "game": "TB@CIN",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 133,
+    "agree": 133,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 133,
+    "agree": 132,
+    "rate": 0.9925
+   },
+   "yardline_100": {
+    "n": 147,
+    "agree": 146,
+    "rate": 0.9932
+   },
+   "possession": {
+    "n": 150,
+    "agree": 150,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 160,
+    "agree": 160,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 160,
+    "agree": 160,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 160,
+    "agree": 149,
+    "rate": 0.9313
+   },
+   "_alignment": {
+    "matched": 160,
+    "espn_unmatched": 1,
+    "nfl_unmatched": 8,
+    "espn_admin": 15,
+    "nfl_admin": 1,
+    "shifted": 7,
+    "id_match_rate": 0.9437
+   }
+  },
+  {
+   "game": "NO@DET",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 183,
+    "agree": 183,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 183,
+    "agree": 183,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 196,
+    "agree": 196,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 198,
+    "agree": 197,
+    "rate": 0.9949
+   },
+   "home_timeouts": {
+    "n": 207,
+    "agree": 206,
+    "rate": 0.9952
+   },
+   "away_timeouts": {
+    "n": 207,
+    "agree": 207,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 207,
+    "agree": 197,
+    "rate": 0.9517
+   },
+   "_alignment": {
+    "matched": 207,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 10,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 10,
+    "id_match_rate": 0.9662
+   }
+  },
+  {
+   "game": "NYJ@TEN",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 138,
+    "agree": 138,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 138,
+    "agree": 138,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 147,
+    "agree": 147,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 150,
+    "agree": 150,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 158,
+    "agree": 151,
+    "rate": 0.9557
+   },
+   "_alignment": {
+    "matched": 158,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 3,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 4,
+    "id_match_rate": 0.9557
+   }
+  },
+  {
+   "game": "BAL@IND",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 137,
+    "agree": 137,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 137,
+    "agree": 137,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 149,
+    "agree": 149,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 152,
+    "agree": 152,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 158,
+    "agree": 147,
+    "rate": 0.9304
+   },
+   "_alignment": {
+    "matched": 158,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 8,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 9,
+    "id_match_rate": 0.9684
+   }
+  },
+  {
+   "game": "ATL@PIT",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 146,
+    "agree": 146,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 146,
+    "agree": 146,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 155,
+    "agree": 155,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 169,
+    "agree": 169,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 169,
+    "agree": 169,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 169,
+    "agree": 163,
+    "rate": 0.9645
+   },
+   "_alignment": {
+    "matched": 169,
+    "espn_unmatched": 2,
+    "nfl_unmatched": 5,
+    "espn_admin": 18,
+    "nfl_admin": 1,
+    "shifted": 5,
+    "id_match_rate": 0.9408
+   }
+  },
+  {
+   "game": "CHI@CAR",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 151,
+    "agree": 151,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 151,
+    "agree": 151,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 168,
+    "agree": 168,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 171,
+    "agree": 171,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 179,
+    "agree": 179,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 179,
+    "agree": 179,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 179,
+    "agree": 165,
+    "rate": 0.9218
+   },
+   "_alignment": {
+    "matched": 179,
+    "espn_unmatched": 2,
+    "nfl_unmatched": 16,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 16,
+    "id_match_rate": 0.9609
+   }
+  },
+  {
+   "game": "CLE@JAX",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 125,
+    "agree": 125,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 125,
+    "agree": 125,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 135,
+    "agree": 135,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 138,
+    "agree": 138,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 142,
+    "agree": 142,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 142,
+    "agree": 142,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 142,
+    "agree": 132,
+    "rate": 0.9296
+   },
+   "_alignment": {
+    "matched": 142,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 5,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 6,
+    "id_match_rate": 0.9789
+   }
+  },
+  {
+   "game": "BUF@HOU",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 147,
+    "agree": 147,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 147,
+    "agree": 147,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 161,
+    "agree": 161,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 164,
+    "agree": 164,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 170,
+    "agree": 170,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 170,
+    "agree": 170,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 170,
+    "agree": 159,
+    "rate": 0.9353
+   },
+   "_alignment": {
+    "matched": 170,
+    "espn_unmatched": 1,
+    "nfl_unmatched": 9,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 9,
+    "id_match_rate": 0.9706
+   }
+  },
+  {
+   "game": "MIA@LV",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 141,
+    "agree": 141,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 141,
+    "agree": 141,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 150,
+    "agree": 150,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 153,
+    "agree": 153,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 163,
+    "agree": 163,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 163,
+    "agree": 163,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 163,
+    "agree": 155,
+    "rate": 0.9509
+   },
+   "_alignment": {
+    "matched": 163,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 5,
+    "espn_admin": 15,
+    "nfl_admin": 1,
+    "shifted": 6,
+    "id_match_rate": 0.9448
+   }
+  },
+  {
+   "game": "GB@MIN",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 150,
+    "agree": 150,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 150,
+    "agree": 149,
+    "rate": 0.9933
+   },
+   "yardline_100": {
+    "n": 163,
+    "agree": 162,
+    "rate": 0.9939
+   },
+   "possession": {
+    "n": 166,
+    "agree": 166,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 171,
+    "agree": 171,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 171,
+    "agree": 171,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 171,
+    "agree": 161,
+    "rate": 0.9415
+   },
+   "_alignment": {
+    "matched": 171,
+    "espn_unmatched": 1,
+    "nfl_unmatched": 8,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 8,
+    "id_match_rate": 0.9766
+   }
+  },
+  {
+   "game": "WAS@PHI",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 145,
+    "agree": 145,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 145,
+    "agree": 145,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 155,
+    "agree": 155,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 158,
+    "agree": 158,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 164,
+    "agree": 164,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 164,
+    "agree": 164,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 164,
+    "agree": 156,
+    "rate": 0.9512
+   },
+   "_alignment": {
+    "matched": 164,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 6,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 7,
+    "id_match_rate": 0.9695
+   }
+  },
+  {
+   "game": "ARI@LAC",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 148,
+    "agree": 148,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 148,
+    "agree": 147,
+    "rate": 0.9932
+   },
+   "yardline_100": {
+    "n": 157,
+    "agree": 156,
+    "rate": 0.9936
+   },
+   "possession": {
+    "n": 160,
+    "agree": 160,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 168,
+    "agree": 168,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 168,
+    "agree": 168,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 168,
+    "agree": 160,
+    "rate": 0.9524
+   },
+   "_alignment": {
+    "matched": 168,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 4,
+    "espn_admin": 16,
+    "nfl_admin": 1,
+    "shifted": 5,
+    "id_match_rate": 0.9583
+   }
+  },
+  {
+   "game": "DAL@NYG",
+   "wallclock_anomalies": 1,
+   "down": {
+    "n": 135,
+    "agree": 135,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 135,
+    "agree": 135,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 144,
+    "agree": 144,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 147,
+    "agree": 147,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 156,
+    "agree": 156,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 156,
+    "agree": 156,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 156,
+    "agree": 149,
+    "rate": 0.9551
+   },
+   "_alignment": {
+    "matched": 156,
+    "espn_unmatched": 0,
+    "nfl_unmatched": 8,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 9,
+    "id_match_rate": 0.9487
+   }
+  },
+  {
+   "game": "DEN@KC",
+   "wallclock_anomalies": 0,
+   "down": {
+    "n": 136,
+    "agree": 136,
+    "rate": 1.0
+   },
+   "distance": {
+    "n": 136,
+    "agree": 136,
+    "rate": 1.0
+   },
+   "yardline_100": {
+    "n": 144,
+    "agree": 144,
+    "rate": 1.0
+   },
+   "possession": {
+    "n": 147,
+    "agree": 147,
+    "rate": 1.0
+   },
+   "home_timeouts": {
+    "n": 153,
+    "agree": 153,
+    "rate": 1.0
+   },
+   "away_timeouts": {
+    "n": 153,
+    "agree": 153,
+    "rate": 1.0
+   },
+   "clock": {
+    "n": 153,
+    "agree": 146,
+    "rate": 0.9542
+   },
+   "_alignment": {
+    "matched": 153,
+    "espn_unmatched": 1,
+    "nfl_unmatched": 6,
+    "espn_admin": 17,
+    "nfl_admin": 1,
+    "shifted": 6,
+    "id_match_rate": 0.9673
+   }
+  }
+ ]
+}

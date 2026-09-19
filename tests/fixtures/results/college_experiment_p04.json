@@ -1,0 +1,137 @@
+{
+ "sport": "ncaaf",
+ "season": 2026,
+ "weeks": [
+  1,
+  2
+ ],
+ "espn_ids": null,
+ "params": {
+  "scale": 0.84375,
+  "clamp": 19.5,
+  "ot_seconds": 120,
+  "bootstrap": 1000
+ },
+ "games": 185,
+ "skipped": 0,
+ "no_spread_games": 0,
+ "results": {
+  "regulation": {
+   "n_rows": 32052,
+   "n_games": 185,
+   "log_loss": {
+    "baseline": 0.1852,
+    "clamp": 0.1867,
+    "rescale": 0.1885,
+    "rescale_ot": 0.1885
+   },
+   "vs_baseline": {
+    "clamp": {
+     "mean": 0.00143,
+     "lo90": -0.00672,
+     "hi90": 0.00774,
+     "frac_positive": 0.682,
+     "n_games": 185,
+     "n_rows": 32052,
+     "sd_per_game": 0.05769
+    },
+    "rescale": {
+     "mean": 0.00326,
+     "lo90": -0.00512,
+     "hi90": 0.01097,
+     "frac_positive": 0.761,
+     "n_games": 185,
+     "n_rows": 32052,
+     "sd_per_game": 0.06621
+    },
+    "rescale_ot": {
+     "mean": 0.00326,
+     "lo90": -0.00512,
+     "hi90": 0.01097,
+     "frac_positive": 0.761,
+     "n_games": 185,
+     "n_rows": 32052,
+     "sd_per_game": 0.06621
+    }
+   }
+  },
+  "overtime": {
+   "n_rows": 79,
+   "n_games": 3,
+   "log_loss": {
+    "baseline": 3.3189,
+    "clamp": 3.3139,
+    "rescale": 3.3045,
+    "rescale_ot": 1.0491
+   },
+   "vs_baseline": {
+    "clamp": {
+     "mean": -0.00497,
+     "lo90": -0.01137,
+     "hi90": 0.0,
+     "frac_positive": 0.0,
+     "n_games": 3,
+     "n_rows": 79,
+     "sd_per_game": 0.01079
+    },
+    "rescale": {
+     "mean": -0.01435,
+     "lo90": -0.03663,
+     "hi90": 0.0034,
+     "frac_positive": 0.282,
+     "n_games": 3,
+     "n_rows": 79,
+     "sd_per_game": 0.03806
+    },
+    "rescale_ot": {
+     "mean": -2.26978,
+     "lo90": -3.48627,
+     "hi90": -1.24809,
+     "frac_positive": 0.0,
+     "n_games": 3,
+     "n_rows": 79,
+     "sd_per_game": 1.73839
+    }
+   }
+  },
+  "all": {
+   "n_rows": 32131,
+   "n_games": 185,
+   "log_loss": {
+    "baseline": 0.1929,
+    "clamp": 0.1943,
+    "rescale": 0.1961,
+    "rescale_ot": 0.1906
+   },
+   "vs_baseline": {
+    "clamp": {
+     "mean": 0.00142,
+     "lo90": -0.00671,
+     "hi90": 0.00773,
+     "frac_positive": 0.681,
+     "n_games": 185,
+     "n_rows": 32131,
+     "sd_per_game": 0.05762
+    },
+    "rescale": {
+     "mean": 0.00322,
+     "lo90": -0.00515,
+     "hi90": 0.01095,
+     "frac_positive": 0.76,
+     "n_games": 185,
+     "n_rows": 32131,
+     "sd_per_game": 0.06567
+    },
+    "rescale_ot": {
+     "mean": -0.00232,
+     "lo90": -0.01476,
+     "hi90": 0.00856,
+     "frac_positive": 0.39,
+     "n_games": 185,
+     "n_rows": 32131,
+     "sd_per_game": 0.08641
+    }
+   }
+  }
+ }
+}
