@@ -1,0 +1,42 @@
+{
+  "_doc": "Which venues a US-resident account can actually execute on. executable_for_us is the fact the engine acts on; adapter says whether this repo can price the venue at all; state_restrictions is a list of two-letter states where the venue itself blocks the product (empty = none known; re-verify by hand, it is not enforced anywhere but executable_venues(home_state=...)). Every row needs verified (ISO date the source was last read) and source (URL); stale_verification() flags rows older than 30 days so the table is re-read before every live week.",
+  "venues": {
+    "kalshi": {
+      "executable_for_us": true,
+      "adapter": true,
+      "verified": "2026-09-19",
+      "source": "https://kalshi.com/regulatory",
+      "note": "CFTC-designated contract market (DCM); sports event contracts offered to US residents. Some states have contested sports contracts in 2025-26; list them in state_restrictions once verified.",
+      "state_restrictions": []
+    },
+    "robinhood": {
+      "executable_for_us": true,
+      "adapter": true,
+      "verified": "2026-09-19",
+      "source": "https://robinhood.com/us/en/support/articles/event-contracts/",
+      "note": "Robinhood Derivatives LLC (CFTC-registered FCM) routes event contracts to KalshiEX, Rothera and CDNA; no order API, hedges are executed by hand from the alert.",
+      "state_restrictions": []
+    },
+    "polymarket": {
+      "executable_for_us": false,
+      "adapter": true,
+      "verified": "2026-09-19",
+      "source": "https://www.cftc.gov/PressRoom/PressReleases/8478-22",
+      "sources": [
+        "https://www.cftc.gov/PressRoom/PressReleases/8478-22",
+        "https://polymarket.com/tos",
+        "gamma-api.polymarket.com /events restricted=true on every NFL event (tests/fixtures/polymarket_events_nfl.json, captured 2026-09-18)"
+      ],
+      "note": "Global CLOB. The CFTC order of 2022-01-03 (Blockratize Inc. d/b/a Polymarket) and the Terms of Use bar US persons from trading; Gamma marks these markets restricted=true. Prices are still useful as a fair-value reference, so the adapter stays.",
+      "state_restrictions": []
+    },
+    "polymarket_us": {
+      "executable_for_us": true,
+      "adapter": false,
+      "verified": "2026-09-19",
+      "source": "https://docs.polymarket.us/",
+      "note": "CFTC-regulated separate product (QCEX DCM). Executable for US persons but this repo has no adapter for it yet, so it never appears in a scan.",
+      "state_restrictions": []
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+ "executable_venues": [
+  "kalshi",
+  "robinhood"
+ ],
+ "item": "P11",
+ "sources": {
+  "ncaaf": {
+   "arbs": {
+    "arbs_after": 0,
+    "arbs_before": 1,
+    "arbs_before_with_non_executable_leg": 1,
+    "arbs_lost": 1,
+    "executable": [
+     "kalshi",
+     "robinhood"
+    ],
+    "non_executable_legs_by_venue": {
+     "polymarket": 1
+    },
+    "share_after_of_before": 0.0,
+    "share_before_non_executable": 1.0,
+    "snapshots": 53
+   },
+   "maker_hedges": {
+    "by_hedge_venue_after": {
+     "robinhood": 10
+    },
+    "by_hedge_venue_before": {
+     "polymarket": 7,
+     "robinhood": 3
+    },
+    "priceable_after": 10,
+    "priceable_before": 10,
+    "priceable_before_non_executable_hedge": 7,
+    "share_before_non_executable": 0.7,
+    "watches_after": 10,
+    "watches_after_non_executable_hedge": 0,
+    "watches_before": 10,
+    "watches_before_non_executable_hedge": 7
+   }
+  },
+  "nfl": {
+   "arbs": {
+    "arbs_after": 0,
+    "arbs_before": 0,
+    "arbs_before_with_non_executable_leg": 0,
+    "arbs_lost": 0,
+    "executable": [
+     "kalshi",
+     "robinhood"
+    ],
+    "non_executable_legs_by_venue": {},
+    "share_after_of_before": null,
+    "share_before_non_executable": null,
+    "snapshots": 1
+   },
+   "maker_hedges": {
+    "by_hedge_venue_after": {
+     "robinhood": 8
+    },
+    "by_hedge_venue_before": {
+     "polymarket": 5,
+     "robinhood": 3
+    },
+    "priceable_after": 8,
+    "priceable_before": 8,
+    "priceable_before_non_executable_hedge": 5,
+    "share_before_non_executable": 0.625,
+    "watches_after": 8,
+    "watches_after_non_executable_hedge": 0,
+    "watches_before": 8,
+    "watches_before_non_executable_hedge": 5
+   }
+  }
+ },
+ "summary": {
+  "arbs_after": 0,
+  "arbs_before": 1,
+  "arbs_before_with_non_executable_leg": 1,
+  "share_after_of_before": 0.0,
+  "share_before_non_executable": 1.0
+ }
+}

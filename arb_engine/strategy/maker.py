@@ -19,14 +19,30 @@ re-checking every loop.
 
 Brokers: PaperBroker (default; simulated fills from live prices), KalshiBroker (demo or
 prod behind the execution gates). Everything is journaled to out/maker_journal.jsonl.
+
+Safety (why each exists):
+  * hedge venues default to Robinhood only. Global Polymarket is not executable for US
+    persons (``compliance.executable_venues``), so a rest hedged there is naked; an
+    operator opts in with ``hedge_venues=(..., "polymarket")`` and every alert then says
+    the leg is not executable. Quotes flagged ``meta.restricted`` (Gamma geoblock) are
+    never hedges, opt-in or not, and Robinhood's Kalshi-routed book is never a hedge.
+  * ``hedge_cash`` bounds the cash the operator must find by hand if every resting order
+    fills in one burst (sum of size x hedge ask over resting orders).
+  * collateral is bounded by min(max_notional, Kalshi balance when a key exists).
+  * the exchange status is polled every 30 s; when trading is not active every order is
+    cancelled and nothing is rested until it is (Kalshi pauses around maintenance and
+    would otherwise fill a stale rest on reopening).
+  * every cancel journals its reason; shutdown cancels everything.
 """
 
 from __future__ import annotations
 
+import inspect
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Iterable, Optional
 
+from .. import compliance
 from ..fees.base import FeeModel
 from ..fees.registry import fee_model_for_quote
 from ..matching.matcher import MergedEvent, merge_snapshots
@@ -36,6 +52,19 @@ from .alerts import Alerter
 from .broker import Broker, PaperBroker, RestingOrder
 
 TICK = 0.01
+STATUS_POLL_S = 30.0   # exchange-status cadence: not per loop (rate limit), not per minute (a pause fills stale rests)
+BALANCE_POLL_S = 60.0
+
+try:  # P01's settings registry; the module stays importable without it.
+    from ..config import declare_setting as _declare_setting
+except ImportError:  # pragma: no cover
+    _declare_setting = None
+if _declare_setting is not None:
+    try:
+        _declare_setting("maker_hedge_cash", env="MAKER_HEDGE_CASH", default=250.0, cast=float, doc="max dollars of hand-executed hedge legs the maker may leave resting at once (sum of size x hedge ask)")
+        _declare_setting("maker_hedge_venues", env="MAKER_HEDGE_VENUES", default="robinhood", cast=str, doc="comma list of hedge venues for the maker; naming polymarket is the explicit opt-in to a non-executable hedge")
+    except Exception:
+        pass
 
 
 @dataclass
@@ -53,8 +82,10 @@ class MakerConfig:
     interval: float = 10.0       # seconds between refresh loops
     rescan: float = 300.0        # seconds between full cross-venue scans
     cancel_slack: float = 0.005  # cancel when margin-if-filled drops below min_margin - slack
-    hedge_venues: tuple[str, ...] = ("robinhood", "polymarket")
+    hedge_venues: tuple[str, ...] = ("robinhood",)  # explicit list = opt-in; polymarket is not executable for US persons
     max_watches: int = 120       # watches kept between rescans (best margin first; orders always kept)
+    hedge_cash: float = 250.0    # dollars of hand-executed hedge legs allowed to be resting at once (<= 0 = unbounded)
+    status_poll: float = STATUS_POLL_S  # seconds between exchange-status polls
 
 
 @dataclass
@@ -152,24 +183,65 @@ def _f(x: Any) -> Optional[float]:
         return None
 
 
+def _accepts_kwarg(fn: Any, name: str) -> bool:
+    """Does ``fn`` take ``name`` (or **kwargs)? Lets this item pass ``resting=`` to a broker
+    that grows it in another item without breaking the ones that have not."""
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
+def _positional_arity(fn: Any) -> int:
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return 0
+    return sum(1 for p in params.values() if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD) and p.default is inspect.Parameter.empty) + sum(1 for p in params.values() if p.kind is inspect.Parameter.VAR_POSITIONAL)
+
+
 class MakerRunner:
-    def __init__(self, config: MakerConfig, feed: MarketFeed, broker: Optional[Broker] = None, alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, scan_fn: Optional[Callable[[], list[MergedEvent]]] = None):
+    def __init__(self, config: MakerConfig, feed: MarketFeed, broker: Optional[Broker] = None, alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, scan_fn: Optional[Callable[[], list[MergedEvent]]] = None, clock: Callable[[], float] = time.time, exchange_status: Optional[Callable[[], dict]] = None):
         self.cfg = config
         self.feed = feed
         self.broker = broker or PaperBroker()
         self.alerts = alerter or Alerter()
         self.settings = settings or {}
         self.scan_fn = scan_fn
+        self.clock = clock
         self.watches: dict[str, Watch] = {}
         self.orders: list[RestingOrder] = []
-        self.last_scan = 0.0
+        self.last_scan = -1e18   # first step() always rescans, whatever clock is injected
         self.fills: list[dict[str, Any]] = []
+        # Eligibility: the explicit hedge_venues list is the opt-in; the table only warns.
+        self.executable = compliance.executable_venues(self.settings)
+        self.hedge_venues = tuple(v for v in (config.hedge_venues or ()) if v != "kalshi") or tuple(sorted(self.executable - {"kalshi"}))
+        self.ineligible_hedges = {v: compliance.ineligible_reason(v, self.settings) for v in self.hedge_venues if v not in self.executable}
+        self.skipped_ineligible: dict[str, int] = {}   # venue -> hedge candidates dropped (eligibility report)
+        # Exchange status pause + balance-bounded collateral.
+        self.exchange_status = exchange_status if exchange_status is not None else self._default_status_fn()
+        self.paused: bool = False
+        self.last_status_poll: float = -1e18
+        self.last_balance_poll: float = -1e18
+        self.balance: Optional[float] = None
+        self._place_accepts_resting = _accepts_kwarg(self.broker.place, "resting")
+        self._hedge_cash_refused: set[str] = set()
+
+    def _default_status_fn(self) -> Optional[Callable[[], dict]]:
+        client = getattr(self.feed, "kalshi", None)
+        fn = getattr(client, "exchange_status", None)
+        return fn if callable(fn) else None
 
     # ---- discovery -------------------------------------------------------------------------
     def discover(self, merged: Iterable[MergedEvent]) -> list[Watch]:
         """Build watches: for every event with a Kalshi quote on one side and a hedgeable ask
-        on another venue for the other side (both directions)."""
+        on another venue for the other side (both directions).
+
+        A hedge is a quote on one of ``hedge_venues`` (the explicit opt-in list) whose book is
+        not Kalshi's own (Robinhood re-sells it)."""
         found: dict[str, Watch] = {}
+        self.skipped_ineligible = {}
         for me in merged:
             info = me.info
             if info.market_type not in self.cfg.market_types or len(info.outcomes) != 2:
@@ -179,7 +251,18 @@ class MakerRunner:
             kq = {q.outcome: q for q in me.quotes_by_venue.get("kalshi", []) if q.meta.get("ticker")}
             for k_out, kquote in kq.items():
                 other = [o for o in info.outcomes if o != k_out][0]
-                hedges = [q for v, qs in me.quotes_by_venue.items() if v in self.cfg.hedge_venues for q in qs if q.outcome == other and q.ask is not None and q.book_id != "kalshi"]
+                hedges = []
+                for v, qs in me.quotes_by_venue.items():
+                    for q in qs:
+                        if q.outcome != other or q.ask is None or q.book_id == "kalshi":
+                            continue
+                        # hedge_venues is the explicit opt-in list, so a venue on it is hedgeable
+                        # even when Gamma's venue-wide restricted flag is on the quote; the
+                        # eligibility note on every alert still says so.
+                        if v not in self.hedge_venues:
+                            self.skipped_ineligible[v] = self.skipped_ineligible.get(v, 0) + 1
+                            continue
+                        hedges.append(q)
                 if not hedges:
                     continue
                 best = None
@@ -260,6 +343,53 @@ class MakerRunner:
             self._price(w)
         return state
 
+    # ---- limits ---------------------------------------------------------------------------
+    def _cancel(self, o: RestingOrder, reason: str, watch: Optional[str] = None) -> None:
+        """Every cancel goes through here so the journal always carries a reason."""
+        try:
+            self.broker.cancel(o)
+            self.alerts.info(f"cancel {o.ticker} {o.side} @ {o.price:.2f} x{o.remaining:g}: {reason}", order_id=o.order_id, watch=watch or o.watch_key, reason=reason)
+        except Exception as e:
+            self.alerts.info(f"cancel failed {o.order_id} ({reason}): {e}", order_id=o.order_id, watch=watch or o.watch_key, reason=reason)
+
+    def _resting(self) -> list[RestingOrder]:
+        return [o for o in self.orders if o.status == "resting"]
+
+    def hedge_exposure(self) -> float:
+        """Dollars of hand-executed hedge legs if every resting order filled now (size x hedge ask)."""
+        total = 0.0
+        for w in self.watches.values():
+            o = w.order
+            if o is not None and o.status == "resting":
+                total += o.remaining * (w.hedge_ask if w.hedge_ask is not None else 1.0)
+        return total
+
+    def collateral_cap(self) -> float:
+        """min(max_notional, Kalshi balance) — the balance only when the broker has a signed
+        client (paper/demo without a key: max_notional alone). Polled at most once a minute.
+
+        Kalshi's ``/portfolio/balance`` already has resting-order collateral deducted, so the
+        caller compares ``resting notional + new order`` against max_notional but only the
+        new order against the live balance (``available_balance``)."""
+        cap = self.cfg.max_notional
+        client = getattr(self.broker, "client", None)
+        if client is None or not getattr(client, "has_credentials", False) or not callable(getattr(client, "balance", None)):
+            return cap
+        now = self.clock()
+        if now - self.last_balance_poll >= BALANCE_POLL_S:
+            self.last_balance_poll = now
+            try:
+                bal = client.balance()
+                cents = bal.get("balance") if isinstance(bal, dict) else bal
+                self.balance = float(cents) / 100.0 if cents is not None else None   # Kalshi reports cents
+            except Exception as e:
+                self.alerts.info(f"balance poll failed: {e!r}")
+        return cap
+
+    def available_balance(self) -> Optional[float]:
+        """Last polled Kalshi balance in dollars (None without a signed client)."""
+        return self.balance
+
     # ---- reconcile ------------------------------------------------------------------------
     def reconcile(self) -> None:
         cfg = self.cfg
@@ -276,29 +406,44 @@ class MakerRunner:
             elif abs(w.desired_price - o.price) >= TICK - 1e-9:
                 drop = f"re-price {o.price:.2f} -> {w.desired_price:.2f}"
             if drop:
-                self.broker.cancel(o)
-                self.alerts.info(f"cancel {o.ticker} {o.side} @ {o.price:.2f} x{o.remaining:g}: {drop}", order_id=o.order_id, watch=w.key)
+                self._cancel(o, drop, watch=w.key)
                 w.order = None
+        if self.paused:
+            return  # exchange not trading: manage nothing new until step() sees it active again
         # 2) place for the best watches within limits
-        resting = [o for o in self.orders if o.status == "resting"]
+        resting = self._resting()
         notional = sum(o.notional for o in resting)
+        collateral_cap = self.collateral_cap()
+        available = self.available_balance()
+        hedge_cash = self.hedge_exposure()
         per_event: dict[str, int] = {}
         for o in resting:
             per_event[o.watch_key.split("|")[0]] = per_event.get(o.watch_key.split("|")[0], 0) + 1
         ranked = sorted((w for w in self.watches.values() if w.desired_price is not None and w.order is None), key=lambda w: -(w.margin_if_filled or 0))
         for w in ranked:
-            if len([o for o in self.orders if o.status == "resting"]) >= cfg.max_orders:
+            if len(self._resting()) >= cfg.max_orders:
                 break
             ev = w.event_key
             if per_event.get(ev, 0) >= cfg.max_per_event:
                 continue
             cost = w.desired_price * cfg.size
-            if notional + cost > cfg.max_notional:
+            if notional + cost > collateral_cap:
+                continue
+            if available is not None and cost > available + 1e-9:  # balance already nets resting collateral
+                continue
+            hedge_cost = cfg.size * (w.hedge_ask if w.hedge_ask is not None else 1.0)
+            if cfg.hedge_cash > 0 and hedge_cash + hedge_cost > cfg.hedge_cash + 1e-9:
+                if w.key not in self._hedge_cash_refused:  # once per watch, like the other limit refusals
+                    self._hedge_cash_refused.add(w.key)
+                    self.alerts.info(f"hedge-cash: not resting {w.kalshi_ticker} {w.kalshi_side} — hedge {w.hedge_label} on {w.hedge_venue} would need ${hedge_cost:.0f} on top of ${hedge_cash:.0f} already exposed (cap ${cfg.hedge_cash:g})", watch=w.key, reason="hedge-cash")
                 continue
             if w.taker_arb:
-                self.alerts.alert("TAKER ARB", f"{w.title}: buy {w.kalshi_label} on Kalshi at the ask {w.kalshi_ask:.2f} and {w.hedge_label} on {w.hedge_venue} at {w.hedge_ask:.2f} — locks ≥ {w.margin_if_filled:.2%}", watch=w.key, kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url)
+                self.alerts.alert("TAKER ARB", f"{w.title}: buy {w.kalshi_label} on Kalshi at the ask {w.kalshi_ask:.2f} and {w.hedge_label} on {w.hedge_venue} at {w.hedge_ask:.2f} ({compliance.eligibility_note(w.hedge_venue, self.settings)}) — locks ≥ {w.margin_if_filled:.2%}", watch=w.key, kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=compliance.eligibility_note(w.hedge_venue, self.settings))
+            kwargs: dict[str, Any] = {"watch_key": w.key, "exchange_index": w.exchange_index}
+            if self._place_accepts_resting:  # P12's SelfMatchGuard wants our own open orders on this ticker
+                kwargs["resting"] = [o for o in self._resting() if o.ticker == w.kalshi_ticker]
             try:
-                o = self.broker.place(w.kalshi_ticker, w.kalshi_side, w.desired_price, cfg.size, watch_key=w.key, exchange_index=w.exchange_index)
+                o = self.broker.place(w.kalshi_ticker, w.kalshi_side, w.desired_price, cfg.size, **kwargs)
             except Exception as e:
                 self.alerts.info(f"place failed {w.kalshi_ticker}: {e}", watch=w.key)
                 continue
@@ -308,8 +453,10 @@ class MakerRunner:
             w.order = o
             self.orders.append(o)
             notional += cost
+            hedge_cash += hedge_cost
             per_event[ev] = per_event.get(ev, 0) + 1
-            self.alerts.info(f"rest {self.broker.name}: buy {w.kalshi_side.upper()} {o.ticker} @ {o.price:.2f} x{o.count:g}  ({w.kalshi_label}; hedge {w.hedge_label} on {w.hedge_venue} @ {w.hedge_ask:.2f}; margin if filled {w.margin_if_filled:.2%})", order_id=o.order_id, watch=w.key, payload=o.payload)
+            self._hedge_cash_refused.discard(w.key)
+            self.alerts.info(f"rest {self.broker.name}: buy {w.kalshi_side.upper()} {o.ticker} @ {o.price:.2f} x{o.count:g}  ({w.kalshi_label}; hedge {w.hedge_label} on {w.hedge_venue} @ {w.hedge_ask:.2f}, {compliance.eligibility_note(w.hedge_venue, self.settings)}; margin if filled {w.margin_if_filled:.2%}; hedge cash ${hedge_cash:.0f}/{cfg.hedge_cash:g})", order_id=o.order_id, watch=w.key, payload=o.payload)
 
     # ---- fills ----------------------------------------------------------------------------
     def check_fills(self, state: dict[str, dict[str, float]]) -> None:
@@ -322,10 +469,11 @@ class MakerRunner:
             kalshi_leg = Leg(w.kalshi_outcome, "kalshi", price, w.kalshi_fee, role="maker")
             hedge_max = max_price_for_leg([kalshi_leg], w.hedge_fee, qty, self.cfg.target_margin, role="taker")
             now_margin = evaluate([kalshi_leg, Leg(w.hedge_outcome, w.hedge_venue, w.hedge_ask, w.hedge_fee)], qty).margin if w.hedge_ask is not None else None
-            rec.update({"hedge_venue": w.hedge_venue, "hedge_label": w.hedge_label, "hedge_max_price": hedge_max, "hedge_ask_now": w.hedge_ask, "margin_if_hedged_now": now_margin, "hedge_url": w.hedge_url})
+            eligibility = compliance.eligibility_note(w.hedge_venue, self.settings)
+            rec.update({"hedge_venue": w.hedge_venue, "hedge_label": w.hedge_label, "hedge_max_price": hedge_max, "hedge_ask_now": w.hedge_ask, "margin_if_hedged_now": now_margin, "hedge_url": w.hedge_url, "hedge_eligibility": eligibility})
             self.fills.append(rec)
             msg = (f"filled {qty:g} x {w.kalshi_label} @ {price:.2f} on Kalshi ({o.ticker}). HEDGE NOW: buy {qty:g} x {w.hedge_label} on {w.hedge_venue} at ≤ {hedge_max if hedge_max is not None else float('nan'):.2f}"
-                   + (f" (ask now {w.hedge_ask:.2f} → margin {now_margin:.2%})" if w.hedge_ask is not None and now_margin is not None else " (hedge ask unknown)") + (f"  {w.hedge_url}" if w.hedge_url else ""))
+                   + (f" (ask now {w.hedge_ask:.2f} → margin {now_margin:.2%})" if w.hedge_ask is not None and now_margin is not None else " (hedge ask unknown)") + f" [{w.hedge_venue}: {eligibility}]" + (f"  {w.hedge_url}" if w.hedge_url else ""))
             self.alerts.alert("HEDGE NOW", msg, **rec)
             if o.status != "resting":
                 w.order = None
@@ -334,7 +482,7 @@ class MakerRunner:
     def rescan(self) -> None:
         if self.scan_fn is None:
             return
-        self.last_scan = time.time()
+        self.last_scan = self.clock()
         try:
             merged = self.scan_fn()
         except Exception as e:
@@ -357,10 +505,62 @@ class MakerRunner:
             if key not in new and old.order is not None and old.order.status == "resting":
                 new[key] = old
         self.watches = new
-        self.alerts.info(f"watchlist: {len(self.watches)} candidates kept of {len(discovered)} ({sum(1 for w in self.watches.values() if w.desired_price is not None)} priceable)")
+        skipped = ", ".join(f"{v}={n}" for v, n in sorted(self.skipped_ineligible.items()))
+        self.alerts.info(f"watchlist: {len(self.watches)} candidates kept of {len(discovered)} ({sum(1 for w in self.watches.values() if w.desired_price is not None)} priceable)" + (f"; hedge quotes skipped as ineligible: {skipped}" if skipped else ""))
+
+    # ---- exchange status ------------------------------------------------------------------
+    def poll_exchange_status(self, force: bool = False) -> Optional[bool]:
+        """Every ``status_poll`` seconds (not per loop): is Kalshi trading? False pauses the
+        runner and cancels everything; True after a pause resumes. None = no status source."""
+        if self.exchange_status is None:
+            return None
+        now = self.clock()
+        if not force and now - self.last_status_poll < self.cfg.status_poll:
+            return not self.paused
+        self.last_status_poll = now
+        try:
+            st = self.exchange_status() or {}
+        except Exception as e:
+            self.alerts.info(f"exchange status poll failed (keeping state paused={self.paused}): {e!r}")
+            return not self.paused
+        active = bool(st.get("trading_active", True)) and bool(st.get("exchange_active", True))
+        if not active and not self.paused:
+            self.paused = True
+            self.alerts.alert("EXCHANGE PAUSED", f"Kalshi trading_active={st.get('trading_active')} exchange_active={st.get('exchange_active')}: cancelling every resting order and pausing", status=st)
+            self.cancel_all("exchange not trading")
+        elif active and self.paused:
+            self.paused = False
+            self.alerts.info("exchange trading again: resuming", status=st)
+        return active
+
+    def cancel_all(self, reason: str) -> None:
+        """Cancel every resting order, journaling ``reason`` for each; batched when the broker
+        can (P12's Broker.cancel_all), one by one otherwise."""
+        resting = self._resting()
+        fn = getattr(self.broker, "cancel_all", None)
+        if callable(fn) and resting:
+            try:
+                if _positional_arity(fn) >= 1:
+                    fn(resting)
+                elif _accepts_kwarg(fn, "orders"):
+                    fn(orders=resting)
+                else:
+                    fn()
+                for o in resting:
+                    o.status = "canceled" if o.status == "resting" else o.status
+                    self.alerts.info(f"cancel {o.ticker} {o.side} @ {o.price:.2f} x{o.remaining:g}: {reason} (batched)", order_id=o.order_id, watch=o.watch_key, reason=reason)
+                resting = self._resting()
+            except Exception as e:
+                self.alerts.info(f"batched cancel failed ({e!r}); cancelling one by one", reason=reason)
+        for o in resting:
+            self._cancel(o, reason)
+        for w in self.watches.values():
+            if w.order is not None and w.order.status != "resting":
+                w.order = None
 
     def step(self) -> None:
-        if self.scan_fn is not None and time.time() - self.last_scan >= self.cfg.rescan:
+        self.poll_exchange_status()
+        if self.scan_fn is not None and self.clock() - self.last_scan >= self.cfg.rescan:
             self.rescan()
         state = self.refresh()
         self.check_fills(state)
@@ -369,7 +569,9 @@ class MakerRunner:
     def run(self, duration: float = 3600.0, max_iterations: Optional[int] = None) -> None:
         start = time.time()
         n = 0
-        self.alerts.info(f"maker runner start: broker={self.broker.name} size={self.cfg.size} min_margin={self.cfg.min_margin:.2%} max_orders={self.cfg.max_orders} max_notional=${self.cfg.max_notional:g}")
+        self.alerts.info(f"maker runner start: broker={self.broker.name} size={self.cfg.size} min_margin={self.cfg.min_margin:.2%} max_orders={self.cfg.max_orders} max_notional=${self.cfg.max_notional:g} hedge_cash=${self.cfg.hedge_cash:g} hedge_venues={','.join(self.hedge_venues)} executable={','.join(sorted(self.executable))}")
+        for v, why in self.ineligible_hedges.items():
+            self.alerts.alert("HEDGE VENUE NOT EXECUTABLE", f"hedge venue {v} was opted in explicitly but {why}; every fill there must be hedged some other way", venue=v)
         try:
             while time.time() - start < duration and (max_iterations is None or n < max_iterations):
                 try:
@@ -382,13 +584,7 @@ class MakerRunner:
             self.shutdown()
 
     def shutdown(self) -> None:
-        for o in self.orders:
-            if o.status == "resting":
-                try:
-                    self.broker.cancel(o)
-                    self.alerts.info(f"shutdown cancel {o.ticker} @ {o.price:.2f}", order_id=o.order_id)
-                except Exception as e:
-                    self.alerts.info(f"shutdown cancel failed {o.order_id}: {e}")
+        self.cancel_all("shutdown")
         self.alerts.info(f"maker runner stop: {len(self.fills)} fills")
 
     def snapshot(self) -> dict[str, Any]:
