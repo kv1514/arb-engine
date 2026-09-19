@@ -118,5 +118,28 @@ class ScannerTests(unittest.TestCase):
         self.assertNotIn("kalshi", {l["venue"] for l in rep.arb["legs"]})
 
 
+
+
+class SettlementTests(unittest.TestCase):
+    def test_tennis_walkover_rules_differ_between_kalshi_and_polymarket(self):
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo, OutcomeQuote
+        from arb_engine.scanner import settlement_mismatches
+        from arb_engine.venues.kalshi import TENNIS_SETTLEMENT as K
+        from arb_engine.venues.polymarket import TENNIS_SETTLEMENT as P
+
+        key = "tennis:a|b:2026-09-19"
+        info = EventInfo(event_key=key, sport="tennis", market_type="moneyline", outcomes=["a", "b"], labels={"a": "A", "b": "B"}, tie_rule="void", venues={"kalshi": {"settlement": K}, "polymarket": {"settlement": P}, "robinhood": {"settlement": dict(K)}})
+        q = lambda v, o, ask: OutcomeQuote(v, f"{v}-{o}", key, o, ask=ask, bid=ask - 0.02, fee_params={})  # noqa: E731
+        me = MergedEvent(key, info, {"kalshi": [q("kalshi", "a", 0.6), q("kalshi", "b", 0.42)], "polymarket": [q("polymarket", "a", 0.58), q("polymarket", "b", 0.44)]})
+        flags = settlement_mismatches(info, me.quotes_by_venue)
+        self.assertEqual(flags, ["settlement-mismatch:cancelled", "settlement-mismatch:postponed", "settlement-mismatch:walkover"])
+        self.assertEqual(K["retirement"], P["retirement"])   # retirements after the first ball agree
+        # Kalshi + its Robinhood mirror only: same rules, no flag.
+        me2 = MergedEvent(key, info, {"kalshi": me.quotes_by_venue["kalshi"], "robinhood": [q("robinhood", "a", 0.6), q("robinhood", "b", 0.42)]})
+        self.assertEqual(settlement_mismatches(info, me2.quotes_by_venue), [])
+        report = analyze_event(me, {}, contracts=100)
+        self.assertIn("settlement-mismatch:walkover", report.flags)
+
 if __name__ == "__main__":
     unittest.main()

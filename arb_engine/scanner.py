@@ -100,6 +100,21 @@ def _dedupe_same_book(quotes: list[OutcomeQuote]) -> tuple[list[OutcomeQuote], d
     return keep, mirrors
 
 
+def settlement_mismatches(info: Any, quotes_by_venue: dict) -> list[str]:
+    """'settlement-mismatch:<case>' for every case (walkover, retirement, …) where the venues
+    holding quotes settle differently — a hedge across them is not a hedge in that case."""
+    rules = {v: (info.venues.get(v) or {}).get("settlement") for v in quotes_by_venue if isinstance(info.venues.get(v), dict)}
+    rules = {v: r for v, r in rules.items() if r}
+    if len(rules) < 2:
+        return []
+    out = []
+    for case in sorted({k for r in rules.values() for k in r}):
+        vals = {r.get(case) for r in rules.values()}
+        if len(vals) > 1:
+            out.append(f"settlement-mismatch:{case}")
+    return out
+
+
 def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None, min_size: float = 1.0) -> EventReport:
     info = me.info
     now = now or time.time()
@@ -138,6 +153,7 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
         flags.append("live")
     if info.tie_rule == "unknown" and info.sport in ("nfl", "ncaaf"):
         flags.append("tie-rule-unverified")
+    flags.extend(settlement_mismatches(info, me.quotes_by_venue))
     for o in info.outcomes:
         others = [l for l in legs if l.outcome != o]
         hedgeable = complete and len(others) == len(info.outcomes) - 1

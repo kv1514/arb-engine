@@ -45,6 +45,12 @@ ENV_REST_BASE = {
 
 TEAM_SPORTS = ("nfl", "ncaaf")  # sports with a canonical team-code table
 
+# Kalshi tennis rule text (rules_primary/secondary on every KX{ATP,WTA}MATCH market, 2026-09-18):
+# "If X wins the match after a ball has been played, then Yes"; no ball played (injury, walkover,
+# forfeiture, cancellation) -> "the market will resolve to a fair price in accordance with the
+# rules"; postponed -> stays open up to two weeks. Robinhood's tennis contracts are this book.
+TENNIS_SETTLEMENT = {"retirement": "advancer", "walkover": "fair_price", "cancelled": "fair_price", "postponed": "open_2w"}
+
 # Series we scan per sport. Game-level series carry maker fees (quadratic_with_maker_fees).
 SPORT_SERIES: dict[str, list[dict[str, Any]]] = {
     "nfl": [
@@ -329,14 +335,18 @@ class KalshiAdapter:
                 codes = {m["ticker"]: pk[i] for i, m in enumerate(ms)}
                 key = tennis_event_key(list(labels.values()), date)
                 tie_rule = "void"
+                settlement = dict(TENNIS_SETTLEMENT)
             else:
                 codes = {m["ticker"]: m["ticker"].rsplit("-", 1)[-1] for m in ms}
                 key = f"{sport}:" + "|".join(sorted(codes.values())) + f":{date or ''}"
                 tie_rule = "half"
+            venue_meta: dict[str, Any] = {"event_ticker": event_ticker, "url": f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}"}
+            if sport == "tennis":
+                venue_meta["settlement"] = settlement
             info = EventInfo(
                 event_key=key, sport=sport, market_type=spec["market_type"], outcomes=sorted(codes.values()),
                 labels={codes[t]: labels[t] for t in codes}, start_time=start, tie_rule=tie_rule,
-                venues={self.venue: {"event_ticker": event_ticker, "url": f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}"}},
+                venues={self.venue: venue_meta},
             )
             snap.events[key] = info
             for m in ms:

@@ -36,6 +36,24 @@
 * Matching is by surname pair + Eastern date with one-day tolerance (order-of-play times
   drift); duplicate surnames fall back to full names.
 
+### Settlement rules, verbatim from the venues (2026-09-18)
+
+| Case | Kalshi (`KXATPMATCH` / `KXWTAMATCH` market `rules_primary` + `rules_secondary`; Robinhood tennis is this book) | Polymarket (market `description`) |
+|---|---|---|
+| Match completed | "If X wins the … match … **after a ball has been played**, then the market resolves to Yes." | "resolve to 'X' if X **advances** against Y" |
+| Retirement / default / DQ after the first ball | X "wins" per the tour = the player who advances | "the player who advances" |
+| Walkover / withdrawal / cancellation **before** the first ball | "the market will resolve to a **fair price** in accordance with the rules" (not a 50-50, not a refund at cost) | "resolve to **50-50**" |
+| Postponed | "will remain open and close after the rescheduled match has finished (within two weeks)" | "delayed beyond 7 days … without a winner → 50-50" |
+
+Retirements agree, so a Kalshi × Polymarket hedge survives the common case. **Walkovers and
+cancellations do not**: Polymarket pays 50¢ a side while Kalshi settles at a "fair price" it
+determines, so the pair is not a lock in that case. The adapters store each venue's rules in
+`EventInfo.venues[venue]["settlement"]` (`TENNIS_SETTLEMENT` in `venues/kalshi.py` and
+`venues/polymarket.py`) and the scanner adds `settlement-mismatch:<case>` flags whenever the
+venues that hold quotes differ — `settlement-mismatch:walkover`, `:cancelled`, `:postponed` for
+every Kalshi × Polymarket tennis pair. Kalshi and its Robinhood mirror never mismatch.
+
+
 ## Other sports already supported by the adapters
 
 NCAAF (`KXNCAAFGAME`, Robinhood `college-football`), NBA, NHL, MLB (`KXMLBGAME` has a 0.5 fee

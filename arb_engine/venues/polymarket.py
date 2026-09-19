@@ -24,6 +24,11 @@ from .http import HttpClient
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
 
+# Polymarket tennis market description (2026-09-18): retirement/default/disqualification after
+# the start -> the player who advances; cancelled, tie, delayed > 7 days, or walkover (withdrawal
+# before the start) -> 50-50.
+TENNIS_SETTLEMENT = {"retirement": "advancer", "walkover": "50-50", "cancelled": "50-50", "postponed": "50-50_after_7d"}
+
 SPORT_TAGS: dict[str, list[str]] = {
     "nfl": ["nfl"],
     "ncaaf": ["cfb"],
@@ -179,6 +184,7 @@ class PolymarketAdapter:
                 codes = person_keys(outcomes)
                 key = tennis_event_key(outcomes, date)
                 tie_rule = "void"
+                settlement = dict(TENNIS_SETTLEMENT)
             else:
                 codes = [o for o in outcomes]
                 key = f"{sport}:" + "|".join(sorted(codes)) + f":{date or ''}"
@@ -186,7 +192,10 @@ class PolymarketAdapter:
             if not key:
                 continue
             url = f"https://polymarket.com/event/{ev.get('slug')}"
-            info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=sorted(codes), labels={codes[i]: outcomes[i] for i in range(2)}, start_time=start, tie_rule=tie_rule, venues={self.venue: {"event_id": ev.get("id"), "market_id": m.get("id"), "condition_id": m.get("conditionId"), "url": url}})
+            venue_meta: dict[str, Any] = {"event_id": ev.get("id"), "market_id": m.get("id"), "condition_id": m.get("conditionId"), "url": url}
+            if sport == "tennis":
+                venue_meta["settlement"] = settlement
+            info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=sorted(codes), labels={codes[i]: outcomes[i] for i in range(2)}, start_time=start, tie_rule=tie_rule, venues={self.venue: venue_meta})
             snap.events.setdefault(key, info)
             fee_params = {"feeSchedule": m.get("feeSchedule"), "feesEnabled": m.get("feesEnabled", True), "feeType": m.get("feeType")}
             # bestBid/bestAsk on the market object refer to outcome[0]'s token; outcome[1] is the complement.

@@ -26,7 +26,9 @@ Ordered by expected value for the NFL/tennis focus.
 6. **Sportsbook consensus.** The Odds API `h2h` lines → `devig_power` → weight into
    `consensus_fair_value` (weights already parameterised). Adds a "true" fair value that
    does not depend on the exchanges themselves.
-7. **Tennis specifics.** Retirement/walkover rule table per venue; ITF/challenger
+7. **Tennis specifics.** ~~Retirement/walkover rule table per venue~~ (done 2026-09-18: rules
+   quoted in SPORTS.md, `settlement-mismatch:*` flags for Kalshi × Polymarket pairs — walkovers
+   and cancellations settle differently, retirements agree); still open: ITF/challenger
    coverage on Polymarket via tag ids; player-name canonicalisation with a small alias file.
 8. ~~NCAAF~~ — done 2026-09-18: `data/ncaaf_teams.json` (761 programs from ESPN + venue codes,
    `scripts/build_ncaaf_teams.py`), `scan/live/games --sport ncaaf` across Kalshi, Polymarket

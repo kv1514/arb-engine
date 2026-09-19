@@ -27,6 +27,7 @@ import time
 from typing import Any, Iterable, Optional
 
 from ..fees.robinhood import exchange_from_symbol_or_enum
+from .kalshi import TENNIS_SETTLEMENT as KALSHI_TENNIS_SETTLEMENT
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
 from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
 from ..matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
@@ -287,6 +288,7 @@ class RobinhoodAdapter:
                     date = kalshi_ticker_date(contracts[0].get("symbol", ""))
                 key = tennis_event_key(names, date)
                 tie_rule = "void"
+                settlement = dict(KALSHI_TENNIS_SETTLEMENT)  # Robinhood tennis is Kalshi's book and rules
             else:
                 codes = [c.get("displayShortName") or c.get("symbol", "").rsplit("-", 1)[-1] for c in contracts]
                 key = f"{sport}:" + "|".join(sorted(codes)) + f":{date or ''}"
@@ -295,7 +297,10 @@ class RobinhoodAdapter:
                 continue
             slug = (ev.get("urlSlugs") or [ev.get("id")])[0]
             url = f"{WEB}/us/en/prediction-markets/{category}/events/{slug}/"
-            info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=sorted(codes), labels={codes[i]: names[i] for i in range(2)}, start_time=start, tie_rule=tie_rule, venues={self.venue: {"event_id": ev.get("id"), "slug": slug, "url": url, "exchange": exchange_from_symbol_or_enum(contracts[0].get("symbol"), contracts[0].get("exchange")), "progress": progress}}, in_play=in_play)
+            venue_meta: dict[str, Any] = {"event_id": ev.get("id"), "slug": slug, "url": url, "exchange": exchange_from_symbol_or_enum(contracts[0].get("symbol"), contracts[0].get("exchange")), "progress": progress}
+            if sport == "tennis":
+                venue_meta["settlement"] = settlement
+            info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=sorted(codes), labels={codes[i]: names[i] for i in range(2)}, start_time=start, tie_rule=tie_rule, venues={self.venue: venue_meta}, in_play=in_play)
             snap.events.setdefault(key, info)
             for i, c in enumerate(contracts):
                 qd = quotes.get(c["id"]) or {}
