@@ -38,6 +38,7 @@ EXCHANGE_FEE_PER_CONTRACT: dict[str, Decimal] = {
     "rothera": Decimal("0.01"),
     "nadex": Decimal("0.01"),
     "forecastex": Decimal("0.00"),
+    "cdna": Decimal("0.01"),  # college-football games (symbols NX.F.OPT.*); assumed at the $0.01 cap, unverified
 }
 
 
@@ -52,9 +53,13 @@ def exchange_from_symbol_or_enum(symbol: str | None, exchange_enum: str | None =
         return "forecastex"
     if "NADEX" in e or "NORTH_AMERICAN" in e:
         return "nadex"
+    if "CDNA" in e:
+        return "cdna"
     s = (symbol or "").upper()
     if s.startswith("KX"):
         return "kalshi"
+    if s.startswith("NX."):
+        return "cdna"
     return "rothera" if s else "unknown"
 
 

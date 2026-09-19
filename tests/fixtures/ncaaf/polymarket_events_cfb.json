@@ -1,0 +1,78 @@
+[
+{
+"id": "985415",
+"slug": "cfb-pur-ucla-2026-09-19",
+"title": "Purdue vs. UCLA",
+"startDate": "2026-09-07T22:06:04Z",
+"active": true,
+"closed": false,
+"markets": [
+{
+"id": "4350163",
+"slug": "cfb-pur-ucla-2026-09-19",
+"question": "Purdue vs. UCLA",
+"outcomes": "[\"Purdue\", \"UCLA\"]",
+"outcomePrices": "[\"0.155\", \"0.845\"]",
+"clobTokenIds": "[\"107370845578032410614145424316167402706007103842259342083791307289419402143937\", \"30236327449625940031394911863739935930292605392640117885638721002487837621553\"]",
+"sportsMarketType": "moneyline",
+"closed": false,
+"active": true,
+"gameStartTime": "2026-09-20 03:00:00+00",
+"bestBid": 0.15,
+"bestAsk": 0.16,
+"feeSchedule": {
+"exponent": 1,
+"rate": 0,
+"takerOnly": true,
+"rebateRate": 0
+},
+"feesEnabled": true,
+"feeType": "zero_fees",
+"conditionId": "0xc17cd1dba433c3865d70d0d1a6aeb0ad237ec07d7653bd399ea3c3e6e5785e45",
+"orderPriceMinTickSize": 0.01,
+"orderMinSize": 5,
+"volume24hr": 1364.619167,
+"liquidityNum": 137594.0256,
+"negRisk": false
+}
+]
+},
+{
+"id": "985414",
+"slug": "cfb-frest-sjst-2026-09-19",
+"title": "Fresno State vs. San Jose State",
+"startDate": "2026-09-07T22:06:01Z",
+"active": true,
+"closed": false,
+"markets": [
+{
+"id": "4350162",
+"slug": "cfb-frest-sjst-2026-09-19",
+"question": "Fresno State vs. San Jose State",
+"outcomes": "[\"Fresno State\", \"San Jose State\"]",
+"outcomePrices": "[\"0.675\", \"0.325\"]",
+"clobTokenIds": "[\"9248201843215207495812679062728068443324555352935485612091156698925248043701\", \"26244431792571693384674411301927909638692578042169388543183520499838316680383\"]",
+"sportsMarketType": "moneyline",
+"closed": false,
+"active": true,
+"gameStartTime": "2026-09-20 03:00:00+00",
+"bestBid": 0.67,
+"bestAsk": 0.68,
+"feeSchedule": {
+"exponent": 1,
+"rate": 0,
+"takerOnly": true,
+"rebateRate": 0
+},
+"feesEnabled": true,
+"feeType": "zero_fees",
+"conditionId": "0xf62e88b42bc13b8e2da7133caf5d89d9dff4b86ab7b153f09c5ae2cca0ad4f61",
+"orderPriceMinTickSize": 0.01,
+"orderMinSize": 5,
+"volume24hr": 50,
+"liquidityNum": 116964.9322,
+"negRisk": false
+}
+]
+}
+]

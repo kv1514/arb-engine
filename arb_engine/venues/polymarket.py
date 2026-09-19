@@ -17,8 +17,8 @@ import time
 from typing import Any, Optional
 
 from ..models import VENUE_POLYMARKET, Book, EventInfo, Level, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, spread_event_key, spread_outcomes, tennis_event_key, total_event_key
-from ..matching.teams import nfl_team_city, nfl_team_code
+from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, spread_event_key, spread_outcomes, tennis_event_key, total_event_key, team_event_key
+from ..matching.teams import nfl_team_city, nfl_team_code, team_code
 from .http import HttpClient
 
 GAMMA = "https://gamma-api.polymarket.com"
@@ -26,6 +26,7 @@ CLOB = "https://clob.polymarket.com"
 
 SPORT_TAGS: dict[str, list[str]] = {
     "nfl": ["nfl"],
+    "ncaaf": ["cfb"],
     "ncaaf": ["cfb", "college-football"],
     "tennis": ["tennis"],
     "nba": ["nba"],
@@ -141,16 +142,16 @@ class PolymarketAdapter:
                 continue
             start = parse_iso(m.get("gameStartTime"))  # ev.startDate is the listing date, not kickoff
             date = et_date(start)
-            if sport in ("nfl",):
-                codes = [nfl_team_code(o) for o in outcomes]
+            if sport in ("nfl", "ncaaf"):
+                codes = [team_code(sport, o) for o in outcomes]
                 slug = ev.get("slug", "")
-                if any(c is None for c in codes):
+                if any(c is None for c in codes) and sport == "nfl":
                     parts = slug.split("-")
                     if len(parts) >= 3:
                         codes = [nfl_team_code(parts[1]), nfl_team_code(parts[2])]
                 if any(c is None for c in codes):
                     continue
-                key = nfl_event_key(codes, date)  # type: ignore[arg-type]
+                key = team_event_key(sport, codes, date)  # type: ignore[arg-type]
                 tie_rule = "half"
             elif sport == "tennis":
                 codes = person_keys(outcomes)

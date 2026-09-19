@@ -28,11 +28,16 @@ from dataclasses import asdict, dataclass, field
 from datetime import date as _date, datetime
 from typing import Any, Iterable, Optional
 
-from ..matching.normalize import et_date, nfl_event_key, parse_iso
-from ..matching.teams import nfl_team_code
+from ..matching.normalize import et_date, nfl_event_key, parse_iso, team_event_key
+from ..matching.teams import nfl_team_code, team_code
 from .http import HttpClient
 
 BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
+SPORT_BASE_URL = {
+    "nfl": BASE_URL,
+    "ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football",
+}
+SPORT_SCOREBOARD_PARAMS = {"ncaaf": {"groups": 80, "limit": 300}}  # FBS only; the default page is 25 games
 
 REGULATION_PERIODS = 4
 REGULATION_PERIOD_SECONDS = 900
@@ -115,7 +120,7 @@ def _int(x: Any) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def normalize_home_spread(odds: Optional[dict], home_code: Optional[str]) -> Optional[float]:
+def normalize_home_spread(odds: Optional[dict], home_code: Optional[str], sport: str = "nfl") -> Optional[float]:
     """Home-team spread (negative = home favoured) from an ESPN odds / pickcenter block.
 
     Priority: ``pointSpread.home.close.line`` ('-4.5' / '+2.5', explicitly home-relative) ->
@@ -132,7 +137,7 @@ def normalize_home_spread(odds: Optional[dict], home_code: Optional[str]) -> Opt
     details = str(odds.get("details") or "").strip()
     m = re.match(r"^(.+?)\s+([+-]?\d+(?:\.\d+)?)$", details)
     if m:
-        team = nfl_team_code(m.group(1))
+        team = team_code(sport, m.group(1))
         line = float(m.group(2))
         if team and home_code:
             return line if team == home_code else -line
@@ -199,6 +204,7 @@ class GameState:
     is_red_zone: Optional[bool] = None
     receive_2h_ko_home: Optional[bool] = None  # home kicked off to open the game -> receives the 2H kickoff
     enriched: bool = False
+    sport: str = "nfl"
 
     @property
     def score_diff_home(self) -> int:
@@ -217,9 +223,9 @@ class GameState:
 
 # ---- parsing ------------------------------------------------------------------------------
 
-def _team_code(team: dict) -> Optional[str]:
+def _team_code(team: dict, sport: str = "nfl") -> Optional[str]:
     t = team or {}
-    return nfl_team_code(t.get("abbreviation")) or nfl_team_code(t.get("displayName")) or nfl_team_code(t.get("name"))
+    return team_code(sport, t.get("abbreviation")) or team_code(sport, t.get("displayName")) or team_code(sport, t.get("location")) or team_code(sport, t.get("name"))
 
 
 def _possession_side(team_id: Any, home_id: Optional[str], away_id: Optional[str]) -> Optional[str]:
@@ -233,7 +239,7 @@ def _possession_side(team_id: Any, home_id: Optional[str], away_id: Optional[str
     return None
 
 
-def yardline_100_from(yard_line: Any, possession: Optional[str], possession_text: Any = None, home: Optional[str] = None, away: Optional[str] = None) -> Optional[int]:
+def yardline_100_from(yard_line: Any, possession: Optional[str], possession_text: Any = None, home: Optional[str] = None, away: Optional[str] = None, sport: str = "nfl") -> Optional[int]:
     """Yards to the opponent goal line for the team with the ball.
 
     ``yard_line`` is ESPN's absolute field position (0 = home goal line, see module doc). When
@@ -253,7 +259,7 @@ def yardline_100_from(yard_line: Any, possession: Optional[str], possession_text
     m = re.match(r"^([A-Za-z.]+)\s+(\d{1,2})$", txt)
     if not m:
         return None
-    side = nfl_team_code(m.group(1))
+    side = team_code(sport, m.group(1))
     n = int(m.group(2))
     own = home if possession == "home" else away
     if side is None or own is None:
@@ -273,7 +279,7 @@ def parse_situation(sit: Optional[dict], state: GameState) -> None:
     state.down = down if down and down > 0 else None
     dist = _int(sit.get("distance"))
     state.distance = dist if state.down is not None else None
-    state.yardline_100 = yardline_100_from(sit.get("yardLine"), state.possession, sit.get("possessionText"), state.home, state.away)
+    state.yardline_100 = yardline_100_from(sit.get("yardLine"), state.possession, sit.get("possessionText"), state.home, state.away, state.sport)
     if sit.get("homeTimeouts") is not None:
         state.home_timeouts = _int(sit.get("homeTimeouts"))
     if sit.get("awayTimeouts") is not None:
@@ -288,7 +294,7 @@ def parse_situation(sit: Optional[dict], state: GameState) -> None:
         state.espn_home_wp = _num(prob.get("homeWinPercentage"))
 
 
-def parse_scoreboard_event(ev: dict) -> GameState:
+def parse_scoreboard_event(ev: dict, sport: str = "nfl") -> GameState:
     comp = (ev.get("competitions") or [{}])[0]
     home_c = next((c for c in comp.get("competitors", []) if c.get("homeAway") == "home"), {})
     away_c = next((c for c in comp.get("competitors", []) if c.get("homeAway") == "away"), {})
@@ -299,8 +305,8 @@ def parse_scoreboard_event(ev: dict) -> GameState:
     if clock is None:
         clock = parse_clock(status_obj.get("clock"))
     start = parse_iso(comp.get("date") or ev.get("date"))
-    home = _team_code(home_c.get("team") or {})
-    away = _team_code(away_c.get("team") or {})
+    home = _team_code(home_c.get("team") or {}, sport)
+    away = _team_code(away_c.get("team") or {}, sport)
     st = GameState(
         event_id=str(ev.get("id")),
         home=home,
@@ -312,7 +318,8 @@ def parse_scoreboard_event(ev: dict) -> GameState:
         clock_seconds_remaining_in_period=clock,
         game_seconds_remaining=game_seconds_remaining(status, period, clock),
         start_time=start,
-        event_key=nfl_event_key([away, home], et_date(start)) if home and away else None,
+        event_key=team_event_key(sport, [away, home], et_date(start)) if home and away else None,
+        sport=sport,
         home_team_id=str(home_c.get("id") or (home_c.get("team") or {}).get("id") or "") or None,
         away_team_id=str(away_c.get("id") or (away_c.get("team") or {}).get("id") or "") or None,
         status_name=((status_obj.get("type") or {}).get("name")),
@@ -324,7 +331,7 @@ def parse_scoreboard_event(ev: dict) -> GameState:
         st.possession = "away"
     odds = (comp.get("odds") or [None])[0]
     if odds:
-        st.vegas_spread_home = normalize_home_spread(odds, home)
+        st.vegas_spread_home = normalize_home_spread(odds, home, sport)
         st.vegas_total = _total_from(odds)
         st.odds_provider = (odds.get("provider") or {}).get("name")
     parse_situation(comp.get("situation"), st)
@@ -416,7 +423,7 @@ def apply_summary(state: GameState, summary: dict) -> GameState:
         state.espn_home_wp = series[-1]["home_wp"]
     pick = (summary.get("pickcenter") or summary.get("odds") or [None])[0]
     if pick:
-        spread = normalize_home_spread(pick, state.home)
+        spread = normalize_home_spread(pick, state.home, state.sport)
         if spread is not None:
             state.vegas_spread_home = spread
         total = _total_from(pick)
@@ -437,7 +444,7 @@ def apply_summary(state: GameState, summary: dict) -> GameState:
                 state.down = down if down and down > 0 else None
                 state.distance = _int(end.get("distance")) if state.down is not None else None
                 yte = _int(end.get("yardsToEndzone"))
-                state.yardline_100 = yte if yte is not None and 0 < yte <= 100 else yardline_100_from(end.get("yardLine"), poss, end.get("possessionText"), state.home, state.away)
+                state.yardline_100 = yte if yte is not None and 0 < yte <= 100 else yardline_100_from(end.get("yardLine"), poss, end.get("possessionText"), state.home, state.away, state.sport)
     state.enriched = True
     return state
 
@@ -445,13 +452,16 @@ def apply_summary(state: GameState, summary: dict) -> GameState:
 # ---- client / feed ------------------------------------------------------------------------
 
 class ESPNClient:
-    def __init__(self, http: Optional[HttpClient] = None, base_url: str = BASE_URL):
+    def __init__(self, http: Optional[HttpClient] = None, base_url: Optional[str] = None, sport: str = "nfl"):
         self.http = http or HttpClient(headers={"Accept": "application/json"}, rate_limit=4.0)
-        self.base_url = base_url.rstrip("/")
+        self.sport = sport
+        self.base_url = (base_url or SPORT_BASE_URL.get(sport, BASE_URL)).rstrip("/")
 
     def scoreboard(self, date: Any = None) -> dict:
-        params = {"dates": _coerce_date(date)} if date is not None else None
-        return self.http.get(f"{self.base_url}/scoreboard", params=params, headers={"Accept": "application/json"})
+        params = dict(SPORT_SCOREBOARD_PARAMS.get(self.sport, {}))
+        if date is not None:
+            params["dates"] = _coerce_date(date)
+        return self.http.get(f"{self.base_url}/scoreboard", params=params or None, headers={"Accept": "application/json"})
 
     def scoreboard_week(self, season: int, week: int, seasontype: int = 2) -> dict:
         """All games of one regular-season (2) / post-season (3) week, including finals."""
@@ -474,7 +484,7 @@ class ESPNFeed:
         out = []
         for ev in sb.get("events") or []:
             try:
-                out.append(parse_scoreboard_event(ev))
+                out.append(parse_scoreboard_event(ev, self.client.sport))
             except Exception:  # one malformed event must not sink the poll
                 continue
         return out

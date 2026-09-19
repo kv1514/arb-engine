@@ -1,0 +1,834 @@
+{
+"events": [
+{
+"id": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"name": "Villanova vs LIU",
+"eventContracts": {
+"0": {
+"id": "e2db0d43-de37-4e81-aaaf-fd2c019036b2",
+"eventId": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"description": "Villanova wins",
+"symbol": "KXNCAAFGAME-26SEP19VILLLIU-VILL",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "VILL",
+"displayLongName": "Villanova",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_VILL_large.png",
+"color": {
+"hex": {
+"light": "#00205B",
+"dark": "#5E65AA"
+}
+},
+"exchangeSource": 2,
+"bannerText": "",
+"name": "Villanova",
+"expirationDate": "2026-09-21T16:00:00Z",
+"openDate": "2026-09-05T16:08:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "VILL",
+"disableHeaderImageFlip": false,
+"parentEventId": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#00205B",
+"dark": "#5E65AA"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#13B5EA",
+"dark": "#13B5EA"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+"isFractionable": true,
+"quantityDecimals": 2,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "7276081c-0845-4f90-a1a9-ffa15f9838ab",
+"exchange": "EXCHANGE_SOURCE_KALSHI",
+"expectedExpirationTime": "2026-09-19T19:00:00Z"
+},
+"1": {
+"id": "eb0cc412-a29d-40b7-9b8b-73968fad31b6",
+"eventId": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"description": "LIU wins",
+"symbol": "KXNCAAFGAME-26SEP19VILLLIU-LIU",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "LIU",
+"displayLongName": "LIU",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_LIU_large.png",
+"color": {
+"hex": {
+"light": "#69B3E7",
+"dark": "#69B3E7"
+}
+},
+"exchangeSource": 2,
+"bannerText": "",
+"name": "LIU",
+"expirationDate": "2026-09-21T16:00:00Z",
+"openDate": "2026-09-05T16:08:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "LIU",
+"disableHeaderImageFlip": false,
+"parentEventId": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#69B3E7",
+"dark": "#69B3E7"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#FFC72C",
+"dark": "#FFC72C"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"contentfulId": "4bE9JMgXyLUZokWhCjfzOm",
+"isFractionable": true,
+"quantityDecimals": 2,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "7276081c-0845-4f90-a1a9-ffa15f9838ab",
+"exchange": "EXCHANGE_SOURCE_KALSHI",
+"expectedExpirationTime": "2026-09-19T19:00:00Z"
+}
+},
+"timeline": {
+"entries": [
+{
+"title": "Trading hours",
+"description": "24 hours a day, except Thursday 3AM-5AM ET",
+"timestamp": "2026-09-05T16:06:07.220671018Z",
+"type": "TIMELINE_ENTRY_TYPE_OPEN"
+},
+{
+"title": "Event day",
+"description": "September 19, 2026",
+"timestamp": "2026-09-19T16:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_EVENT_DAY"
+},
+{
+"title": "Contract resolves",
+"description": "Determines the outcome of the contract",
+"timestamp": "2026-09-21T16:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_OTHER"
+},
+{
+"title": "Payout",
+"description": "Usually within 1 hour of event resolution",
+"timestamp": "2026-09-21T17:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_PAYOUT"
+}
+]
+},
+"urlSlugs": [
+"villanova-vs-liu-sep-19-2026"
+],
+"category": "College Football",
+"eventType": "EVENT_TYPE_WINNER",
+"mutuallyExclusive": true
+},
+{
+"id": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"name": "Purdue vs UCLA",
+"eventContracts": {
+"0": {
+"id": "8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5",
+"eventId": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"description": "Will Purdue win the Purdue vs UCLA college football game?",
+"symbol": "NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "PUR",
+"displayLongName": "Purdue",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_PUR_large.png",
+"color": {
+"hex": {
+"light": "#CEB888",
+"dark": "#CEB888"
+}
+},
+"exchangeSource": 4,
+"bannerText": "",
+"name": "Purdue wins",
+"expirationDate": "2027-02-28T23:00:00Z",
+"openDate": "2026-09-04T03:00:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "PUR",
+"disableHeaderImageFlip": false,
+"parentEventId": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#CEB888",
+"dark": "#CEB888"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#000000",
+"dark": "#FFFFFF"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"isFractionable": false,
+"quantityDecimals": 0,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "3b43578c-35a5-4013-bbab-10a221e274be",
+"exchange": "EXCHANGE_SOURCE_CDNA",
+"expectedExpirationTime": "2026-09-20T03:00:00Z"
+},
+"1": {
+"id": "810109c6-76b7-432b-99ac-f630aff37531",
+"eventId": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"description": "Will UCLA win the Purdue vs UCLA college football game?",
+"symbol": "NX.F.OPT.CFB-00027-260919-M.O.1.2.20270228",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "UCLA",
+"displayLongName": "UCLA",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_UCLA_large.png",
+"color": {
+"hex": {
+"light": "#2D68C4",
+"dark": "#2D68C4"
+}
+},
+"exchangeSource": 4,
+"bannerText": "",
+"name": "UCLA wins",
+"expirationDate": "2027-02-28T23:00:00Z",
+"openDate": "2026-09-04T03:00:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "UCLA",
+"disableHeaderImageFlip": false,
+"parentEventId": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#2D68C4",
+"dark": "#2D68C4"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#F2A900",
+"dark": "#F2A900"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"isFractionable": false,
+"quantityDecimals": 0,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "3b43578c-35a5-4013-bbab-10a221e274be",
+"exchange": "EXCHANGE_SOURCE_CDNA",
+"expectedExpirationTime": "2026-09-20T03:00:00Z"
+}
+},
+"timeline": {
+"entries": [
+{
+"title": "Trading hours",
+"description": "24 hours a day, except Tuesday 3AM-3:05AM ET",
+"timestamp": "2026-09-04T03:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_OPEN"
+},
+{
+"title": "Event day",
+"description": "September 19, 2026",
+"timestamp": "2026-09-20T03:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_EVENT_DAY"
+},
+{
+"title": "Contract resolves",
+"description": "Determines the outcome of the contract",
+"timestamp": "2027-02-28T23:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_OTHER"
+},
+{
+"title": "Payout",
+"description": "Usually within 1 hour of event resolution",
+"timestamp": "2027-03-01T00:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_PAYOUT"
+}
+]
+},
+"urlSlugs": [],
+"category": "College Football",
+"eventType": "EVENT_TYPE_WINNER",
+"mutuallyExclusive": false
+},
+{
+"id": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"name": "Fresno State vs San Jose State",
+"eventContracts": {
+"0": {
+"id": "44bc17cd-45b0-4268-8818-dd8c913ad4d0",
+"eventId": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"description": "Will Fresno State win the Fresno State vs San Jose State college football game?",
+"symbol": "NX.F.OPT.CFB-00046-260919-M.O.1.1.20270228",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "FRES",
+"displayLongName": "Fresno St.",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_FRES_large.png",
+"color": {
+"hex": {
+"light": "#DB0032",
+"dark": "#DB0032"
+}
+},
+"exchangeSource": 4,
+"bannerText": "",
+"name": "Fresno State wins",
+"expirationDate": "2027-02-28T23:00:00Z",
+"openDate": "2026-09-04T03:00:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "FRES",
+"disableHeaderImageFlip": false,
+"parentEventId": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#DB0032",
+"dark": "#DB0032"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#002E6D",
+"dark": "#5467AE"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"isFractionable": false,
+"quantityDecimals": 0,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "3b43578c-35a5-4013-bbab-10a221e274be",
+"exchange": "EXCHANGE_SOURCE_CDNA",
+"expectedExpirationTime": "2026-09-20T03:00:00Z"
+},
+"1": {
+"id": "e1501ec2-8d3b-45a0-af9e-c549732c1f22",
+"eventId": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"description": "Will San Jose State win the Fresno State vs San Jose State college football game?",
+"symbol": "NX.F.OPT.CFB-00046-260919-M.O.1.2.20270228",
+"tradability": "EVENT_CONTRACT_TRADABILITY_TRADABLE",
+"displayShortName": "SJSU",
+"displayLongName": "San Jose St.",
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/football/college_helmets/helmet_SJSU_large.png",
+"color": {
+"hex": {
+"light": "#0055A2",
+"dark": "#0055A2"
+}
+},
+"exchangeSource": 4,
+"bannerText": "",
+"name": "San Jose State wins",
+"expirationDate": "2027-02-28T23:00:00Z",
+"openDate": "2026-09-04T03:00:00Z",
+"multiplier": "1",
+"imageStyle": "IMAGE_STYLE_GENERIC",
+"receiptShortname": "SJSU",
+"disableHeaderImageFlip": false,
+"parentEventId": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"floorStrikeValue": "",
+"isTeamContract": true,
+"selectedLegs": [],
+"isCombo": false,
+"attestationValues": [
+"rhd_event_contract_attestation_universal_agreement"
+],
+"iconAsset": {
+"layers": [
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_1.png",
+"color": {
+"hex": {
+"light": "#0055A2",
+"dark": "#0055A2"
+}
+}
+},
+{
+"imageUrl": "https://cdn.robinhood.com/app_assets/futures/events_images/dynamic/Football_Layer_2.png",
+"color": {
+"hex": {
+"light": "#E5A823",
+"dark": "#E5A823"
+}
+}
+}
+]
+},
+"tickPriceRanges": [
+{
+"start": "0.0000",
+"end": "1.0000",
+"step": "0.0100"
+}
+],
+"isFractionable": false,
+"quantityDecimals": 0,
+"comboType": "COMBO_TYPE_NOT_COMBO",
+"locationRequirement": "LOCATION_REQUIREMENT_NONE",
+"discoverable": true,
+"seriesId": "3b43578c-35a5-4013-bbab-10a221e274be",
+"exchange": "EXCHANGE_SOURCE_CDNA",
+"expectedExpirationTime": "2026-09-20T03:00:00Z"
+}
+},
+"timeline": {
+"entries": [
+{
+"title": "Trading hours",
+"description": "24 hours a day, except Tuesday 3AM-3:05AM ET",
+"timestamp": "2026-09-04T03:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_OPEN"
+},
+{
+"title": "Event day",
+"description": "September 19, 2026",
+"timestamp": "2026-09-20T03:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_EVENT_DAY"
+},
+{
+"title": "Contract resolves",
+"description": "Determines the outcome of the contract",
+"timestamp": "2027-02-28T23:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_OTHER"
+},
+{
+"title": "Payout",
+"description": "Usually within 1 hour of event resolution",
+"timestamp": "2027-03-01T00:00:00Z",
+"type": "TIMELINE_ENTRY_TYPE_PAYOUT"
+}
+]
+},
+"urlSlugs": [],
+"category": "College Football",
+"eventType": "EVENT_TYPE_WINNER",
+"mutuallyExclusive": false
+}
+],
+"eventStates": {
+"7389f388-23f0-4bd5-9959-73043d9b9e7d": {
+"eventStatus": "EVENT_STATUS_UPCOMING",
+"eventProgress": "",
+"contractIdToEventScores": {},
+"contractIdToVisualIndicator": {
+"eb0cc412-a29d-40b7-9b8b-73968fad31b6": false,
+"e2db0d43-de37-4e81-aaaf-fd2c019036b2": false
+},
+"contractIdToColor": {
+"e2db0d43-de37-4e81-aaaf-fd2c019036b2": {
+"hex": {
+"light": "#00205B",
+"dark": "#5E65AA"
+}
+},
+"eb0cc412-a29d-40b7-9b8b-73968fad31b6": {
+"hex": {
+"light": "#69B3E7",
+"dark": "#69B3E7"
+}
+}
+},
+"openInterest": "0",
+"gameStart": "2026-09-19T16:00:00Z",
+"contractIdToVisualEmphasis": {
+"eb0cc412-a29d-40b7-9b8b-73968fad31b6": true,
+"e2db0d43-de37-4e81-aaaf-fd2c019036b2": true
+},
+"eventId": "7389f388-23f0-4bd5-9959-73043d9b9e7d",
+"supportsLiveData": true,
+"gameStartFormat": "GAME_START_FORMAT_MONTH_DAY_TIME_AM_PM",
+"category": "College Football",
+"contractIdToTertiaryText": {},
+"contractIdToQuaternaryText": {
+"eb0cc412-a29d-40b7-9b8b-73968fad31b6": "0-3",
+"e2db0d43-de37-4e81-aaaf-fd2c019036b2": "1-2"
+},
+"gdpTitle": "VILL 0 - 0 LIU",
+"pageType": "PAGE_TYPE_GDP",
+"eventTags": [],
+"totalVolumeOfAllContractsV2": "0",
+"totalOpenInterestOfAllContractsV2": "19981",
+"eventProgressOverrides": [],
+"contractIdToActiveIndicator": {},
+"textAlignment": "TEXT_ALIGNMENT_UNSPECIFIED",
+"isSport": true,
+"viewMode": "EVENT_VIEW_MODE_PAIR"
+},
+"3fbbb7f6-2963-49c5-b347-de1b1ce75c1d": {
+"eventStatus": "EVENT_STATUS_UPCOMING",
+"eventProgress": "",
+"contractIdToEventScores": {},
+"contractIdToVisualIndicator": {
+"810109c6-76b7-432b-99ac-f630aff37531": false,
+"8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5": false
+},
+"contractIdToColor": {
+"8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5": {
+"hex": {
+"light": "#CEB888",
+"dark": "#CEB888"
+}
+},
+"810109c6-76b7-432b-99ac-f630aff37531": {
+"hex": {
+"light": "#2D68C4",
+"dark": "#2D68C4"
+}
+}
+},
+"openInterest": "0",
+"gameStart": "2026-09-20T03:00:00Z",
+"contractIdToVisualEmphasis": {
+"810109c6-76b7-432b-99ac-f630aff37531": true,
+"8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5": true
+},
+"eventId": "3fbbb7f6-2963-49c5-b347-de1b1ce75c1d",
+"supportsLiveData": true,
+"gameStartFormat": "GAME_START_FORMAT_MONTH_DAY_TIME_AM_PM",
+"category": "College Football",
+"contractIdToTertiaryText": {},
+"contractIdToQuaternaryText": {
+"810109c6-76b7-432b-99ac-f630aff37531": "2-0",
+"8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5": "1-1"
+},
+"gdpTitle": "PUR 0 - 0 UCLA",
+"pageType": "PAGE_TYPE_GDP",
+"eventTags": [],
+"totalVolumeOfAllContractsV2": "1482",
+"totalOpenInterestOfAllContractsV2": "23308",
+"eventProgressOverrides": [],
+"contractIdToActiveIndicator": {},
+"textAlignment": "TEXT_ALIGNMENT_UNSPECIFIED",
+"isSport": true,
+"viewMode": "EVENT_VIEW_MODE_PAIR"
+},
+"18044bff-8a83-4e73-b1ce-576d1ccec48e": {
+"eventStatus": "EVENT_STATUS_UPCOMING",
+"eventProgress": "",
+"contractIdToEventScores": {},
+"contractIdToVisualIndicator": {
+"44bc17cd-45b0-4268-8818-dd8c913ad4d0": false,
+"e1501ec2-8d3b-45a0-af9e-c549732c1f22": false
+},
+"contractIdToColor": {
+"e1501ec2-8d3b-45a0-af9e-c549732c1f22": {
+"hex": {
+"light": "#0055A2",
+"dark": "#0055A2"
+}
+},
+"44bc17cd-45b0-4268-8818-dd8c913ad4d0": {
+"hex": {
+"light": "#DB0032",
+"dark": "#DB0032"
+}
+}
+},
+"openInterest": "0",
+"gameStart": "2026-09-20T03:00:00Z",
+"contractIdToVisualEmphasis": {
+"44bc17cd-45b0-4268-8818-dd8c913ad4d0": true,
+"e1501ec2-8d3b-45a0-af9e-c549732c1f22": true
+},
+"eventId": "18044bff-8a83-4e73-b1ce-576d1ccec48e",
+"supportsLiveData": true,
+"gameStartFormat": "GAME_START_FORMAT_MONTH_DAY_TIME_AM_PM",
+"category": "College Football",
+"contractIdToTertiaryText": {},
+"contractIdToQuaternaryText": {
+"e1501ec2-8d3b-45a0-af9e-c549732c1f22": "2-1",
+"44bc17cd-45b0-4268-8818-dd8c913ad4d0": "1-1"
+},
+"gdpTitle": "FRES 0 - 0 SJSU",
+"pageType": "PAGE_TYPE_GDP",
+"eventTags": [],
+"totalVolumeOfAllContractsV2": "1649",
+"totalOpenInterestOfAllContractsV2": "9392",
+"eventProgressOverrides": [],
+"contractIdToActiveIndicator": {},
+"textAlignment": "TEXT_ALIGNMENT_UNSPECIFIED",
+"isSport": true,
+"viewMode": "EVENT_VIEW_MODE_PAIR"
+}
+},
+"quotes": {
+"e2db0d43-de37-4e81-aaaf-fd2c019036b2": {
+"yes_bid_price": "0.91",
+"yes_ask_price": "0.92",
+"no_bid_price": "0.08",
+"no_ask_price": "0.09",
+"ask_price": "0.92",
+"ask_size": null,
+"ask_size_fractional": null,
+"ask_venue_timestamp": "2026-09-19T05:42:20.959Z",
+"bid_price": "0.91",
+"bid_size": null,
+"bid_size_fractional": null,
+"bid_venue_timestamp": "2026-09-19T05:42:20.959Z",
+"last_trade_price": "0.92",
+"last_trade_size": 3,
+"last_trade_size_fractional": "3.24",
+"last_trade_venue_timestamp": "2026-09-19T05:37:10.469Z",
+"display_yes_bid": "0.91",
+"display_no_bid": "0.08",
+"symbol": "KXNCAAFGAME-26SEP19VILLLIU-VILL",
+"instrument_id": "e2db0d43-de37-4e81-aaaf-fd2c019036b2",
+"state": "active",
+"updated_at": "2026-09-19T05:42:20.959Z"
+},
+"eb0cc412-a29d-40b7-9b8b-73968fad31b6": {
+"yes_bid_price": "0.09",
+"yes_ask_price": "0.1",
+"no_bid_price": "0.9",
+"no_ask_price": "0.91",
+"ask_price": "0.1",
+"ask_size": null,
+"ask_size_fractional": null,
+"ask_venue_timestamp": "2026-09-19T05:40:09.682Z",
+"bid_price": "0.09",
+"bid_size": null,
+"bid_size_fractional": null,
+"bid_venue_timestamp": "2026-09-19T05:40:09.682Z",
+"last_trade_price": "0.1",
+"last_trade_size": 100,
+"last_trade_size_fractional": "100",
+"last_trade_venue_timestamp": "2026-09-19T05:35:29.892Z",
+"display_yes_bid": "0.09",
+"display_no_bid": "0.9",
+"symbol": "KXNCAAFGAME-26SEP19VILLLIU-LIU",
+"instrument_id": "eb0cc412-a29d-40b7-9b8b-73968fad31b6",
+"state": "active",
+"updated_at": "2026-09-19T05:40:09.682Z"
+},
+"8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5": {
+"yes_bid_price": "0.14",
+"yes_ask_price": "0.15",
+"no_bid_price": "0.85",
+"no_ask_price": "0.86",
+"ask_price": "0.15",
+"ask_size": 49148,
+"ask_size_fractional": "49148",
+"ask_venue_timestamp": "2026-09-19T05:28:21.68Z",
+"bid_price": "0.14",
+"bid_size": 105000,
+"bid_size_fractional": "105000",
+"bid_venue_timestamp": "2026-09-19T05:22:34.25Z",
+"last_trade_price": "0.15",
+"last_trade_size": 12,
+"last_trade_size_fractional": "12",
+"last_trade_venue_timestamp": "2026-09-19T05:28:21.596Z",
+"display_yes_bid": "0.14",
+"display_no_bid": "0.85",
+"symbol": "NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228",
+"instrument_id": "8dbcc9d9-ec1f-4c71-bfb0-ea648eb5c7a5",
+"state": "active",
+"updated_at": "2026-09-19T05:28:21.68Z"
+},
+"810109c6-76b7-432b-99ac-f630aff37531": {
+"yes_bid_price": "0.85",
+"yes_ask_price": "0.86",
+"no_bid_price": "0.14",
+"no_ask_price": "0.15",
+"ask_price": "0.86",
+"ask_size": 111482,
+"ask_size_fractional": "111482",
+"ask_venue_timestamp": "2026-09-19T05:22:34.391Z",
+"bid_price": "0.85",
+"bid_size": 50033,
+"bid_size_fractional": "50033",
+"bid_venue_timestamp": "2026-09-19T05:22:37.165Z",
+"last_trade_price": "0.86",
+"last_trade_size": 111,
+"last_trade_size_fractional": "111",
+"last_trade_venue_timestamp": "2026-09-19T05:01:24.555Z",
+"display_yes_bid": "0.85",
+"display_no_bid": "0.14",
+"symbol": "NX.F.OPT.CFB-00027-260919-M.O.1.2.20270228",
+"instrument_id": "810109c6-76b7-432b-99ac-f630aff37531",
+"state": "active",
+"updated_at": "2026-09-19T05:22:37.165Z"
+},
+"44bc17cd-45b0-4268-8818-dd8c913ad4d0": {
+"yes_bid_price": "0.67",
+"yes_ask_price": "0.68",
+"no_bid_price": "0.32",
+"no_ask_price": "0.33",
+"ask_price": "0.68",
+"ask_size": 49941,
+"ask_size_fractional": "49941",
+"ask_venue_timestamp": "2026-09-19T04:46:31.813Z",
+"bid_price": "0.67",
+"bid_size": 100050,
+"bid_size_fractional": "100050",
+"bid_venue_timestamp": "2026-09-19T05:22:37.224Z",
+"last_trade_price": "0.68",
+"last_trade_size": 2,
+"last_trade_size_fractional": "2",
+"last_trade_venue_timestamp": "2026-09-19T04:46:31.794Z",
+"display_yes_bid": "0.67",
+"display_no_bid": "0.32",
+"symbol": "NX.F.OPT.CFB-00046-260919-M.O.1.1.20270228",
+"instrument_id": "44bc17cd-45b0-4268-8818-dd8c913ad4d0",
+"state": "active",
+"updated_at": "2026-09-19T05:22:37.224Z"
+},
+"e1501ec2-8d3b-45a0-af9e-c549732c1f22": {
+"yes_bid_price": "0.31",
+"yes_ask_price": "0.33",
+"no_bid_price": "0.67",
+"no_ask_price": "0.69",
+"ask_price": "0.33",
+"ask_size": 104552,
+"ask_size_fractional": "104552",
+"ask_venue_timestamp": "2026-09-19T05:31:03.183Z",
+"bid_price": "0.31",
+"bid_size": 105000,
+"bid_size_fractional": "105000",
+"bid_venue_timestamp": "2026-09-19T05:23:39.867Z",
+"last_trade_price": "0.33",
+"last_trade_size": 14,
+"last_trade_size_fractional": "14",
+"last_trade_venue_timestamp": "2026-09-19T05:31:03.11Z",
+"display_yes_bid": "0.31",
+"display_no_bid": "0.67",
+"symbol": "NX.F.OPT.CFB-00046-260919-M.O.1.2.20270228",
+"instrument_id": "e1501ec2-8d3b-45a0-af9e-c549732c1f22",
+"state": "active",
+"updated_at": "2026-09-19T05:31:03.183Z"
+}
+}
+}

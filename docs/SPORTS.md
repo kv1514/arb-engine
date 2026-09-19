@@ -42,3 +42,28 @@ NCAAF (`KXNCAAFGAME`, Robinhood `college-football`), NBA, NHL, MLB (`KXMLBGAME` 
 multiplier) can be scanned with `--sport`. Team alias tables exist only for the NFL so far;
 the other leagues match on the venue's own short codes, which works when both venues use the
 same codes.
+
+## College football (`--sport ncaaf`, added 2026-09-18)
+
+| Venue | Where | Codes / names | Notes |
+|---|---|---|---|
+| Kalshi | `KXNCAAFGAME` (moneyline), `KXNCAAFSPREAD`, `KXNCAAFTOTAL` — ~230 game markets on a Saturday | ticker codes (`SJSU`, `FRES`, `NW`…) — 84% equal ESPN's abbreviations, the rest learned from titles ("San Jose St. wins") | `occurrence_datetime` is **not** kickoff (06:00Z for a 03:00Z kick); the ET game date comes from the ticker (`26SEP19`). Maker fees apply. |
+| Polymarket | Gamma `tag_slug=cfb`; event slug `cfb-{away}-{home}-{UTC date}` with Polymarket's own codes (`frest`, `sjst`, `oregst`) | outcomes are full names ("Fresno State", "San Jose State") | 150+ markets per event (props); moneyline `sportsMarketType`; `feeSchedule` rate 0 this week, 0.05 on later games |
+| Robinhood | category `college-football` (1,540 events) | game winners are **CDNA-routed** (`NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228`, `EXCHANGE_SOURCE_CDNA`, `mutuallyExclusive: false` but one two-contract `EVENT_TYPE_WINNER`); ~half the games are KalshiEX mirrors (`KXNCAAFGAME-…`); Rothera lists only futures (conference champions, Heisman) | CDNA is its own order book — the real cross-venue pair. Exchange fee assumed $0.01/contract (unverified). |
+| ESPN | `…/football/college-football/scoreboard?groups=80&limit=300` (FBS week; 75 games) | abbreviations = our canonical codes | summaries carry the same situation / win-probability fields as the NFL |
+
+Canonical codes are ESPN's abbreviations for 761 programs, in `arb_engine/data/ncaaf_teams.json`
+(built by `scripts/build_ncaaf_teams.py`: ESPN team list + Kalshi codes learned from open
+markets + Robinhood short names from the cached catalogue + a manual alias list). Matching is
+exact on code or normalised alias ("St." → "State"), never substring — "Miami" vs "Miami (OH)"
+and "Washington" vs "Washington State" must not collide. Event keys are
+`ncaaf:<A>|<B>:<ET date>`; on 2026-09-18 a full scan merged 263 games (109 on all three
+venues, 100 Kalshi + Robinhood-mirror), and `live --sport ncaaf` matched 65 ESPN games to venue
+quotes with none missing.
+
+In-play: the NFL win-probability model is used as an approximation (same clock, different OT,
+pace and variance; spreads above ±17 are outside its training range), so the college blend
+keeps the market as the anchor (`SPORT_WEIGHTS["ncaaf"]` = market 0.50 / model 0.35 / ESPN 0.15)
+until a college replay says otherwise. Spreads/totals on Polymarket are not ingested yet for
+college (Kalshi's are).
+

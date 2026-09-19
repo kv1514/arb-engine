@@ -101,6 +101,11 @@ def tennis_event_key(names: list[str], date_str: Optional[str]) -> str:
     return "tennis:" + "|".join(keys) + ":" + (date_str or "")
 
 
+def team_event_key(sport: str, codes: list[str], date_str: Optional[str]) -> str:
+    """Generic two-team key: '<sport>:<A>|<B>:<ET date>' with codes sorted."""
+    return f"{sport}:" + "|".join(sorted(codes)) + ":" + (date_str or "")
+
+
 def nfl_event_key(team_names: list[str], date_str: Optional[str]) -> Optional[str]:
     codes = [nfl_team_code(n) for n in team_names]
     if any(c is None for c in codes):

@@ -28,8 +28,8 @@ from typing import Any, Iterable, Optional
 
 from ..fees.robinhood import exchange_from_symbol_or_enum
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key
-from ..matching.teams import nfl_team_city, nfl_team_code
+from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
+from ..matching.teams import nfl_team_city, nfl_team_code, team_code
 from .http import HttpClient
 
 WEB = "https://robinhood.com"
@@ -48,7 +48,7 @@ SPORT_CATEGORY: dict[str, str] = {
 # Contract symbol families we treat as the game-winner market per sport.
 SPORT_SYMBOL_PREFIXES: dict[str, tuple[str, ...]] = {
     "nfl": ("NFLGAME-", "KXNFLGAME-"),
-    "ncaaf": ("NCAAFGAME-", "KXNCAAFGAME-"),
+    "ncaaf": ("NCAAFGAME-", "KXNCAAFGAME-", "NX.F.OPT.CFB"),  # NX.F.OPT.* = CDNA-routed college games
     "tennis": ("KXATPMATCH-", "KXWTAMATCH-", "ATPMATCH-", "WTAMATCH-", "KXATPCHALLENGERMATCH-", "KXWTACHALLENGERMATCH-", "KXITFMATCH-", "KXITFWMATCH-"),
     "nba": ("NBAGAME-", "KXNBAGAME-"),
     "nhl": ("NHLGAME-", "KXNHLGAME-"),
@@ -102,7 +102,9 @@ def clean_label(name: str) -> str:
 
 def _epoch(ts: Any) -> Optional[float]:
     dt = parse_iso(ts) if ts else None
-    return dt.timestamp() if dt else None
+    if dt is None or dt.year < 2000:  # Go zero time "0001-01-01T00:00:00Z" on never-quoted contracts
+        return None
+    return dt.timestamp()
 
 
 def extract_next_data(html: str) -> dict:
@@ -231,7 +233,9 @@ class RobinhoodAdapter:
                 continue
             if not all(any(c.get("symbol", "").startswith(p) for p in prefixes) for c in contracts):
                 continue
-            if not ev.get("mutuallyExclusive", True):
+            # CDNA lists the two sides as separate instruments (mutuallyExclusive=false) but a
+            # two-contract EVENT_TYPE_WINNER is still one game.
+            if not ev.get("mutuallyExclusive", True) and ev.get("eventType") != "EVENT_TYPE_WINNER":
                 continue
             out.append({"event": ev, "contracts": contracts})
         return out
@@ -259,15 +263,15 @@ class RobinhoodAdapter:
             names = [clean_label(c.get("displayLongName") or c.get("displayShortName") or "") for c in contracts]
             progress = str(st.get("eventProgress") or "").strip()
             in_play = _in_play_from_progress(progress, st.get("eventStatus"))
-            if sport == "nfl":
-                codes = [nfl_team_code(c.get("displayShortName")) or nfl_team_code(c.get("displayLongName")) or nfl_team_code(c.get("symbol", "").rsplit("-", 1)[-1]) for c in contracts]
-                if any(c is None for c in codes):
+            if sport in ("nfl", "ncaaf"):
+                codes = [team_code(sport, c.get("displayShortName")) or team_code(sport, c.get("displayLongName")) or team_code(sport, c.get("symbol", "").rsplit("-", 1)[-1]) for c in contracts]
+                if any(c is None for c in codes) or codes[0] == codes[1]:
                     continue
                 if date is None:
                     from ..matching.normalize import kalshi_ticker_date
-                    date = kalshi_ticker_date(contracts[0].get("symbol", ""))
-                key = nfl_event_key(codes, date)  # type: ignore[arg-type]
-                tie_rule = "unknown"  # Rothera NFL rules do not spell out ties in the public blurb
+                    date = kalshi_ticker_date(contracts[0].get("symbol", "")) or _cdna_symbol_date(contracts[0].get("symbol", ""))
+                key = team_event_key(sport, codes, date)  # type: ignore[arg-type]
+                tie_rule = "unknown"  # Rothera/CDNA rules do not spell out ties in the public blurb
             elif sport == "tennis":
                 codes = person_keys(names)
                 if date is None:
@@ -354,6 +358,12 @@ def _pair_title(pair: str, sport: str) -> str:
     """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
     for cut in range(2, len(pair) - 1):
         a, b = pair[:cut], pair[cut:]
-        if sport != "nfl" or (nfl_team_code(a) and nfl_team_code(b)):
+        if sport not in ("nfl", "ncaaf") or (team_code(sport, a) and team_code(sport, b)):
             return f"{a} @ {b}"
     return pair
+
+
+def _cdna_symbol_date(symbol: str) -> Optional[str]:
+    """'NX.F.OPT.CFB-00002-260918-M.O.1.1.20270228' -> '2026-09-18' (game date, YYMMDD)."""
+    m = re.search(r"-(\d{2})(\d{2})(\d{2})-", symbol or "")
+    return f"20{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None

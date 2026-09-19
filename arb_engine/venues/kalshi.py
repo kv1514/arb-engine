@@ -35,13 +35,15 @@ from ..matching.normalize import (
     ticker_pair,
     total_event_key,
 )
-from ..matching.teams import nfl_team_city, nfl_team_code
+from ..matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
 from .http import HttpClient
 
 ENV_REST_BASE = {
     "prod": "https://api.elections.kalshi.com/trade-api/v2",
     "demo": "https://demo-api.kalshi.co/trade-api/v2",
 }
+
+TEAM_SPORTS = ("nfl", "ncaaf")  # sports with a canonical team-code table
 
 # Series we scan per sport. Game-level series carry maker fees (quadratic_with_maker_fees).
 SPORT_SERIES: dict[str, list[dict[str, Any]]] = {
@@ -50,7 +52,11 @@ SPORT_SERIES: dict[str, list[dict[str, Any]]] = {
         {"series": "KXNFLSPREAD", "market_type": "spread"},
         {"series": "KXNFLTOTAL", "market_type": "total"},
     ],
-    "ncaaf": [{"series": "KXNCAAFGAME", "market_type": "moneyline"}],
+    "ncaaf": [
+        {"series": "KXNCAAFGAME", "market_type": "moneyline"},
+        {"series": "KXNCAAFSPREAD", "market_type": "spread"},
+        {"series": "KXNCAAFTOTAL", "market_type": "total"},
+    ],
     "tennis": [
         {"series": "KXATPMATCH", "market_type": "moneyline"},
         {"series": "KXWTAMATCH", "market_type": "moneyline"},
@@ -308,13 +314,12 @@ class KalshiAdapter:
             start = None
             for m in ms:
                 start = parse_iso(m.get("occurrence_datetime")) or start
-            date = et_date(start) or kalshi_ticker_date(event_ticker)
+            # The ticker's date is Kalshi's own ET game date; occurrence_datetime is not kickoff
+            # for college games (26SEP19PURUCLA carries 2026-09-20T06:00Z for a 03:00Z kick).
+            date = kalshi_ticker_date(event_ticker) or et_date(start)
             labels = {m["ticker"]: re.sub(r"\s*\((?:b\.|born)[^)]*\)", "", (m.get("yes_sub_title") or m.get("title", "")).replace(" wins", "")).strip() for m in ms}
             if sport in ("nfl", "ncaaf"):
-                if sport == "nfl":
-                    codes = {m["ticker"]: (nfl_team_code(m["ticker"].rsplit("-", 1)[-1]) or nfl_team_code(labels[m["ticker"]])) for m in ms}
-                else:
-                    codes = {m["ticker"]: m["ticker"].rsplit("-", 1)[-1] for m in ms}
+                codes = {m["ticker"]: (team_code(sport, m["ticker"].rsplit("-", 1)[-1]) or team_code(sport, labels[m["ticker"]])) for m in ms}
                 if any(c is None for c in codes.values()):
                     continue
                 key = f"{sport}:" + "|".join(sorted(codes.values())) + f":{date or ''}"  # type: ignore[arg-type]
@@ -364,25 +369,25 @@ class KalshiAdapter:
             if not pair:
                 continue
             start = parse_iso(m.get("occurrence_datetime"))
-            date = et_date(start) or kalshi_ticker_date(event_ticker)
+            date = kalshi_ticker_date(event_ticker) or et_date(start)
             url = f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}"
             if mtype == "spread":
                 team_raw = strip_digits(m["ticker"].rsplit("-", 1)[-1])
                 other_raw = split_pair(pair, team_raw)
-                fav = nfl_team_code(team_raw) if sport == "nfl" else team_raw
-                dog = (nfl_team_code(other_raw) if sport == "nfl" else other_raw) if other_raw else None
+                fav = team_code(sport, team_raw) if sport in TEAM_SPORTS else team_raw
+                dog = (team_code(sport, other_raw) if sport in TEAM_SPORTS else other_raw) if other_raw else None
                 if not fav or not dog:
                     continue
                 key = spread_event_key(sport, [fav, dog], date, fav, line)
                 yes_key, no_key = spread_outcomes(fav, dog, line)
-                labels = {yes_key: f"{nfl_team_city(fav) if sport == 'nfl' else fav} -{fmt_line(line)}", no_key: f"{nfl_team_city(dog) if sport == 'nfl' else dog} +{fmt_line(line)}"}
+                labels = {yes_key: f"{team_name(sport, fav) if sport in TEAM_SPORTS else fav} -{fmt_line(line)}", no_key: f"{team_name(sport, dog) if sport in TEAM_SPORTS else dog} +{fmt_line(line)}"}
                 outcomes = [yes_key, no_key]
             else:
                 codes: list[str] = []
                 for cut in range(2, len(pair) - 1):  # split 'DETBUF' into two known codes
                     a, b = pair[:cut], pair[cut:]
-                    if sport == "nfl" and nfl_team_code(a) and nfl_team_code(b):
-                        codes = [nfl_team_code(a), nfl_team_code(b)]  # type: ignore[list-item]
+                    if sport in TEAM_SPORTS and team_code(sport, a) and team_code(sport, b):
+                        codes = [team_code(sport, a), team_code(sport, b)]  # type: ignore[list-item]
                         break
                 if not codes:
                     codes = [pair[: len(pair) // 2], pair[len(pair) // 2:]]
@@ -411,6 +416,6 @@ def _pair_title(pair: str, sport: str) -> str:
     """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
     for cut in range(2, len(pair) - 1):
         a, b = pair[:cut], pair[cut:]
-        if sport != "nfl" or (nfl_team_code(a) and nfl_team_code(b)):
+        if sport not in TEAM_SPORTS or (team_code(sport, a) and team_code(sport, b)):
             return f"{a} @ {b}"
     return pair

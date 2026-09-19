@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
 from ..matching.matcher import MergedEvent, merge_snapshots
-from ..venues.espn import ESPNFeed, GameState
+from ..venues.espn import ESPNClient, ESPNFeed, GameState
 from .alerts import Alerter
 from .inplay import InplayView, evaluate_inplay
 
@@ -32,7 +32,7 @@ class SlateTick:
 class LiveSlate:
     def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100):
         self.adapters = list(adapters)
-        self.feed = feed or ESPNFeed()
+        self.feed = feed or ESPNFeed(ESPNClient(sport=sport))
         self.settings = settings or {}
         self.sport = sport
         self.steal_edge = steal_edge

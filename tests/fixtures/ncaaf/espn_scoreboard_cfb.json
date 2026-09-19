@@ -1,0 +1,2955 @@
+{
+"events": [
+{
+"id": "401858455",
+"uid": "s:20~l:23~e:401858455",
+"date": "2026-09-19T02:30Z",
+"name": "Portland State Vikings at Oregon Ducks",
+"shortName": "PRST @ ORE",
+"season": {
+"year": 2026,
+"type": 2,
+"slug": "regular-season"
+},
+"week": {
+"number": 3
+},
+"competitions": [
+{
+"id": "401858455",
+"uid": "s:20~l:23~e:401858455~c:401858455",
+"date": "2026-09-19T02:30Z",
+"attendance": 0,
+"type": {
+"id": "1",
+"abbreviation": "STD"
+},
+"timeValid": true,
+"dateValid": true,
+"neutralSite": false,
+"conferenceCompetition": false,
+"playByPlayAvailable": true,
+"recent": true,
+"venue": {
+"id": "3626",
+"fullName": "Autzen Stadium",
+"address": {
+"city": "Eugene",
+"state": "OR",
+"country": "USA"
+},
+"indoor": false
+},
+"competitors": [
+{
+"id": "2483",
+"uid": "s:20~l:23~t:2483",
+"type": "team",
+"order": 0,
+"homeAway": "home",
+"team": {
+"id": "2483",
+"uid": "s:20~l:23~t:2483",
+"location": "Oregon",
+"name": "Ducks",
+"abbreviation": "ORE",
+"displayName": "Oregon Ducks",
+"shortDisplayName": "Oregon",
+"color": "00934b",
+"alternateColor": "fff41b",
+"isActive": true,
+"venue": {
+"id": "3626"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2483/oregon-ducks",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2483/oregon-ducks",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/2483",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2483&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/2483",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2483&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/2483",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2483&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/2483.png",
+"conferenceId": "5"
+},
+"score": "77",
+"linescores": [
+{
+"value": 28.0,
+"displayValue": "28",
+"period": 1
+},
+{
+"value": 21.0,
+"displayValue": "21",
+"period": 2
+},
+{
+"value": 14.0,
+"displayValue": "14",
+"period": 3
+},
+{
+"value": 14.0,
+"displayValue": "14",
+"period": 4
+}
+],
+"statistics": [],
+"curatedRank": {
+"current": 21
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "1-1"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "1-0"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "0-1"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-0"
+}
+]
+},
+{
+"id": "2502",
+"uid": "s:20~l:23~t:2502",
+"type": "team",
+"order": 1,
+"homeAway": "away",
+"team": {
+"id": "2502",
+"uid": "s:20~l:23~t:2502",
+"location": "Portland State",
+"name": "Vikings",
+"abbreviation": "PRST",
+"displayName": "Portland State Vikings",
+"shortDisplayName": "Portland St",
+"color": "00311e",
+"alternateColor": "ebebeb",
+"isActive": true,
+"venue": {
+"id": "4765"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2502/portland-state-vikings",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2502/portland-state-vikings",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/2502",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2502&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/2502",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2502&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/2502",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2502&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/2502.png",
+"conferenceId": "20"
+},
+"score": "0",
+"linescores": [
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 1
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 2
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 3
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 4
+}
+],
+"statistics": [],
+"curatedRank": {
+"current": 99
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "0-3"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "0-2"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "0-1"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-1"
+}
+]
+}
+],
+"notes": [],
+"situation": {
+"lastPlay": {
+"id": "401858455784",
+"type": {
+"id": "5",
+"text": "Rush",
+"abbreviation": "RUSH"
+},
+"text": "(01:57) No Huddle-Shotgun #26 B.Smith rush middle for 2 yards gain to the PSU12 (#12 D.Farmer; #43 C.Katoanga)",
+"scoreValue": 0,
+"team": {
+"id": "2483"
+},
+"probability": {
+"tiePercentage": 0.0,
+"homeWinPercentage": 0.999,
+"awayWinPercentage": 0.0010000000000000009,
+"secondsLeft": 111
+},
+"statYardage": 2,
+"drive": {
+"description": "10 plays, 64 yards, 0:54",
+"start": {
+"yardLine": 24,
+"text": "ORE 24"
+},
+"timeElapsed": {
+"displayValue": "0:54"
+}
+},
+"start": {
+"yardLine": 86,
+"team": {
+"id": "2483"
+}
+},
+"end": {
+"yardLine": 88,
+"team": {
+"id": "2483"
+}
+},
+"athletesInvolved": [
+{
+"id": "5198506",
+"fullName": "Brandon Smith",
+"displayName": "Brandon Smith",
+"shortName": "B. Smith",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5198506/brandon-smith"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5198506.png",
+"jersey": "26",
+"position": "RB",
+"team": {
+"id": "2483"
+}
+}
+]
+},
+"down": 2,
+"yardLine": 88,
+"distance": 8,
+"downDistanceText": "2nd & 8 at PRST 12",
+"shortDownDistanceText": "2nd & 8",
+"possessionText": "PRST 12",
+"isRedZone": true,
+"homeTimeouts": 3,
+"awayTimeouts": 2,
+"possession": "2483"
+},
+"status": {
+"clock": 74.0,
+"displayClock": "1:14",
+"period": 4,
+"type": {
+"id": "2",
+"name": "STATUS_IN_PROGRESS",
+"state": "in",
+"completed": false,
+"description": "In Progress",
+"detail": "1:14 - 4th Quarter",
+"shortDetail": "1:14 - 4th"
+}
+},
+"broadcasts": [
+{
+"market": "national",
+"names": [
+"BTN"
+]
+}
+],
+"leaders": [
+{
+"name": "passingYards",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "19/23, 280 YDS, 4 TD",
+"value": 280.0,
+"athlete": {
+"id": "4870921",
+"fullName": "Dante Moore",
+"displayName": "Dante Moore",
+"shortName": "D. Moore",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4870921/dante-moore"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4870921.png",
+"jersey": "5",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "2483"
+},
+"active": true
+},
+"team": {
+"id": "2483"
+}
+}
+]
+},
+{
+"name": "rushingYards",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "13 CAR, 81 YDS, 2 TD",
+"value": 81.0,
+"athlete": {
+"id": "5141423",
+"fullName": "Jordon Davison",
+"displayName": "Jordon Davison",
+"shortName": "J. Davison",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5141423/jordon-davison"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5141423.png",
+"jersey": "0",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "2483"
+},
+"active": true
+},
+"team": {
+"id": "2483"
+}
+}
+]
+},
+{
+"name": "receivingYards",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "3 REC, 72 YDS, 1 TD",
+"value": 72.0,
+"athlete": {
+"id": "4685565",
+"fullName": "Evan Stewart",
+"displayName": "Evan Stewart",
+"shortName": "E. Stewart",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4685565/evan-stewart"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4685565.png",
+"jersey": "7",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "2483"
+},
+"active": true
+},
+"team": {
+"id": "2483"
+}
+}
+]
+}
+],
+"format": {
+"regulation": {
+"periods": 4
+}
+},
+"startDate": "2026-09-19T02:30Z",
+"broadcast": "BTN",
+"geoBroadcasts": [
+{
+"type": {
+"id": "1",
+"shortName": "TV"
+},
+"market": {
+"id": "1",
+"type": "National"
+},
+"media": {
+"shortName": "BTN"
+},
+"lang": "en",
+"region": "us"
+}
+],
+"highlights": []
+}
+],
+"links": [
+{
+"language": "en-US",
+"rel": [
+"live",
+"desktop",
+"event"
+],
+"href": "https://www.espn.com/college-football/game?gameId=401858455",
+"text": "Gamecast",
+"shortText": "Gamecast",
+"isExternal": false,
+"isPremium": false
+},
+{
+"language": "en-US",
+"rel": [
+"boxscore",
+"desktop",
+"event"
+],
+"href": "https://www.espn.com/college-football/boxscore/_/gameId/401858455",
+"text": "Box Score",
+"shortText": "Box Score",
+"isExternal": false,
+"isPremium": false
+},
+{
+"language": "en-US",
+"rel": [
+"highlights",
+"desktop"
+],
+"href": "https://www.espn.com/college-football/video?gameId=401858455",
+"text": "Highlights",
+"shortText": "Highlights",
+"isExternal": false,
+"isPremium": false
+},
+{
+"language": "en-US",
+"rel": [
+"pbp",
+"desktop",
+"event"
+],
+"href": "https://www.espn.com/college-football/playbyplay/_/gameId/401858455",
+"text": "Play-by-Play",
+"shortText": "Play-by-Play",
+"isExternal": false,
+"isPremium": false
+}
+],
+"weather": {
+"displayValue": "33",
+"temperature": 54,
+"highTemperature": 54,
+"conditionId": "Clear",
+"link": {
+"language": "en-US",
+"rel": [
+"97401"
+],
+"href": "http://www.accuweather.com/en/us/autzen-stadium-or/97401/current-weather/53629_poi?lang=en-us",
+"text": "Weather",
+"shortText": "Weather",
+"isExternal": true,
+"isPremium": false
+}
+},
+"status": {
+"clock": 74.0,
+"displayClock": "1:14",
+"period": 4,
+"type": {
+"id": "2",
+"name": "STATUS_IN_PROGRESS",
+"state": "in",
+"completed": false,
+"description": "In Progress",
+"detail": "1:14 - 4th Quarter",
+"shortDetail": "1:14 - 4th"
+}
+}
+},
+{
+"id": "401858458",
+"uid": "s:20~l:23~e:401858458",
+"date": "2026-09-20T03:00Z",
+"name": "Purdue Boilermakers at UCLA Bruins",
+"shortName": "PUR @ UCLA",
+"season": {
+"year": 2026,
+"type": 2,
+"slug": "regular-season"
+},
+"week": {
+"number": 3
+},
+"competitions": [
+{
+"id": "401858458",
+"uid": "s:20~l:23~e:401858458~c:401858458",
+"date": "2026-09-20T03:00Z",
+"attendance": 0,
+"type": {
+"id": "1",
+"abbreviation": "STD"
+},
+"timeValid": true,
+"dateValid": true,
+"neutralSite": false,
+"conferenceCompetition": true,
+"playByPlayAvailable": false,
+"recent": false,
+"venue": {
+"id": "1056",
+"fullName": "Rose Bowl",
+"address": {
+"city": "Pasadena",
+"state": "CA",
+"country": "USA"
+},
+"indoor": false
+},
+"competitors": [
+{
+"id": "26",
+"uid": "s:20~l:23~t:26",
+"type": "team",
+"order": 0,
+"homeAway": "home",
+"team": {
+"id": "26",
+"uid": "s:20~l:23~t:26",
+"location": "UCLA",
+"name": "Bruins",
+"abbreviation": "UCLA",
+"displayName": "UCLA Bruins",
+"shortDisplayName": "UCLA",
+"color": "2774ae",
+"alternateColor": "f2a900",
+"isActive": true,
+"venue": {
+"id": "1056"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/26/ucla-bruins",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/26/ucla-bruins",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/26",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:26&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/26",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:26&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/26",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:26&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/26.png",
+"conferenceId": "5"
+},
+"score": "0",
+"curatedRank": {
+"current": 99
+},
+"statistics": [],
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "2-0"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "1-0"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "1-0"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-0"
+}
+],
+"leaders": [
+{
+"name": "passingLeader",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "28/44, 335 YDS, 2 INT",
+"value": 335.0,
+"athlete": {
+"id": "4870799",
+"fullName": "Nico Iamaleava",
+"displayName": "Nico Iamaleava",
+"shortName": "N. Iamaleava",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4870799/nico-iamaleava"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4870799.png",
+"jersey": "9",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "26"
+},
+"active": true
+},
+"team": {
+"id": "26"
+}
+}
+]
+},
+{
+"name": "rushingLeader",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "21 CAR, 168 YDS, 6 TD",
+"value": 168.0,
+"athlete": {
+"id": "4912342",
+"fullName": "Wayne Knight",
+"displayName": "Wayne Knight",
+"shortName": "W. Knight",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4912342/wayne-knight"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4912342.png",
+"jersey": "3",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "26"
+},
+"active": true
+},
+"team": {
+"id": "26"
+}
+}
+]
+},
+{
+"name": "receivingLeader",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "8 REC, 91 YDS",
+"value": 91.0,
+"athlete": {
+"id": "5209464",
+"fullName": "Brian Rowe Jr.",
+"displayName": "Brian Rowe Jr.",
+"shortName": "B. Rowe Jr.",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5209464/brian-rowe-jr"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5209464.png",
+"jersey": "2",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "26"
+},
+"active": true
+},
+"team": {
+"id": "26"
+}
+}
+]
+}
+]
+},
+{
+"id": "2509",
+"uid": "s:20~l:23~t:2509",
+"type": "team",
+"order": 1,
+"homeAway": "away",
+"team": {
+"id": "2509",
+"uid": "s:20~l:23~t:2509",
+"location": "Purdue",
+"name": "Boilermakers",
+"abbreviation": "PUR",
+"displayName": "Purdue Boilermakers",
+"shortDisplayName": "Purdue",
+"color": "ceb888",
+"alternateColor": "000000",
+"isActive": true,
+"venue": {
+"id": "3907"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2509/purdue-boilermakers",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/2509/purdue-boilermakers",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/2509",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2509&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/2509",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2509&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/2509",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:2509&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/2509.png",
+"conferenceId": "5"
+},
+"score": "0",
+"curatedRank": {
+"current": 99
+},
+"statistics": [],
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "1-1"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "1-1"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "0-0"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-0"
+}
+],
+"leaders": [
+{
+"name": "passingLeader",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "55/71, 646 YDS, 4 TD",
+"value": 646.0,
+"athlete": {
+"id": "5104738",
+"fullName": "Ryan Browne",
+"displayName": "Ryan Browne",
+"shortName": "R. Browne",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5104738/ryan-browne"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5104738.png",
+"jersey": "15",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+},
+{
+"name": "rushingLeader",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "38 CAR, 201 YDS, 4 TD",
+"value": 201.0,
+"athlete": {
+"id": "5218961",
+"fullName": "Fame Ijeboi",
+"displayName": "Fame Ijeboi",
+"shortName": "F. Ijeboi",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5218961/fame-ijeboi"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5218961.png",
+"jersey": "2",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+},
+{
+"name": "receivingLeader",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "12 REC, 172 YDS, 1 TD",
+"value": 172.0,
+"athlete": {
+"id": "4871062",
+"fullName": "Asaad Waseem",
+"displayName": "Asaad Waseem",
+"shortName": "A. Waseem",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4871062/asaad-waseem"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4871062.png",
+"jersey": "19",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+}
+]
+}
+],
+"notes": [],
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Sat, September 19th at 11:00 PM EDT",
+"shortDetail": "9/19 - 11:00 PM EDT"
+}
+},
+"broadcasts": [
+{
+"market": "national",
+"names": [
+"BTN"
+]
+}
+],
+"leaders": [
+{
+"name": "passingYards",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "646 YDS, 4 TD",
+"value": 646.0,
+"athlete": {
+"id": "5104738",
+"fullName": "Ryan Browne",
+"displayName": "Ryan Browne",
+"shortName": "R. Browne",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5104738/ryan-browne"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5104738.png",
+"jersey": "15",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+},
+{
+"name": "rushingYards",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "38 CAR, 201 YDS, 4 TD",
+"value": 201.0,
+"athlete": {
+"id": "5218961",
+"fullName": "Fame Ijeboi",
+"displayName": "Fame Ijeboi",
+"shortName": "F. Ijeboi",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5218961/fame-ijeboi"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5218961.png",
+"jersey": "2",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+},
+{
+"name": "receivingYards",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "12 REC, 172 YDS, 1 TD",
+"value": 172.0,
+"athlete": {
+"id": "4871062",
+"fullName": "Asaad Waseem",
+"displayName": "Asaad Waseem",
+"shortName": "A. Waseem",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4871062/asaad-waseem"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4871062.png",
+"jersey": "19",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "2509"
+},
+"active": true
+},
+"team": {
+"id": "2509"
+}
+}
+]
+}
+],
+"groups": {
+"id": "5",
+"name": "Big Ten Conference",
+"shortName": "Big Ten",
+"isConference": true
+},
+"format": {
+"regulation": {
+"periods": 4
+}
+},
+"tickets": [
+{
+"summary": "Tickets as low as $33",
+"numberAvailable": 1114,
+"links": [
+{
+"href": "https://www.vividseats.com/ucla-bruins-football-tickets-rose-bowl-stadium-9-3-2026--sports-ncaa-football/production/6171131?wsUser=717"
+},
+{
+"href": "https://www.vividseats.com/rose-bowl-stadium-tickets/venue/1457?wsUser=717"
+}
+]
+}
+],
+"startDate": "2026-09-20T03:00Z",
+"broadcast": "BTN",
+"geoBroadcasts": [
+{
+"type": {
+"id": "1",
+"shortName": "TV"
+},
+"market": {
+"id": "1",
+"type": "National"
+},
+"media": {
+"shortName": "BTN"
+},
+"lang": "en",
+"region": "us"
+}
+],
+"odds": [
+{
+"provider": {
+"id": "100",
+"name": "Draft Kings",
+"priority": 1,
+"logos": [
+{
+"href": "https://a.espncdn.com/i/betting/Draftkings_Light.svg",
+"rel": [
+"light"
+]
+},
+{
+"href": "https://a.espncdn.com/i/betting/Draftkings_Dark.svg",
+"rel": [
+"dark"
+]
+}
+]
+},
+"details": "UCLA -14",
+"overUnder": 52.5,
+"spread": -14.0,
+"awayTeamOdds": {
+"favorite": false,
+"underdog": true,
+"team": {
+"id": "2509",
+"uid": "s:20~l:23~t:2509",
+"abbreviation": "PUR",
+"name": "Boilermakers",
+"displayName": "Purdue Boilermakers",
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/2509.png"
+},
+"favoriteAtOpen": false
+},
+"homeTeamOdds": {
+"favorite": true,
+"underdog": false,
+"team": {
+"id": "26",
+"uid": "s:20~l:23~t:26",
+"abbreviation": "UCLA",
+"name": "Bruins",
+"displayName": "UCLA Bruins",
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/26.png"
+},
+"favoriteAtOpen": true
+},
+"moneyline": {
+"displayName": "Moneyline",
+"shortDisplayName": "ML",
+"home": {
+"close": {
+"odds": "-650",
+"link": {
+"language": "en-US",
+"rel": [
+"home",
+"desktop",
+"bets",
+"draft-kings"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0ML86203460_1",
+"text": "Home Bet",
+"shortText": "Home Bet",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "home",
+"betType": "straight"
+}
+}
+}
+},
+"open": {
+"odds": "-700"
+}
+},
+"away": {
+"close": {
+"odds": "+470",
+"link": {
+"language": "en-US",
+"rel": [
+"away",
+"desktop",
+"bets",
+"draft-kings"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0ML86203460_3",
+"text": "Away Bet",
+"shortText": "Away Bet",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "away",
+"betType": "straight"
+}
+}
+}
+},
+"open": {
+"odds": "+500"
+}
+}
+},
+"pointSpread": {
+"displayName": "Spread",
+"shortDisplayName": "Spread",
+"home": {
+"close": {
+"line": "-14",
+"odds": "-112",
+"link": {
+"language": "en-US",
+"rel": [
+"homeSpread",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0HC86203460N1400_1",
+"text": "Home Point Spread",
+"shortText": "Home Point Spread",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "none",
+"betType": "straight",
+"betDetails": "Spread:UCLA-14"
+}
+}
+}
+},
+"open": {
+"line": "-14",
+"odds": "-110"
+}
+},
+"away": {
+"close": {
+"line": "+14",
+"odds": "-108",
+"link": {
+"language": "en-US",
+"rel": [
+"awaySpread",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0HC86203460P1400_3",
+"text": "Away Point Spread",
+"shortText": "Away Point Spread",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "none",
+"betType": "straight",
+"betDetails": "Spread:PUR+14"
+}
+}
+}
+},
+"open": {
+"line": "+14",
+"odds": "-110"
+}
+}
+},
+"total": {
+"displayName": "Total",
+"shortDisplayName": "Total",
+"over": {
+"close": {
+"line": "o52.5",
+"odds": "-112",
+"link": {
+"language": "en-US",
+"rel": [
+"over",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0OU86203460O5250_1",
+"text": "Over Odds",
+"shortText": "Over Odds",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "over",
+"betType": "straight",
+"betDetails": "Over:52.5"
+}
+}
+}
+},
+"open": {
+"line": "o53.5",
+"odds": "-110"
+}
+},
+"under": {
+"close": {
+"line": "u52.5",
+"odds": "-108",
+"link": {
+"language": "en-US",
+"rel": [
+"under",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074%3Foutcomes%3D0OU86203460U5250_3",
+"text": "Under Odds",
+"shortText": "Under Odds",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "under",
+"betType": "straight",
+"betDetails": "Under:52.5"
+}
+}
+}
+},
+"open": {
+"line": "u53.5",
+"odds": "-110"
+}
+}
+},
+"link": {
+"language": "en-US",
+"rel": [
+"game",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634074",
+"text": "See More Odds",
+"shortText": "Game",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401858458,
+"betSide": "none",
+"betType": "straight"
+}
+}
+},
+"header": {
+"logo": {
+"dark": "https://a.espncdn.com/i/espnbet/dark/espn-bet-square-off.svg",
+"light": "https://a.espncdn.com/i/espnbet/espn-bet-square-off.svg",
+"exclusivesLogoDark": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg",
+"exclusivesLogoLight": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg"
+},
+"text": "Game Odds"
+},
+"footer": {
+"disclaimer": "GAMBLING PROBLEM? CALL 1-800-GAMBLER or 1-800-MY-RESET, (800) 327-5050 or visit gamblinghelplinema.org (MA). Call 877-8-HOPENY/text HOPENY (467369) (NY). Call 888-789-7777/visit ccpg.org (CT), or visit www.mdgamblinghelp.org (MD), 1-800-981-0023 (PR). 21+ and present in most states. (18+ DC/KY/NH/PR/WY). Void in ONT. Eligibility restrictions apply. Terms: draftkings.com/sportsbook. On behalf of Boot Hill Casino (KS). Pass-thru of per wager tax may apply in IL."
+}
+}
+],
+"highlights": []
+}
+],
+"links": [
+{
+"language": "en-US",
+"rel": [
+"summary",
+"desktop",
+"event"
+],
+"href": "https://www.espn.com/college-football/game/_/gameId/401858458/purdue-ucla",
+"text": "Gamecast",
+"shortText": "Gamecast",
+"isExternal": false,
+"isPremium": false
+}
+],
+"weather": {
+"displayValue": "Mostly clear",
+"temperature": 74,
+"highTemperature": 74,
+"conditionId": "34",
+"link": {
+"language": "en-US",
+"rel": [
+"91103"
+],
+"href": "http://www.accuweather.com/en/us/rose-bowl-ca/91101/hourly-weather-forecast/53542_poi?day=2&hbhhour=20&lang=en-us",
+"text": "Weather",
+"shortText": "Weather",
+"isExternal": true,
+"isPremium": false
+}
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Sat, September 19th at 11:00 PM EDT",
+"shortDetail": "9/19 - 11:00 PM EDT"
+}
+}
+},
+{
+"id": "401860888",
+"uid": "s:20~l:23~e:401860888",
+"date": "2026-09-20T03:00Z",
+"name": "Fresno State Bulldogs at San Jos\u00e9 State Spartans",
+"shortName": "FRES @ SJSU",
+"season": {
+"year": 2026,
+"type": 2,
+"slug": "regular-season"
+},
+"week": {
+"number": 3
+},
+"competitions": [
+{
+"id": "401860888",
+"uid": "s:20~l:23~e:401860888~c:401860888",
+"date": "2026-09-20T03:00Z",
+"attendance": 0,
+"type": {
+"id": "1",
+"abbreviation": "STD"
+},
+"timeValid": true,
+"dateValid": true,
+"neutralSite": false,
+"conferenceCompetition": false,
+"playByPlayAvailable": false,
+"recent": false,
+"venue": {
+"id": "3935",
+"fullName": "CEFCU Stadium",
+"address": {
+"city": "San Jose",
+"state": "CA",
+"country": "USA"
+},
+"indoor": false
+},
+"competitors": [
+{
+"id": "23",
+"uid": "s:20~l:23~t:23",
+"type": "team",
+"order": 0,
+"homeAway": "home",
+"team": {
+"id": "23",
+"uid": "s:20~l:23~t:23",
+"location": "San Jos\u00e9 State",
+"name": "Spartans",
+"abbreviation": "SJSU",
+"displayName": "San Jos\u00e9 State Spartans",
+"shortDisplayName": "San Jos\u00e9 St",
+"color": "0038a8",
+"alternateColor": "ffb81a",
+"isActive": true,
+"venue": {
+"id": "3935"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/23/san-jose-state-spartans",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/23/san-jose-state-spartans",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/23",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:23&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/23",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:23&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/23",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:23&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/23.png",
+"conferenceId": "17"
+},
+"score": "0",
+"curatedRank": {
+"current": 99
+},
+"statistics": [],
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "2-1"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "1-0"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "1-1"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-0"
+}
+],
+"leaders": [
+{
+"name": "passingLeader",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "66/105, 788 YDS, 8 TD, 1 INT",
+"value": 788.0,
+"athlete": {
+"id": "5295238",
+"fullName": "Luke Weaver",
+"displayName": "Luke Weaver",
+"shortName": "L. Weaver",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5295238/luke-weaver"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5295238.png",
+"jersey": "3",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+},
+{
+"name": "rushingLeader",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "58 CAR, 319 YDS",
+"value": 319.0,
+"athlete": {
+"id": "4685254",
+"fullName": "Jabari Bates",
+"displayName": "Jabari Bates",
+"shortName": "J. Bates",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4685254/jabari-bates"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4685254.png",
+"jersey": "6",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+},
+{
+"name": "receivingLeader",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "14 REC, 216 YDS, 3 TD",
+"value": 216.0,
+"athlete": {
+"id": "5151342",
+"fullName": "Cooper Hoch",
+"displayName": "Cooper Hoch",
+"shortName": "C. Hoch",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5151342/cooper-hoch"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5151342.png",
+"jersey": "13",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+}
+]
+},
+{
+"id": "278",
+"uid": "s:20~l:23~t:278",
+"type": "team",
+"order": 1,
+"homeAway": "away",
+"team": {
+"id": "278",
+"uid": "s:20~l:23~t:278",
+"location": "Fresno State",
+"name": "Bulldogs",
+"abbreviation": "FRES",
+"displayName": "Fresno State Bulldogs",
+"shortDisplayName": "Fresno St",
+"color": "b1102b",
+"alternateColor": "13284c",
+"isActive": true,
+"venue": {
+"id": "3660"
+},
+"links": [
+{
+"rel": [
+"clubhouse",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/278/fresno-state-bulldogs",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"clubhouse",
+"mobile",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/_/id/278/fresno-state-bulldogs",
+"text": "Clubhouse",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/roster/_/id/278",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"roster",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:278&section=roster",
+"text": "Roster",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/stats/_/id/278",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"stats",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:278&section=stats",
+"text": "Statistics",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"desktop",
+"team"
+],
+"href": "https://www.espn.com/college-football/team/schedule/_/id/278",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+},
+{
+"rel": [
+"schedule",
+"sportscenter",
+"app",
+"team"
+],
+"href": "sportscenter://x-callback-url/showClubhouse?uid=s:20~l:23~t:278&section=scores",
+"text": "Schedule",
+"isExternal": false,
+"isPremium": false
+}
+],
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/278.png",
+"conferenceId": "9"
+},
+"score": "0",
+"curatedRank": {
+"current": 99
+},
+"statistics": [],
+"records": [
+{
+"name": "overall",
+"abbreviation": "overall",
+"type": "total",
+"summary": "1-1"
+},
+{
+"name": "Home",
+"abbreviation": "Home",
+"type": "homerecord",
+"summary": "1-0"
+},
+{
+"name": "Away",
+"abbreviation": "Away",
+"type": "awayrecord",
+"summary": "0-1"
+},
+{
+"name": "vs. Conf.",
+"abbreviation": "CONF",
+"type": "vsconf",
+"summary": "0-0"
+}
+],
+"leaders": [
+{
+"name": "passingLeader",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "30/41, 393 YDS, 2 TD, 1 INT",
+"value": 393.0,
+"athlete": {
+"id": "5010409",
+"fullName": "Jayden Mandal",
+"displayName": "Jayden Mandal",
+"shortName": "J. Mandal",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5010409/jayden-mandal"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5010409.png",
+"jersey": "7",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "278"
+},
+"active": true
+},
+"team": {
+"id": "278"
+}
+}
+]
+},
+{
+"name": "rushingLeader",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "19 CAR, 117 YDS, 3 TD",
+"value": 117.0,
+"athlete": {
+"id": "5175334",
+"fullName": "Bryson Donelson",
+"displayName": "Bryson Donelson",
+"shortName": "B. Donelson",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5175334/bryson-donelson"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5175334.png",
+"jersey": "6",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "278"
+},
+"active": true
+},
+"team": {
+"id": "278"
+}
+}
+]
+},
+{
+"name": "receivingLeader",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "3 REC, 109 YDS, 1 TD",
+"value": 109.0,
+"athlete": {
+"id": "5121384",
+"fullName": "Ezekiel Avit",
+"displayName": "Ezekiel Avit",
+"shortName": "E. Avit",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5121384/ezekiel-avit"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5121384.png",
+"jersey": "0",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "278"
+},
+"active": true
+},
+"team": {
+"id": "278"
+}
+}
+]
+}
+]
+}
+],
+"notes": [],
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Sat, September 19th at 11:00 PM EDT",
+"shortDetail": "9/19 - 11:00 PM EDT"
+}
+},
+"broadcasts": [
+{
+"market": "national",
+"names": [
+"FS1"
+]
+}
+],
+"leaders": [
+{
+"name": "passingYards",
+"displayName": "Passing Leader",
+"shortDisplayName": "PASS",
+"abbreviation": "PYDS",
+"leaders": [
+{
+"displayValue": "788 YDS, 8 TD, 1 INT",
+"value": 788.0,
+"athlete": {
+"id": "5295238",
+"fullName": "Luke Weaver",
+"displayName": "Luke Weaver",
+"shortName": "L. Weaver",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5295238/luke-weaver"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5295238.png",
+"jersey": "3",
+"position": {
+"abbreviation": "QB"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+},
+{
+"name": "rushingYards",
+"displayName": "Rushing Leader",
+"shortDisplayName": "RUSH",
+"abbreviation": "RYDS",
+"leaders": [
+{
+"displayValue": "58 CAR, 319 YDS",
+"value": 319.0,
+"athlete": {
+"id": "4685254",
+"fullName": "Jabari Bates",
+"displayName": "Jabari Bates",
+"shortName": "J. Bates",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/4685254/jabari-bates"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/4685254.png",
+"jersey": "6",
+"position": {
+"abbreviation": "RB"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+},
+{
+"name": "receivingYards",
+"displayName": "Receiving Leader",
+"shortDisplayName": "REC",
+"abbreviation": "RECYDS",
+"leaders": [
+{
+"displayValue": "14 REC, 216 YDS, 3 TD",
+"value": 216.0,
+"athlete": {
+"id": "5151342",
+"fullName": "Cooper Hoch",
+"displayName": "Cooper Hoch",
+"shortName": "C. Hoch",
+"links": [
+{
+"rel": [
+"playercard",
+"desktop",
+"athlete"
+],
+"href": "https://www.espn.com/college-football/player/_/id/5151342/cooper-hoch"
+}
+],
+"headshot": "https://a.espncdn.com/i/headshots/college-football/players/full/5151342.png",
+"jersey": "13",
+"position": {
+"abbreviation": "WR"
+},
+"team": {
+"id": "23"
+},
+"active": true
+},
+"team": {
+"id": "23"
+}
+}
+]
+}
+],
+"format": {
+"regulation": {
+"periods": 4
+}
+},
+"tickets": [
+{
+"summary": "Tickets as low as $26",
+"numberAvailable": 236,
+"links": [
+{
+"href": "https://www.vividseats.com/san-jose-state-spartans-football-tickets-cefcu-stadium-9-19-2026--sports-ncaa-football/production/6207037?wsUser=717"
+},
+{
+"href": "https://www.vividseats.com/venues/cefcu-stadium-tickets.html?wsUser=717"
+}
+]
+}
+],
+"startDate": "2026-09-20T03:00Z",
+"broadcast": "FS1",
+"geoBroadcasts": [
+{
+"type": {
+"id": "1",
+"shortName": "TV"
+},
+"market": {
+"id": "1",
+"type": "National"
+},
+"media": {
+"shortName": "FS1"
+},
+"lang": "en",
+"region": "us"
+}
+],
+"odds": [
+{
+"provider": {
+"id": "100",
+"name": "Draft Kings",
+"priority": 1,
+"logos": [
+{
+"href": "https://a.espncdn.com/i/betting/Draftkings_Light.svg",
+"rel": [
+"light"
+]
+},
+{
+"href": "https://a.espncdn.com/i/betting/Draftkings_Dark.svg",
+"rel": [
+"dark"
+]
+}
+]
+},
+"details": "FRES -6.5",
+"overUnder": 49.5,
+"spread": 6.5,
+"awayTeamOdds": {
+"favorite": true,
+"underdog": false,
+"team": {
+"id": "278",
+"uid": "s:20~l:23~t:278",
+"abbreviation": "FRES",
+"name": "Bulldogs",
+"displayName": "Fresno State Bulldogs",
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/278.png"
+},
+"favoriteAtOpen": true
+},
+"homeTeamOdds": {
+"favorite": false,
+"underdog": true,
+"team": {
+"id": "23",
+"uid": "s:20~l:23~t:23",
+"abbreviation": "SJSU",
+"name": "Spartans",
+"displayName": "San Jos\u00e9 State Spartans",
+"logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/23.png"
+},
+"favoriteAtOpen": false
+},
+"moneyline": {
+"displayName": "Moneyline",
+"shortDisplayName": "ML",
+"home": {
+"close": {
+"odds": "+190",
+"link": {
+"language": "en-US",
+"rel": [
+"home",
+"desktop",
+"bets",
+"draft-kings"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0ML86203459_1",
+"text": "Home Bet",
+"shortText": "Home Bet",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "home",
+"betType": "straight"
+}
+}
+}
+},
+"open": {
+"odds": "+225"
+}
+},
+"away": {
+"close": {
+"odds": "-230",
+"link": {
+"language": "en-US",
+"rel": [
+"away",
+"desktop",
+"bets",
+"draft-kings"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0ML86203459_3",
+"text": "Away Bet",
+"shortText": "Away Bet",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "away",
+"betType": "straight"
+}
+}
+}
+},
+"open": {
+"odds": "-278"
+}
+}
+},
+"pointSpread": {
+"displayName": "Spread",
+"shortDisplayName": "Spread",
+"home": {
+"close": {
+"line": "+6.5",
+"odds": "-112",
+"link": {
+"language": "en-US",
+"rel": [
+"homeSpread",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0HC86203459P650_1",
+"text": "Home Point Spread",
+"shortText": "Home Point Spread",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "none",
+"betType": "straight",
+"betDetails": "Spread:SJSU+6.5"
+}
+}
+}
+},
+"open": {
+"line": "+7.5",
+"odds": "-110"
+}
+},
+"away": {
+"close": {
+"line": "-6.5",
+"odds": "-108",
+"link": {
+"language": "en-US",
+"rel": [
+"awaySpread",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0HC86203459N650_3",
+"text": "Away Point Spread",
+"shortText": "Away Point Spread",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "none",
+"betType": "straight",
+"betDetails": "Spread:FRES-6.5"
+}
+}
+}
+},
+"open": {
+"line": "-7.5",
+"odds": "-110"
+}
+}
+},
+"total": {
+"displayName": "Total",
+"shortDisplayName": "Total",
+"over": {
+"close": {
+"line": "o49.5",
+"odds": "-112",
+"link": {
+"language": "en-US",
+"rel": [
+"over",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0OU86203459O4950_1",
+"text": "Over Odds",
+"shortText": "Over Odds",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "over",
+"betType": "straight",
+"betDetails": "Over:49.5"
+}
+}
+}
+},
+"open": {
+"line": "o52.5",
+"odds": "+100"
+}
+},
+"under": {
+"close": {
+"line": "u49.5",
+"odds": "-108",
+"link": {
+"language": "en-US",
+"rel": [
+"under",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073%3Foutcomes%3D0OU86203459U4950_3",
+"text": "Under Odds",
+"shortText": "Under Odds",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "under",
+"betType": "straight",
+"betDetails": "Under:49.5"
+}
+}
+}
+},
+"open": {
+"line": "u52.5",
+"odds": "-120"
+}
+}
+},
+"link": {
+"language": "en-US",
+"rel": [
+"game",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34634073",
+"text": "See More Odds",
+"shortText": "Game",
+"isExternal": true,
+"isPremium": false,
+"tracking": {
+"campaign": "betting-integrations",
+"tags": {
+"league": "college-football",
+"sport": "football",
+"gameId": 401860888,
+"betSide": "none",
+"betType": "straight"
+}
+}
+},
+"header": {
+"logo": {
+"dark": "https://a.espncdn.com/i/espnbet/dark/espn-bet-square-off.svg",
+"light": "https://a.espncdn.com/i/espnbet/espn-bet-square-off.svg",
+"exclusivesLogoDark": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg",
+"exclusivesLogoLight": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg"
+},
+"text": "Game Odds"
+},
+"footer": {
+"disclaimer": "GAMBLING PROBLEM? CALL 1-800-GAMBLER or 1-800-MY-RESET, (800) 327-5050 or visit gamblinghelplinema.org (MA). Call 877-8-HOPENY/text HOPENY (467369) (NY). Call 888-789-7777/visit ccpg.org (CT), or visit www.mdgamblinghelp.org (MD), 1-800-981-0023 (PR). 21+ and present in most states. (18+ DC/KY/NH/PR/WY). Void in ONT. Eligibility restrictions apply. Terms: draftkings.com/sportsbook. On behalf of Boot Hill Casino (KS). Pass-thru of per wager tax may apply in IL."
+}
+}
+],
+"highlights": []
+}
+],
+"links": [
+{
+"language": "en-US",
+"rel": [
+"summary",
+"desktop",
+"event"
+],
+"href": "https://www.espn.com/college-football/game/_/gameId/401860888/fresno-st-san-jose-st",
+"text": "Gamecast",
+"shortText": "Gamecast",
+"isExternal": false,
+"isPremium": false
+}
+],
+"weather": {
+"displayValue": "Mostly clear",
+"temperature": 71,
+"highTemperature": 71,
+"conditionId": "34",
+"link": {
+"language": "en-US",
+"rel": [
+"95112"
+],
+"href": "http://www.accuweather.com/en/us/cefcu-stadium-ca/95110/hourly-weather-forecast/53544_poi?day=2&hbhhour=20&lang=en-us",
+"text": "Weather",
+"shortText": "Weather",
+"isExternal": true,
+"isPremium": false
+}
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Sat, September 19th at 11:00 PM EDT",
+"shortDetail": "9/19 - 11:00 PM EDT"
+}
+}
+}
+]
+}

@@ -37,6 +37,9 @@ book (taker) or as a resting order (maker, lower fees on Kalshi, none on Polymar
 
 ## What is in the box
 
+Sports: NFL (moneylines, spreads, totals) and **college football** (`--sport ncaaf`: Kalshi ×
+Polymarket × Robinhood/CDNA, 761 programs; see [docs/SPORTS.md](docs/SPORTS.md)); tennis for fee routing.
+
 | Piece | What it does |
 |---|---|
 | `arb_engine/fees` | Exact (`Decimal`) fee models: Kalshi taker/maker with series multipliers, Robinhood commission (Gold/no Gold) + exchange fee, Polymarket sports schedule, Polymarket US theta. Tested against the venues' own tables. |
@@ -84,6 +87,7 @@ python -m arb_engine games                       # this week's NFL games: status
 python -m arb_engine inplay "https://robinhood.com/us/en/prediction-markets/nfl/events/<game>/" --position robinhood:DEN:0.50:100 --once
 python -m arb_engine inplay "<game url>" --position robinhood:DEN:0.50:100 --position robinhood:DEN:0.40:100   # keeps watching
 python -m arb_engine live --every 10 --pre-hours 1 --record out/history.db   # the whole slate: every live game, STEAL alerts, ticks recorded
+python -m arb_engine live --sport ncaaf --once --pre-hours 6    # college football: same thing for Saturday (65 games matched on 2026-09-18)
 ```
 
 `live` is the Sunday mode: one venue pull and one ESPN scoreboard call per tick, a summary
@@ -247,7 +251,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 163 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 168 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

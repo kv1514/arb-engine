@@ -1,0 +1,7473 @@
+{
+"AAMU": {
+"aliases": [
+"Alabama A&M",
+"Alabama A&M Bulldogs"
+],
+"espn_id": "2010",
+"kalshi": "AAMU",
+"name": "Alabama A&M",
+"nick": "Bulldogs"
+},
+"ABSU": {
+"aliases": [
+"Albany St",
+"Albany State",
+"Albany State Golden Rams"
+],
+"espn_id": "2013",
+"name": "Albany State",
+"nick": "Golden Rams"
+},
+"ACU": {
+"aliases": [
+"Abilene Christian",
+"Abilene Christian Wildcats",
+"Abilene Chrstn",
+"AC"
+],
+"espn_id": "2000",
+"kalshi": "AC",
+"name": "Abilene Christian",
+"nick": "Wildcats"
+},
+"ADR": {
+"aliases": [
+"Adrian",
+"Adrian Bulldogs"
+],
+"espn_id": "2003",
+"name": "Adrian",
+"nick": "Bulldogs"
+},
+"ADSU": {
+"aliases": [
+"Adams St",
+"Adams State",
+"Adams State Grizzlies"
+],
+"espn_id": "2001",
+"name": "Adams State",
+"nick": "Grizzlies"
+},
+"AF": {
+"aliases": [
+"Air Force",
+"Air Force Falcons",
+"AFA"
+],
+"espn_id": "2005",
+"kalshi": "AFA",
+"name": "Air Force",
+"nick": "Falcons"
+},
+"AFST": {
+"aliases": [
+"Alfred St",
+"Alfred State",
+"Alfred State Pioneers"
+],
+"espn_id": "3162",
+"name": "Alfred State",
+"nick": "Pioneers"
+},
+"AGSU": {
+"aliases": [
+"Angelo St",
+"Angelo State",
+"Angelo State Rams"
+],
+"espn_id": "2025",
+"name": "Angelo State",
+"nick": "Rams"
+},
+"AIC": {
+"aliases": [
+"American Int'l",
+"American International",
+"American International Yellow Jackets"
+],
+"espn_id": "2022",
+"name": "American International",
+"nick": "Yellow Jackets"
+},
+"AKR": {
+"aliases": [
+"Akron",
+"Akron Zips"
+],
+"espn_id": "2006",
+"kalshi": "AKR",
+"name": "Akron",
+"nick": "Zips"
+},
+"ALA": {
+"aliases": [
+"Alabama",
+"Alabama Crimson Tide"
+],
+"espn_id": "333",
+"kalshi": "ALA",
+"name": "Alabama",
+"nick": "Crimson Tide"
+},
+"ALBI": {
+"aliases": [
+"Albion",
+"Albion Britons"
+],
+"espn_id": "2790",
+"name": "Albion",
+"nick": "Britons"
+},
+"ALBR": {
+"aliases": [
+"Albright",
+"Albright Lions"
+],
+"espn_id": "2015",
+"name": "Albright",
+"nick": "Lions"
+},
+"ALCN": {
+"aliases": [
+"Alcorn St",
+"Alcorn State",
+"Alcorn State Braves"
+],
+"espn_id": "2016",
+"kalshi": "ALCN",
+"name": "Alcorn State",
+"nick": "Braves"
+},
+"ALFR": {
+"aliases": [
+"Alfred",
+"Alfred Saxons"
+],
+"espn_id": "365",
+"name": "Alfred",
+"nick": "Saxons"
+},
+"ALLG": {
+"aliases": [
+"Allegheny",
+"Allegheny Gators"
+],
+"espn_id": "2018",
+"name": "Allegheny",
+"nick": "Gators"
+},
+"ALMA": {
+"aliases": [
+"Alma",
+"Alma Scots"
+],
+"espn_id": "2800",
+"name": "Alma",
+"nick": "Scots"
+},
+"ALNU": {
+"aliases": [
+"Allen",
+"Allen Yellow Jackets"
+],
+"espn_id": "2019",
+"name": "Allen",
+"nick": "Yellow Jackets"
+},
+"ALST": {
+"aliases": [
+"Alabama St",
+"Alabama State",
+"Alabama State Hornets"
+],
+"espn_id": "2011",
+"kalshi": "ALST",
+"name": "Alabama State",
+"nick": "Hornets"
+},
+"ALVR": {
+"aliases": [
+"Alvernia",
+"Alvernia Golden Wolves"
+],
+"espn_id": "111674",
+"name": "Alvernia",
+"nick": "Golden Wolves"
+},
+"AMH": {
+"aliases": [
+"Amherst",
+"Amherst Mammoths"
+],
+"espn_id": "7",
+"name": "Amherst",
+"nick": "Mammoths"
+},
+"AND": {
+"aliases": [
+"Andrew",
+"Andrew Fighting Tigers"
+],
+"espn_id": "134002",
+"name": "Andrew",
+"nick": "Fighting Tigers"
+},
+"ANIN": {
+"aliases": [
+"Anderson (IN)",
+"Anderson (IN) Ravens"
+],
+"espn_id": "2023",
+"name": "Anderson (IN)",
+"nick": "Ravens"
+},
+"ANSC": {
+"aliases": [
+"Anderson (SC)",
+"Anderson (SC) Trojans"
+],
+"espn_id": "129469",
+"name": "Anderson (SC)",
+"nick": "Trojans"
+},
+"APP": {
+"aliases": [
+"App State",
+"App State Mountaineers",
+"Appalachian State"
+],
+"espn_id": "2026",
+"kalshi": "APP",
+"name": "App State",
+"nick": "Mountaineers"
+},
+"APPRE": {
+"aliases": [
+"Apprentice",
+"Apprentice School",
+"Apprentice School Builders"
+],
+"espn_id": "3111",
+"name": "Apprentice School",
+"nick": "Builders"
+},
+"APSU": {
+"aliases": [
+"Austin Peay",
+"Austin Peay Governors",
+"PEAY"
+],
+"espn_id": "2046",
+"kalshi": "PEAY",
+"name": "Austin Peay",
+"nick": "Governors"
+},
+"APU": {
+"aliases": [
+"Azusa Pacific",
+"Azusa Pacific Cougars"
+],
+"espn_id": "2049",
+"name": "Azusa Pacific",
+"nick": "Cougars"
+},
+"ARBA": {
+"aliases": [
+"Ark Baptist",
+"Arkansas Baptist",
+"Arkansas Baptist Buffaloes"
+],
+"espn_id": "124386",
+"name": "Arkansas Baptist",
+"nick": "Buffaloes"
+},
+"ARIZ": {
+"aliases": [
+"Arizona",
+"Arizona Wildcats"
+],
+"espn_id": "12",
+"kalshi": "ARIZ",
+"name": "Arizona",
+"nick": "Wildcats"
+},
+"ARK": {
+"aliases": [
+"Arkansas",
+"Arkansas Razorbacks"
+],
+"espn_id": "8",
+"kalshi": "ARK",
+"name": "Arkansas",
+"nick": "Razorbacks"
+},
+"ARMY": {
+"aliases": [
+"Army",
+"Army Black Knights"
+],
+"espn_id": "349",
+"kalshi": "ARMY",
+"name": "Army",
+"nick": "Black Knights"
+},
+"ARST": {
+"aliases": [
+"Arkansas St",
+"Arkansas State",
+"Arkansas State Red Wolves"
+],
+"espn_id": "2032",
+"kalshi": "ARST",
+"name": "Arkansas State",
+"nick": "Red Wolves"
+},
+"ARTE": {
+"aliases": [
+"Arkansas Tech",
+"Arkansas Tech Wonder Boys"
+],
+"espn_id": "2033",
+"name": "Arkansas Tech",
+"nick": "Wonder Boys"
+},
+"ASH": {
+"aliases": [
+"Ashland",
+"Ashland Eagles"
+],
+"espn_id": "308",
+"name": "Ashland",
+"nick": "Eagles"
+},
+"ASP": {
+"aliases": [
+"Assumption",
+"Assumption Greyhounds"
+],
+"espn_id": "2038",
+"name": "Assumption",
+"nick": "Greyhounds"
+},
+"ASU": {
+"aliases": [
+"Arizona St",
+"Arizona State",
+"Arizona State Sun Devils"
+],
+"espn_id": "9",
+"kalshi": "ASU",
+"name": "Arizona State",
+"nick": "Sun Devils"
+},
+"AUB": {
+"aliases": [
+"Auburn",
+"Auburn Tigers"
+],
+"espn_id": "2",
+"kalshi": "AUB",
+"name": "Auburn",
+"nick": "Tigers"
+},
+"AUGC": {
+"aliases": [
+"Augustana (IL)",
+"Augustana (IL) Vikings"
+],
+"espn_id": "2042",
+"name": "Augustana (IL)",
+"nick": "Vikings"
+},
+"AUGS": {
+"aliases": [
+"Augsburg",
+"Augsburg Auggies"
+],
+"espn_id": "124",
+"name": "Augsburg",
+"nick": "Auggies"
+},
+"AUR": {
+"aliases": [
+"Aurora",
+"Aurora Spartans"
+],
+"espn_id": "2044",
+"name": "Aurora",
+"nick": "Spartans"
+},
+"AUS": {
+"aliases": [
+"Austin",
+"Austin 'Roos"
+],
+"espn_id": "2045",
+"name": "Austin",
+"nick": "'Roos"
+},
+"AUSD": {
+"aliases": [
+"Augustana (SD)",
+"Augustana (SD) Vikings"
+],
+"espn_id": "2043",
+"name": "Augustana (SD)",
+"nick": "Vikings"
+},
+"AVE M": {
+"aliases": [
+"Ave Maria",
+"Ave Maria University",
+"Ave Maria University Gyrenes"
+],
+"espn_id": "3178",
+"name": "Ave Maria University",
+"nick": "Gyrenes"
+},
+"AVER": {
+"aliases": [
+"Averett",
+"Averett Cougars"
+],
+"espn_id": "2047",
+"name": "Averett",
+"nick": "Cougars"
+},
+"AVILA": {
+"aliases": [
+"Avila",
+"Avila University",
+"Avila University Eagles"
+],
+"espn_id": "2048",
+"name": "Avila University",
+"nick": "Eagles"
+},
+"AZCH": {
+"aliases": [
+"AZ Christian",
+"Arizona Christian",
+"Arizona Christian Firestorm"
+],
+"espn_id": "108358",
+"name": "Arizona Christian",
+"nick": "Firestorm"
+},
+"BAK": {
+"aliases": [
+"Baker",
+"Baker University",
+"Baker University Baker"
+],
+"espn_id": "488",
+"name": "Baker University",
+"nick": "Baker"
+},
+"BALL": {
+"aliases": [
+"Ball State",
+"Ball State Cardinals"
+],
+"espn_id": "2050",
+"kalshi": "BALL",
+"name": "Ball State",
+"nick": "Cardinals"
+},
+"BART": {
+"aliases": [
+"Barton",
+"Barton Bulldogs"
+],
+"espn_id": "122666",
+"name": "Barton",
+"nick": "Bulldogs"
+},
+"BATE": {
+"aliases": [
+"Bates",
+"Bates Bobcats"
+],
+"espn_id": "121",
+"name": "Bates",
+"nick": "Bobcats"
+},
+"BAY": {
+"aliases": [
+"Baylor",
+"Baylor Bears"
+],
+"espn_id": "239",
+"kalshi": "BAY",
+"name": "Baylor",
+"nick": "Bears"
+},
+"BBM": {
+"aliases": [
+"British Columbia",
+"British Columbia British Col",
+"Britsh Col"
+],
+"espn_id": "2080",
+"name": "British Columbia",
+"nick": "British Col"
+},
+"BBU": {
+"aliases": [
+"Bloomsburg",
+"Bloomsburg Huskies"
+],
+"espn_id": "2071",
+"name": "Bloomsburg",
+"nick": "Huskies"
+},
+"BC": {
+"aliases": [
+"Boston College",
+"Boston College Eagles"
+],
+"espn_id": "103",
+"kalshi": "BC",
+"name": "Boston College",
+"nick": "Eagles"
+},
+"BCU": {
+"aliases": [
+"Bethune",
+"Bethune-Cookman",
+"Bethune-Cookman Wildcats",
+"COOK"
+],
+"espn_id": "2065",
+"kalshi": "COOK",
+"name": "Bethune-Cookman",
+"nick": "Wildcats"
+},
+"BCWV": {
+"aliases": [
+"Bethany (WV)",
+"Bethany (WV) Bison"
+],
+"espn_id": "2062",
+"name": "Bethany (WV)",
+"nick": "Bison"
+},
+"BELH": {
+"aliases": [
+"Belhaven",
+"Belhaven Blazers"
+],
+"espn_id": "2056",
+"name": "Belhaven",
+"nick": "Blazers"
+},
+"BELO": {
+"aliases": [
+"Beloit",
+"Beloit Buccaneers"
+],
+"espn_id": "266",
+"name": "Beloit",
+"nick": "Buccaneers"
+},
+"BEN": {
+"aliases": [
+"Benedict",
+"Benedict Tigers"
+],
+"espn_id": "490",
+"name": "Benedict",
+"nick": "Tigers"
+},
+"BENC": {
+"aliases": [
+"Benedictine College",
+"Benedictine College Ravens",
+"Bndctn Col"
+],
+"espn_id": "16111",
+"name": "Benedictine College",
+"nick": "Ravens"
+},
+"BENT": {
+"aliases": [
+"Bentley",
+"Bentley Falcons"
+],
+"espn_id": "2060",
+"name": "Bentley",
+"nick": "Falcons"
+},
+"BERR": {
+"aliases": [
+"Berry",
+"Berry Vikings"
+],
+"espn_id": "2757",
+"name": "Berry",
+"nick": "Vikings"
+},
+"BGSU": {
+"aliases": [
+"Bowling Green",
+"Bowling Green Falcons"
+],
+"espn_id": "189",
+"kalshi": "BGSU",
+"name": "Bowling Green",
+"nick": "Falcons"
+},
+"BHSU": {
+"aliases": [
+"Black Hills St",
+"Black Hills State",
+"Black Hills State Yellow Jackets"
+],
+"espn_id": "2069",
+"name": "Black Hills State",
+"nick": "Yellow Jackets"
+},
+"BLF": {
+"aliases": [
+"Bluffton",
+"Bluffton Beavers"
+],
+"espn_id": "2074",
+"name": "Bluffton",
+"nick": "Beavers"
+},
+"BLU": {
+"aliases": [
+"BLUEFIELD",
+"BLUEFIELD Ramblin' Rams",
+"Bluefield"
+],
+"espn_id": "495",
+"name": "BLUEFIELD",
+"nick": "Ramblin' Rams"
+},
+"BLUS": {
+"aliases": [
+"Bluefield St",
+"Bluefield State",
+"Bluefield State Big Blue"
+],
+"espn_id": "124180",
+"name": "Bluefield State",
+"nick": "Big Blue"
+},
+"BNIL": {
+"aliases": [
+"Benedictine (IL)",
+"Benedictine (IL) Eagles",
+"Benedictine IL"
+],
+"espn_id": "2283",
+"name": "Benedictine (IL)",
+"nick": "Eagles"
+},
+"BOIS": {
+"aliases": [
+"Boise St",
+"Boise State",
+"Boise State Broncos"
+],
+"espn_id": "68",
+"name": "Boise State",
+"nick": "Broncos"
+},
+"BOW": {
+"aliases": [
+"Bowdoin",
+"Bowdoin Polar Bears"
+],
+"espn_id": "340",
+"name": "Bowdoin",
+"nick": "Polar Bears"
+},
+"BOWE": {
+"aliases": [
+"Bowie St",
+"Bowie State",
+"Bowie State Bulldogs"
+],
+"espn_id": "2075",
+"name": "Bowie State",
+"nick": "Bulldogs"
+},
+"BRE": {
+"aliases": [
+"Brevard",
+"Brevard Tornados"
+],
+"espn_id": "2913",
+"name": "Brevard",
+"nick": "Tornados"
+},
+"BRI": {
+"aliases": [
+"Bridgewater",
+"Bridgewater Eagles"
+],
+"espn_id": "2079",
+"name": "Bridgewater",
+"nick": "Eagles"
+},
+"BRIS": {
+"aliases": [
+"Bridgewater St",
+"Bridgewater State",
+"Bridgewater State Bears"
+],
+"espn_id": "18",
+"name": "Bridgewater State",
+"nick": "Bears"
+},
+"BRO": {
+"aliases": [
+"Brockport",
+"Brockport Golden Eagles"
+],
+"espn_id": "2781",
+"name": "Brockport",
+"nick": "Golden Eagles"
+},
+"BRWN": {
+"aliases": [
+"Brown",
+"Brown Bears"
+],
+"espn_id": "225",
+"kalshi": "BRWN",
+"name": "Brown",
+"nick": "Bears"
+},
+"BRY": {
+"aliases": [
+"Bryant",
+"Bryant Bulldogs"
+],
+"espn_id": "2803",
+"kalshi": "BRY",
+"name": "Bryant",
+"nick": "Bulldogs"
+},
+"BST": {
+"aliases": [
+"Bemidji St",
+"Bemidji State",
+"Bemidji State Beavers"
+],
+"espn_id": "132",
+"name": "Bemidji State",
+"nick": "Beavers"
+},
+"BSU": {
+"aliases": [
+"Buffalo St",
+"Buffalo State",
+"Buffalo State Bengals"
+],
+"espn_id": "2085",
+"kalshi": "BSU",
+"name": "Buffalo State",
+"nick": "Bengals"
+},
+"BTLR": {
+"aliases": [
+"Butler",
+"Butler Bulldogs",
+"BUT"
+],
+"espn_id": "2086",
+"kalshi": "BUT",
+"name": "Butler",
+"nick": "Bulldogs"
+},
+"BTTN": {
+"aliases": [
+"Bethel (TN)",
+"Bethel (TN) Wildcats"
+],
+"espn_id": "2064",
+"name": "Bethel (TN)",
+"nick": "Wildcats"
+},
+"BUCK": {
+"aliases": [
+"Bucknell",
+"Bucknell Bison"
+],
+"espn_id": "2083",
+"kalshi": "BUCK",
+"name": "Bucknell",
+"nick": "Bison"
+},
+"BUF": {
+"aliases": [
+"Buffalo",
+"Buffalo Bulls",
+"BUFF"
+],
+"espn_id": "2084",
+"kalshi": "BUFF",
+"name": "Buffalo",
+"nick": "Bulls"
+},
+"BUMN": {
+"aliases": [
+"Bethel (MN)",
+"Bethel (MN) Royals"
+],
+"espn_id": "2802",
+"name": "Bethel (MN)",
+"nick": "Royals"
+},
+"BVU": {
+"aliases": [
+"Buena Vista",
+"Buena Vista Beavers"
+],
+"espn_id": "63",
+"name": "Buena Vista",
+"nick": "Beavers"
+},
+"BW": {
+"aliases": [
+"Baldwin Wall",
+"Baldwin Wallace",
+"Baldwin Wallace Yellow Jackets"
+],
+"espn_id": "188",
+"name": "Baldwin Wallace",
+"nick": "Yellow Jackets"
+},
+"BYKS": {
+"aliases": [
+"Bethany (KS)",
+"Bethany (KS) Swedes"
+],
+"espn_id": "492",
+"name": "Bethany (KS)",
+"nick": "Swedes"
+},
+"BYU": {
+"aliases": [
+"BYU",
+"BYU Cougars",
+"Brigham Young"
+],
+"espn_id": "252",
+"kalshi": "BYU",
+"name": "BYU",
+"nick": "Cougars"
+},
+"CAL": {
+"aliases": [
+"California",
+"California Golden Bears"
+],
+"espn_id": "25",
+"kalshi": "CAL",
+"name": "California",
+"nick": "Golden Bears"
+},
+"CALU": {
+"aliases": [
+"Calvin",
+"Calvin Knights"
+],
+"espn_id": "129738",
+"name": "Calvin",
+"nick": "Knights"
+},
+"CAM": {
+"aliases": [
+"Campbell",
+"Campbell Fighting Camels",
+"CAMP"
+],
+"espn_id": "2097",
+"kalshi": "CAMP",
+"name": "Campbell",
+"nick": "Fighting Camels"
+},
+"CAPA": {
+"aliases": [
+"Cal (PA)",
+"California (PA)",
+"California (PA) Vulcans"
+],
+"espn_id": "2858",
+"name": "California (PA)",
+"nick": "Vulcans"
+},
+"CAPU": {
+"aliases": [
+"Capital",
+"Capital Comets"
+],
+"espn_id": "424",
+"name": "Capital",
+"nick": "Comets"
+},
+"CAR": {
+"aliases": [
+"Carleton",
+"Carleton Knights"
+],
+"espn_id": "2101",
+"name": "Carleton",
+"nick": "Knights"
+},
+"CARK": {
+"aliases": [
+"C Arkansas",
+"Central Arkansas",
+"Central Arkansas Bears"
+],
+"espn_id": "2110",
+"kalshi": "CARK",
+"name": "Central Arkansas",
+"nick": "Bears"
+},
+"CAT": {
+"aliases": [
+"Catawba",
+"Catawba Indians"
+],
+"espn_id": "2107",
+"name": "Catawba",
+"nick": "Indians"
+},
+"CATH": {
+"aliases": [
+"Catholic",
+"Catholic Cardinals"
+],
+"espn_id": "2108",
+"name": "Catholic",
+"nick": "Cardinals"
+},
+"CBVU": {
+"aliases": [
+"Campbellsville",
+"Campbellsville Tigers"
+],
+"espn_id": "2098",
+"name": "Campbellsville",
+"nick": "Tigers"
+},
+"CC": {
+"aliases": [
+"Curry",
+"Curry Colonels"
+],
+"espn_id": "40",
+"name": "Curry",
+"nick": "Colonels"
+},
+"CCMN": {
+"aliases": [
+"Concordia (MN)",
+"Concordia (MN) Cobbers"
+],
+"espn_id": "2152",
+"name": "Concordia (MN)",
+"nick": "Cobbers"
+},
+"CCO": {
+"aliases": [
+"Centre",
+"Centre Colonels"
+],
+"espn_id": "2121",
+"name": "Centre",
+"nick": "Colonels"
+},
+"CCSU": {
+"aliases": [
+"C Connecticut",
+"Central Connecticut",
+"Central Connecticut Blue Devils"
+],
+"espn_id": "2115",
+"kalshi": "CCSU",
+"name": "Central Connecticut",
+"nick": "Blue Devils"
+},
+"CCU": {
+"aliases": [
+"Coastal",
+"Coastal Carolina",
+"Coastal Carolina Chanticleers",
+"CCAR"
+],
+"espn_id": "324",
+"kalshi": "CCAR",
+"name": "Coastal Carolina",
+"nick": "Chanticleers"
+},
+"CCW": {
+"aliases": [
+"Carthage",
+"Carthage Firebirds"
+],
+"espn_id": "2106",
+"name": "Carthage",
+"nick": "Firebirds"
+},
+"CDF": {
+"aliases": [
+"C Methodst",
+"Central Methodist",
+"Central Methodist Eagles"
+],
+"espn_id": "2860",
+"name": "Central Methodist",
+"nick": "Eagles"
+},
+"CGMU": {
+"aliases": [
+"Carn Mellon",
+"Carnegie Mellon",
+"Carnegie Mellon Tartans"
+],
+"espn_id": "2102",
+"name": "Carnegie Mellon",
+"nick": "Tartans"
+},
+"CHAD": {
+"aliases": [
+"Chadron St",
+"Chadron State",
+"Chadron State Eagles"
+],
+"espn_id": "2123",
+"name": "Chadron State",
+"nick": "Eagles"
+},
+"CHAP": {
+"aliases": [
+"Chapman",
+"Chapman Panthers"
+],
+"espn_id": "411",
+"name": "Chapman",
+"nick": "Panthers"
+},
+"CHI": {
+"aliases": [
+"Chicago",
+"Chicago Maroons"
+],
+"espn_id": "80",
+"name": "Chicago",
+"nick": "Maroons"
+},
+"CHSO": {
+"aliases": [
+"Charleston So",
+"Charleston Southern",
+"Charleston Southern Buccaneers"
+],
+"espn_id": "2127",
+"name": "Charleston Southern",
+"nick": "Buccaneers"
+},
+"CHST": {
+"aliases": [
+"Chicago St",
+"Chicago State",
+"Chicago State Cougars",
+"CHS"
+],
+"espn_id": "2130",
+"kalshi": "CHS",
+"name": "Chicago State",
+"nick": "Cougars"
+},
+"CIN": {
+"aliases": [
+"Cincinnati",
+"Cincinnati Bearcats"
+],
+"espn_id": "2132",
+"kalshi": "CIN",
+"name": "Cincinnati",
+"nick": "Bearcats"
+},
+"CIT": {
+"aliases": [
+"The Citadel",
+"The Citadel Bulldogs"
+],
+"espn_id": "2643",
+"kalshi": "CIT",
+"name": "The Citadel",
+"nick": "Bulldogs"
+},
+"CKGA": {
+"aliases": [
+"Clark (GA)",
+"Clark Atlanta",
+"Clark Atlanta Panthers"
+],
+"espn_id": "2805",
+"name": "Clark Atlanta",
+"nick": "Panthers"
+},
+"CLBY": {
+"aliases": [
+"Colby",
+"Colby White Mules"
+],
+"espn_id": "33",
+"name": "Colby",
+"nick": "White Mules"
+},
+"CLEM": {
+"aliases": [
+"Clemson",
+"Clemson Tigers"
+],
+"espn_id": "228",
+"kalshi": "CLEM",
+"name": "Clemson",
+"nick": "Tigers"
+},
+"CLRN": {
+"aliases": [
+"Clarion",
+"Clarion Golden Eagles"
+],
+"espn_id": "2134",
+"name": "Clarion",
+"nick": "Golden Eagles"
+},
+"CLT": {
+"aliases": [
+"Charlotte",
+"Charlotte 49ers",
+"CHAR"
+],
+"espn_id": "2429",
+"kalshi": "CHAR",
+"name": "Charlotte",
+"nick": "49ers"
+},
+"CLU": {
+"aliases": [
+"Cal Lutheran",
+"Cal Lutheran Kingsmen"
+],
+"espn_id": "2094",
+"name": "Cal Lutheran",
+"nick": "Kingsmen"
+},
+"CMBS": {
+"aliases": [
+"Cumberlands",
+"Cumberlands Indians"
+],
+"espn_id": "511",
+"name": "Cumberlands",
+"nick": "Indians"
+},
+"CMIN": {
+"aliases": [
+"Colorado Mines",
+"Colorado School of Mines",
+"Colorado School of Mines Orediggers"
+],
+"espn_id": "2146",
+"name": "Colorado School of Mines",
+"nick": "Orediggers"
+},
+"CMS": {
+"aliases": [
+"Claremont Mudd Scripps",
+"Claremont Mudd Scripps Stags",
+"Claremont-M-S"
+],
+"espn_id": "17",
+"name": "Claremont Mudd Scripps",
+"nick": "Stags"
+},
+"CMU": {
+"aliases": [
+"C Michigan",
+"Central Michigan",
+"Central Michigan Chippewas"
+],
+"espn_id": "2117",
+"kalshi": "CMU",
+"name": "Central Michigan",
+"nick": "Chippewas"
+},
+"CN": {
+"aliases": [
+"Carson Newman",
+"Carson Newman Eagles"
+],
+"espn_id": "2105",
+"name": "Carson Newman",
+"nick": "Eagles"
+},
+"CNIA": {
+"aliases": [
+"Cornell (IA)",
+"Cornell (IA) Rams"
+],
+"espn_id": "2155",
+"name": "Cornell (IA)",
+"nick": "Rams"
+},
+"CNSU": {
+"aliases": [
+"Central St",
+"Central State",
+"Central State Marauders"
+],
+"espn_id": "2119",
+"name": "Central State",
+"nick": "Marauders"
+},
+"CNTC": {
+"aliases": [
+"Central Col",
+"Central College",
+"Central College Dutch"
+],
+"espn_id": "2964",
+"name": "Central College",
+"nick": "Dutch"
+},
+"CNU": {
+"aliases": [
+"Chris Newport",
+"Christopher Newport",
+"Christopher Newport Captains"
+],
+"espn_id": "3112",
+"name": "Christopher Newport",
+"nick": "Captains"
+},
+"COE": {
+"aliases": [
+"Coe",
+"Coe Kohawks"
+],
+"espn_id": "2141",
+"name": "Coe",
+"nick": "Kohawks"
+},
+"COI": {
+"aliases": [
+"Coll. of Idaho",
+"College of Idaho",
+"College of Idaho Yotes"
+],
+"espn_id": "108382",
+"name": "College of Idaho",
+"nick": "Yotes"
+},
+"COLE": {
+"aliases": [
+"Cole",
+"Cole College",
+"Cole College Jaguars"
+],
+"espn_id": "3210",
+"name": "Cole College",
+"nick": "Jaguars"
+},
+"COLG": {
+"aliases": [
+"Colgate",
+"Colgate Raiders"
+],
+"espn_id": "2142",
+"kalshi": "COLG",
+"name": "Colgate",
+"nick": "Raiders"
+},
+"COLLE": {
+"aliases": [
+"Charlotte",
+"Charlotte Saints",
+"Faith NC"
+],
+"espn_id": "3253",
+"name": "Charlotte",
+"nick": "Saints"
+},
+"COLO": {
+"aliases": [
+"Colorado",
+"Colorado Buffaloes"
+],
+"espn_id": "38",
+"kalshi": "COLO",
+"name": "Colorado",
+"nick": "Buffaloes"
+},
+"COLU": {
+"aliases": [
+"Columbia",
+"Columbia Lions",
+"CLMB"
+],
+"espn_id": "171",
+"kalshi": "CLMB",
+"name": "Columbia",
+"nick": "Lions"
+},
+"COMU": {
+"aliases": [
+"Colorado Mesa",
+"Colorado Mesa Mavericks"
+],
+"espn_id": "11",
+"name": "Colorado Mesa",
+"nick": "Mavericks"
+},
+"CONC": {
+"aliases": [
+"Concord",
+"Concord Mountain Lions"
+],
+"espn_id": "2148",
+"name": "Concord",
+"nick": "Mountain Lions"
+},
+"CONCMI": {
+"aliases": [
+"Cncrdia MI",
+"Concordia-Michigan",
+"Concordia-Michigan Cardinals"
+],
+"espn_id": "2985",
+"name": "Concordia-Michigan",
+"nick": "Cardinals"
+},
+"CONCONE": {
+"aliases": [
+"Cncrdia NE",
+"Concordia University Nebraska",
+"Concordia University Nebraska Clippers"
+],
+"espn_id": "507",
+"name": "Concordia University Nebraska",
+"nick": "Clippers"
+},
+"CONN": {
+"aliases": [
+"UConn",
+"UConn Huskies"
+],
+"espn_id": "41",
+"kalshi": "CONN",
+"name": "UConn",
+"nick": "Huskies"
+},
+"COR": {
+"aliases": [
+"Cornell",
+"Cornell Big Red"
+],
+"espn_id": "172",
+"kalshi": "COR",
+"name": "Cornell",
+"nick": "Big Red"
+},
+"CP": {
+"aliases": [
+"Cal Poly",
+"Cal Poly Mustangs"
+],
+"espn_id": "13",
+"kalshi": "CP",
+"name": "Cal Poly",
+"nick": "Mustangs"
+},
+"CRU": {
+"aliases": [
+"Carroll (WI)",
+"Carroll (WI) Pioneers"
+],
+"espn_id": "32",
+"name": "Carroll (WI)",
+"nick": "Pioneers"
+},
+"CRWN": {
+"aliases": [
+"Crown",
+"Crown Polars"
+],
+"espn_id": "509",
+"name": "Crown",
+"nick": "Polars"
+},
+"CSP": {
+"aliases": [
+"Concordia St P",
+"Concordia St. Paul",
+"Concordia St. Paul Golden Bears"
+],
+"espn_id": "3066",
+"name": "Concordia St. Paul",
+"nick": "Golden Bears"
+},
+"CSS": {
+"aliases": [
+"St Scholastica",
+"St. Scholastica",
+"St. Scholastica Saints"
+],
+"espn_id": "375",
+"name": "St. Scholastica",
+"nick": "Saints"
+},
+"CSU": {
+"aliases": [
+"Colorado St",
+"Colorado State",
+"Colorado State Rams"
+],
+"espn_id": "36",
+"kalshi": "CSU",
+"name": "Colorado State",
+"nick": "Rams"
+},
+"CSUP": {
+"aliases": [
+"CSU Pueblo",
+"CSU Pueblo ThunderWolves"
+],
+"espn_id": "2570",
+"name": "CSU Pueblo",
+"nick": "ThunderWolves"
+},
+"CTLA": {
+"aliases": [
+"Centenary (LA)",
+"Centenary (LA) Gentlemen"
+],
+"espn_id": "101442",
+"name": "Centenary (LA)",
+"nick": "Gentlemen"
+},
+"CUC": {
+"aliases": [
+"Concordia Chi",
+"Concordia Chicago",
+"Concordia Chicago Cougars"
+],
+"espn_id": "2151",
+"name": "Concordia Chicago",
+"nick": "Cougars"
+},
+"CULVE": {
+"aliases": [
+"Culver-Stockton College",
+"Culver-Stockton College Wildcats",
+"Culvr-Stck"
+],
+"espn_id": "510",
+"name": "Culver-Stockton College",
+"nick": "Wildcats"
+},
+"CUMBTN": {
+"aliases": [
+"Cmbrlnd TN",
+"Cumberland (TN)",
+"Cumberland (TN) Bulldogs"
+],
+"espn_id": "2161",
+"name": "Cumberland (TN)",
+"nick": "Bulldogs"
+},
+"CUW": {
+"aliases": [
+"Concordia (WI)",
+"Concordia (WI) Falcons"
+],
+"espn_id": "409",
+"name": "Concordia (WI)",
+"nick": "Falcons"
+},
+"CWAN": {
+"aliases": [
+"Chowan",
+"Chowan Hawks"
+],
+"espn_id": "2804",
+"name": "Chowan",
+"nick": "Hawks"
+},
+"CWAU": {
+"aliases": [
+"C Washington",
+"Central Washington",
+"Central Washington Wildcats"
+],
+"espn_id": "2120",
+"name": "Central Washington",
+"nick": "Wildcats"
+},
+"CWRU": {
+"aliases": [
+"Case Western",
+"Case Western Reserve",
+"Case Western Reserve Spartans"
+],
+"espn_id": "2963",
+"name": "Case Western Reserve",
+"nick": "Spartans"
+},
+"DAKOT": {
+"aliases": [
+"Dakota St",
+"Dakota State University",
+"Dakota State University Trojans"
+],
+"espn_id": "512",
+"name": "Dakota State University",
+"nick": "Trojans"
+},
+"DART": {
+"aliases": [
+"Dartmouth",
+"Dartmouth Big Green"
+],
+"espn_id": "159",
+"kalshi": "DART",
+"name": "Dartmouth",
+"nick": "Big Green"
+},
+"DAV": {
+"aliases": [
+"Davidson",
+"Davidson Wildcats"
+],
+"espn_id": "2166",
+"kalshi": "DAV",
+"name": "Davidson",
+"nick": "Wildcats"
+},
+"DAY": {
+"aliases": [
+"Dayton",
+"Dayton Flyers"
+],
+"espn_id": "2168",
+"kalshi": "DAY",
+"name": "Dayton",
+"nick": "Flyers"
+},
+"DBQ": {
+"aliases": [
+"Dubuque",
+"Dubuque Spartans"
+],
+"espn_id": "49",
+"name": "Dubuque",
+"nick": "Spartans"
+},
+"DEAN": {
+"aliases": [
+"Dean",
+"Dean Bulldogs"
+],
+"espn_id": "110438",
+"name": "Dean",
+"nick": "Bulldogs"
+},
+"DEF": {
+"aliases": [
+"Defiance",
+"Defiance College",
+"Defiance College Yellow Jackets"
+],
+"espn_id": "190",
+"name": "Defiance College",
+"nick": "Yellow Jackets"
+},
+"DEL": {
+"aliases": [
+"Delaware",
+"Delaware Blue Hens"
+],
+"espn_id": "48",
+"kalshi": "DEL",
+"name": "Delaware",
+"nick": "Blue Hens"
+},
+"DIC": {
+"aliases": [
+"Dickinson State University",
+"Dickinson State University Blue Hawks",
+"Dicknsn St"
+],
+"espn_id": "316",
+"name": "Dickinson State University",
+"nick": "Blue Hawks"
+},
+"DKSN": {
+"aliases": [
+"Dickinson",
+"Dickinson Red Devils"
+],
+"espn_id": "2175",
+"name": "Dickinson",
+"nick": "Red Devils"
+},
+"DLST": {
+"aliases": [
+"Delta St",
+"Delta State",
+"Delta State Statesmen"
+],
+"espn_id": "2170",
+"name": "Delta State",
+"nick": "Statesmen"
+},
+"DPU": {
+"aliases": [
+"DePauw",
+"DePauw Tigers"
+],
+"espn_id": "83",
+"name": "DePauw",
+"nick": "Tigers"
+},
+"DRKE": {
+"aliases": [
+"Drake",
+"Drake Bulldogs"
+],
+"espn_id": "2181",
+"kalshi": "DRKE",
+"name": "Drake",
+"nick": "Bulldogs"
+},
+"DSN": {
+"aliases": [
+"Denison",
+"Denison Big Red"
+],
+"espn_id": "2171",
+"name": "Denison",
+"nick": "Big Red"
+},
+"DSU": {
+"aliases": [
+"Delaware St",
+"Delaware State",
+"Delaware State Hornets"
+],
+"espn_id": "2169",
+"kalshi": "DSU",
+"name": "Delaware State",
+"nick": "Hornets"
+},
+"DUKE": {
+"aliases": [
+"Duke",
+"Duke Blue Devils"
+],
+"espn_id": "150",
+"kalshi": "DUKE",
+"name": "Duke",
+"nick": "Blue Devils"
+},
+"DUQ": {
+"aliases": [
+"Duquesne",
+"Duquesne Dukes"
+],
+"espn_id": "2184",
+"kalshi": "DUQ",
+"name": "Duquesne",
+"nick": "Dukes"
+},
+"DVU": {
+"aliases": [
+"Del Val",
+"Delaware Valley",
+"Delaware Valley Aggies"
+],
+"espn_id": "2808",
+"name": "Delaware Valley",
+"nick": "Aggies"
+},
+"DWU": {
+"aliases": [
+"Dakota Wes",
+"Dakota Wesleyan",
+"Dakota Wesleyan Tigers"
+],
+"espn_id": "513",
+"name": "Dakota Wesleyan",
+"nick": "Tigers"
+},
+"ECNU": {
+"aliases": [
+"East Central",
+"East Central Tigers"
+],
+"espn_id": "2191",
+"name": "East Central",
+"nick": "Tigers"
+},
+"ECSU": {
+"aliases": [
+"Elizabeth City",
+"Elizabeth City State",
+"Elizabeth City State Vikings"
+],
+"espn_id": "2207",
+"name": "Elizabeth City State",
+"nick": "Vikings"
+},
+"ECU": {
+"aliases": [
+"East Carolina",
+"East Carolina Pirates"
+],
+"espn_id": "151",
+"kalshi": "ECU",
+"name": "East Carolina",
+"nick": "Pirates"
+},
+"EDBR": {
+"aliases": [
+"Edinboro",
+"Edinboro Fighting Scots"
+],
+"espn_id": "2205",
+"name": "Edinboro",
+"nick": "Fighting Scots"
+},
+"EDW": {
+"aliases": [
+"Edward Waters",
+"Edward Waters Tigers"
+],
+"espn_id": "2206",
+"name": "Edward Waters",
+"nick": "Tigers"
+},
+"EHC": {
+"aliases": [
+"Emory & Henry",
+"Emory & Henry Wasps"
+],
+"espn_id": "2213",
+"name": "Emory & Henry",
+"nick": "Wasps"
+},
+"EIU": {
+"aliases": [
+"E Illinois",
+"Eastern Illinois",
+"Eastern Illinois Panthers"
+],
+"espn_id": "2197",
+"kalshi": "EIU",
+"name": "Eastern Illinois",
+"nick": "Panthers"
+},
+"EKU": {
+"aliases": [
+"E Kentucky",
+"Eastern Kentucky",
+"Eastern Kentucky Colonels",
+"EKY"
+],
+"espn_id": "2198",
+"kalshi": "EKY",
+"name": "Eastern Kentucky",
+"nick": "Colonels"
+},
+"ELMH": {
+"aliases": [
+"Elmhurst",
+"Elmhurst Bluejays"
+],
+"espn_id": "72",
+"name": "Elmhurst",
+"nick": "Bluejays"
+},
+"ELON": {
+"aliases": [
+"Elon",
+"Elon Phoenix"
+],
+"espn_id": "2210",
+"kalshi": "ELON",
+"name": "Elon",
+"nick": "Phoenix"
+},
+"EMSU": {
+"aliases": [
+"Emporia St",
+"Emporia State",
+"Emporia State Hornets"
+],
+"espn_id": "2214",
+"name": "Emporia State",
+"nick": "Hornets"
+},
+"EMU": {
+"aliases": [
+"E Michigan",
+"Eastern Michigan",
+"Eastern Michigan Eagles"
+],
+"espn_id": "2199",
+"kalshi": "EMU",
+"name": "Eastern Michigan",
+"nick": "Eagles"
+},
+"ENDC": {
+"aliases": [
+"Endicott",
+"Endicott Gulls"
+],
+"espn_id": "452",
+"name": "Endicott",
+"nick": "Gulls"
+},
+"ENMU": {
+"aliases": [
+"Eastern NM",
+"Eastern New Mexico",
+"Eastern New Mexico Greyhounds"
+],
+"espn_id": "2201",
+"name": "Eastern New Mexico",
+"nick": "Greyhounds"
+},
+"EORE": {
+"aliases": [
+"E Oregon",
+"Eastern Oregon",
+"Eastern Oregon Eastern Oregon"
+],
+"espn_id": "2202",
+"name": "Eastern Oregon",
+"nick": "Eastern Oregon"
+},
+"ERKA": {
+"aliases": [
+"Eureka",
+"Eureka Red Devils"
+],
+"espn_id": "101",
+"name": "Eureka",
+"nick": "Red Devils"
+},
+"ERSK": {
+"aliases": [
+"Erskine",
+"Erskine Flying Fleet"
+],
+"espn_id": "101784",
+"name": "Erskine",
+"nick": "Flying Fleet"
+},
+"ESU": {
+"aliases": [
+"E Stroudsburg",
+"East Stroudsburg",
+"East Stroudsburg Warriors"
+],
+"espn_id": "2188",
+"name": "East Stroudsburg",
+"nick": "Warriors"
+},
+"ETAM": {
+"aliases": [
+"East Texas A&M",
+"East Texas A&M Lions"
+],
+"espn_id": "2837",
+"kalshi": "ETAM",
+"name": "East Texas A&M",
+"nick": "Lions"
+},
+"ETBU": {
+"aliases": [
+"E TX Baptist",
+"East Texas Baptist",
+"East Texas Baptist Tigers"
+],
+"espn_id": "2194",
+"name": "East Texas Baptist",
+"nick": "Tigers"
+},
+"ETSU": {
+"aliases": [
+"ETSU",
+"East Tennessee State",
+"East Tennessee State Buccaneers"
+],
+"espn_id": "2193",
+"kalshi": "ETSU",
+"name": "East Tennessee State",
+"nick": "Buccaneers"
+},
+"EU": {
+"aliases": [
+"Eastern",
+"Eastern Eagles"
+],
+"espn_id": "127954",
+"name": "Eastern",
+"nick": "Eagles"
+},
+"EVA": {
+"aliases": [
+"Evangel",
+"Evangel University",
+"Evangel University Crusaders"
+],
+"espn_id": "2865",
+"name": "Evangel University",
+"nick": "Crusaders"
+},
+"EWU": {
+"aliases": [
+"E Washington",
+"Eastern Washington",
+"Eastern Washington Eagles"
+],
+"espn_id": "331",
+"kalshi": "EWU",
+"name": "Eastern Washington",
+"nick": "Eagles"
+},
+"FAI": {
+"aliases": [
+"C of Faith",
+"West Memphis",
+"West Memphis Crusaders"
+],
+"espn_id": "3211",
+"name": "West Memphis",
+"nick": "Crusaders"
+},
+"FAMU": {
+"aliases": [
+"Florida A&M",
+"Florida A&M Rattlers"
+],
+"espn_id": "50",
+"kalshi": "FAMU",
+"name": "Florida A&M",
+"nick": "Rattlers"
+},
+"FAU": {
+"aliases": [
+"FAU",
+"Florida Atlantic",
+"Florida Atlantic Owls"
+],
+"espn_id": "2226",
+"kalshi": "FAU",
+"name": "Florida Atlantic",
+"nick": "Owls"
+},
+"FAULKNER": {
+"aliases": [
+"Faulkner",
+"Faulkner University",
+"Faulkner University Eagles"
+],
+"espn_id": "2219",
+"name": "Faulkner University",
+"nick": "Eagles"
+},
+"FAYU": {
+"aliases": [
+"Fay'ville St",
+"Fayetteville State",
+"Fayetteville State Broncos"
+],
+"espn_id": "2220",
+"name": "Fayetteville State",
+"nick": "Broncos"
+},
+"FBSU": {
+"aliases": [
+"Fitchburg St",
+"Fitchburg State",
+"Fitchburg State Falcons"
+],
+"espn_id": "114",
+"name": "Fitchburg State",
+"nick": "Falcons"
+},
+"FC": {
+"aliases": [
+"Ferrum",
+"Ferrum Panthers"
+],
+"espn_id": "366",
+"name": "Ferrum",
+"nick": "Panthers"
+},
+"FDUF": {
+"aliases": [
+"FDU Florham",
+"FDU Florham Devils"
+],
+"espn_id": "2221",
+"name": "FDU Florham",
+"nick": "Devils"
+},
+"FHSU": {
+"aliases": [
+"Fort Hays",
+"Fort Hays Tigers"
+],
+"espn_id": "2231",
+"name": "Fort Hays",
+"nick": "Tigers"
+},
+"FIU": {
+"aliases": [
+"FIU",
+"Florida International",
+"Florida International Panthers"
+],
+"espn_id": "2229",
+"kalshi": "FIU",
+"name": "Florida International",
+"nick": "Panthers"
+},
+"FLA": {
+"aliases": [
+"Florida",
+"Florida Gators"
+],
+"espn_id": "57",
+"kalshi": "FLA",
+"name": "Florida",
+"nick": "Gators"
+},
+"FLWC": {
+"aliases": [
+"Fort Lewis",
+"Fort Lewis Skyhawks"
+],
+"espn_id": "2237",
+"name": "Fort Lewis",
+"nick": "Skyhawks"
+},
+"FMC": {
+"aliases": [
+"Franklin & Marshall",
+"Franklin & Marshall Diplomats",
+"Franklin Marsh"
+],
+"espn_id": "2234",
+"name": "Franklin & Marshall",
+"nick": "Diplomats"
+},
+"FMSU": {
+"aliases": [
+"Fairmont St",
+"Fairmont State",
+"Fairmont State Falcons"
+],
+"espn_id": "2986",
+"name": "Fairmont State",
+"nick": "Falcons"
+},
+"FMU": {
+"aliases": [
+"FL Memorial",
+"Florida Memorial",
+"Florida Memorial Lions"
+],
+"espn_id": "125762",
+"name": "Florida Memorial",
+"nick": "Lions"
+},
+"FOR": {
+"aliases": [
+"Fordham",
+"Fordham Rams"
+],
+"espn_id": "2230",
+"kalshi": "FOR",
+"name": "Fordham",
+"nick": "Rams"
+},
+"FP": {
+"aliases": [
+"Franklin Pierce",
+"Franklin Pierce Ravens"
+],
+"espn_id": "112334",
+"name": "Franklin Pierce",
+"nick": "Ravens"
+},
+"FRES": {
+"aliases": [
+"Fresno St",
+"Fresno State",
+"Fresno State Bulldogs"
+],
+"espn_id": "278",
+"kalshi": "FRES",
+"name": "Fresno State",
+"nick": "Bulldogs"
+},
+"FRIE": {
+"aliases": [
+"Friends",
+"Friends University",
+"Friends University Friends"
+],
+"espn_id": "527",
+"name": "Friends University",
+"nick": "Friends"
+},
+"FRKL": {
+"aliases": [
+"Franklin",
+"Franklin Grizzlies"
+],
+"espn_id": "2233",
+"name": "Franklin",
+"nick": "Grizzlies"
+},
+"FRST": {
+"aliases": [
+"Ferris St",
+"Ferris State",
+"Ferris State Bulldogs"
+],
+"espn_id": "2222",
+"name": "Ferris State",
+"nick": "Bulldogs"
+},
+"FRSU": {
+"aliases": [
+"Framingham St",
+"Framingham State",
+"Framingham State Rams"
+],
+"espn_id": "2967",
+"name": "Framingham State",
+"nick": "Rams"
+},
+"FSTU": {
+"aliases": [
+"Frostburg St",
+"Frostburg State",
+"Frostburg State Bobcats"
+],
+"espn_id": "341",
+"name": "Frostburg State",
+"nick": "Bobcats"
+},
+"FSU": {
+"aliases": [
+"Florida St",
+"Florida State",
+"Florida State Seminoles"
+],
+"espn_id": "52",
+"kalshi": "FSU",
+"name": "Florida State",
+"nick": "Seminoles"
+},
+"FUR": {
+"aliases": [
+"Furman",
+"Furman Paladins"
+],
+"espn_id": "231",
+"kalshi": "FUR",
+"name": "Furman",
+"nick": "Paladins"
+},
+"FVSU": {
+"aliases": [
+"Fort Valley St",
+"Fort Valley State",
+"Fort Valley State Wildcats"
+],
+"espn_id": "2232",
+"name": "Fort Valley State",
+"nick": "Wildcats"
+},
+"GAC": {
+"aliases": [
+"Gustavus",
+"Gustavus Adolphus",
+"Gustavus Adolphus Golden Gusties"
+],
+"espn_id": "2968",
+"name": "Gustavus Adolphus",
+"nick": "Golden Gusties"
+},
+"GANN": {
+"aliases": [
+"Gannon",
+"Gannon Golden Knights"
+],
+"espn_id": "367",
+"name": "Gannon",
+"nick": "Golden Knights"
+},
+"GASO": {
+"aliases": [
+"GA Southern",
+"Georgia Southern",
+"Georgia Southern Eagles"
+],
+"espn_id": "290",
+"kalshi": "GASO",
+"name": "Georgia Southern",
+"nick": "Eagles"
+},
+"GAST": {
+"aliases": [
+"Georgia St",
+"Georgia State",
+"Georgia State Panthers"
+],
+"espn_id": "2247",
+"kalshi": "GAST",
+"name": "Georgia State",
+"nick": "Panthers"
+},
+"GEN": {
+"aliases": [
+"Geneva",
+"Geneva Golden Tornadoes"
+],
+"espn_id": "2242",
+"name": "Geneva",
+"nick": "Golden Tornadoes"
+},
+"GFU": {
+"aliases": [
+"George Fox",
+"George Fox Bruins"
+],
+"espn_id": "415",
+"name": "George Fox",
+"nick": "Bruins"
+},
+"GLDT": {
+"aliases": [
+"Gallaudet",
+"Gallaudet Bison"
+],
+"espn_id": "417",
+"name": "Gallaudet",
+"nick": "Bison"
+},
+"GLFD": {
+"aliases": [
+"Guilford",
+"Guilford Quakers"
+],
+"espn_id": "2258",
+"name": "Guilford",
+"nick": "Quakers"
+},
+"GMU": {
+"aliases": [
+"George Mason",
+"George Mason University",
+"George Mason University Patriots"
+],
+"espn_id": "2244",
+"name": "George Mason University",
+"nick": "Patriots"
+},
+"GRAM": {
+"aliases": [
+"Grambling",
+"Grambling Tigers"
+],
+"espn_id": "2755",
+"kalshi": "GRAM",
+"name": "Grambling",
+"nick": "Tigers"
+},
+"GRANDVIEW": {
+"aliases": [
+"Des Moines",
+"Des Moines Vikings",
+"Grand View"
+],
+"espn_id": "2254",
+"name": "Des Moines",
+"nick": "Vikings"
+},
+"GRC": {
+"aliases": [
+"Graceland",
+"Graceland University",
+"Graceland University Graceland"
+],
+"espn_id": "530",
+"name": "Graceland University",
+"nick": "Graceland"
+},
+"GRNB": {
+"aliases": [
+"Greensboro",
+"Greensboro Pride"
+],
+"espn_id": "2256",
+"name": "Greensboro",
+"nick": "Pride"
+},
+"GRNL": {
+"aliases": [
+"Grinnell",
+"Grinnell Pioneers"
+],
+"espn_id": "65",
+"name": "Grinnell",
+"nick": "Pioneers"
+},
+"GRNV": {
+"aliases": [
+"Greenville",
+"Greenville Panthers"
+],
+"espn_id": "2257",
+"name": "Greenville",
+"nick": "Panthers"
+},
+"GRO": {
+"aliases": [
+"Grove City",
+"Grove City Wolverines"
+],
+"espn_id": "146",
+"name": "Grove City",
+"nick": "Wolverines"
+},
+"GT": {
+"aliases": [
+"Georgia Tech",
+"Georgia Tech Yellow Jackets"
+],
+"espn_id": "59",
+"kalshi": "GT",
+"name": "Georgia Tech",
+"nick": "Yellow Jackets"
+},
+"GTKY": {
+"aliases": [
+"Georgetown (KY)",
+"Georgetown (KY) Tigers",
+"Georgetown KY"
+],
+"espn_id": "2245",
+"name": "Georgetown (KY)",
+"nick": "Tigers"
+},
+"GTWN": {
+"aliases": [
+"Georgetown",
+"Georgetown Hoyas"
+],
+"espn_id": "46",
+"kalshi": "GTWN",
+"name": "Georgetown",
+"nick": "Hoyas"
+},
+"GTYB": {
+"aliases": [
+"Gettysburg",
+"Gettysburg Bullets"
+],
+"espn_id": "2248",
+"name": "Gettysburg",
+"nick": "Bullets"
+},
+"GVLS": {
+"aliases": [
+"Glenville St",
+"Glenville State",
+"Glenville State Pioneers"
+],
+"espn_id": "2249",
+"name": "Glenville State",
+"nick": "Pioneers"
+},
+"GVSU": {
+"aliases": [
+"Grand Val St",
+"Grand Valley State",
+"Grand Valley State Lakers"
+],
+"espn_id": "125",
+"name": "Grand Valley State",
+"nick": "Lakers"
+},
+"GWEB": {
+"aliases": [
+"Gardner-Webb",
+"Gardner-Webb Runnin' Bulldogs",
+"WEBB"
+],
+"espn_id": "2241",
+"kalshi": "WEBB",
+"name": "Gardner-Webb",
+"nick": "Runnin' Bulldogs"
+},
+"HAM": {
+"aliases": [
+"Hamilton",
+"Hamilton Continentals"
+],
+"espn_id": "348",
+"name": "Hamilton",
+"nick": "Continentals"
+},
+"HAMP": {
+"aliases": [
+"Hampton",
+"Hampton Pirates"
+],
+"espn_id": "2261",
+"kalshi": "HAMP",
+"name": "Hampton",
+"nick": "Pirates"
+},
+"HARD": {
+"aliases": [
+"Harding",
+"Harding Bisons"
+],
+"espn_id": "2264",
+"name": "Harding",
+"nick": "Bisons"
+},
+"HARV": {
+"aliases": [
+"Harvard",
+"Harvard Crimson"
+],
+"espn_id": "108",
+"kalshi": "HARV",
+"name": "Harvard",
+"nick": "Crimson"
+},
+"HASKELL": {
+"aliases": [
+"Haskell",
+"Haskell Indian Nations Univ",
+"Haskell Indian Nations Univ Jayhawks"
+],
+"espn_id": "535",
+"name": "Haskell Indian Nations Univ",
+"nick": "Jayhawks"
+},
+"HAW": {
+"aliases": [
+"Hawai'i",
+"Hawai'i Rainbow Warriors",
+"Hawaii"
+],
+"espn_id": "62",
+"kalshi": "HAW",
+"name": "Hawai'i",
+"nick": "Rainbow Warriors"
+},
+"HBRT": {
+"aliases": [
+"Hobart",
+"Hobart Statesmen"
+],
+"espn_id": "174",
+"name": "Hobart",
+"nick": "Statesmen"
+},
+"HC": {
+"aliases": [
+"Holy Cross",
+"Holy Cross Crusaders"
+],
+"espn_id": "107",
+"kalshi": "HC",
+"name": "Holy Cross",
+"nick": "Crusaders"
+},
+"HCU": {
+"aliases": [
+"Hou Christian",
+"Houston Christian",
+"Houston Christian Huskies"
+],
+"espn_id": "2277",
+"kalshi": "HCU",
+"name": "Houston Christian",
+"nick": "Huskies"
+},
+"HDBG": {
+"aliases": [
+"Heidelberg",
+"Heidelberg Student Princes"
+],
+"espn_id": "191",
+"name": "Heidelberg",
+"nick": "Student Princes"
+},
+"HDX": {
+"aliases": [
+"Hendrix",
+"Hendrix Warriors"
+],
+"espn_id": "418",
+"name": "Hendrix",
+"nick": "Warriors"
+},
+"HIRM": {
+"aliases": [
+"Hiram",
+"Hiram Terriers"
+],
+"espn_id": "2274",
+"name": "Hiram",
+"nick": "Terriers"
+},
+"HLBT": {
+"aliases": [
+"Hilbert",
+"Hilbert Hawks"
+],
+"espn_id": "125974",
+"name": "Hilbert",
+"nick": "Hawks"
+},
+"HLDL": {
+"aliases": [
+"Hillsdale",
+"Hillsdale Chargers"
+],
+"espn_id": "2273",
+"name": "Hillsdale",
+"nick": "Chargers"
+},
+"HMLN": {
+"aliases": [
+"Hamline",
+"Hamline Pipers"
+],
+"espn_id": "162",
+"name": "Hamline",
+"nick": "Pipers"
+},
+"HNTC": {
+"aliases": [
+"Huntingdon",
+"Huntingdon Hawks"
+],
+"espn_id": "2938",
+"name": "Huntingdon",
+"nick": "Hawks"
+},
+"HNVR": {
+"aliases": [
+"Hanover",
+"Hanover Panthers"
+],
+"espn_id": "2262",
+"name": "Hanover",
+"nick": "Panthers"
+},
+"HOL": {
+"aliases": [
+"Holland College",
+"Holland College Hurricanes"
+],
+"espn_id": "108354",
+"name": "Holland College",
+"nick": "Hurricanes"
+},
+"HOPE": {
+"aliases": [
+"Hope",
+"Hope Flying Dutchmen"
+],
+"espn_id": "2812",
+"name": "Hope",
+"nick": "Flying Dutchmen"
+},
+"HOU": {
+"aliases": [
+"Houston",
+"Houston Cougars"
+],
+"espn_id": "248",
+"kalshi": "HOU",
+"name": "Houston",
+"nick": "Cougars"
+},
+"HOW": {
+"aliases": [
+"Howard",
+"Howard Bison"
+],
+"espn_id": "47",
+"kalshi": "HOW",
+"name": "Howard",
+"nick": "Bison"
+},
+"HRTW": {
+"aliases": [
+"Hartwick",
+"Hartwick Hawks"
+],
+"espn_id": "173",
+"name": "Hartwick",
+"nick": "Hawks"
+},
+"HSC": {
+"aliases": [
+"Hampden Sydney",
+"Hampden Sydney Tigers"
+],
+"espn_id": "297",
+"name": "Hampden Sydney",
+"nick": "Tigers"
+},
+"HSTU": {
+"aliases": [
+"Henderson St",
+"Henderson State",
+"Henderson State Reddies"
+],
+"espn_id": "2271",
+"name": "Henderson State",
+"nick": "Reddies"
+},
+"HSU": {
+"aliases": [
+"Hardin Simmons",
+"Hardin Simmons Cowboys"
+],
+"espn_id": "2810",
+"name": "Hardin Simmons",
+"nick": "Cowboys"
+},
+"HUSS": {
+"aliases": [
+"Husson",
+"Husson Eagles"
+],
+"espn_id": "2280",
+"name": "Husson",
+"nick": "Eagles"
+},
+"HVCC": {
+"aliases": [
+"Hudson",
+"Troy",
+"Troy Vikings"
+],
+"espn_id": "3237",
+"name": "Troy",
+"nick": "Vikings"
+},
+"HWPU": {
+"aliases": [
+"Howard Payne",
+"Howard Payne Yellow Jackets"
+],
+"espn_id": "2758",
+"name": "Howard Payne",
+"nick": "Yellow Jackets"
+},
+"IDHO": {
+"aliases": [
+"Idaho",
+"Idaho Vandals"
+],
+"espn_id": "70",
+"kalshi": "IDHO",
+"name": "Idaho",
+"nick": "Vandals"
+},
+"IDST": {
+"aliases": [
+"Idaho St",
+"Idaho State",
+"Idaho State Bengals"
+],
+"espn_id": "304",
+"kalshi": "IDST",
+"name": "Idaho State",
+"nick": "Bengals"
+},
+"ILL": {
+"aliases": [
+"Illinois",
+"Illinois Fighting Illini"
+],
+"espn_id": "356",
+"kalshi": "ILL",
+"name": "Illinois",
+"nick": "Fighting Illini"
+},
+"ILLC": {
+"aliases": [
+"Illinois Col",
+"Illinois College",
+"Illinois College Blueboys"
+],
+"espn_id": "2286",
+"name": "Illinois College",
+"nick": "Blueboys"
+},
+"ILST": {
+"aliases": [
+"Illinois St",
+"Illinois State",
+"Illinois State Redbirds"
+],
+"espn_id": "2287",
+"kalshi": "ILST",
+"name": "Illinois State",
+"nick": "Redbirds"
+},
+"ILWU": {
+"aliases": [
+"IL Wesleyan",
+"Illinois Wesleyan",
+"Illinois Wesleyan Titans"
+],
+"espn_id": "306",
+"name": "Illinois Wesleyan",
+"nick": "Titans"
+},
+"INDY": {
+"aliases": [
+"Indianapolis",
+"Indianapolis Greyhounds"
+],
+"espn_id": "2292",
+"name": "Indianapolis",
+"nick": "Greyhounds"
+},
+"INST": {
+"aliases": [
+"Indiana St",
+"Indiana State",
+"Indiana State Sycamores"
+],
+"espn_id": "282",
+"kalshi": "INST",
+"name": "Indiana State",
+"nick": "Sycamores"
+},
+"INWESL": {
+"aliases": [
+"INDWESLYAN",
+"Indiana Wesleyan",
+"Indiana Wesleyan Wildcats"
+],
+"espn_id": "111756",
+"name": "Indiana Wesleyan",
+"nick": "Wildcats"
+},
+"IOWA": {
+"aliases": [
+"Iowa",
+"Iowa Hawkeyes"
+],
+"espn_id": "2294",
+"kalshi": "IOWA",
+"name": "Iowa",
+"nick": "Hawkeyes"
+},
+"ISU": {
+"aliases": [
+"Iowa State",
+"Iowa State Cyclones"
+],
+"espn_id": "66",
+"kalshi": "ISU",
+"name": "Iowa State",
+"nick": "Cyclones"
+},
+"ITH": {
+"aliases": [
+"Ithaca",
+"Ithaca Bombers"
+],
+"espn_id": "175",
+"name": "Ithaca",
+"nick": "Bombers"
+},
+"IU": {
+"aliases": [
+"Indiana",
+"Indiana Hoosiers",
+"IND"
+],
+"espn_id": "84",
+"kalshi": "IND",
+"name": "Indiana",
+"nick": "Hoosiers"
+},
+"IUP": {
+"aliases": [
+"IU Penn",
+"IU Pennsylvania",
+"IU Pennsylvania Crimson Hawks"
+],
+"espn_id": "2291",
+"name": "IU Pennsylvania",
+"nick": "Crimson Hawks"
+},
+"JCSU": {
+"aliases": [
+"Johnson C Smth",
+"Johnson C. Smith",
+"Johnson C. Smith Golden Bulls"
+],
+"espn_id": "2304",
+"name": "Johnson C. Smith",
+"nick": "Golden Bulls"
+},
+"JCU": {
+"aliases": [
+"John Carroll",
+"John Carroll Blue Streaks"
+],
+"espn_id": "2302",
+"name": "John Carroll",
+"nick": "Blue Streaks"
+},
+"JHU": {
+"aliases": [
+"Johns Hopkins",
+"Johns Hopkins Blue Jays"
+],
+"espn_id": "118",
+"name": "Johns Hopkins",
+"nick": "Blue Jays"
+},
+"JKST": {
+"aliases": [
+"Jackson St",
+"Jackson State",
+"Jackson State Tigers"
+],
+"espn_id": "2296",
+"kalshi": "JKST",
+"name": "Jackson State",
+"nick": "Tigers"
+},
+"JMU": {
+"aliases": [
+"James Madison",
+"James Madison Dukes"
+],
+"espn_id": "256",
+"kalshi": "JMU",
+"name": "James Madison",
+"nick": "Dukes"
+},
+"JUDSO": {
+"aliases": [
+"Elgin",
+"Elgin Eagles",
+"JUDSON"
+],
+"espn_id": "122775",
+"name": "Elgin",
+"nick": "Eagles"
+},
+"JUN": {
+"aliases": [
+"Juniata",
+"Juniata Eagles"
+],
+"espn_id": "246",
+"name": "Juniata",
+"nick": "Eagles"
+},
+"JXST": {
+"aliases": [
+"Jacksonville State",
+"Jacksonville State Gamecocks",
+"Jax State",
+"JVST"
+],
+"espn_id": "55",
+"kalshi": "JVST",
+"name": "Jacksonville State",
+"nick": "Gamecocks"
+},
+"KALC": {
+"aliases": [
+"Kalamazoo",
+"Kalamazoo Hornets"
+],
+"espn_id": "126",
+"name": "Kalamazoo",
+"nick": "Hornets"
+},
+"KANSA": {
+"aliases": [
+"KS Weslyan",
+"Kansas Wesleyan",
+"Kansas Wesleyan Ks Wesleyan"
+],
+"espn_id": "547",
+"name": "Kansas Wesleyan",
+"nick": "Ks Wesleyan"
+},
+"KEAN": {
+"aliases": [
+"Kean",
+"Kean Cougars"
+],
+"espn_id": "2871",
+"name": "Kean",
+"nick": "Cougars"
+},
+"KEISER": {
+"aliases": [
+"Keiser Univers",
+"Keiser University",
+"Keiser University Keiser"
+],
+"espn_id": "126110",
+"name": "Keiser University",
+"nick": "Keiser"
+},
+"KENN": {
+"aliases": [
+"Kennesaw St",
+"Kennesaw State",
+"Kennesaw State Owls"
+],
+"espn_id": "338",
+"kalshi": "KENN",
+"name": "Kennesaw State",
+"nick": "Owls"
+},
+"KENT": {
+"aliases": [
+"Kent State",
+"Kent State Golden Flashes"
+],
+"espn_id": "2309",
+"kalshi": "KENT",
+"name": "Kent State",
+"nick": "Golden Flashes"
+},
+"KNGS": {
+"aliases": [
+"King's",
+"King's Monarchs"
+],
+"espn_id": "247",
+"name": "King's",
+"nick": "Monarchs"
+},
+"KNOX": {
+"aliases": [
+"Knox",
+"Knox Prairie Fire"
+],
+"espn_id": "255",
+"name": "Knox",
+"nick": "Prairie Fire"
+},
+"KNY": {
+"aliases": [
+"Kenyon",
+"Kenyon Owls"
+],
+"espn_id": "352",
+"name": "Kenyon",
+"nick": "Owls"
+},
+"KSU": {
+"aliases": [
+"Kansas St",
+"Kansas State",
+"Kansas State Wildcats"
+],
+"espn_id": "2306",
+"kalshi": "KSU",
+"name": "Kansas State",
+"nick": "Wildcats"
+},
+"KU": {
+"aliases": [
+"Kansas",
+"Kansas Jayhawks"
+],
+"espn_id": "2305",
+"kalshi": "KU",
+"name": "Kansas",
+"nick": "Jayhawks"
+},
+"KUTZ": {
+"aliases": [
+"Kutztown",
+"Kutztown Golden Bears"
+],
+"espn_id": "2315",
+"name": "Kutztown",
+"nick": "Golden Bears"
+},
+"KWC": {
+"aliases": [
+"KY Wesleyan",
+"Kentucky Wesleyan",
+"Kentucky Wesleyan Panthers"
+],
+"espn_id": "2316",
+"name": "Kentucky Wesleyan",
+"nick": "Panthers"
+},
+"KYCHR": {
+"aliases": [
+"KCU",
+"Kentucky Christian",
+"Kentucky Christian Knights"
+],
+"espn_id": "3077",
+"name": "Kentucky Christian",
+"nick": "Knights"
+},
+"KYSN": {
+"aliases": [
+"Keystone",
+"Keystone Giants"
+],
+"espn_id": "122774",
+"name": "Keystone",
+"nick": "Giants"
+},
+"KYSU": {
+"aliases": [
+"Kentucky St",
+"Kentucky State",
+"Kentucky State Thorobreds"
+],
+"espn_id": "2310",
+"name": "Kentucky State",
+"nick": "Thorobreds"
+},
+"LAF": {
+"aliases": [
+"Lafayette",
+"Lafayette Leopards"
+],
+"espn_id": "322",
+"kalshi": "LAF",
+"name": "Lafayette",
+"nick": "Leopards"
+},
+"LAM": {
+"aliases": [
+"Lamar",
+"Lamar Cardinals"
+],
+"espn_id": "2320",
+"kalshi": "LAM",
+"name": "Lamar",
+"nick": "Cardinals"
+},
+"LANE": {
+"aliases": [
+"Lane College",
+"Lane College Dragons"
+],
+"espn_id": "2323",
+"name": "Lane College",
+"nick": "Dragons"
+},
+"LAW": {
+"aliases": [
+"Lawrence",
+"Lawrence Vikings"
+],
+"espn_id": "268",
+"name": "Lawrence",
+"nick": "Vikings"
+},
+"LC": {
+"aliases": [
+"Lewis & Clark",
+"Lewis & Clark River Otters"
+],
+"espn_id": "2333",
+"name": "Lewis & Clark",
+"nick": "River Otters"
+},
+"LCHR": {
+"aliases": [
+"LA Christian",
+"Louisiana Christian",
+"Louisiana Christian Wildcats"
+],
+"espn_id": "2347",
+"name": "Louisiana Christian",
+"nick": "Wildcats"
+},
+"LEH": {
+"aliases": [
+"Lehigh",
+"Lehigh Mountain Hawks"
+],
+"espn_id": "2329",
+"kalshi": "LEH",
+"name": "Lehigh",
+"nick": "Mountain Hawks"
+},
+"LENR": {
+"aliases": [
+"Lenoir Rhyne",
+"Lenoir Rhyne Bears"
+],
+"espn_id": "2331",
+"name": "Lenoir Rhyne",
+"nick": "Bears"
+},
+"LFC": {
+"aliases": [
+"Lake Forest",
+"Lake Forest Foresters"
+],
+"espn_id": "262",
+"name": "Lake Forest",
+"nick": "Foresters"
+},
+"LGC": {
+"aliases": [
+"LaGrange",
+"LaGrange Panthers"
+],
+"espn_id": "548",
+"name": "LaGrange",
+"nick": "Panthers"
+},
+"LHU": {
+"aliases": [
+"Lock Haven",
+"Lock Haven Bald Eagles"
+],
+"espn_id": "209",
+"name": "Lock Haven",
+"nick": "Bald Eagles"
+},
+"LIB": {
+"aliases": [
+"Liberty",
+"Liberty Flames"
+],
+"espn_id": "2335",
+"kalshi": "LIB",
+"name": "Liberty",
+"nick": "Flames"
+},
+"LIN": {
+"aliases": [
+"Lindenwood",
+"Lindenwood Lions",
+"LINW"
+],
+"espn_id": "2815",
+"kalshi": "LINW",
+"name": "Lindenwood",
+"nick": "Lions"
+},
+"LINB": {
+"aliases": [
+"Lind Bellv",
+"Lindenwood Belleville",
+"Lindenwood Belleville Lynx"
+],
+"espn_id": "3209",
+"name": "Lindenwood Belleville",
+"nick": "Lynx"
+},
+"LINF": {
+"aliases": [
+"Linfield",
+"Linfield Wildcats"
+],
+"espn_id": "203",
+"name": "Linfield",
+"nick": "Wildcats"
+},
+"LIU": {
+"aliases": [
+"Long Island",
+"Long Island University",
+"Long Island University Sharks"
+],
+"espn_id": "2341",
+"kalshi": "LIU",
+"name": "Long Island University",
+"nick": "Sharks"
+},
+"LIV": {
+"aliases": [
+"Livingstone",
+"Livingstone Blue Bears"
+],
+"espn_id": "2940",
+"name": "Livingstone",
+"nick": "Blue Bears"
+},
+"LKER": {
+"aliases": [
+"Lake Erie",
+"Lake Erie Storm"
+],
+"espn_id": "437",
+"name": "Lake Erie",
+"nick": "Storm"
+},
+"LKLD": {
+"aliases": [
+"Lakeland",
+"Lakeland Muskies"
+],
+"espn_id": "6353",
+"name": "Lakeland",
+"nick": "Muskies"
+},
+"LNCA": {
+"aliases": [
+"Lincoln (CA)",
+"Lincoln (CA) Oaklanders"
+],
+"espn_id": "124179",
+"name": "Lincoln (CA)",
+"nick": "Oaklanders"
+},
+"LNGT": {
+"aliases": [
+"Langston",
+"Langston Lions"
+],
+"espn_id": "2324",
+"name": "Langston",
+"nick": "Lions"
+},
+"LNMO": {
+"aliases": [
+"Lincoln (MO)",
+"Lincoln (MO) Blue Tigers"
+],
+"espn_id": "2876",
+"name": "Lincoln (MO)",
+"nick": "Blue Tigers"
+},
+"LNPA": {
+"aliases": [
+"Lincoln (PA)",
+"Lincoln (PA) Lions"
+],
+"espn_id": "2339",
+"name": "Lincoln (PA)",
+"nick": "Lions"
+},
+"LOR": {
+"aliases": [
+"Loras",
+"Loras Duhawks"
+],
+"espn_id": "263",
+"name": "Loras",
+"nick": "Duhawks"
+},
+"LOU": {
+"aliases": [
+"Louisville",
+"Louisville Cardinals"
+],
+"espn_id": "97",
+"kalshi": "LOU",
+"name": "Louisville",
+"nick": "Cardinals"
+},
+"LSU": {
+"aliases": [
+"LSU",
+"LSU Tigers",
+"Louisiana State"
+],
+"espn_id": "99",
+"kalshi": "LSU",
+"name": "LSU",
+"nick": "Tigers"
+},
+"LT": {
+"aliases": [
+"Louisiana Tech",
+"Louisiana Tech Bulldogs"
+],
+"espn_id": "2348",
+"kalshi": "LT",
+"name": "Louisiana Tech",
+"nick": "Bulldogs"
+},
+"LUTH": {
+"aliases": [
+"Luther",
+"Luther Norse"
+],
+"espn_id": "67",
+"name": "Luther",
+"nick": "Norse"
+},
+"LVC": {
+"aliases": [
+"Lebanon Valley",
+"Lebanon Valley Flying Dutchmen"
+],
+"espn_id": "388",
+"name": "Lebanon Valley",
+"nick": "Flying Dutchmen"
+},
+"LWU": {
+"aliases": [
+"Lindsey Wilson",
+"Lindsey Wilson LINDSEY"
+],
+"espn_id": "2877",
+"name": "Lindsey Wilson",
+"nick": "LINDSEY"
+},
+"LYCO": {
+"aliases": [
+"Lycoming",
+"Lycoming Warriors"
+],
+"espn_id": "2354",
+"name": "Lycoming",
+"nick": "Warriors"
+},
+"LYON": {
+"aliases": [
+"Lyon",
+"Lyon Scots"
+],
+"espn_id": "101161",
+"name": "Lyon",
+"nick": "Scots"
+},
+"M-OH": {
+"aliases": [
+"Miami (OH)",
+"Miami (OH) RedHawks",
+"Miami OH",
+"Miami RedHawks",
+"MOH"
+],
+"espn_id": "193",
+"kalshi": "MOH",
+"name": "Miami (OH)",
+"nick": "RedHawks"
+},
+"MAC": {
+"aliases": [
+"Macalester",
+"Macalester Scots"
+],
+"espn_id": "2359",
+"name": "Macalester",
+"nick": "Scots"
+},
+"MARY": {
+"aliases": [
+"UMary",
+"University of Mary",
+"University of Mary Marauders"
+],
+"espn_id": "559",
+"name": "University of Mary",
+"nick": "Marauders"
+},
+"MASS": {
+"aliases": [
+"Massachusetts",
+"Massachusetts Minutemen",
+"UMass"
+],
+"espn_id": "113",
+"kalshi": "MASS",
+"name": "Massachusetts",
+"nick": "Minutemen"
+},
+"MB": {
+"aliases": [
+"MANITOBA",
+"Manitoba",
+"Manitoba MANITOBA"
+],
+"espn_id": "2770",
+"name": "Manitoba",
+"nick": "MANITOBA"
+},
+"MCD": {
+"aliases": [
+"McDaniel",
+"McDaniel Green Terror"
+],
+"espn_id": "2700",
+"name": "McDaniel",
+"nick": "Green Terror"
+},
+"MCK": {
+"aliases": [
+"McKendree",
+"McKendree Bearcats"
+],
+"espn_id": "2816",
+"name": "McKendree",
+"nick": "Bearcats"
+},
+"MCM": {
+"aliases": [
+"McMurry",
+"McMurry War Hawks"
+],
+"espn_id": "241",
+"name": "McMurry",
+"nick": "War Hawks"
+},
+"MCN": {
+"aliases": [
+"McNeese",
+"McNeese Cowboys",
+"MCNS"
+],
+"espn_id": "2377",
+"kalshi": "MCNS",
+"name": "McNeese",
+"nick": "Cowboys"
+},
+"MCST": {
+"aliases": [
+"Montclair",
+"Montclair State",
+"Montclair State Red Hawks"
+],
+"espn_id": "2818",
+"name": "Montclair State",
+"nick": "Red Hawks"
+},
+"MCTN": {
+"aliases": [
+"Maryville (TN)",
+"Maryville (TN) Scots"
+],
+"espn_id": "2373",
+"name": "Maryville (TN)",
+"nick": "Scots"
+},
+"MD": {
+"aliases": [
+"Maryland",
+"Maryland Terrapins"
+],
+"espn_id": "120",
+"kalshi": "MD",
+"name": "Maryland",
+"nick": "Terrapins"
+},
+"MDAR": {
+"aliases": [
+"UMass Dartmouth",
+"UMass Dartmouth Corsairs",
+"UMass Dartmth"
+],
+"espn_id": "379",
+"name": "UMass Dartmouth",
+"nick": "Corsairs"
+},
+"MDNN": {
+"aliases": [
+"MADONNA",
+"Madonna",
+"Madonna MADONNA"
+],
+"espn_id": "126146",
+"name": "Madonna",
+"nick": "MADONNA"
+},
+"ME": {
+"aliases": [
+"Maine",
+"Maine Black Bears"
+],
+"espn_id": "311",
+"kalshi": "ME",
+"name": "Maine",
+"nick": "Black Bears"
+},
+"MEM": {
+"aliases": [
+"Memphis",
+"Memphis Tigers"
+],
+"espn_id": "235",
+"kalshi": "MEM",
+"name": "Memphis",
+"nick": "Tigers"
+},
+"MER": {
+"aliases": [
+"Mercer",
+"Mercer Bears"
+],
+"espn_id": "2382",
+"kalshi": "MER",
+"name": "Mercer",
+"nick": "Bears"
+},
+"MERC": {
+"aliases": [
+"Mercyhurst",
+"Mercyhurst Lakers"
+],
+"espn_id": "2385",
+"name": "Mercyhurst",
+"nick": "Lakers"
+},
+"MHB": {
+"aliases": [
+"Mary Hardin",
+"Mary Hardin Baylor",
+"Mary Hardin Baylor Crusaders"
+],
+"espn_id": "2371",
+"name": "Mary Hardin Baylor",
+"nick": "Crusaders"
+},
+"MHU": {
+"aliases": [
+"Mars Hill",
+"Mars Hill Lions"
+],
+"espn_id": "2369",
+"kalshi": "MHU",
+"name": "Mars Hill",
+"nick": "Lions"
+},
+"MIA": {
+"aliases": [
+"Miami",
+"Miami Hurricanes",
+"Miami FL",
+"Miami (FL)"
+],
+"espn_id": "2390",
+"kalshi": "MIA",
+"name": "Miami",
+"nick": "Hurricanes"
+},
+"MICH": {
+"aliases": [
+"Michigan",
+"Michigan Wolverines"
+],
+"espn_id": "130",
+"kalshi": "MICH",
+"name": "Michigan",
+"nick": "Wolverines"
+},
+"MIDB": {
+"aliases": [
+"Middlebury",
+"Middlebury Panthers"
+],
+"espn_id": "2394",
+"name": "Middlebury",
+"nick": "Panthers"
+},
+"MIDL": {
+"aliases": [
+"Midland",
+"Midland MIDLAND LUTHERAN"
+],
+"espn_id": "565",
+"name": "Midland",
+"nick": "MIDLAND LUTHERAN"
+},
+"MILE": {
+"aliases": [
+"Miles",
+"Miles Golden Bears"
+],
+"espn_id": "2396",
+"name": "Miles",
+"nick": "Golden Bears"
+},
+"MILK": {
+"aliases": [
+"Millikin",
+"Millikin Big Blue"
+],
+"espn_id": "74",
+"name": "Millikin",
+"nick": "Big Blue"
+},
+"MILL": {
+"aliases": [
+"Millersville",
+"Millersville Marauders"
+],
+"espn_id": "210",
+"name": "Millersville",
+"nick": "Marauders"
+},
+"MINN": {
+"aliases": [
+"Minnesota",
+"Minnesota Golden Gophers"
+],
+"espn_id": "135",
+"kalshi": "MINN",
+"name": "Minnesota",
+"nick": "Golden Gophers"
+},
+"MINS": {
+"aliases": [
+"Minot St",
+"Minot State",
+"Minot State Beavers"
+],
+"espn_id": "568",
+"name": "Minot State",
+"nick": "Beavers"
+},
+"MISE": {
+"aliases": [
+"Misericordia",
+"Misericordia Cougars"
+],
+"espn_id": "2969",
+"name": "Misericordia",
+"nick": "Cougars"
+},
+"MISS": {
+"aliases": [
+"Ole Miss",
+"Ole Miss Rebels",
+"Mississippi"
+],
+"espn_id": "145",
+"kalshi": "MISS",
+"name": "Ole Miss",
+"nick": "Rebels"
+},
+"MIT": {
+"aliases": [
+"MIT",
+"MIT Engineers"
+],
+"espn_id": "109",
+"name": "MIT",
+"nick": "Engineers"
+},
+"MITE": {
+"aliases": [
+"Monterrey Tech",
+"Monterrey Tech Borregos"
+],
+"espn_id": "3100",
+"name": "Monterrey Tech",
+"nick": "Borregos"
+},
+"MIZ": {
+"aliases": [
+"Missouri",
+"Missouri Tigers",
+"MIZZ"
+],
+"espn_id": "142",
+"kalshi": "MIZZ",
+"name": "Missouri",
+"nick": "Tigers"
+},
+"MLC": {
+"aliases": [
+"Martin Luther",
+"Martin Luther Knights"
+],
+"espn_id": "446",
+"name": "Martin Luther",
+"nick": "Knights"
+},
+"MLSP": {
+"aliases": [
+"Millsaps",
+"Millsaps Majors"
+],
+"espn_id": "2398",
+"name": "Millsaps",
+"nick": "Majors"
+},
+"MMA": {
+"aliases": [
+"Merch Marine",
+"Merchant Marine",
+"Merchant Marine Mariners"
+],
+"espn_id": "2383",
+"name": "Merchant Marine",
+"nick": "Mariners"
+},
+"MMT": {
+"aliases": [
+"Mass Maritime",
+"Mass Maritime Buccaneers"
+],
+"espn_id": "110",
+"name": "Mass Maritime",
+"nick": "Buccaneers"
+},
+"MNCH": {
+"aliases": [
+"Manchester",
+"Manchester Spartans"
+],
+"espn_id": "2362",
+"name": "Manchester",
+"nick": "Spartans"
+},
+"MNFD": {
+"aliases": [
+"Mansfield",
+"Mansfield Mountaineers"
+],
+"espn_id": "2365",
+"name": "Mansfield",
+"nick": "Mountaineers"
+},
+"MNGS": {
+"aliases": [
+"Morningside",
+"Morningside Chiefs"
+],
+"espn_id": "2416",
+"name": "Morningside",
+"nick": "Chiefs"
+},
+"MNIL": {
+"aliases": [
+"Monmouth (IL)",
+"Monmouth (IL) Fighting Scots"
+],
+"espn_id": "2919",
+"name": "Monmouth (IL)",
+"nick": "Fighting Scots"
+},
+"MNMO": {
+"aliases": [
+"Minn Morris",
+"Minnesota Morris",
+"Minnesota Morris Cougars"
+],
+"espn_id": "2399",
+"name": "Minnesota Morris",
+"nick": "Cougars"
+},
+"MNST": {
+"aliases": [
+"Minnesota St",
+"Minnesota State",
+"Minnesota State Mavericks"
+],
+"espn_id": "2364",
+"name": "Minnesota State",
+"nick": "Mavericks"
+},
+"MOBU": {
+"aliases": [
+"Missouri Bapt",
+"Missouri Baptist",
+"Missouri Baptist Spartans"
+],
+"espn_id": "2880",
+"name": "Missouri Baptist",
+"nick": "Spartans"
+},
+"MON": {
+"aliases": [
+"Monroe",
+"Monroe Mustangs"
+],
+"espn_id": "134001",
+"name": "Monroe",
+"nick": "Mustangs"
+},
+"MONM": {
+"aliases": [
+"Monmouth",
+"Monmouth Hawks"
+],
+"espn_id": "2405",
+"kalshi": "MONM",
+"name": "Monmouth",
+"nick": "Hawks"
+},
+"MONT": {
+"aliases": [
+"Montana",
+"Montana Grizzlies"
+],
+"espn_id": "149",
+"kalshi": "MONT",
+"name": "Montana",
+"nick": "Grizzlies"
+},
+"MOR": {
+"aliases": [
+"Moravian",
+"Moravian Greyhounds"
+],
+"espn_id": "323",
+"name": "Moravian",
+"nick": "Greyhounds"
+},
+"MORE": {
+"aliases": [
+"Morehead St",
+"Morehead State",
+"Morehead State Eagles"
+],
+"espn_id": "2413",
+"kalshi": "MORE",
+"name": "Morehead State",
+"nick": "Eagles"
+},
+"MORG": {
+"aliases": [
+"Morgan St",
+"Morgan State",
+"Morgan State Bears"
+],
+"espn_id": "2415",
+"kalshi": "MORG",
+"name": "Morgan State",
+"nick": "Bears"
+},
+"MOST": {
+"aliases": [
+"Missouri St",
+"Missouri State",
+"Missouri State Bears",
+"MOSU"
+],
+"espn_id": "2623",
+"kalshi": "MOSU",
+"name": "Missouri State",
+"nick": "Bears"
+},
+"MOWE": {
+"aliases": [
+"MO Western",
+"Missouri Western",
+"Missouri Western Griffons"
+],
+"espn_id": "137",
+"name": "Missouri Western",
+"nick": "Griffons"
+},
+"MRHO": {
+"aliases": [
+"Morehouse",
+"Morehouse Maroon Tigers"
+],
+"espn_id": "60",
+"name": "Morehouse",
+"nick": "Maroon Tigers"
+},
+"MRMK": {
+"aliases": [
+"Merrimack",
+"Merrimack Warriors"
+],
+"espn_id": "2771",
+"kalshi": "MRMK",
+"name": "Merrimack",
+"nick": "Warriors"
+},
+"MRSH": {
+"aliases": [
+"Marshall",
+"Marshall Thundering Herd"
+],
+"espn_id": "276",
+"kalshi": "MRSH",
+"name": "Marshall",
+"nick": "Thundering Herd"
+},
+"MRST": {
+"aliases": [
+"Marist",
+"Marist Red Foxes"
+],
+"espn_id": "2368",
+"kalshi": "MRST",
+"name": "Marist",
+"nick": "Red Foxes"
+},
+"MRTT": {
+"aliases": [
+"Marietta",
+"Marietta Pioneers"
+],
+"espn_id": "317",
+"name": "Marietta",
+"nick": "Pioneers"
+},
+"MS&T": {
+"aliases": [
+"Missouri S&T",
+"Missouri S&T Miners"
+],
+"espn_id": "2402",
+"name": "Missouri S&T",
+"nick": "Miners"
+},
+"MSJ": {
+"aliases": [
+"Mount St Joseph",
+"Mount St Joseph Lions",
+"Mt St Joseph"
+],
+"espn_id": "2419",
+"name": "Mount St Joseph",
+"nick": "Lions"
+},
+"MSK": {
+"aliases": [
+"Muskingum",
+"Muskingum Fighting Muskies"
+],
+"espn_id": "332",
+"name": "Muskingum",
+"nick": "Fighting Muskies"
+},
+"MSST": {
+"aliases": [
+"Mississippi St",
+"Mississippi State",
+"Mississippi State Bulldogs"
+],
+"espn_id": "344",
+"kalshi": "MSST",
+"name": "Mississippi State",
+"nick": "Bulldogs"
+},
+"MSSU": {
+"aliases": [
+"Missouri So St",
+"Missouri Southern State",
+"Missouri Southern State Lions"
+],
+"espn_id": "2403",
+"name": "Missouri Southern State",
+"nick": "Lions"
+},
+"MSU": {
+"aliases": [
+"Michigan St",
+"Michigan State",
+"Michigan State Spartans"
+],
+"espn_id": "127",
+"kalshi": "MSU",
+"name": "Michigan State",
+"nick": "Spartans"
+},
+"MSUM": {
+"aliases": [
+"Minn Moorhead",
+"Minnesota St Moorhead",
+"Minnesota St Moorhead Dragons"
+],
+"espn_id": "2817",
+"name": "Minnesota St Moorhead",
+"nick": "Dragons"
+},
+"MTST": {
+"aliases": [
+"Montana St",
+"Montana State",
+"Montana State Bobcats"
+],
+"espn_id": "147",
+"kalshi": "MTST",
+"name": "Montana State",
+"nick": "Bobcats"
+},
+"MTSU": {
+"aliases": [
+"MTSU",
+"Middle Tennessee",
+"Middle Tennessee Blue Raiders"
+],
+"espn_id": "2393",
+"name": "Middle Tennessee",
+"nick": "Blue Raiders"
+},
+"MTU": {
+"aliases": [
+"Michigan Tech",
+"Michigan Tech Huskies"
+],
+"espn_id": "2392",
+"kalshi": "MTU",
+"name": "Michigan Tech",
+"nick": "Huskies"
+},
+"MU": {
+"aliases": [
+"Methodist",
+"Methodist Monarchs"
+],
+"espn_id": "291",
+"name": "Methodist",
+"nick": "Monarchs"
+},
+"MUHL": {
+"aliases": [
+"Muhlenberg",
+"Muhlenberg Mules"
+],
+"espn_id": "2422",
+"name": "Muhlenberg",
+"nick": "Mules"
+},
+"MUIN": {
+"aliases": [
+"Marian (IN)",
+"Marian (IN) MARIAN"
+],
+"espn_id": "2366",
+"name": "Marian (IN)",
+"nick": "MARIAN"
+},
+"MUR": {
+"aliases": [
+"Murray St",
+"Murray State",
+"Murray State Racers",
+"MURR"
+],
+"espn_id": "93",
+"kalshi": "MURR",
+"name": "Murray State",
+"nick": "Racers"
+},
+"MVSU": {
+"aliases": [
+"Miss Valley St",
+"Mississippi Valley State",
+"Mississippi Valley State Delta Devils"
+],
+"espn_id": "2400",
+"kalshi": "MVSU",
+"name": "Mississippi Valley State",
+"nick": "Delta Devils"
+},
+"MWMO": {
+"aliases": [
+"NW Missouri St",
+"Northwest Missouri State",
+"Northwest Missouri State Bearcats"
+],
+"espn_id": "138",
+"name": "Northwest Missouri State",
+"nick": "Bearcats"
+},
+"MWSU": {
+"aliases": [
+"Midwestern St",
+"Midwestern State",
+"Midwestern State Mustangs"
+],
+"espn_id": "2395",
+"name": "Midwestern State",
+"nick": "Mustangs"
+},
+"MYSU": {
+"aliases": [
+"Mayville St",
+"Mayville State",
+"Mayville State Comets"
+],
+"espn_id": "561",
+"name": "Mayville State",
+"nick": "Comets"
+},
+"NAMU": {
+"aliases": [
+"N American",
+"North American",
+"North American Stallions"
+],
+"espn_id": "123086",
+"name": "North American",
+"nick": "Stallions"
+},
+"NAU": {
+"aliases": [
+"N Arizona",
+"Northern Arizona",
+"Northern Arizona Lumberjacks"
+],
+"espn_id": "2464",
+"kalshi": "NAU",
+"name": "Northern Arizona",
+"nick": "Lumberjacks"
+},
+"NAVY": {
+"aliases": [
+"Navy",
+"Navy Midshipmen"
+],
+"espn_id": "2426",
+"kalshi": "NAVY",
+"name": "Navy",
+"nick": "Midshipmen"
+},
+"NBRY": {
+"aliases": [
+"Newberry",
+"Newberry Wolves"
+],
+"espn_id": "2444",
+"name": "Newberry",
+"nick": "Wolves"
+},
+"NCAT": {
+"aliases": [
+"NC A&T",
+"North Carolina A&T",
+"North Carolina A&T Aggies"
+],
+"espn_id": "2448",
+"kalshi": "NCAT",
+"name": "North Carolina A&T",
+"nick": "Aggies"
+},
+"NCC": {
+"aliases": [
+"N Central (IL)",
+"North Central College",
+"North Central College Cardinals"
+],
+"espn_id": "3071",
+"name": "North Central College",
+"nick": "Cardinals"
+},
+"NCCU": {
+"aliases": [
+"NC Central",
+"North Carolina Central",
+"North Carolina Central Eagles"
+],
+"espn_id": "2428",
+"kalshi": "NCCU",
+"name": "North Carolina Central",
+"nick": "Eagles"
+},
+"NCSU": {
+"aliases": [
+"NC State",
+"NC State Wolfpack",
+"North Carolina State",
+"North Carolina St.",
+"NCST"
+],
+"espn_id": "152",
+"name": "NC State",
+"nick": "Wolfpack"
+},
+"NCW": {
+"aliases": [
+"NC Wesleyan",
+"North Carolina Wesleyan",
+"North Carolina Wesleyan Battling Bishops"
+],
+"espn_id": "286",
+"name": "North Carolina Wesleyan",
+"nick": "Battling Bishops"
+},
+"ND": {
+"aliases": [
+"Notre Dame",
+"Notre Dame Fighting Irish"
+],
+"espn_id": "87",
+"kalshi": "ND",
+"name": "Notre Dame",
+"nick": "Fighting Irish"
+},
+"NDSU": {
+"aliases": [
+"N Dakota St",
+"North Dakota State",
+"North Dakota State Bison"
+],
+"espn_id": "2449",
+"kalshi": "NDSU",
+"name": "North Dakota State",
+"nick": "Bison"
+},
+"NEB": {
+"aliases": [
+"Nebraska",
+"Nebraska Cornhuskers"
+],
+"espn_id": "158",
+"kalshi": "NEB",
+"name": "Nebraska",
+"nick": "Cornhuskers"
+},
+"NEBK": {
+"aliases": [
+"NE Kearney",
+"Nebraska Kearney",
+"Nebraska Kearney Lopers"
+],
+"espn_id": "2438",
+"name": "Nebraska Kearney",
+"nick": "Lopers"
+},
+"NEL": {
+"aliases": [
+"Nelson",
+"Nelson (TX)",
+"Nelson (TX) Lions"
+],
+"espn_id": "2904",
+"name": "Nelson (TX)",
+"nick": "Lions"
+},
+"NESU": {
+"aliases": [
+"NE State",
+"Northeastern State",
+"Northeastern State RiverHawks"
+],
+"espn_id": "196",
+"name": "Northeastern State",
+"nick": "RiverHawks"
+},
+"NEV": {
+"aliases": [
+"Nevada",
+"Nevada Wolf Pack"
+],
+"espn_id": "2440",
+"kalshi": "NEV",
+"name": "Nevada",
+"nick": "Wolf Pack"
+},
+"NGU": {
+"aliases": [
+"N Greenville",
+"North Greenville",
+"North Greenville Trailblazers"
+],
+"espn_id": "2822",
+"name": "North Greenville",
+"nick": "Trailblazers"
+},
+"NHVN": {
+"aliases": [
+"New Haven",
+"New Haven Chargers",
+"NHC"
+],
+"espn_id": "2441",
+"kalshi": "NHC",
+"name": "New Haven",
+"nick": "Chargers"
+},
+"NICC": {
+"aliases": [
+"Nichols",
+"Nichols Bison"
+],
+"espn_id": "2884",
+"name": "Nichols",
+"nick": "Bison"
+},
+"NICH": {
+"aliases": [
+"Nicholls",
+"Nicholls Colonels"
+],
+"espn_id": "2447",
+"kalshi": "NICH",
+"name": "Nicholls",
+"nick": "Colonels"
+},
+"NIU": {
+"aliases": [
+"N Illinois",
+"Northern Illinois",
+"Northern Illinois Huskies"
+],
+"espn_id": "2459",
+"kalshi": "NIU",
+"name": "Northern Illinois",
+"nick": "Huskies"
+},
+"NMHU": {
+"aliases": [
+"NM Highlands",
+"New Mexico Highlands",
+"New Mexico Highlands Cowboys"
+],
+"espn_id": "2424",
+"name": "New Mexico Highlands",
+"nick": "Cowboys"
+},
+"NMI": {
+"aliases": [
+"N Michigan",
+"Northern Michigan",
+"Northern Michigan Wildcats"
+],
+"espn_id": "128",
+"name": "Northern Michigan",
+"nick": "Wildcats"
+},
+"NMSU": {
+"aliases": [
+"New Mexico St",
+"New Mexico State",
+"New Mexico State Aggies"
+],
+"espn_id": "166",
+"kalshi": "NMSU",
+"name": "New Mexico State",
+"nick": "Aggies"
+},
+"NORF": {
+"aliases": [
+"Norfolk St",
+"Norfolk State",
+"Norfolk State Spartans"
+],
+"espn_id": "2450",
+"kalshi": "NORF",
+"name": "Norfolk State",
+"nick": "Spartans"
+},
+"NPU": {
+"aliases": [
+"North Park",
+"North Park Vikings"
+],
+"espn_id": "75",
+"name": "North Park",
+"nick": "Vikings"
+},
+"NSU": {
+"aliases": [
+"Northern St",
+"Northern State",
+"Northern State Wolves"
+],
+"espn_id": "425",
+"name": "Northern State",
+"nick": "Wolves"
+},
+"NU": {
+"aliases": [
+"Northwestern",
+"Northwestern Wildcats",
+"NW"
+],
+"espn_id": "77",
+"kalshi": "NW",
+"name": "Northwestern",
+"nick": "Wildcats"
+},
+"NWCH": {
+"aliases": [
+"Norwich",
+"Norwich Cadets"
+],
+"espn_id": "2467",
+"name": "Norwich",
+"nick": "Cadets"
+},
+"NWD": {
+"aliases": [
+"Northwood",
+"Northwood Timberwolves"
+],
+"espn_id": "2886",
+"name": "Northwood",
+"nick": "Timberwolves"
+},
+"NWOK": {
+"aliases": [
+"N'Western (OK)",
+"Northwestern (OK)",
+"Northwestern (OK) Rangers"
+],
+"espn_id": "2823",
+"name": "Northwestern (OK)",
+"nick": "Rangers"
+},
+"NWST": {
+"aliases": [
+"N'Western St",
+"Northwestern State",
+"Northwestern State Demons"
+],
+"espn_id": "2466",
+"kalshi": "NWST",
+"name": "Northwestern State",
+"nick": "Demons"
+},
+"NWU": {
+"aliases": [
+"NE Wesleyan",
+"Nebraska Wesleyan",
+"Nebraska Wesleyan Prairie Wolves"
+],
+"espn_id": "6845",
+"name": "Nebraska Wesleyan",
+"nick": "Prairie Wolves"
+},
+"NYCL": {
+"aliases": [
+"SUNY Cortland",
+"SUNY Cortland Red Dragons"
+],
+"espn_id": "2782",
+"name": "SUNY Cortland",
+"nick": "Red Dragons"
+},
+"NYER": {
+"aliases": [
+"SUNY Erie",
+"SUNY Erie Kats"
+],
+"espn_id": "3236",
+"name": "SUNY Erie",
+"nick": "Kats"
+},
+"NYMS": {
+"aliases": [
+"SUNY Morrisville",
+"SUNY Morrisville Mustangs",
+"SUNY Morrisvle"
+],
+"espn_id": "3110",
+"name": "SUNY Morrisville",
+"nick": "Mustangs"
+},
+"NYMT": {
+"aliases": [
+"SUNY Maritime",
+"SUNY Maritime Privateers"
+],
+"espn_id": "2951",
+"name": "SUNY Maritime",
+"nick": "Privateers"
+},
+"OBE": {
+"aliases": [
+"Oberlin",
+"Oberlin Yeomen"
+],
+"espn_id": "391",
+"name": "Oberlin",
+"nick": "Yeomen"
+},
+"OBU": {
+"aliases": [
+"Ouachita Bapt",
+"Ouachita Baptist",
+"Ouachita Baptist Tigers"
+],
+"espn_id": "2888",
+"name": "Ouachita Baptist",
+"nick": "Tigers"
+},
+"ODU": {
+"aliases": [
+"Old Dominion",
+"Old Dominion Monarchs"
+],
+"espn_id": "295",
+"kalshi": "ODU",
+"name": "Old Dominion",
+"nick": "Monarchs"
+},
+"OHDU": {
+"aliases": [
+"Ohio Dominican",
+"Ohio Dominican Panthers"
+],
+"espn_id": "2477",
+"name": "Ohio Dominican",
+"nick": "Panthers"
+},
+"OHIO": {
+"aliases": [
+"Ohio",
+"Ohio Bobcats"
+],
+"espn_id": "195",
+"kalshi": "OHIO",
+"name": "Ohio",
+"nick": "Bobcats"
+},
+"OHNU": {
+"aliases": [
+"Ohio Northern",
+"Ohio Northern Polar Bears"
+],
+"espn_id": "427",
+"name": "Ohio Northern",
+"nick": "Polar Bears"
+},
+"OKBU": {
+"aliases": [
+"OK Baptist",
+"Oklahoma Baptist",
+"Oklahoma Baptist Bison"
+],
+"espn_id": "319",
+"name": "Oklahoma Baptist",
+"nick": "Bison"
+},
+"OKST": {
+"aliases": [
+"Oklahoma St",
+"Oklahoma State",
+"Oklahoma State Cowboys"
+],
+"espn_id": "197",
+"kalshi": "OKST",
+"name": "Oklahoma State",
+"nick": "Cowboys"
+},
+"OLAF": {
+"aliases": [
+"St Olaf",
+"St. Olaf",
+"St. Olaf Oles"
+],
+"espn_id": "133",
+"name": "St. Olaf",
+"nick": "Oles"
+},
+"OPSU": {
+"aliases": [
+"OK Panhandle",
+"Oklahoma Panhandle",
+"Oklahoma Panhandle OK PANHANDLE ST"
+],
+"espn_id": "2824",
+"name": "Oklahoma Panhandle",
+"nick": "OK PANHANDLE ST"
+},
+"ORE": {
+"aliases": [
+"Oregon",
+"Oregon Ducks"
+],
+"espn_id": "2483",
+"kalshi": "ORE",
+"name": "Oregon",
+"nick": "Ducks"
+},
+"ORST": {
+"aliases": [
+"Oregon St",
+"Oregon State",
+"Oregon State Beavers"
+],
+"espn_id": "204",
+"kalshi": "ORST",
+"name": "Oregon State",
+"nick": "Beavers"
+},
+"OSU": {
+"aliases": [
+"Ohio State Newark",
+"Ohio State Newark Titans",
+"Osunewark"
+],
+"espn_id": "3161",
+"kalshi": "OSU",
+"name": "Ohio State Newark",
+"nick": "Titans"
+},
+"OTTB": {
+"aliases": [
+"Otterbein",
+"Otterbein Cardinals"
+],
+"espn_id": "359",
+"name": "Otterbein",
+"nick": "Cardinals"
+},
+"OU": {
+"aliases": [
+"Oklahoma",
+"Oklahoma Sooners",
+"OKLA"
+],
+"espn_id": "201",
+"kalshi": "OKLA",
+"name": "Oklahoma",
+"nick": "Sooners"
+},
+"OWU": {
+"aliases": [
+"Ohio Wesleyan",
+"Ohio Wesleyan Battling Bishops"
+],
+"espn_id": "2980",
+"name": "Ohio Wesleyan",
+"nick": "Battling Bishops"
+},
+"PACE": {
+"aliases": [
+"Pace",
+"Pace Setters"
+],
+"espn_id": "2487",
+"name": "Pace",
+"nick": "Setters"
+},
+"PCLT": {
+"aliases": [
+"Pac Lutheran",
+"Pacific Lutheran",
+"Pacific Lutheran Lutes"
+],
+"espn_id": "2486",
+"name": "Pacific Lutheran",
+"nick": "Lutes"
+},
+"PCOR": {
+"aliases": [
+"Pacific (OR)",
+"Pacific (OR) Boxers"
+],
+"espn_id": "205",
+"name": "Pacific (OR)",
+"nick": "Boxers"
+},
+"PENN": {
+"aliases": [
+"Penn",
+"Pennsylvania",
+"Pennsylvania Quakers"
+],
+"espn_id": "219",
+"kalshi": "PENN",
+"name": "Pennsylvania",
+"nick": "Quakers"
+},
+"PIKEV": {
+"aliases": [
+"Pikeville",
+"Pikeville Bears"
+],
+"espn_id": "95",
+"name": "Pikeville",
+"nick": "Bears"
+},
+"PITT": {
+"aliases": [
+"Pitt",
+"Pittsburgh",
+"Pittsburgh Panthers"
+],
+"espn_id": "221",
+"kalshi": "PITT",
+"name": "Pittsburgh",
+"nick": "Panthers"
+},
+"PLYM": {
+"aliases": [
+"Plymouth St",
+"Plymouth State",
+"Plymouth State Panthers"
+],
+"espn_id": "2972",
+"name": "Plymouth State",
+"nick": "Panthers"
+},
+"POINT": {
+"aliases": [
+"Point",
+"Point University",
+"Point University Skyhawks"
+],
+"espn_id": "3179",
+"name": "Point University",
+"nick": "Skyhawks"
+},
+"POPI": {
+"aliases": [
+"Pomona Pitzer",
+"Pomona Pitzer Sagehens"
+],
+"espn_id": "2923",
+"name": "Pomona Pitzer",
+"nick": "Sagehens"
+},
+"POST": {
+"aliases": [
+"Post",
+"Post Eagles"
+],
+"espn_id": "126086",
+"name": "Post",
+"nick": "Eagles"
+},
+"PRES": {
+"aliases": [
+"Presbyterian",
+"Presbyterian Blue Hose",
+"PRE"
+],
+"espn_id": "2506",
+"kalshi": "PRE",
+"name": "Presbyterian",
+"nick": "Blue Hose"
+},
+"PRIN": {
+"aliases": [
+"Princeton",
+"Princeton Tigers"
+],
+"espn_id": "163",
+"kalshi": "PRIN",
+"name": "Princeton",
+"nick": "Tigers"
+},
+"PRST": {
+"aliases": [
+"Portland St",
+"Portland State",
+"Portland State Vikings"
+],
+"espn_id": "2502",
+"kalshi": "PRST",
+"name": "Portland State",
+"nick": "Vikings"
+},
+"PSU": {
+"aliases": [
+"Penn State",
+"Penn State Nittany Lions"
+],
+"espn_id": "213",
+"kalshi": "PSU",
+"name": "Penn State",
+"nick": "Nittany Lions"
+},
+"PTSU": {
+"aliases": [
+"Pittsburg St",
+"Pittsburg State",
+"Pittsburg State Gorillas"
+],
+"espn_id": "90",
+"name": "Pittsburg State",
+"nick": "Gorillas"
+},
+"PUG": {
+"aliases": [
+"Puget Sound",
+"Puget Sound Loggers"
+],
+"espn_id": "2508",
+"name": "Puget Sound",
+"nick": "Loggers"
+},
+"PUR": {
+"aliases": [
+"Purdue",
+"Purdue Boilermakers"
+],
+"espn_id": "2509",
+"kalshi": "PUR",
+"name": "Purdue",
+"nick": "Boilermakers"
+},
+"PV": {
+"aliases": [
+"Prairie View",
+"Prairie View A&M",
+"Prairie View A&M Panthers"
+],
+"espn_id": "2504",
+"kalshi": "PV",
+"name": "Prairie View A&M",
+"nick": "Panthers"
+},
+"QUI": {
+"aliases": [
+"Quincy",
+"Quincy Hawks"
+],
+"espn_id": "2825",
+"name": "Quincy",
+"nick": "Hawks"
+},
+"REDL": {
+"aliases": [
+"Redlands",
+"Redlands Bulldogs"
+],
+"espn_id": "29",
+"name": "Redlands",
+"nick": "Bulldogs"
+},
+"RFU": {
+"aliases": [
+"Rockford",
+"Rockford Regents"
+],
+"espn_id": "2524",
+"name": "Rockford",
+"nick": "Regents"
+},
+"RHDS": {
+"aliases": [
+"Rhodes",
+"Rhodes Lynx"
+],
+"espn_id": "2519",
+"name": "Rhodes",
+"nick": "Lynx"
+},
+"RHDT": {
+"aliases": [
+"Reinhardt",
+"Reinhardt Eagles"
+],
+"espn_id": "2890",
+"name": "Reinhardt",
+"nick": "Eagles"
+},
+"RHIT": {
+"aliases": [
+"Rose Hulman",
+"Rose Hulman Fightin' Engineers"
+],
+"espn_id": "86",
+"name": "Rose Hulman",
+"nick": "Fightin' Engineers"
+},
+"RICE": {
+"aliases": [
+"Rice",
+"Rice Owls"
+],
+"espn_id": "242",
+"kalshi": "RICE",
+"name": "Rice",
+"nick": "Owls"
+},
+"RICH": {
+"aliases": [
+"Richmond",
+"Richmond Spiders"
+],
+"espn_id": "257",
+"kalshi": "RICH",
+"name": "Richmond",
+"nick": "Spiders"
+},
+"RIP": {
+"aliases": [
+"Ripon",
+"Ripon Red Hawks"
+],
+"espn_id": "2891",
+"name": "Ripon",
+"nick": "Red Hawks"
+},
+"RMC": {
+"aliases": [
+"Randolph Macon",
+"Randolph Macon Yellow Jackets"
+],
+"espn_id": "2516",
+"name": "Randolph Macon",
+"nick": "Yellow Jackets"
+},
+"RMU": {
+"aliases": [
+"Robert Morris",
+"Robert Morris Colonials"
+],
+"espn_id": "2523",
+"kalshi": "RMU",
+"name": "Robert Morris",
+"nick": "Colonials"
+},
+"ROW": {
+"aliases": [
+"Rowan",
+"Rowan Profs"
+],
+"espn_id": "2827",
+"name": "Rowan",
+"nick": "Profs"
+},
+"RPI": {
+"aliases": [
+"Rensselaer",
+"Rensselaer Engineers"
+],
+"espn_id": "2528",
+"name": "Rensselaer",
+"nick": "Engineers"
+},
+"RSVT": {
+"aliases": [
+"Roosevelt",
+"Roosevelt Lakers"
+],
+"espn_id": "127991",
+"name": "Roosevelt",
+"nick": "Lakers"
+},
+"RUTG": {
+"aliases": [
+"Rutgers",
+"Rutgers Scarlet Knights"
+],
+"espn_id": "164",
+"kalshi": "RUTG",
+"name": "Rutgers",
+"nick": "Scarlet Knights"
+},
+"SAC": {
+"aliases": [
+"Sacramento St",
+"Sacramento State",
+"Sacramento State Hornets"
+],
+"espn_id": "16",
+"kalshi": "SAC",
+"name": "Sacramento State",
+"nick": "Hornets"
+},
+"SAL": {
+"aliases": [
+"Salisbury",
+"Salisbury Sea Gulls"
+],
+"espn_id": "2532",
+"name": "Salisbury",
+"nick": "Sea Gulls"
+},
+"SALV": {
+"aliases": [
+"Salve Regina",
+"Salve Regina Seahawks"
+],
+"espn_id": "2776",
+"name": "Salve Regina",
+"nick": "Seahawks"
+},
+"SAM": {
+"aliases": [
+"Samford",
+"Samford Bulldogs"
+],
+"espn_id": "2535",
+"kalshi": "SAM",
+"name": "Samford",
+"nick": "Bulldogs"
+},
+"SANS": {
+"aliases": [
+"Saint Anselm",
+"Saint Anselm Hawks"
+],
+"espn_id": "2830",
+"name": "Saint Anselm",
+"nick": "Hawks"
+},
+"SAR": {
+"aliases": [
+"S Arkansas",
+"Southern Arkansas",
+"Southern Arkansas Muleriders"
+],
+"espn_id": "2568",
+"name": "Southern Arkansas",
+"nick": "Muleriders"
+},
+"SAV": {
+"aliases": [
+"Savannah St",
+"Savannah State",
+"Savannah State Tigers"
+],
+"espn_id": "2542",
+"name": "Savannah State",
+"nick": "Tigers"
+},
+"SC": {
+"aliases": [
+"South Carolina",
+"South Carolina Gamecocks",
+"SCAR"
+],
+"espn_id": "2579",
+"kalshi": "SCAR",
+"name": "South Carolina",
+"nick": "Gamecocks"
+},
+"SCIA": {
+"aliases": [
+"Simpson (IA)",
+"Simpson (IA) Storm"
+],
+"espn_id": "2564",
+"name": "Simpson (IA)",
+"nick": "Storm"
+},
+"SCST": {
+"aliases": [
+"SC State",
+"South Carolina State",
+"South Carolina State Bulldogs"
+],
+"espn_id": "2569",
+"kalshi": "SCST",
+"name": "South Carolina State",
+"nick": "Bulldogs"
+},
+"SCTS": {
+"aliases": [
+"S Conn St",
+"Southern Connecticut State",
+"Southern Connecticut State Owls"
+],
+"espn_id": "2583",
+"name": "Southern Connecticut State",
+"nick": "Owls"
+},
+"SDAK": {
+"aliases": [
+"South Dakota",
+"South Dakota Coyotes"
+],
+"espn_id": "233",
+"kalshi": "SDAK",
+"name": "South Dakota",
+"nick": "Coyotes"
+},
+"SDMT": {
+"aliases": [
+"SD Mines",
+"South Dakota Mines",
+"South Dakota Mines Hardrockers"
+],
+"espn_id": "613",
+"name": "South Dakota Mines",
+"nick": "Hardrockers"
+},
+"SDST": {
+"aliases": [
+"S Dakota St",
+"South Dakota State",
+"South Dakota State Jackrabbits"
+],
+"espn_id": "2571",
+"kalshi": "SDST",
+"name": "South Dakota State",
+"nick": "Jackrabbits"
+},
+"SDSU": {
+"aliases": [
+"San Diego St",
+"San Diego State",
+"San Diego State Aztecs"
+],
+"espn_id": "21",
+"kalshi": "SDSU",
+"name": "San Diego State",
+"nick": "Aztecs"
+},
+"SEHI": {
+"aliases": [
+"Seton Hill",
+"Seton Hill Griffins"
+],
+"espn_id": "611",
+"name": "Seton Hill",
+"nick": "Griffins"
+},
+"SELA": {
+"aliases": [
+"SE Louisiana",
+"SE Louisiana Lions"
+],
+"espn_id": "2545",
+"kalshi": "SELA",
+"name": "SE Louisiana",
+"nick": "Lions"
+},
+"SEMO": {
+"aliases": [
+"SE Missouri",
+"Southeast Missouri State",
+"Southeast Missouri State Redhawks"
+],
+"espn_id": "2546",
+"kalshi": "SEMO",
+"name": "Southeast Missouri State",
+"nick": "Redhawks"
+},
+"SEOK": {
+"aliases": [
+"SE Oklahoma St",
+"Southeastern Oklahoma State",
+"Southeastern Oklahoma State Savage Storm"
+],
+"espn_id": "199",
+"name": "Southeastern Oklahoma State",
+"nick": "Savage Storm"
+},
+"SEU": {
+"aliases": [
+"Southeastern",
+"Southeastern Fires"
+],
+"espn_id": "267",
+"name": "Southeastern",
+"nick": "Fires"
+},
+"SEWA": {
+"aliases": [
+"Sewanee",
+"Sewanee Tigers"
+],
+"espn_id": "2553",
+"name": "Sewanee",
+"nick": "Tigers"
+},
+"SFA": {
+"aliases": [
+"SF Austin",
+"Stephen F. Austin",
+"Stephen F. Austin Lumberjacks"
+],
+"espn_id": "2617",
+"kalshi": "SFA",
+"name": "Stephen F. Austin",
+"nick": "Lumberjacks"
+},
+"SFIL": {
+"aliases": [
+"St Francis IL",
+"St. Francis (IL)",
+"St. Francis (IL) Fighting Saints"
+],
+"espn_id": "2595",
+"name": "St. Francis (IL)",
+"nick": "Fighting Saints"
+},
+"SFIN": {
+"aliases": [
+"Saint Francis (IN)",
+"Saint Francis (IN) Cougars",
+"St Francis IN"
+],
+"espn_id": "2831",
+"name": "Saint Francis (IN)",
+"nick": "Cougars"
+},
+"SFPA": {
+"aliases": [
+"Saint Francis",
+"Saint Francis Red Flash"
+],
+"espn_id": "2598",
+"name": "Saint Francis",
+"nick": "Red Flash"
+},
+"SFU": {
+"aliases": [
+"Sioux Falls",
+"Sioux Falls Cougars"
+],
+"espn_id": "2894",
+"name": "Sioux Falls",
+"nick": "Cougars"
+},
+"SHAW": {
+"aliases": [
+"Shaw",
+"Shaw Bears"
+],
+"espn_id": "2551",
+"name": "Shaw",
+"nick": "Bears"
+},
+"SHEN": {
+"aliases": [
+"Shenandoah",
+"Shenandoah Hornets"
+],
+"espn_id": "2828",
+"name": "Shenandoah",
+"nick": "Hornets"
+},
+"SHEP": {
+"aliases": [
+"Shepherd",
+"Shepherd Rams"
+],
+"espn_id": "2974",
+"name": "Shepherd",
+"nick": "Rams"
+},
+"SHIP": {
+"aliases": [
+"Shippensburg",
+"Shippensburg Raiders"
+],
+"espn_id": "2559",
+"name": "Shippensburg",
+"nick": "Raiders"
+},
+"SHOU": {
+"aliases": [
+"Shorter",
+"Shorter Hawks"
+],
+"espn_id": "2560",
+"name": "Shorter",
+"nick": "Hawks"
+},
+"SHSU": {
+"aliases": [
+"Sam Houston",
+"Sam Houston Bearkats"
+],
+"espn_id": "2534",
+"kalshi": "SHSU",
+"name": "Sam Houston",
+"nick": "Bearkats"
+},
+"SHTU": {
+"aliases": [
+"Siena Heights",
+"Siena Heights Saints"
+],
+"espn_id": "2562",
+"name": "Siena Heights",
+"nick": "Saints"
+},
+"SHU": {
+"aliases": [
+"Sacred Heart",
+"Sacred Heart Pioneers"
+],
+"espn_id": "2529",
+"kalshi": "SHU",
+"name": "Sacred Heart",
+"nick": "Pioneers"
+},
+"SIU": {
+"aliases": [
+"S Illinois",
+"Southern Illinois",
+"Southern Illinois Salukis"
+],
+"espn_id": "79",
+"kalshi": "SIU",
+"name": "Southern Illinois",
+"nick": "Salukis"
+},
+"SJSU": {
+"aliases": [
+"San Jos\u00e9 St",
+"San Jos\u00e9 State",
+"San Jos\u00e9 State Spartans",
+"San Jose State"
+],
+"espn_id": "23",
+"kalshi": "SJSU",
+"name": "San Jos\u00e9 State",
+"nick": "Spartans"
+},
+"SMU": {
+"aliases": [
+"SMU",
+"SMU Mustangs",
+"Southern Methodist"
+],
+"espn_id": "2567",
+"kalshi": "SMU",
+"name": "SMU",
+"nick": "Mustangs"
+},
+"SNU": {
+"aliases": [
+"S Nazarene",
+"Southern Nazarene",
+"Southern Nazarene Crimson Storm"
+],
+"espn_id": "200",
+"name": "Southern Nazarene",
+"nick": "Crimson Storm"
+},
+"SOR": {
+"aliases": [
+"S Oregon",
+"Southern Oregon",
+"Southern Oregon Raiders"
+],
+"espn_id": "2584",
+"name": "Southern Oregon",
+"nick": "Raiders"
+},
+"SOSU": {
+"aliases": [
+"SW Oklahoma St",
+"Southwestern Oklahoma State",
+"Southwestern Oklahoma State Bulldogs"
+],
+"espn_id": "2927",
+"name": "Southwestern Oklahoma State",
+"nick": "Bulldogs"
+},
+"SOU": {
+"aliases": [
+"Southern",
+"Southern Jaguars"
+],
+"espn_id": "2582",
+"kalshi": "SOU",
+"name": "Southern",
+"nick": "Jaguars"
+},
+"SOVA": {
+"aliases": [
+"S Virginia",
+"Southern Virginia",
+"Southern Virginia Knights"
+],
+"espn_id": "2896",
+"name": "Southern Virginia",
+"nick": "Knights"
+},
+"SPR": {
+"aliases": [
+"Springfield",
+"Springfield Pride"
+],
+"espn_id": "81",
+"name": "Springfield",
+"nick": "Pride"
+},
+"SRST": {
+"aliases": [
+"Sul Ross St",
+"Sul Ross State",
+"Sul Ross State Lobos"
+],
+"espn_id": "2834",
+"name": "Sul Ross State",
+"nick": "Lobos"
+},
+"SRU": {
+"aliases": [
+"Slippery Rock",
+"Slippery Rock The Rock"
+],
+"espn_id": "215",
+"name": "Slippery Rock",
+"nick": "The Rock"
+},
+"STAM": {
+"aliases": [
+"St Ambrose",
+"St. Ambrose",
+"St. Ambrose Fighting Bees"
+],
+"espn_id": "2591",
+"name": "St. Ambrose",
+"nick": "Fighting Bees"
+},
+"STAN": {
+"aliases": [
+"Stanford",
+"Stanford Cardinal"
+],
+"espn_id": "24",
+"kalshi": "STAN",
+"name": "Stanford",
+"nick": "Cardinal"
+},
+"STAU": {
+"aliases": [
+"St Andrews",
+"St. Andrews",
+"St. Andrews Knights"
+],
+"espn_id": "111610",
+"name": "St. Andrews",
+"nick": "Knights"
+},
+"STBK": {
+"aliases": [
+"Stony Brook",
+"Stony Brook Seawolves",
+"STON"
+],
+"espn_id": "2619",
+"kalshi": "STON",
+"name": "Stony Brook",
+"nick": "Seawolves"
+},
+"STET": {
+"aliases": [
+"Stetson",
+"Stetson Hatters"
+],
+"espn_id": "56",
+"kalshi": "STET",
+"name": "Stetson",
+"nick": "Hatters"
+},
+"STJF": {
+"aliases": [
+"St John Fisher",
+"St. John Fisher",
+"St. John Fisher Cardinals"
+],
+"espn_id": "374",
+"name": "St. John Fisher",
+"nick": "Cardinals"
+},
+"STJM": {
+"aliases": [
+"Saint John's (MN)",
+"Saint John's (MN) Johnnies",
+"St Johns (MN)"
+],
+"espn_id": "2600",
+"name": "Saint John's (MN)",
+"nick": "Johnnies"
+},
+"STLG": {
+"aliases": [
+"Sterling",
+"Sterling STERLING KS"
+],
+"espn_id": "618",
+"name": "Sterling",
+"nick": "STERLING KS"
+},
+"STMN": {
+"aliases": [
+"St Thomas",
+"St. Thomas",
+"St. Thomas Tommies",
+"UST"
+],
+"espn_id": "2900",
+"kalshi": "UST",
+"name": "St. Thomas",
+"nick": "Tommies"
+},
+"STNC": {
+"aliases": [
+"St Norbert",
+"St. Norbert",
+"St. Norbert Green Knights"
+],
+"espn_id": "2832",
+"name": "St. Norbert",
+"nick": "Green Knights"
+},
+"STO": {
+"aliases": [
+"Stonehill",
+"Stonehill Skyhawks",
+"STNH"
+],
+"espn_id": "284",
+"kalshi": "STNH",
+"name": "Stonehill",
+"nick": "Skyhawks"
+},
+"STVS": {
+"aliases": [
+"Stevenson",
+"Stevenson Mustangs"
+],
+"espn_id": "471",
+"name": "Stevenson",
+"nick": "Mustangs"
+},
+"STX": {
+"aliases": [
+"Saint Xavier",
+"Saint Xavier Cougars"
+],
+"espn_id": "2615",
+"name": "Saint Xavier",
+"nick": "Cougars"
+},
+"SUCA": {
+"aliases": [
+"Simpson (CA)",
+"Simpson (CA) Red Hawks"
+],
+"espn_id": "129758",
+"name": "Simpson (CA)",
+"nick": "Red Hawks"
+},
+"SUSQ": {
+"aliases": [
+"Susquehanna",
+"Susquehanna River Hawks"
+],
+"espn_id": "216",
+"name": "Susquehanna",
+"nick": "River Hawks"
+},
+"SUU": {
+"aliases": [
+"Southern Utah",
+"Southern Utah Thunderbirds"
+],
+"espn_id": "253",
+"kalshi": "SUU",
+"name": "Southern Utah",
+"nick": "Thunderbirds"
+},
+"SVC": {
+"aliases": [
+"Saint Vincent",
+"Saint Vincent Bearcats"
+],
+"espn_id": "2614",
+"name": "Saint Vincent",
+"nick": "Bearcats"
+},
+"SVSU": {
+"aliases": [
+"Saginaw Valley",
+"Saginaw Valley State",
+"Saginaw Valley State Cardinals"
+],
+"espn_id": "129",
+"name": "Saginaw Valley State",
+"nick": "Cardinals"
+},
+"SWBU": {
+"aliases": [
+"SW Baptist",
+"Southwest Baptist",
+"Southwest Baptist Bearcats"
+],
+"espn_id": "2586",
+"name": "Southwest Baptist",
+"nick": "Bearcats"
+},
+"SWKS": {
+"aliases": [
+"SW Col (KS)",
+"Southwestern (KS)",
+"Southwestern (KS) Moundbuilders"
+],
+"espn_id": "616",
+"name": "Southwestern (KS)",
+"nick": "Moundbuilders"
+},
+"SWMS": {
+"aliases": [
+"SW Minn St",
+"Southwest Minnesota State",
+"Southwest Minnesota State Mustangs"
+],
+"espn_id": "2587",
+"name": "Southwest Minnesota State",
+"nick": "Mustangs"
+},
+"SWU": {
+"aliases": [
+"Southwestern",
+"Southwestern U",
+"Southwestern U Pirates"
+],
+"espn_id": "2588",
+"name": "Southwestern U",
+"nick": "Pirates"
+},
+"SYR": {
+"aliases": [
+"Syracuse",
+"Syracuse Orange"
+],
+"espn_id": "183",
+"name": "Syracuse",
+"nick": "Orange"
+},
+"TA&M": {
+"aliases": [
+"Texas A&M",
+"Texas A&M Aggies",
+"TXAM"
+],
+"espn_id": "245",
+"kalshi": "TXAM",
+"name": "Texas A&M",
+"nick": "Aggies"
+},
+"TAMK": {
+"aliases": [
+"TAMU-Kingsvlle",
+"Texas A&M-Kingsville",
+"Texas A&M-Kingsville Javelinas"
+],
+"espn_id": "2658",
+"name": "Texas A&M-Kingsville",
+"nick": "Javelinas"
+},
+"TAR": {
+"aliases": [
+"Tarleton St",
+"Tarleton State",
+"Tarleton State Texans",
+"TARL"
+],
+"espn_id": "2627",
+"kalshi": "TARL",
+"name": "Tarleton State",
+"nick": "Texans"
+},
+"TBIB": {
+"aliases": [
+"Trinity Bible",
+"Trinity Bible Lions"
+],
+"espn_id": "3214",
+"name": "Trinity Bible",
+"nick": "Lions"
+},
+"TCCT": {
+"aliases": [
+"Trinity (CT)",
+"Trinity (CT) Bantams"
+],
+"espn_id": "2977",
+"name": "Trinity (CT)",
+"nick": "Bantams"
+},
+"TCNJ": {
+"aliases": [
+"College of NJ",
+"The College of New Jersey",
+"The College of New Jersey Lions"
+],
+"espn_id": "2442",
+"name": "The College of New Jersey",
+"nick": "Lions"
+},
+"TCU": {
+"aliases": [
+"TCU",
+"TCU Horned Frogs",
+"Texas Christian"
+],
+"espn_id": "2628",
+"kalshi": "TCU",
+"name": "TCU",
+"nick": "Horned Frogs"
+},
+"TEM": {
+"aliases": [
+"Temple",
+"Temple Owls"
+],
+"espn_id": "218",
+"kalshi": "TEM",
+"name": "Temple",
+"nick": "Owls"
+},
+"TENN": {
+"aliases": [
+"Tennessee",
+"Tennessee Volunteers"
+],
+"espn_id": "2633",
+"kalshi": "TENN",
+"name": "Tennessee",
+"nick": "Volunteers"
+},
+"TEX": {
+"aliases": [
+"Texas",
+"Texas Longhorns"
+],
+"espn_id": "251",
+"kalshi": "TEX",
+"name": "Texas",
+"nick": "Longhorns"
+},
+"THI": {
+"aliases": [
+"Thiel",
+"Thiel Tomcats"
+],
+"espn_id": "2644",
+"name": "Thiel",
+"nick": "Tomcats"
+},
+"THO": {
+"aliases": [
+"Thomas",
+"Thomas Night Hawks"
+],
+"espn_id": "134000",
+"name": "Thomas",
+"nick": "Night Hawks"
+},
+"TIFF": {
+"aliases": [
+"Tiffin",
+"Tiffin Dragons"
+],
+"espn_id": "2838",
+"name": "Tiffin",
+"nick": "Dragons"
+},
+"TLRU": {
+"aliases": [
+"Taylor",
+"Taylor Trojans"
+],
+"espn_id": "620",
+"name": "Taylor",
+"nick": "Trojans"
+},
+"TLSA": {
+"aliases": [
+"Tulsa",
+"Tulsa Golden Hurricane"
+],
+"espn_id": "202",
+"kalshi": "TLSA",
+"name": "Tulsa",
+"nick": "Golden Hurricane"
+},
+"TMOR": {
+"aliases": [
+"Thomas More",
+"Thomas More Saints"
+],
+"espn_id": "2646",
+"name": "Thomas More",
+"nick": "Saints"
+},
+"TNST": {
+"aliases": [
+"Tennessee St",
+"Tennessee State",
+"Tennessee State Tigers"
+],
+"espn_id": "2634",
+"kalshi": "TNST",
+"name": "Tennessee State",
+"nick": "Tigers"
+},
+"TNTC": {
+"aliases": [
+"Tennessee Tech",
+"Tennessee Tech Golden Eagles"
+],
+"espn_id": "2635",
+"kalshi": "TNTC",
+"name": "Tennessee Tech",
+"nick": "Golden Eagles"
+},
+"TOL": {
+"aliases": [
+"Toledo",
+"Toledo Rockets"
+],
+"espn_id": "2649",
+"kalshi": "TOL",
+"name": "Toledo",
+"nick": "Rockets"
+},
+"TOW": {
+"aliases": [
+"Towson",
+"Towson Tigers",
+"TOWS"
+],
+"espn_id": "119",
+"kalshi": "TOWS",
+"name": "Towson",
+"nick": "Tigers"
+},
+"TRNE": {
+"aliases": [
+"Trine",
+"Trine Thunder"
+],
+"espn_id": "2651",
+"name": "Trine",
+"nick": "Thunder"
+},
+"TROY": {
+"aliases": [
+"Troy",
+"Troy Trojans"
+],
+"espn_id": "2653",
+"kalshi": "TROY",
+"name": "Troy",
+"nick": "Trojans"
+},
+"TRST": {
+"aliases": [
+"Truman St",
+"Truman State",
+"Truman State Bulldogs"
+],
+"espn_id": "2654",
+"name": "Truman State",
+"nick": "Bulldogs"
+},
+"TTU": {
+"aliases": [
+"Texas Tech",
+"Texas Tech Red Raiders"
+],
+"espn_id": "2641",
+"kalshi": "TTU",
+"name": "Texas Tech",
+"nick": "Red Raiders"
+},
+"TUFT": {
+"aliases": [
+"Tufts",
+"Tufts Jumbos"
+],
+"espn_id": "112",
+"name": "Tufts",
+"nick": "Jumbos"
+},
+"TULN": {
+"aliases": [
+"Tulane",
+"Tulane Green Wave"
+],
+"espn_id": "2655",
+"kalshi": "TULN",
+"name": "Tulane",
+"nick": "Green Wave"
+},
+"TUSC": {
+"aliases": [
+"Tusculum",
+"Tusculum Pioneers"
+],
+"espn_id": "2839",
+"name": "Tusculum",
+"nick": "Pioneers"
+},
+"TUSK": {
+"aliases": [
+"Tuskegee",
+"Tuskegee Golden Tigers"
+],
+"espn_id": "2657",
+"name": "Tuskegee",
+"nick": "Golden Tigers"
+},
+"TUTX": {
+"aliases": [
+"Trinity (TX)",
+"Trinity (TX) Tigers"
+],
+"espn_id": "386",
+"name": "Trinity (TX)",
+"nick": "Tigers"
+},
+"TXCL": {
+"aliases": [
+"Texas College",
+"Texas College Steers"
+],
+"espn_id": "2637",
+"name": "Texas College",
+"nick": "Steers"
+},
+"TXLU": {
+"aliases": [
+"Texas Lutheran",
+"Texas Lutheran Bulldogs"
+],
+"espn_id": "2639",
+"name": "Texas Lutheran",
+"nick": "Bulldogs"
+},
+"TXSO": {
+"aliases": [
+"Texas Southern",
+"Texas Southern Tigers"
+],
+"espn_id": "2640",
+"kalshi": "TXSO",
+"name": "Texas Southern",
+"nick": "Tigers"
+},
+"TXST": {
+"aliases": [
+"Texas St",
+"Texas State",
+"Texas State Bobcats"
+],
+"espn_id": "326",
+"kalshi": "TXST",
+"name": "Texas State",
+"nick": "Bobcats"
+},
+"UAB": {
+"aliases": [
+"UAB",
+"UAB Blazers",
+"Alabama-Birmingham",
+"Alabama Birmingham"
+],
+"espn_id": "5",
+"kalshi": "UAB",
+"name": "UAB",
+"nick": "Blazers"
+},
+"UALB": {
+"aliases": [
+"UAlbany",
+"UAlbany Great Danes",
+"University at Albany",
+"Albany",
+"ALBY"
+],
+"espn_id": "399",
+"name": "UAlbany",
+"nick": "Great Danes"
+},
+"UAM": {
+"aliases": [
+"Arkansas Monticello",
+"Arkansas Monticello Boll Weevils",
+"UA Monticello"
+],
+"espn_id": "2028",
+"name": "Arkansas Monticello",
+"nick": "Boll Weevils"
+},
+"UAPB": {
+"aliases": [
+"AR-Pine Bluff",
+"Arkansas-Pine Bluff",
+"Arkansas-Pine Bluff Golden Lions"
+],
+"espn_id": "2029",
+"name": "Arkansas-Pine Bluff",
+"nick": "Golden Lions"
+},
+"UCD": {
+"aliases": [
+"UC Davis",
+"UC Davis Aggies"
+],
+"espn_id": "302",
+"kalshi": "UCD",
+"name": "UC Davis",
+"nick": "Aggies"
+},
+"UCF": {
+"aliases": [
+"UCF",
+"UCF Knights",
+"Central Florida"
+],
+"espn_id": "2116",
+"kalshi": "UCF",
+"name": "UCF",
+"nick": "Knights"
+},
+"UCLA": {
+"aliases": [
+"UCLA",
+"UCLA Bruins"
+],
+"espn_id": "26",
+"kalshi": "UCLA",
+"name": "UCLA",
+"nick": "Bruins"
+},
+"UCM": {
+"aliases": [
+"C Missouri",
+"Central Missouri",
+"Central Missouri Mules"
+],
+"espn_id": "2118",
+"name": "Central Missouri",
+"nick": "Mules"
+},
+"UCO": {
+"aliases": [
+"C Oklahoma",
+"Central Oklahoma",
+"Central Oklahoma Bronchos"
+],
+"espn_id": "2122",
+"name": "Central Oklahoma",
+"nick": "Bronchos"
+},
+"UCWV": {
+"aliases": [
+"Charleston (WV)",
+"Charleston (WV) Golden Eagles",
+"Charleston WV"
+],
+"espn_id": "2128",
+"name": "Charleston (WV)",
+"nick": "Golden Eagles"
+},
+"UF": {
+"aliases": [
+"Findlay",
+"Findlay Oilers"
+],
+"espn_id": "2224",
+"name": "Findlay",
+"nick": "Oilers"
+},
+"UFFL": {
+"aliases": [
+"St. Petersburg",
+"St. Petersburg Glory Eagles",
+"U of Faith"
+],
+"espn_id": "3254",
+"name": "St. Petersburg",
+"nick": "Glory Eagles"
+},
+"UGA": {
+"aliases": [
+"Georgia",
+"Georgia Bulldogs"
+],
+"espn_id": "61",
+"kalshi": "UGA",
+"name": "Georgia",
+"nick": "Bulldogs"
+},
+"UIU": {
+"aliases": [
+"Upper Iowa",
+"Upper Iowa Peacocks"
+],
+"espn_id": "389",
+"name": "Upper Iowa",
+"nick": "Peacocks"
+},
+"UIW": {
+"aliases": [
+"Incarnate Word",
+"Incarnate Word Cardinals",
+"IW"
+],
+"espn_id": "2916",
+"kalshi": "IW",
+"name": "Incarnate Word",
+"nick": "Cardinals"
+},
+"UJ": {
+"aliases": [
+"Jamestown",
+"Jamestown Jimmies"
+],
+"espn_id": "2939",
+"name": "Jamestown",
+"nick": "Jimmies"
+},
+"UK": {
+"aliases": [
+"Kentucky",
+"Kentucky Wildcats"
+],
+"espn_id": "96",
+"kalshi": "UK",
+"name": "Kentucky",
+"nick": "Wildcats"
+},
+"UL": {
+"aliases": [
+"Louisiana",
+"Louisiana Ragin' Cajuns",
+"Louisiana-Lafayette",
+"Louisiana Lafayette",
+"Louisiana Ragin Cajuns",
+"UL Lafayette",
+"ULL"
+],
+"espn_id": "309",
+"kalshi": "ULL",
+"name": "Louisiana",
+"nick": "Ragin' Cajuns"
+},
+"ULM": {
+"aliases": [
+"UL Monroe",
+"UL Monroe Warhawks",
+"Louisiana-Monroe",
+"Louisiana Monroe"
+],
+"espn_id": "2433",
+"kalshi": "ULM",
+"name": "UL Monroe",
+"nick": "Warhawks"
+},
+"ULV": {
+"aliases": [
+"La Verne",
+"La Verne Leopards"
+],
+"espn_id": "2318",
+"name": "La Verne",
+"nick": "Leopards"
+},
+"UMD": {
+"aliases": [
+"Minn Duluth",
+"Minnesota Duluth",
+"Minnesota Duluth Bulldogs"
+],
+"espn_id": "134",
+"name": "Minnesota Duluth",
+"nick": "Bulldogs"
+},
+"UMMA": {
+"aliases": [
+"Maine Maritime",
+"Maine Maritime Mariners"
+],
+"espn_id": "274",
+"name": "Maine Maritime",
+"nick": "Mariners"
+},
+"UMU": {
+"aliases": [
+"Mount Union",
+"Mount Union Purple Raiders",
+"Mt Union"
+],
+"espn_id": "426",
+"name": "Mount Union",
+"nick": "Purple Raiders"
+},
+"UMW": {
+"aliases": [
+"MT Western",
+"Montana Western",
+"Montana Western Bulldogs"
+],
+"espn_id": "2701",
+"name": "Montana Western",
+"nick": "Bulldogs"
+},
+"UNA": {
+"aliases": [
+"North Alabama",
+"North Alabama Lions"
+],
+"espn_id": "2453",
+"kalshi": "UNA",
+"name": "North Alabama",
+"nick": "Lions"
+},
+"UNAM": {
+"aliases": [
+"U of Mexico",
+"University of Mexico",
+"University of Mexico MEXICO U"
+],
+"espn_id": "3212",
+"name": "University of Mexico",
+"nick": "MEXICO U"
+},
+"UNC": {
+"aliases": [
+"North Carolina",
+"North Carolina Tar Heels"
+],
+"espn_id": "153",
+"kalshi": "UNC",
+"name": "North Carolina",
+"nick": "Tar Heels"
+},
+"UNCO": {
+"aliases": [
+"N Colorado",
+"Northern Colorado",
+"Northern Colorado Bears"
+],
+"espn_id": "2458",
+"kalshi": "UNCO",
+"name": "Northern Colorado",
+"nick": "Bears"
+},
+"UNCP": {
+"aliases": [
+"UNC Pembroke",
+"UNC Pembroke Braves"
+],
+"espn_id": "2882",
+"name": "UNC Pembroke",
+"nick": "Braves"
+},
+"UND": {
+"aliases": [
+"North Dakota",
+"North Dakota Fighting Hawks"
+],
+"espn_id": "155",
+"kalshi": "UND",
+"name": "North Dakota",
+"nick": "Fighting Hawks"
+},
+"UNE": {
+"aliases": [
+"New England",
+"New England Nor'easters"
+],
+"espn_id": "111675",
+"name": "New England",
+"nick": "Nor'easters"
+},
+"UNH": {
+"aliases": [
+"New Hampshire",
+"New Hampshire Wildcats"
+],
+"espn_id": "160",
+"kalshi": "UNH",
+"name": "New Hampshire",
+"nick": "Wildcats"
+},
+"UNI": {
+"aliases": [
+"Northern Iowa",
+"Northern Iowa Panthers"
+],
+"espn_id": "2460",
+"kalshi": "UNI",
+"name": "Northern Iowa",
+"nick": "Panthers"
+},
+"UNLV": {
+"aliases": [
+"UNLV",
+"UNLV Rebels",
+"Nevada-Las Vegas",
+"Nevada Las Vegas"
+],
+"espn_id": "2439",
+"kalshi": "UNLV",
+"name": "UNLV",
+"nick": "Rebels"
+},
+"UNM": {
+"aliases": [
+"New Mexico",
+"New Mexico Lobos"
+],
+"espn_id": "167",
+"kalshi": "UNM",
+"name": "New Mexico",
+"nick": "Lobos"
+},
+"UNNY": {
+"aliases": [
+"Union",
+"Union Garnet Chargers"
+],
+"espn_id": "237",
+"name": "Union",
+"nick": "Garnet Chargers"
+},
+"UNT": {
+"aliases": [
+"North Texas",
+"North Texas Mean Green"
+],
+"espn_id": "249",
+"kalshi": "UNT",
+"name": "North Texas",
+"nick": "Mean Green"
+},
+"UNW": {
+"aliases": [
+"N'Western (MN)",
+"Northwestern (MN)",
+"Northwestern (MN) Eagles"
+],
+"espn_id": "583",
+"name": "Northwestern (MN)",
+"nick": "Eagles"
+},
+"UOO": {
+"aliases": [
+"Olivet",
+"Olivet Comets"
+],
+"espn_id": "354",
+"name": "Olivet",
+"nick": "Comets"
+},
+"URI": {
+"aliases": [
+"Rhode Island",
+"Rhode Island Rams"
+],
+"espn_id": "227",
+"kalshi": "URI",
+"name": "Rhode Island",
+"nick": "Rams"
+},
+"URNY": {
+"aliases": [
+"Rochester (NY)",
+"Rochester (NY) Yellow Jackets"
+],
+"espn_id": "184",
+"name": "Rochester (NY)",
+"nick": "Yellow Jackets"
+},
+"URSN": {
+"aliases": [
+"Ursinus",
+"Ursinus Bears"
+],
+"espn_id": "2667",
+"name": "Ursinus",
+"nick": "Bears"
+},
+"USA": {
+"aliases": [
+"South Alabama",
+"South Alabama Jaguars"
+],
+"espn_id": "6",
+"kalshi": "USA",
+"name": "South Alabama",
+"nick": "Jaguars"
+},
+"USC": {
+"aliases": [
+"USC",
+"USC Trojans",
+"Southern California"
+],
+"espn_id": "30",
+"kalshi": "USC",
+"name": "USC",
+"nick": "Trojans"
+},
+"USCG": {
+"aliases": [
+"Coast Guard",
+"Coast Guard Bears"
+],
+"espn_id": "2557",
+"name": "Coast Guard",
+"nick": "Bears"
+},
+"USD": {
+"aliases": [
+"San Diego",
+"San Diego Toreros"
+],
+"espn_id": "301",
+"kalshi": "USD",
+"name": "San Diego",
+"nick": "Toreros"
+},
+"USF": {
+"aliases": [
+"South Florida",
+"South Florida Bulls"
+],
+"espn_id": "58",
+"kalshi": "USF",
+"name": "South Florida",
+"nick": "Bulls"
+},
+"USL": {
+"aliases": [
+"St Lawrence",
+"St. Lawrence",
+"St. Lawrence Saints"
+],
+"espn_id": "2779",
+"name": "St. Lawrence",
+"nick": "Saints"
+},
+"USM": {
+"aliases": [
+"Southern Miss",
+"Southern Miss Golden Eagles"
+],
+"espn_id": "2572",
+"kalshi": "USM",
+"name": "Southern Miss",
+"nick": "Golden Eagles"
+},
+"USU": {
+"aliases": [
+"Utah State",
+"Utah State Aggies"
+],
+"espn_id": "328",
+"kalshi": "USU",
+"name": "Utah State",
+"nick": "Aggies"
+},
+"UTAH": {
+"aliases": [
+"Utah",
+"Utah Utes"
+],
+"espn_id": "254",
+"kalshi": "UTAH",
+"name": "Utah",
+"nick": "Utes"
+},
+"UTC": {
+"aliases": [
+"Chattanooga",
+"Chattanooga Mocs",
+"CHAT"
+],
+"espn_id": "236",
+"kalshi": "CHAT",
+"name": "Chattanooga",
+"nick": "Mocs"
+},
+"UTEP": {
+"aliases": [
+"UTEP",
+"UTEP Miners",
+"Texas-El Paso",
+"Texas El Paso"
+],
+"espn_id": "2638",
+"kalshi": "UTEP",
+"name": "UTEP",
+"nick": "Miners"
+},
+"UTIC": {
+"aliases": [
+"Utica",
+"Utica Pioneers"
+],
+"espn_id": "390",
+"name": "Utica",
+"nick": "Pioneers"
+},
+"UTM": {
+"aliases": [
+"UT Martin",
+"UT Martin Skyhawks"
+],
+"espn_id": "2630",
+"kalshi": "UTM",
+"name": "UT Martin",
+"nick": "Skyhawks"
+},
+"UTPB": {
+"aliases": [
+"UT Permian Basin",
+"UT Permian Basin Falcons",
+"UT Prmian Basn"
+],
+"espn_id": "110243",
+"name": "UT Permian Basin",
+"nick": "Falcons"
+},
+"UTRGV": {
+"aliases": [
+"UTRGV",
+"UT Rio Grande Valley",
+"Texas-Rio Grande Valley",
+"Rio Grande Valley"
+],
+"espn_id": null,
+"kalshi": "UTRGV",
+"name": "UT Rio Grande Valley",
+"nick": "Vaqueros"
+},
+"UTSA": {
+"aliases": [
+"UTSA",
+"UTSA Roadrunners",
+"Texas-San Antonio",
+"Texas San Antonio"
+],
+"espn_id": "2636",
+"kalshi": "UTSA",
+"name": "UTSA",
+"nick": "Roadrunners"
+},
+"UTU": {
+"aliases": [
+"Utah Tech",
+"Utah Tech Trailblazers"
+],
+"espn_id": "3101",
+"kalshi": "UTU",
+"name": "Utah Tech",
+"nick": "Trailblazers"
+},
+"UVA": {
+"aliases": [
+"Virginia",
+"Virginia Cavaliers"
+],
+"espn_id": "258",
+"kalshi": "UVA",
+"name": "Virginia",
+"nick": "Cavaliers"
+},
+"UVAW": {
+"aliases": [
+"UVA Wise",
+"UVA Wise Cavaliers"
+],
+"espn_id": "2842",
+"name": "UVA Wise",
+"nick": "Cavaliers"
+},
+"UWA": {
+"aliases": [
+"West Alabama",
+"West Alabama Tigers"
+],
+"espn_id": "2695",
+"name": "West Alabama",
+"nick": "Tigers"
+},
+"UWEC": {
+"aliases": [
+"UW-Eau Claire",
+"Wisconsin Eau Claire",
+"Wisconsin Eau Claire Blugolds"
+],
+"espn_id": "2738",
+"name": "Wisconsin Eau Claire",
+"nick": "Blugolds"
+},
+"UWF": {
+"aliases": [
+"West Florida",
+"West Florida Argonauts",
+"UWFL"
+],
+"espn_id": "110242",
+"kalshi": "UWFL",
+"name": "West Florida",
+"nick": "Argonauts"
+},
+"UWL": {
+"aliases": [
+"UW-La Crosse",
+"Wisconsin La Crosse",
+"Wisconsin La Crosse Eagles"
+],
+"espn_id": "2740",
+"name": "Wisconsin La Crosse",
+"nick": "Eagles"
+},
+"UWO": {
+"aliases": [
+"UW-Oshkosh",
+"Wisconsin Oshkosh",
+"Wisconsin Oshkosh Titans"
+],
+"espn_id": "271",
+"name": "Wisconsin Oshkosh",
+"nick": "Titans"
+},
+"UWP": {
+"aliases": [
+"UW-Platteville",
+"Wisconsin Platteville",
+"Wisconsin Platteville Pioneers"
+],
+"espn_id": "272",
+"name": "Wisconsin Platteville",
+"nick": "Pioneers"
+},
+"UWRF": {
+"aliases": [
+"UW-River Falls",
+"Wisconsin River Falls",
+"Wisconsin River Falls Falcons"
+],
+"espn_id": "2723",
+"name": "Wisconsin River Falls",
+"nick": "Falcons"
+},
+"UWSP": {
+"aliases": [
+"UW-Stevens Pt",
+"Wisconsin Stevens Point",
+"Wisconsin Stevens Point Pointers"
+],
+"espn_id": "2743",
+"name": "Wisconsin Stevens Point",
+"nick": "Pointers"
+},
+"UWST": {
+"aliases": [
+"UW-Stout",
+"Wisconsin Stout",
+"Wisconsin Stout Blue Devils"
+],
+"espn_id": "2744",
+"name": "Wisconsin Stout",
+"nick": "Blue Devils"
+},
+"UWW": {
+"aliases": [
+"UW-Whitewater",
+"Wisconsin Whitewater",
+"Wisconsin Whitewater Warhawks"
+],
+"espn_id": "2745",
+"name": "Wisconsin Whitewater",
+"nick": "Warhawks"
+},
+"VAL": {
+"aliases": [
+"Valparaiso",
+"Valparaiso Beacons",
+"VALP"
+],
+"espn_id": "2674",
+"kalshi": "VALP",
+"name": "Valparaiso",
+"nick": "Beacons"
+},
+"VALD": {
+"aliases": [
+"Valdosta St",
+"Valdosta State",
+"Valdosta State Blazers"
+],
+"espn_id": "2673",
+"name": "Valdosta State",
+"nick": "Blazers"
+},
+"VAN": {
+"aliases": [
+"Vanderbilt",
+"Vanderbilt Commodores"
+],
+"espn_id": "238",
+"kalshi": "VAN",
+"name": "Vanderbilt",
+"nick": "Commodores"
+},
+"VCSU": {
+"aliases": [
+"Valley City St",
+"Valley City State",
+"Valley City State Vikings"
+],
+"espn_id": "628",
+"name": "Valley City State",
+"nick": "Vikings"
+},
+"VILL": {
+"aliases": [
+"Villanova",
+"Villanova Wildcats"
+],
+"espn_id": "222",
+"kalshi": "VILL",
+"name": "Villanova",
+"nick": "Wildcats"
+},
+"VMI": {
+"aliases": [
+"VMI",
+"VMI Keydets"
+],
+"espn_id": "2678",
+"kalshi": "VMI",
+"name": "VMI",
+"nick": "Keydets"
+},
+"VSU": {
+"aliases": [
+"Virginia St",
+"Virginia State",
+"Virginia State Trojans"
+],
+"espn_id": "330",
+"name": "Virginia State",
+"nick": "Trojans"
+},
+"VT": {
+"aliases": [
+"Virginia Tech",
+"Virginia Tech Hokies"
+],
+"espn_id": "259",
+"kalshi": "VT",
+"name": "Virginia Tech",
+"nick": "Hokies"
+},
+"VTSC": {
+"aliases": [
+"VTSU Castleton",
+"Vermont State Castleton",
+"Vermont State Castleton Spartans"
+],
+"espn_id": "293",
+"name": "Vermont State Castleton",
+"nick": "Spartans"
+},
+"VUL": {
+"aliases": [
+"VA Lynchburg",
+"Virginia Lynchburg",
+"Virginia Lynchburg Dragons"
+],
+"espn_id": "2355",
+"name": "Virginia Lynchburg",
+"nick": "Dragons"
+},
+"VUU": {
+"aliases": [
+"Virginia Union",
+"Virginia Union Panthers"
+],
+"espn_id": "2676",
+"name": "Virginia Union",
+"nick": "Panthers"
+},
+"W&J": {
+"aliases": [
+"Wash & Jeff",
+"Washington & Jefferson",
+"Washington & Jefferson Presidents"
+],
+"espn_id": "2686",
+"name": "Washington & Jefferson",
+"nick": "Presidents"
+},
+"W&L": {
+"aliases": [
+"Wash and Lee",
+"Washington and Lee",
+"Washington and Lee Generals"
+],
+"espn_id": "2688",
+"name": "Washington and Lee",
+"nick": "Generals"
+},
+"W&M": {
+"aliases": [
+"William & Mary",
+"William & Mary Tribe",
+"WM"
+],
+"espn_id": "2729",
+"kalshi": "WM",
+"name": "William & Mary",
+"nick": "Tribe"
+},
+"WAB": {
+"aliases": [
+"Wabash",
+"Wabash Little Giants"
+],
+"espn_id": "89",
+"name": "Wabash",
+"nick": "Little Giants"
+},
+"WAG": {
+"aliases": [
+"Wagner",
+"Wagner Seahawks"
+],
+"espn_id": "2681",
+"kalshi": "WAG",
+"name": "Wagner",
+"nick": "Seahawks"
+},
+"WAKE": {
+"aliases": [
+"Wake Forest",
+"Wake Forest Demon Deacons"
+],
+"espn_id": "154",
+"kalshi": "WAKE",
+"name": "Wake Forest",
+"nick": "Demon Deacons"
+},
+"WASH": {
+"aliases": [
+"Washington",
+"Washington Huskies"
+],
+"espn_id": "264",
+"kalshi": "WASH",
+"name": "Washington",
+"nick": "Huskies"
+},
+"WAYN": {
+"aliases": [
+"Waynesburg",
+"Waynesburg Yellow Jackets"
+],
+"espn_id": "2845",
+"name": "Waynesburg",
+"nick": "Yellow Jackets"
+},
+"WCHT": {
+"aliases": [
+"West Chester",
+"West Chester Golden Rams"
+],
+"espn_id": "223",
+"name": "West Chester",
+"nick": "Golden Rams"
+},
+"WCIL": {
+"aliases": [
+"Wheaton (IL)",
+"Wheaton (IL) Thunder"
+],
+"espn_id": "396",
+"name": "Wheaton (IL)",
+"nick": "Thunder"
+},
+"WCMO": {
+"aliases": [
+"Westminster (MO)",
+"Westminster (MO) Blue Jays",
+"Westminster MO"
+],
+"espn_id": "433",
+"name": "Westminster (MO)",
+"nick": "Blue Jays"
+},
+"WCOH": {
+"aliases": [
+"Wilmington (OH)",
+"Wilmington (OH) Fightin' Quakers",
+"Wilmington OH"
+],
+"espn_id": "2733",
+"name": "Wilmington (OH)",
+"nick": "Fightin' Quakers"
+},
+"WCOL": {
+"aliases": [
+"W Colorado",
+"Western Colorado",
+"Western Colorado Mountaineers"
+],
+"espn_id": "2714",
+"name": "Western Colorado",
+"nick": "Mountaineers"
+},
+"WCPA": {
+"aliases": [
+"Westminster (PA)",
+"Westminster (PA) Titans",
+"Westminster PA"
+],
+"espn_id": "2849",
+"name": "Westminster (PA)",
+"nick": "Titans"
+},
+"WCSU": {
+"aliases": [
+"WestConn",
+"Western Connecticut State",
+"Western Connecticut State Wolves"
+],
+"espn_id": "2843",
+"name": "Western Connecticut State",
+"nick": "Wolves"
+},
+"WCU": {
+"aliases": [
+"W Carolina",
+"Western Carolina",
+"Western Carolina Catamounts"
+],
+"espn_id": "2717",
+"kalshi": "WCU",
+"name": "Western Carolina",
+"nick": "Catamounts"
+},
+"WEB": {
+"aliases": [
+"Weber St",
+"Weber State",
+"Weber State Wildcats"
+],
+"espn_id": "2692",
+"kalshi": "WEB",
+"name": "Weber State",
+"nick": "Wildcats"
+},
+"WES": {
+"aliases": [
+"Westgate Chris",
+"Westgate Christian University",
+"Westgate Christian University Ravens"
+],
+"espn_id": "134087",
+"name": "Westgate Christian University",
+"nick": "Ravens"
+},
+"WFST": {
+"aliases": [
+"Westfield St",
+"Westfield State",
+"Westfield State Owls"
+],
+"espn_id": "2909",
+"name": "Westfield State",
+"nick": "Owls"
+},
+"WGA": {
+"aliases": [
+"West Georgia",
+"West Georgia Wolves",
+"UWGA"
+],
+"espn_id": "2698",
+"kalshi": "UWGA",
+"name": "West Georgia",
+"nick": "Wolves"
+},
+"WHIW": {
+"aliases": [
+"Whitworth",
+"Whitworth Pirates"
+],
+"espn_id": "2721",
+"name": "Whitworth",
+"nick": "Pirates"
+},
+"WHLG": {
+"aliases": [
+"Wheeling",
+"Wheeling Cardinals"
+],
+"espn_id": "112335",
+"name": "Wheeling",
+"nick": "Cardinals"
+},
+"WHTR": {
+"aliases": [
+"Whittier",
+"Whittier Poets"
+],
+"espn_id": "2850",
+"name": "Whittier",
+"nick": "Poets"
+},
+"WIDE": {
+"aliases": [
+"Widener",
+"Widener Pride"
+],
+"espn_id": "2725",
+"name": "Widener",
+"nick": "Pride"
+},
+"WILK": {
+"aliases": [
+"Wilkes",
+"Wilkes Colonels"
+],
+"espn_id": "398",
+"name": "Wilkes",
+"nick": "Colonels"
+},
+"WINT": {
+"aliases": [
+"Webber Int'l",
+"Webber International",
+"Webber International Warriors"
+],
+"espn_id": "2691",
+"name": "Webber International",
+"nick": "Warriors"
+},
+"WINU": {
+"aliases": [
+"Wingate",
+"Wingate Bulldogs"
+],
+"espn_id": "351",
+"name": "Wingate",
+"nick": "Bulldogs"
+},
+"WIS": {
+"aliases": [
+"Wisconsin",
+"Wisconsin Badgers"
+],
+"espn_id": "275",
+"kalshi": "WIS",
+"name": "Wisconsin",
+"nick": "Badgers"
+},
+"WITT": {
+"aliases": [
+"Wittenberg",
+"Wittenberg Tigers"
+],
+"espn_id": "2746",
+"name": "Wittenberg",
+"nick": "Tigers"
+},
+"WIU": {
+"aliases": [
+"W Illinois",
+"Western Illinois",
+"Western Illinois Leathernecks"
+],
+"espn_id": "2710",
+"kalshi": "WIU",
+"name": "Western Illinois",
+"nick": "Leathernecks"
+},
+"WJC": {
+"aliases": [
+"William Jewell",
+"William Jewell Cardinals"
+],
+"espn_id": "2911",
+"name": "William Jewell",
+"nick": "Cardinals"
+},
+"WKU": {
+"aliases": [
+"Western KY",
+"Western Kentucky",
+"Western Kentucky Hilltoppers"
+],
+"espn_id": "98",
+"kalshi": "WKU",
+"name": "Western Kentucky",
+"nick": "Hilltoppers"
+},
+"WLC": {
+"aliases": [
+"Wisc Lutheran",
+"Wisconsin Lutheran",
+"Wisconsin Lutheran Warriors"
+],
+"espn_id": "2741",
+"name": "Wisconsin Lutheran",
+"nick": "Warriors"
+},
+"WLDF": {
+"aliases": [
+"Waldorf",
+"Waldorf Warriors"
+],
+"espn_id": "3080",
+"name": "Waldorf",
+"nick": "Warriors"
+},
+"WLM": {
+"aliases": [
+"Williams",
+"Williams Ephs"
+],
+"espn_id": "2731",
+"name": "Williams",
+"nick": "Ephs"
+},
+"WLMT": {
+"aliases": [
+"Willamette",
+"Willamette Bearcats"
+],
+"espn_id": "2930",
+"name": "Willamette",
+"nick": "Bearcats"
+},
+"WLSH": {
+"aliases": [
+"Walsh",
+"Walsh Cavaliers"
+],
+"espn_id": "2682",
+"name": "Walsh",
+"nick": "Cavaliers"
+},
+"WLU": {
+"aliases": [
+"West Liberty",
+"West Liberty Hilltoppers"
+],
+"espn_id": "2699",
+"name": "West Liberty",
+"nick": "Hilltoppers"
+},
+"WLWD": {
+"aliases": [
+"William Woods",
+"William Woods Owls"
+],
+"espn_id": "129741",
+"name": "William Woods",
+"nick": "Owls"
+},
+"WMSN": {
+"aliases": [
+"Williamson",
+"Williamson Mechanics"
+],
+"espn_id": "3130",
+"name": "Williamson",
+"nick": "Mechanics"
+},
+"WMU": {
+"aliases": [
+"W Michigan",
+"Western Michigan",
+"Western Michigan Broncos"
+],
+"espn_id": "2711",
+"kalshi": "WMU",
+"name": "Western Michigan",
+"nick": "Broncos"
+},
+"WNE": {
+"aliases": [
+"W New England",
+"Western New England",
+"Western New England Golden Bears"
+],
+"espn_id": "2702",
+"name": "Western New England",
+"nick": "Golden Bears"
+},
+"WNMU": {
+"aliases": [
+"Western NM",
+"Western New Mexico",
+"Western New Mexico Mustangs"
+],
+"espn_id": "2703",
+"name": "Western New Mexico",
+"nick": "Mustangs"
+},
+"WNST": {
+"aliases": [
+"Winona St",
+"Winona State",
+"Winona State Warriors"
+],
+"espn_id": "2851",
+"name": "Winona State",
+"nick": "Warriors"
+},
+"WOF": {
+"aliases": [
+"Wofford",
+"Wofford Terriers"
+],
+"espn_id": "2747",
+"kalshi": "WOF",
+"name": "Wofford",
+"nick": "Terriers"
+},
+"WOO": {
+"aliases": [
+"Wooster",
+"Wooster Fighting Scots"
+],
+"espn_id": "2748",
+"name": "Wooster",
+"nick": "Fighting Scots"
+},
+"WORC": {
+"aliases": [
+"Worcester St",
+"Worcester State",
+"Worcester State Lancers"
+],
+"espn_id": "402",
+"name": "Worcester State",
+"nick": "Lancers"
+},
+"WORU": {
+"aliases": [
+"West Oregon",
+"Western Oregon",
+"Western Oregon Wolves"
+],
+"espn_id": "2848",
+"name": "Western Oregon",
+"nick": "Wolves"
+},
+"WPEN": {
+"aliases": [
+"William Penn",
+"William Penn Statesmen"
+],
+"espn_id": "2912",
+"name": "William Penn",
+"nick": "Statesmen"
+},
+"WPI": {
+"aliases": [
+"WPI",
+"WPI Engineers"
+],
+"espn_id": "2749",
+"name": "WPI",
+"nick": "Engineers"
+},
+"WPU": {
+"aliases": [
+"William Paterson",
+"William Paterson Pioneers",
+"Wm Paterson"
+],
+"espn_id": "2970",
+"name": "William Paterson",
+"nick": "Pioneers"
+},
+"WRNR": {
+"aliases": [
+"Warner",
+"Warner Royals"
+],
+"espn_id": "2683",
+"name": "Warner",
+"nick": "Royals"
+},
+"WSBN": {
+"aliases": [
+"Washburn",
+"Washburn Ichabods"
+],
+"espn_id": "2687",
+"name": "Washburn",
+"nick": "Ichabods"
+},
+"WSCT": {
+"aliases": [
+"Wesleyan (CT)",
+"Wesleyan (CT) Cardinals"
+],
+"espn_id": "336",
+"name": "Wesleyan (CT)",
+"nick": "Cardinals"
+},
+"WSMI": {
+"aliases": [
+"Wayne St (MI)",
+"Wayne State (MI)",
+"Wayne State (MI) Warriors"
+],
+"espn_id": "131",
+"name": "Wayne State (MI)",
+"nick": "Warriors"
+},
+"WSNE": {
+"aliases": [
+"Wayne St (NE)",
+"Wayne State (NE)",
+"Wayne State (NE) Wildcats"
+],
+"espn_id": "2844",
+"name": "Wayne State (NE)",
+"nick": "Wildcats"
+},
+"WSSU": {
+"aliases": [
+"Winston-Salem",
+"Winston-Salem State",
+"Winston-Salem State Rams"
+],
+"espn_id": "2736",
+"name": "Winston-Salem State",
+"nick": "Rams"
+},
+"WSU": {
+"aliases": [
+"Washington St",
+"Washington State",
+"Washington State Cougars"
+],
+"espn_id": "265",
+"kalshi": "WSU",
+"name": "Washington State",
+"nick": "Cougars"
+},
+"WTAM": {
+"aliases": [
+"West Texas",
+"West Texas Buffaloes"
+],
+"espn_id": "2704",
+"name": "West Texas",
+"nick": "Buffaloes"
+},
+"WTBG": {
+"aliases": [
+"Wartburg",
+"Wartburg Knights"
+],
+"espn_id": "2685",
+"name": "Wartburg",
+"nick": "Knights"
+},
+"WUMO": {
+"aliases": [
+"Wash St Louis",
+"Washington St. Louis",
+"Washington St. Louis Bears"
+],
+"espn_id": "143",
+"name": "Washington St. Louis",
+"nick": "Bears"
+},
+"WVSU": {
+"aliases": [
+"W Virginia St",
+"West Virginia State",
+"West Virginia State Yellow Jackets"
+],
+"espn_id": "2707",
+"name": "West Virginia State",
+"nick": "Yellow Jackets"
+},
+"WVU": {
+"aliases": [
+"West Virginia",
+"West Virginia Mountaineers"
+],
+"espn_id": "277",
+"kalshi": "WVU",
+"name": "West Virginia",
+"nick": "Mountaineers"
+},
+"WVUT": {
+"aliases": [
+"WVU Tech",
+"WVU Tech Golden Bears"
+],
+"espn_id": "2706",
+"name": "WVU Tech",
+"nick": "Golden Bears"
+},
+"WVWC": {
+"aliases": [
+"WV Wesleyan",
+"West Virginia Wesleyan",
+"West Virginia Wesleyan Bobcats"
+],
+"espn_id": "455",
+"name": "West Virginia Wesleyan",
+"nick": "Bobcats"
+},
+"WYBU": {
+"aliases": [
+"Wayland Baptist",
+"Wayland Baptist Pioneers",
+"Wylnd Baptist"
+],
+"espn_id": "630",
+"name": "Wayland Baptist",
+"nick": "Pioneers"
+},
+"WYO": {
+"aliases": [
+"Wyoming",
+"Wyoming Cowboys"
+],
+"espn_id": "2751",
+"kalshi": "WYO",
+"name": "Wyoming",
+"nick": "Cowboys"
+},
+"YALE": {
+"aliases": [
+"Yale",
+"Yale Bulldogs"
+],
+"espn_id": "43",
+"kalshi": "YALE",
+"name": "Yale",
+"nick": "Bulldogs"
+},
+"YSU": {
+"aliases": [
+"Youngstown St",
+"Youngstown State",
+"Youngstown State Penguins"
+],
+"espn_id": "2754",
+"kalshi": "YSU",
+"name": "Youngstown State",
+"nick": "Penguins"
+}
+}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import json
 import re
 from importlib import resources
@@ -39,3 +41,68 @@ def nfl_team_city(code: Optional[str]) -> str:
     """'BUF' -> 'Buffalo' (falls back to the code)."""
     info = NFL_TEAMS.get(code or "")
     return info["city"] if info else (code or "")
+
+
+# ---- other team sports: data/<sport>_teams.json (ncaaf built by scripts/build_ncaaf_teams.py) ----
+
+_TABLES: dict[str, dict] = {}
+_SPORT_INDEX: dict[str, dict[str, str]] = {}
+
+
+def _norm_team(s: str) -> str:
+    s = str(s).lower().replace("&", " and ")
+    s = re.sub(r"\bst\.?\b", "state", s)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def team_table(sport: str) -> dict:
+    if sport == "nfl":
+        return NFL_TEAMS
+    if sport not in _TABLES:
+        path = os.path.join(os.path.dirname(__file__), "..", "data", f"{sport}_teams.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                _TABLES[sport] = json.load(f)
+        except FileNotFoundError:
+            _TABLES[sport] = {}
+    return _TABLES[sport]
+
+
+def _sport_index(sport: str) -> dict[str, str]:
+    if sport not in _SPORT_INDEX:
+        idx: dict[str, str] = {}
+        for code, info in sorted(team_table(sport).items()):
+            for a in [code, info.get("name") or ""] + list(info.get("aliases") or []):
+                if a:
+                    idx.setdefault(_norm_team(a), code)
+        _SPORT_INDEX[sport] = idx
+    return _SPORT_INDEX[sport]
+
+
+def team_code(sport: str, name: Optional[str]) -> Optional[str]:
+    """Canonical team code for any venue spelling. NFL keeps its fuzzy matcher; other sports
+    (761 college programs) need exact code / alias hits — substring matching would mis-pair
+    'Miami' with 'Miami (OH)' or 'Washington' with 'Washington State'."""
+    if sport == "nfl":
+        return nfl_team_code(name)
+    if not name:
+        return None
+    table = team_table(sport)
+    if not table:
+        return None
+    raw = str(name).strip()
+    if raw.upper() in table:
+        return raw.upper()
+    return _sport_index(sport).get(_norm_team(raw))
+
+
+def team_name(sport: str, code: Optional[str]) -> str:
+    if sport == "nfl":
+        return nfl_team_city(code)
+    info = team_table(sport).get(code or "")
+    return (info or {}).get("name") or (code or "")
+
+
+def ncaaf_team_code(name: Optional[str]) -> Optional[str]:
+    return team_code("ncaaf", name)
+

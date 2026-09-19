@@ -35,7 +35,7 @@ arb_engine/
   quant/       odds & de-vig, arbitrage evaluation, max-buy price, depth sizing, Kelly, fair value
   venues/      adapters: kalshi.py (public + signed), polymarket.py (Gamma/CLOB), robinhood.py (public web/API), espn.py (live game state), history.py (candles/bars/price history + ESPN play timeline)
   models/      __init__.py = the core dataclasses (was models.py); wp.py = stdlib win-probability inference; data/nfl_wp_model.json
-  matching/    canonical team/player keys, Eastern-date event keys, cross-venue merge
+  matching/    canonical team/player keys (nfl_teams.json, ncaaf_teams.json via scripts/build_ncaaf_teams.py), Eastern-date event keys, cross-venue merge
   scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
   execution/   Kalshi order plans + gated executor
   strategy/    maker runner (maker.py), in-play lock/steal watcher (inplay.py), slate-wide live scanner (live.py), brokers, alerts + journal
@@ -48,9 +48,9 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (163)
+python -m unittest discover -s tests -t .      # Python tests (168)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
-python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
+python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
 python -m arb_engine bridge                    # local server the extension uses when running
 python -m arb_engine maker --mode paper        # rest Kalshi orders at arb-creating prices (paper by default)

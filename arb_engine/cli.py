@@ -245,10 +245,10 @@ def cmd_maker(args: argparse.Namespace) -> int:
 def _espn_state_fetcher(event_key: str, refresh_summary_every: float = 30.0):
     """Returns a zero-arg fetcher for the ESPN GameState of one event (scoreboard every call,
     summary — win-probability series + odds — at most every ``refresh_summary_every`` s)."""
-    from .venues.espn import ESPNFeed
+    from .venues.espn import ESPNClient, ESPNFeed
 
-    feed = ESPNFeed()
     parts = event_key.split(":")
+    feed = ESPNFeed(ESPNClient(sport=parts[0] if parts and parts[0] else "nfl"))
     date = parts[2] if len(parts) > 2 and parts[2] else None
     state = {"last_summary": 0.0, "cache": None}
 
@@ -325,9 +325,9 @@ def cmd_inplay(args: argparse.Namespace) -> int:
 def cmd_games(args: argparse.Namespace) -> int:
     """This week's NFL games from ESPN with status, score, spread and the model's pre-game P(home)."""
     from .strategy.inplay import game_line, model_home_wp
-    from .venues.espn import ESPNFeed
+    from .venues.espn import ESPNClient, ESPNFeed
 
-    feed = ESPNFeed()
+    feed = ESPNFeed(ESPNClient(sport=args.sport))
     games = feed.games(args.date)
     print(f"{len(games)} games" + (f" on {args.date}" if args.date else " this week") + "  (spread = home line, DraftKings via ESPN; P(home) = our WP model)")
     for g in sorted(games, key=lambda x: (x.start_time or 0).timestamp() if x.start_time else 0):
@@ -584,6 +584,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.add_argument("--date", default=None, help="YYYY-MM-DD (default: current week)")
     gm.add_argument("--live-only", action="store_true")
     gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
+    gm.add_argument("--sport", default="nfl", choices=["nfl", "ncaaf"])
     gm.set_defaults(func=cmd_games)
 
     lv = sub.add_parser("live", help="price every live NFL game at once (model/market/ESPN fair, cheapest venue, STEAL flags)")

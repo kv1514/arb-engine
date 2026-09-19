@@ -182,7 +182,7 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
     live = (gs_status == "live") if gs_status in ("pre", "live", "final") else bool(info.in_play)
     m_wp = model_home_wp(game_state, model)
     e_wp = getattr(game_state, "espn_home_wp", None) if game_state is not None else None
-    blend: BlendedFair = blended_fair(market_probs, m_wp, e_wp, home_o, away_o, weights=blend_weights, live=live, market_confidence=market_confidence_from_spread(_best_spread(me.quotes_by_venue)))
+    blend: BlendedFair = blended_fair(market_probs, m_wp, e_wp, home_o, away_o, weights=blend_weights, live=live, market_confidence=market_confidence_from_spread(_best_spread(me.quotes_by_venue)), sport=info.sport)
     fair = {o: blend.fair.get(o) for o in info.outcomes} if blend.fair else {o: market_probs[o] for o in info.outcomes}
     model_probs = {home_o: m_wp, away_o: (1 - m_wp) if m_wp is not None else None}
     espn_probs = {home_o: e_wp, away_o: (1 - e_wp) if e_wp is not None else None}

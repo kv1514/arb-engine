@@ -50,6 +50,9 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
 DEFAULT_WEIGHTS: dict[str, float] = {"market": 0.30, "model": 0.55, "espn": 0.15}
+# The WP model is trained on NFL play-by-play; for college games it is an approximation
+# (different OT, pace and variance), so the market keeps the anchor there until a replay says otherwise.
+SPORT_WEIGHTS: dict[str, dict[str, float]] = {"ncaaf": {"market": 0.50, "model": 0.35, "espn": 0.15}}
 
 
 def market_confidence_from_spread(spread: Optional[float], tight: float = 0.04, wide: float = 0.12, floor: float = 0.3) -> float:
@@ -111,6 +114,7 @@ def blended_fair(
     weights: Optional[Mapping[str, float]] = None,
     live: bool = True,
     market_confidence: float = 1.0,
+    sport: Optional[str] = None,
 ) -> BlendedFair:
     """Weighted blend of the available sources (weights renormalise over what is present).
 
@@ -118,7 +122,7 @@ def blended_fair(
     model, then ESPN, act as the single source. ``market_confidence`` in (0, 1] scales the
     market weight (thin book, stale quote) before normalisation.
     """
-    w_in = dict(DEFAULT_WEIGHTS)
+    w_in = dict(SPORT_WEIGHTS.get(sport or "", DEFAULT_WEIGHTS))
     if weights:
         w_in.update({k: float(v) for k, v in weights.items()})
     conf = min(max(float(market_confidence), 0.0), 1.0)
