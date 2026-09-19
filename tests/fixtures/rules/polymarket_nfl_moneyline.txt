@@ -1,0 +1,10 @@
+# Polymarket Gamma market nfl-dal-phi-2026-10-27 (event nfl-dal-phi-2026-10-27, sportsMarketType=moneyline, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming NFL football game between Cowboys and Eagles, scheduled for October 26 at 8:15PM ET:
+This market will resolve to "Cowboys" if Cowboys win the game.
+This market will resolve to "Eagles" if Eagles win the game.
+Overtime is included if played.
+If the game ends in a tie, this market will resolve 50-50.
+If the game is postponed, this market will remain open until the game has been completed.
+If the game is canceled entirely, with no make-up game, this market will resolve 50-50.

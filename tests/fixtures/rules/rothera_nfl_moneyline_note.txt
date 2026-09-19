@@ -1,0 +1,9 @@
+# Robinhood / Rothera NFLGAME-* game-winner contracts: NOT a verbatim capture (status=unverified, 2026-09-19)
+
+The Robinhood event page blurb for Rothera NFL game winners does not spell out ties, postponements
+or cancellations (docs/VENUES.md "Tie rule (Rothera NFL)"). The plan attributes tie="no_winner" to
+Rothera's CFTC-certified contract terms, rule 40.2(d), whose "strictly greater" clause would mean a
+tied game has no winner and neither YES pays. That rulebook text could not be fetched from the
+sandbox on 2026-09-19 (rothera.com unreachable), so the clause is not quoted here and the registry
+row stays status=unverified until a human pastes the certified text into this file and flips the
+row to status=derived (update the sha256 in arb_engine/data/settlement_rules.json).

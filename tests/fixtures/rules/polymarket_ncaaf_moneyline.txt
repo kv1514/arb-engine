@@ -1,0 +1,10 @@
+# Polymarket Gamma market cfb-librty-coast-2026-09-24 (event cfb-librty-coast-2026-09-24, sportsMarketType=moneyline, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming college football game between Liberty and Coastal Carolina, scheduled for September 24 at 7:30PM ET:
+This market will resolve to "Liberty" if Liberty win the game.
+This market will resolve to "Coastal Carolina" if Coastal Carolina win the game.
+Overtime is included if played.
+If the game ends in a tie, this market will resolve 50-50.
+If the game is postponed, this market will remain open until the game has been completed.
+If the game is canceled entirely, with no make-up game, this market will resolve 50-50.

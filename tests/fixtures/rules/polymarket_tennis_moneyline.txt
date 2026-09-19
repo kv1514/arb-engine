@@ -1,0 +1,16 @@
+# Polymarket Gamma market wta-quevedo-podoros-2026-09-20 (event wta-quevedo-podoros-2026-09-20, sportsMarketType=moneyline, restricted=True, captured 2026-09-19)
+
+[description]
+This market refers to the tennis match between Kaitlin Quevedo and Nadia Podoroska in the Sao Paulo Open, originally scheduled for September 20, 2026 at 1:30PM ET.
+
+This market will resolve to 'Kaitlin Quevedo' if Kaitlin Quevedo advances against Nadia Podoroska.
+
+This market will resolve to 'Nadia Podoroska' if Nadia Podoroska advances against Kaitlin Quevedo.
+
+If the match is canceled (not played at all), ends in a tie, or a winner has not been determined by October 4, 2026, 11:59 PM ET (14 days after the scheduled start), this market will resolve to 50-50.
+
+If the match begins but is not completed, and one player advances due to the opponent's retirement, default, or disqualification, this market will resolve to the player who advances.
+
+If the match ends in a walkover (player withdraws before the start and the other advances automatically), this market will resolve to 50-50.
+
+The primary resolution source will be official information from the WTA Tour. A consensus of credible reporting may also be used.

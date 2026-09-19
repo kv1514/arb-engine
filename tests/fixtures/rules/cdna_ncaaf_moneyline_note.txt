@@ -1,0 +1,7 @@
+# Robinhood / CDNA NX.F.OPT.CFB-* college-football game winners: NOT a verbatim capture (status=unverified, 2026-09-19)
+
+CDNA (EXCHANGE_SOURCE_CDNA) is the fourth routing exchange behind robinhood.com and its contract
+terms are not exposed by the public web/API surface the adapter reads (docs/VENUES.md,
+docs/SPORTS.md). The plan records cancelled="vwap_1w" (settlement at the one-week volume-weighted
+average price) as the working assumption; it is unverified and the row stays status=unverified
+until the CDNA contract specification is pasted here.

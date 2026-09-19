@@ -1,0 +1,507 @@
+{
+ "version": "2026-09-19",
+ "schema": {
+  "key": "(venue, sport, market_type, exchange); exchange null = any; market_type may be a list",
+  "fields": {
+   "tie": "half | no_winner | void | null (impossible or unstated)",
+   "postponed": "open_48h | open_2w | open_until_complete | 50-50_after_<n>d | 50-50_after_date | null",
+   "cancelled": "fair_price | 50-50 | vwap_1w | null",
+   "walkover": "fair_price | 50-50 | null",
+   "retirement": "advancer | null",
+   "ot_included": "true | null"
+  },
+  "status": "verbatim = quoted from the fixture text; derived = inferred from the fixture text; unverified = assumption, fixture is a note",
+  "source.sha256": "sha256 of tests/fixtures/rules/<fixture> (tests fail when the text changes)",
+  "derived_fields": "optional list of field names a verbatim row infers rather than quotes; flagged per field as settlement-rule-derived:<venue>:<field>"
+ },
+ "rules": [
+  {
+   "venue": "kalshi",
+   "sport": "nfl",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNFLGAME market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_nfl_moneyline.txt",
+    "sha256": "e7d0792b408bc5603aa68e4fb4f6d5597e9e1e16c0bf33cac68737d98e6a6f30"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "nfl",
+   "market_type": "spread",
+   "exchange": null,
+   "tie": null,
+   "postponed": null,
+   "cancelled": null,
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNFLSPREAD market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_nfl_spread.txt",
+    "sha256": "681cf1feaf9a7661caaa117eeef50a2e4cfb4101a0a263b5105593e33ca16d09"
+   },
+   "status": "verbatim",
+   "note": "Half-point line: no tie clause; postponement/cancellation not stated on the market (series-level terms unknown)"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "nfl",
+   "market_type": "total",
+   "exchange": null,
+   "tie": null,
+   "postponed": null,
+   "cancelled": null,
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNFLTOTAL market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_nfl_total.txt",
+    "sha256": "dd470633e551894ab5e80575eab2d58b8f09db97c6eb316cc0b7d4914e554ef4"
+   },
+   "status": "verbatim",
+   "note": "Half-point line: no tie clause; postponement/cancellation not stated on the market"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "ncaaf",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNCAAFGAME market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_ncaaf_moneyline.txt",
+    "sha256": "067e6ec50c598be8b0cdd6186d61ed53ff97109682c97eb192f00313f778c136"
+   },
+   "status": "verbatim",
+   "note": "College football has no ties; no tie clause in the text"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "ncaaf",
+   "market_type": "spread",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNCAAFSPREAD market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_ncaaf_spread.txt",
+    "sha256": "ff563823b448dbe83dd7eade3353bc99b94388ee22828e879614888f5abae794"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "ncaaf",
+   "market_type": "total",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNCAAFTOTAL market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_ncaaf_total.txt",
+    "sha256": "fe49e54b7b5417f47eb16c7f2f8477c0e52a816f61063cb5f6c3694ab662122a"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "nba",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNBAGAME market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_nba_moneyline.txt",
+    "sha256": "ad6b822cb5bd7d438f7c2576293b421824e7179947f85537916d0d7886f1e038"
+   },
+   "status": "verbatim",
+   "note": "NBA has no ties; no tie clause in the text"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "nhl",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "open_48h",
+   "cancelled": "fair_price",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KXNHLGAME market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_nhl_moneyline.txt",
+    "sha256": "b77291510f717a5415a31c57fe6985dfd66590f9a22f31a6c99c91c20c69617c"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "kalshi",
+   "sport": "tennis",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_2w",
+   "cancelled": "fair_price",
+   "walkover": "fair_price",
+   "retirement": "advancer",
+   "ot_included": null,
+   "source": {
+    "doc": "Kalshi KX{ATP,WTA}{,CHALLENGER}MATCH market rules_primary/rules_secondary",
+    "date": "2026-09-19",
+    "fixture": "kalshi_tennis_moneyline.txt",
+    "sha256": "a324fa3d88d94ca41031cf188aafe1e18e08b2c25115ab1b9e5d7f3460165a16"
+   },
+   "status": "verbatim",
+   "note": "postponed/cancelled/walkover are verbatim from the rule text; retirement=advancer is inferred from 'wins ... after a ball has been played' (the tour records a retirement as the opponent's win) and listed in derived_fields; the settled feed shows walkovers paid 0.85/0.15, 0.89/0.11 etc., i.e. a fair price, never 50-50",
+   "derived_fields": [
+    "retirement"
+   ]
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nfl",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket Gamma market description (sportsMarketType=moneyline)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nfl_moneyline.txt",
+    "sha256": "0b0e28106ce104fb6fd577a2226c3e4ba144769bee109b2d1e3619a870c63370"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nfl",
+   "market_type": "spread",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket Gamma market description (sportsMarketType=spreads)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nfl_spread.txt",
+    "sha256": "69269826c66f94fc4738b5874f08f1de5968665e249bb8053cf544b1be65c5fb"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nfl",
+   "market_type": "total",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Polymarket Gamma market description (sportsMarketType=totals)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nfl_total.txt",
+    "sha256": "0650bf04b15962520972801fee1fec4c91b9629009dfbcb170ccae7da12a2e01"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "ncaaf",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag cfb, sportsMarketType=moneyline)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_ncaaf_moneyline.txt",
+    "sha256": "87606ea17ccff2c156eccda2a4588e1f4f4d389657dd2d45ee09fdfa013a017c"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "ncaaf",
+   "market_type": "spread",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag cfb, sportsMarketType=spreads)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_ncaaf_spread.txt",
+    "sha256": "4416c75d0d0e5c5dbcb393ec8e101b0a3b0f70775600e2ba6af23ace7b48ede0"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "ncaaf",
+   "market_type": "total",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag cfb, sportsMarketType=totals)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_ncaaf_total.txt",
+    "sha256": "af46b03469bf9b6f15a4f63d29cea77ea5959ab5732eeb60c115ed5a9d596ca0"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nhl",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag nhl, sportsMarketType=moneyline)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nhl_moneyline.txt",
+    "sha256": "1db4283f258cd40bee5d2755e342b590adaf82f76c50e7114e4152e8070408b2"
+   },
+   "status": "verbatim",
+   "note": "Shootout adds one goal to the winner; no tie is possible"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nhl",
+   "market_type": "total",
+   "exchange": null,
+   "tie": null,
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag nhl, sportsMarketType=totals)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nhl_total.txt",
+    "sha256": "f3dd19924fb22488a71bc06d60f18f30ec7f7ba6eb42acdd4fedb656ba00d49c"
+   },
+   "status": "verbatim"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "nba",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "open_until_complete",
+   "cancelled": "50-50",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": true,
+   "source": {
+    "doc": "Polymarket NBA game template not yet listed on Gamma (see note fixture)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_nba_moneyline_note.txt",
+    "sha256": "9425e74c861f2be0b1eb7a06c096f3a6781900d78241d95238963895afaac902"
+   },
+   "status": "unverified",
+   "note": "Assumed identical to the NFL/NHL game template; capture with scripts/capture_fixtures.py --rules once NBA game markets exist"
+  },
+  {
+   "venue": "polymarket",
+   "sport": "tennis",
+   "market_type": "moneyline",
+   "exchange": null,
+   "tie": "half",
+   "postponed": "50-50_after_14d",
+   "cancelled": "50-50",
+   "walkover": "50-50",
+   "retirement": "advancer",
+   "ot_included": null,
+   "source": {
+    "doc": "Polymarket Gamma market description (tag tennis, sportsMarketType=moneyline)",
+    "date": "2026-09-19",
+    "fixture": "polymarket_tennis_moneyline.txt",
+    "sha256": "e85e1c7a7e2bec500b3ee26d2ef2c7e1be11f06e893a46fa23784bd5e7d1f82c"
+   },
+   "status": "verbatim",
+   "note": "The 2026-09-18 template said 7 days; today's says 14 days with an explicit deadline date. parse_polymarket() reads the per-market value at ingest, this row is the default"
+  },
+  {
+   "venue": "robinhood",
+   "sport": "nfl",
+   "market_type": "moneyline",
+   "exchange": "rothera",
+   "tie": "no_winner",
+   "postponed": null,
+   "cancelled": null,
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Rothera certified contract terms rule 40.2(d) (not captured; see note fixture)",
+    "date": "2026-09-19",
+    "fixture": "rothera_nfl_moneyline_note.txt",
+    "sha256": "25f583f6f3b80e82f83312275226a64e57b846c6517f7e915fc637c16f946e34"
+   },
+   "status": "unverified",
+   "note": "tie=no_winner follows the plan's reading of rule 40.2(d) 'strictly greater'; unverified until the certified text is pasted into the fixture"
+  },
+  {
+   "venue": "robinhood",
+   "sport": "nfl",
+   "market_type": [
+    "spread",
+    "total"
+   ],
+   "exchange": "rothera",
+   "tie": null,
+   "postponed": null,
+   "cancelled": null,
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "Rothera NFLSPREAD/NFLTOTAL contract terms (not captured; see note fixture)",
+    "date": "2026-09-19",
+    "fixture": "rothera_nfl_lines_note.txt",
+    "sha256": "0cf91469126777e23302006d71ab73522bca1091bbea1ad7918e5db8e71daf66"
+   },
+   "status": "unverified"
+  },
+  {
+   "venue": "robinhood",
+   "sport": "ncaaf",
+   "market_type": "moneyline",
+   "exchange": "cdna",
+   "tie": null,
+   "postponed": null,
+   "cancelled": "vwap_1w",
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "CDNA NX.F.OPT.CFB contract specification (not captured; see note fixture)",
+    "date": "2026-09-19",
+    "fixture": "cdna_ncaaf_moneyline_note.txt",
+    "sha256": "09130b960a5e04447cfdfe4e31aff040afcdbdd3eef947a469afd1c69d08c66a"
+   },
+   "status": "unverified",
+   "note": "cancelled=vwap_1w is the plan's working assumption for CDNA; unverified"
+  },
+  {
+   "venue": "robinhood",
+   "sport": "ncaaf",
+   "market_type": [
+    "spread",
+    "total"
+   ],
+   "exchange": "cdna",
+   "tie": null,
+   "postponed": null,
+   "cancelled": null,
+   "walkover": null,
+   "retirement": null,
+   "ot_included": null,
+   "source": {
+    "doc": "CDNA NX.F.OPT.CFB line contract specification (not captured; see note fixture)",
+    "date": "2026-09-19",
+    "fixture": "cdna_ncaaf_moneyline_note.txt",
+    "sha256": "09130b960a5e04447cfdfe4e31aff040afcdbdd3eef947a469afd1c69d08c66a"
+   },
+   "status": "unverified"
+  }
+ ],
+ "tennis_walkover": [
+  {
+   "tier": "tour",
+   "p_walkover": 0.0325,
+   "n_markets": 2400,
+   "n_matches": 1200,
+   "n_scalar": 78,
+   "status": "derived",
+   "source": "scripts/tennis_settlement_share.py on GET /markets?series_ticker=KXATPMATCH|KXWTAMATCH&status=settled, first 1200 markets per series, 2026-09-19",
+   "note": "scalar (fair-price) settlements / settled markets; a walkover pays e.g. 0.85/0.15 on Kalshi"
+  },
+  {
+   "tier": "challenger",
+   "p_walkover": 0.0198,
+   "n_markets": 2222,
+   "n_matches": 1111,
+   "n_scalar": 44,
+   "status": "derived",
+   "source": "scripts/tennis_settlement_share.py on GET /markets?series_ticker=KXATPCHALLENGERMATCH|KXWTACHALLENGERMATCH&status=settled, first 1200 markets per series, 2026-09-19",
+   "note": "lower than the 0.09 provisional guess; challenger fields withdraw less than tour players who retire from early rounds"
+  },
+  {
+   "tier": "itf",
+   "p_walkover": 0.09,
+   "n_markets": 0,
+   "n_matches": 0,
+   "n_scalar": 0,
+   "status": "provisional",
+   "source": "no Kalshi ITF series; provisional default until Polymarket ITF resolutions are tallied",
+   "note": "documented provisional default"
+  }
+ ]
+}

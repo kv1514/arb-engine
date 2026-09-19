@@ -1,0 +1,10 @@
+# Polymarket Gamma market cfb-librty-coast-2026-09-24-total-35pt5 (event cfb-librty-coast-2026-09-24, sportsMarketType=totals, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming college football game, scheduled for September 24 at 7:30 PM ET:
+
+This market will resolve to "Over" if Liberty and Coastal Carolina combine to score 36 or more points in this game.
+
+If the combined total is less than 36, this market will resolve to "Under".
+
+If the game is postponed, this market will remain open until the game has been completed. If the game is canceled entirely, with no make-up game, this market will resolve 50-50.

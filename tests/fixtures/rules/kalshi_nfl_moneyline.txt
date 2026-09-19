@@ -1,0 +1,9 @@
+# Kalshi KXNFLGAME market KXNFLGAME-26SEP28PHICHI-PHI (GET /trade-api/v2/markets, captured 2026-09-19)
+
+[rules_primary]
+If Philadelphia wins the Philadelphia vs Chicago Pro Football game originally scheduled for Sep 28, 2026, then the market resolves to Yes.
+
+[rules_secondary]
+The following market refers to the team who wins the Philadelphia vs Chicago Pro Football game originally scheduled for Sep 28, 2026. If the game ends in a tie, the market will resolve to $0.50 for each team. If the game is postponed but begins within 48 hours from its originally scheduled start time, the market will remain open and resolve based on the official final result. If the game is not started within 48 hours, the market will resolve to a fair price.
+
+Kalshi is not affiliated, associated, authorized, endorsed by, or in any way officially connected with the Governing League. All trademarks, logos, and brand names are the property of their respective owners.

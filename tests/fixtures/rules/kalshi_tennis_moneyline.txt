@@ -1,0 +1,9 @@
+# Kalshi KXWTAMATCH market KXWTAMATCH-26SEP19ZIDJEO-ZID (settled scalar 0.85/0.15 on 2026-09-19; same rules template on KXATPMATCH, KXATPCHALLENGERMATCH, KXWTACHALLENGERMATCH; captured 2026-09-19)
+
+[rules_primary]
+If Tamara Zidansek wins the Zidansek vs Jeong professional tennis match in the 2026 WTA Seoul Qualification Round 1 after a ball has been played, then the market resolves to Yes.
+
+[rules_secondary]
+The following market refers to the Zidansek vs Jeong professional tennis match in the 2026 WTA Seoul Qualification Round 1 after a ball has been played. If the match does not occur (signaled by a ball being played) due to a player injury, walkover, forfeiture, or any other cancellation (all before the match starts), the market will resolve to a fair price in accordance with the rules. If this match is postponed or delayed, the market will remain open and close after the rescheduled match has finished (within two weeks).
+
+Kalshi is not affiliated, associated, authorized, endorsed by, or in any way officially connected with the Governing League. All trademarks, logos, and brand names are the property of their respective owners.

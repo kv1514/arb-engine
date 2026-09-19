@@ -5,7 +5,10 @@
   (``moneyline`` | ``spreads`` | ``totals`` | ``tennis_completed_match`` ...),
   ``gameStartTime``, ``line``, two-element ``outcomes`` / ``outcomePrices`` /
   ``clobTokenIds``, and ``feeSchedule`` (used by the fee model).
-* ``https://clob.polymarket.com/book?token_id=`` gives depth per outcome token.
+* ``https://clob.polymarket.com/book?token_id=`` gives depth per outcome token plus the
+  market's ``tick_size`` / ``min_order_size`` (kept in ``quote.meta`` when ``with_books``).
+* Gamma marks geo-restricted events/markets with ``restricted: true``; every quote carries
+  ``meta["restricted"]`` so the scanner and compliance gates can read it.
 
 No key needed for reads. Trading needs a wallet + the py-clob-client; not wired here.
 """
@@ -24,10 +27,17 @@ from .http import HttpClient
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
 
-# Polymarket tennis market description (2026-09-18): retirement/default/disqualification after
-# the start -> the player who advances; cancelled, tie, delayed > 7 days, or walkover (withdrawal
-# before the start) -> 50-50.
-TENNIS_SETTLEMENT = {"retirement": "advancer", "walkover": "50-50", "cancelled": "50-50", "postponed": "50-50_after_7d"}
+# Polymarket tennis market description: retirement/default/disqualification after the start ->
+# the player who advances; cancelled, tie, or no winner within the deadline (7 days in the
+# 2026-09-18 template, 14 days on 2026-09-19), or walkover (withdrawal before the start) -> 50-50.
+# The registry (arb_engine/data/settlement_rules.json, cited text fixture) is the source of truth;
+# the literal below is the fallback when the registry is unavailable. Per-market descriptions
+# are parsed at ingest so a template change shows up on the quote, not only in the registry.
+try:
+    from ..matching.settlement_rules import POLYMARKET_TENNIS_SETTLEMENT as _REG_TENNIS, parse_polymarket as _parse_rules
+except ImportError:  # pragma: no cover - registry module absent on an older branch
+    _REG_TENNIS, _parse_rules = {}, None
+TENNIS_SETTLEMENT = dict(_REG_TENNIS) or {"retirement": "advancer", "walkover": "50-50", "cancelled": "50-50", "postponed": "50-50_after_7d"}
 
 SPORT_TAGS: dict[str, list[str]] = {
     "nfl": ["nfl"],
@@ -60,6 +70,36 @@ def parse_clob_book(book: dict) -> Book:
     asks = sorted((Level(float(l["price"]), float(l["size"])) for l in book.get("asks", [])), key=lambda l: l.price)
     bids = sorted((Level(float(l["price"]), float(l["size"])) for l in book.get("bids", [])), key=lambda l: -l.price)
     return Book(asks=asks, bids=bids)
+
+
+def parse_clob_book_meta(book: dict) -> dict[str, Any]:
+    """Order-size constraints the CLOB reports with the book: ``tick_size`` (price grid, 0.01
+    or 0.001 near the extremes) and ``min_order_size`` (contracts). Sizing a leg below the
+    minimum or off the grid is a rejected order, so they travel with the quote."""
+    out: dict[str, Any] = {}
+    for src, dst in (("tick_size", "tick_size"), ("min_order_size", "min_order_size")):
+        v = _f(book.get(src))
+        if v is not None:
+            out[dst] = v
+    if book.get("neg_risk") is not None:
+        out["neg_risk"] = bool(book.get("neg_risk"))
+    return out
+
+
+def settlement_from_description(sport: str, description: Optional[str]) -> dict[str, Any]:
+    """The venue's settlement rules for one market: the registry default for the sport, overlaid
+    with whatever the market's own description states (parsed). Tennis keeps the four-key shape
+    the scanner compares across venues."""
+    base: dict[str, Any] = dict(TENNIS_SETTLEMENT) if sport == "tennis" else {}
+    if _parse_rules is None or not description:
+        return base
+    keep = ("retirement", "walkover", "cancelled", "postponed") if sport == "tennis" else None
+    base.update({k: v for k, v in _parse_rules(description).items() if v is not None and (keep is None or k in keep)})
+    return base
+
+
+def _restricted(ev: dict, m: dict) -> bool:
+    return bool(ev.get("restricted")) or bool(m.get("restricted"))
 
 
 def _event_game_codes(sport: str, ev: dict, slug_parts: list[str]) -> list:
@@ -105,15 +145,23 @@ class PolymarketAdapter:
         return out
 
     def book(self, token_id: str) -> Book:
-        return parse_clob_book(self.http.get(f"{CLOB}/book", {"token_id": token_id}))
+        return self.book_with_meta(token_id)[0]
+
+    def book_with_meta(self, token_id: str) -> tuple[Book, dict[str, Any]]:
+        raw = self.http.get(f"{CLOB}/book", {"token_id": token_id})
+        return parse_clob_book(raw), parse_clob_book_meta(raw)
 
     def books(self, token_ids: list[str]) -> dict[str, Book]:
         """Batch order books (POST /books)."""
+        return {t: b for t, (b, _m) in self.books_with_meta(token_ids).items()}
+
+    def books_with_meta(self, token_ids: list[str]) -> dict[str, tuple[Book, dict[str, Any]]]:
+        """Batch order books plus each book's tick/min-size meta (POST /books, GET /book fallback)."""
         try:
             data = self.http.post(f"{CLOB}/books", [{"token_id": t} for t in token_ids])
         except Exception:
-            return {t: self.book(t) for t in token_ids}
-        return {b.get("asset_id", ""): parse_clob_book(b) for b in data or []}
+            return {t: self.book_with_meta(t) for t in token_ids}
+        return {b.get("asset_id", ""): (parse_clob_book(b), parse_clob_book_meta(b)) for b in data or []}
 
     def fetch(self, sport: str) -> VenueSnapshot:
         snap = VenueSnapshot(venue=self.venue, fetched_at=time.time())
@@ -135,18 +183,24 @@ class PolymarketAdapter:
 
     def attach_books_for(self, quotes: list[OutcomeQuote], errors: Optional[list[str]] = None) -> None:
         tokens = list(dict.fromkeys(q.venue_market_id for q in quotes if q.venue_market_id))
-        books: dict[str, Book] = {}
+        books: dict[str, tuple[Book, dict[str, Any]]] = {}
         for i in range(0, len(tokens), 50):
             try:
-                books.update(self.books(tokens[i : i + 50]))
+                books.update(self.books_with_meta(tokens[i : i + 50]))
             except Exception as e:
                 if errors is not None:
                     errors.append(f"books: {e}")
         for q in quotes:
-            b = books.get(q.venue_market_id)
-            if b is None:
+            got = books.get(q.venue_market_id)
+            if got is None:
                 continue
+            b, bmeta = got
             q.book = b
+            q.meta.update(bmeta)  # tick_size / min_order_size from the CLOB override Gamma's copy
+            if "tick_size" in bmeta:
+                q.meta["tick"] = bmeta["tick_size"]
+            if "min_order_size" in bmeta:
+                q.meta["min_size"] = bmeta["min_order_size"]
             if b.asks:
                 q.ask, q.ask_size = b.asks[0].price, b.asks[0].size
             if b.bids:
@@ -184,7 +238,6 @@ class PolymarketAdapter:
                 codes = person_keys(outcomes)
                 key = tennis_event_key(outcomes, date)
                 tie_rule = "void"
-                settlement = dict(TENNIS_SETTLEMENT)
             else:
                 codes = [o for o in outcomes]
                 key = f"{sport}:" + "|".join(sorted(codes)) + f":{date or ''}"
@@ -192,8 +245,10 @@ class PolymarketAdapter:
             if not key:
                 continue
             url = f"https://polymarket.com/event/{ev.get('slug')}"
-            venue_meta: dict[str, Any] = {"event_id": ev.get("id"), "market_id": m.get("id"), "condition_id": m.get("conditionId"), "url": url}
-            if sport == "tennis":
+            restricted = _restricted(ev, m)
+            venue_meta: dict[str, Any] = {"event_id": ev.get("id"), "market_id": m.get("id"), "condition_id": m.get("conditionId"), "url": url, "restricted": restricted}
+            settlement = settlement_from_description(sport, m.get("description"))
+            if settlement:
                 venue_meta["settlement"] = settlement
             info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=sorted(codes), labels={codes[i]: outcomes[i] for i in range(2)}, start_time=start, tie_rule=tie_rule, venues={self.venue: venue_meta})
             snap.events.setdefault(key, info)
@@ -207,7 +262,7 @@ class PolymarketAdapter:
                     venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=codes[i], outcome_label=outcomes[i],
                     ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None,
                     fee_params=fee_params, url=url, ts=snap.fetched_at,
-                    meta={"mid_price": prices[i] if i < len(prices) else None, "condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "volume24h": _f(m.get("volume24hr")), "liquidity": _f(m.get("liquidityNum")), "neg_risk": m.get("negRisk")},
+                    meta={"mid_price": prices[i] if i < len(prices) else None, "condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "volume24h": _f(m.get("volume24hr")), "liquidity": _f(m.get("liquidityNum")), "neg_risk": m.get("negRisk"), "restricted": restricted},
                 )
                 snap.quotes.append(q)
 
@@ -247,11 +302,16 @@ class PolymarketAdapter:
             keys = ["over" if outcomes[0].lower().startswith("over") else "under", "under" if outcomes[0].lower().startswith("over") else "over"]
             labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
             out_keys = ["over", "under"]
-        info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=out_keys, labels=labels, start_time=start, line=abs(line) if mtype == "spread" else line, tie_rule=push_rule_for_line(abs(line)), venues={self.venue: {"event_id": ev.get("id"), "market_id": m.get("id"), "slug": m.get("slug"), "url": url}, "_teams": {"title": f"{game_codes[0]} @ {game_codes[1]}" if None not in game_codes else ""}})
+        restricted = _restricted(ev, m)
+        venue_meta: dict[str, Any] = {"event_id": ev.get("id"), "market_id": m.get("id"), "slug": m.get("slug"), "url": url, "restricted": restricted}
+        settlement = settlement_from_description(sport, m.get("description"))
+        if settlement:
+            venue_meta["settlement"] = settlement
+        info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=out_keys, labels=labels, start_time=start, line=abs(line) if mtype == "spread" else line, tie_rule=push_rule_for_line(abs(line)), venues={self.venue: venue_meta, "_teams": {"title": f"{game_codes[0]} @ {game_codes[1]}" if None not in game_codes else ""}})
         snap.events.setdefault(key, info)
         fee_params = {"feeSchedule": m.get("feeSchedule"), "feesEnabled": m.get("feesEnabled", True), "feeType": m.get("feeType")}
         bb, ba = _f(m.get("bestBid")), _f(m.get("bestAsk"))
         sides = [(bb, ba), ((1 - ba) if ba is not None else None, (1 - bb) if bb is not None else None)]
         for i in range(2):
             bid, ask = sides[i]
-            snap.quotes.append(OutcomeQuote(venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None, fee_params=fee_params, url=url, ts=snap.fetched_at, meta={"condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "line": line, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize"))}))
+            snap.quotes.append(OutcomeQuote(venue=self.venue, venue_market_id=str(tokens[i]), event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(ask, 4) if ask is not None and 0 < ask < 1 else None, bid=round(bid, 4) if bid is not None and 0 < bid < 1 else None, fee_params=fee_params, url=url, ts=snap.fetched_at, meta={"condition_id": m.get("conditionId"), "slug": m.get("slug"), "outcome_index": i, "line": line, "tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize")), "restricted": restricted}))

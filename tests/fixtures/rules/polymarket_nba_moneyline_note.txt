@@ -1,0 +1,7 @@
+# Polymarket NBA moneyline: NOT a verbatim capture (status=unverified, 2026-09-19)
+
+Gamma tag_slug=nba returned 22 active events on 2026-09-19 (season futures) and no
+sportsMarketType=moneyline game markets yet, so the NBA game template could not be captured. The
+registry row assumes the same game template as the captured NFL/NHL moneylines (postponed ->
+remain open until completed; cancelled with no make-up game -> 50-50; tie -> 50-50) and stays
+status=unverified until scripts/capture_fixtures.py --rules is run once NBA game markets are listed.

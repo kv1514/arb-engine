@@ -1,0 +1,9 @@
+# Kalshi KXNHLGAME market KXNHLGAME-26SEP22UTALA-UTA (GET /trade-api/v2/markets, captured 2026-09-19)
+
+[rules_primary]
+If Utah wins the Utah vs Los Angeles NHL game originally scheduled for Sep 22, 2026, then the market resolves to Yes.
+
+[rules_secondary]
+In the event of a tie, all markets will resolve at 50c.
+
+If the game is postponed but begins within 48 hours of its originally scheduled start time, the market will remain open and resolve based on the official final result. If the game is cancelled or not started within 48 hours of its originally scheduled start, all markets will resolve to a fair price.

@@ -1,0 +1,10 @@
+# Polymarket Gamma market nfl-dal-phi-2026-10-27-total-24pt5 (event nfl-dal-phi-2026-10-27, sportsMarketType=totals, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming NFL game, scheduled for October 26 at 8:15 PM ET:
+
+This market will resolve to "Over" if the Cowboys and Eagles combine to score 25 or more points in this game.
+
+If the combined total is less than 25, this market will resolve to "Under".
+
+If the game is postponed, this market will remain open until the game has been completed. If the game is canceled entirely, with no make-up game, this market will resolve 50-50.

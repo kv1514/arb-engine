@@ -1,0 +1,6 @@
+# Robinhood / Rothera NFLSPREAD-* and NFLTOTAL-* contracts: NOT a verbatim capture (status=unverified, 2026-09-19)
+
+Half-point lines cannot push, so the tie field is null by construction. Postponement and
+cancellation handling is not stated on the Robinhood event page and the Rothera rulebook could
+not be fetched from the sandbox on 2026-09-19; both fields stay null and the row stays
+status=unverified until the certified contract terms are pasted here.

@@ -1,0 +1,9 @@
+# Polymarket Gamma market nhl-pit-col-2026-10-16 (event nhl-pit-col-2026-10-16, sportsMarketType=moneyline, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming NHL game, scheduled for October 16 at 9:00PM ET:
+If the Penguins win, the market will resolve to "Penguins".
+If the Avalanche win, the market will resolve to "Avalanche".
+If the game is postponed, this market will remain open until the game has been completed.
+If the game is canceled entirely, with no make-up game, this market will resolve 50-50.
+The result will be determined based on the final score including any overtime periods and shootouts. In the event of a shootout, one goal will be added to the winning team's score for the purpose of resolution.

@@ -1,0 +1,11 @@
+# Polymarket Gamma market nhl-pit-col-2026-10-16-total-4pt5 (event nhl-pit-col-2026-10-16, sportsMarketType=totals, restricted=True, captured 2026-09-19)
+
+[description]
+In the upcoming NHL game, scheduled for October 16 at 9:00 PM ET:
+
+This market will resolve to "Over" if the Penguins and Avalanche combine to score 5 or more goals in this game.
+
+If the combined total is less than 5, this market will resolve to "Under".
+
+If the game is postponed, this market will remain open until the game has been completed. If the game is canceled entirely, with no make-up game, this market will resolve 50-50.
+The result will be determined based on the final score including any overtime periods and shootouts. In the event of a shootout, one goal will be added to the winning team's score for the purpose of resolution.
