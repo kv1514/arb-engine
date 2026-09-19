@@ -17,7 +17,7 @@ from typing import Any, Optional
 from .fees.registry import fee_model_for
 from .fees.robinhood import exchange_from_symbol_or_enum
 from .matching.normalize import fmt_line, kalshi_ticker_date, person_key, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, ticker_pair, total_event_key
-from .matching.teams import nfl_team_city, nfl_team_code
+from .matching.teams import nfl_team_city, nfl_team_code, team_code
 from .models import EventInfo, OutcomeQuote
 from .quant.arbitrage import Leg, best_leg_per_outcome, evaluate, max_price_for_leg
 from .quant.fairvalue import consensus_fair_value
@@ -103,6 +103,69 @@ class EventAnalyzer:
                     return m
         return None
 
+    def _parse_cdna_college(self, contracts_raw: list[dict], names: list[str], ev: dict) -> list[Optional[dict[str, Any]]]:
+        """CDNA symbols (NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228) carry no team codes, so
+        build the same dict parse_symbol() returns from the contract names: canonical codes,
+        the game date from the symbol, and the Kalshi ticker KXNCAAFGAME-{YYMONDD}{AWAY}{HOME}-{TEAM}
+        (Robinhood names the event "Away vs Home", matching Kalshi's pair order)."""
+        from .matching.teams import team_table
+        from .venues.robinhood import _cdna_symbol_date
+
+        codes = [team_code("ncaaf", c.get("displayShortName")) or team_code("ncaaf", n) for c, n in zip(contracts_raw, names)]
+        date = _cdna_symbol_date(contracts_raw[0].get("symbol", ""))
+        if any(c is None for c in codes) or codes[0] == codes[1] or not date:
+            return [None, None]
+        table = team_table("ncaaf")
+        kcodes = [(table.get(c) or {}).get("kalshi") or c for c in codes]
+        y, m, d = date.split("-")
+        mon = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][int(m) - 1]
+        # Name order "Purdue vs UCLA" = away, home -> KXNCAAFGAME-26SEP19PURUCLA
+        order = list(range(len(contracts_raw)))
+        name_parts = [x.strip() for x in re.split(r"\s+vs\.?\s+", str(ev.get("name") or ""), maxsplit=1)]
+        if len(name_parts) == 2:
+            first = team_code("ncaaf", name_parts[0])
+            if first == codes[1]:
+                order = [1, 0]
+        pair = "".join(kcodes[i] for i in order)
+        return [{"family": "CFBGAME", "date": date, "pair": pair, "side": kcodes[i], "teams": [kcodes[j] for j in order], "kalshi_ticker": f"KXNCAAFGAME-{y[2:]}{mon}{d}{pair}-{kcodes[i]}", "routed": "cdna"} for i in range(len(contracts_raw))]
+
+    def polymarket_cfb(self, names: list[str], outcomes: list[str], date: str) -> Optional[dict]:
+        """College moneyline on Polymarket: search by the two team names, keep the event whose
+        slug is cfb-…-{date} (UTC date of kickoff may be the ET date or the day after), then read
+        the moneyline market by slug."""
+        from datetime import datetime, timedelta
+
+        d0 = datetime.strptime(date, "%Y-%m-%d")
+        dates = {(d0 + timedelta(days=k)).strftime("%Y-%m-%d") for k in (0, 1)}
+        q = " ".join(names)
+        try:
+            found = self.pm.http.get(f"{GAMMA}/public-search", {"q": q, "limit_per_type": 10})
+        except Exception:
+            return None
+        for cand in (found or {}).get("events") or []:
+            slug = str(cand.get("slug") or "")
+            m = re.match(r"^cfb-[a-z0-9]+-[a-z0-9]+-(\d{4}-\d{2}-\d{2})$", slug)
+            if not m or m.group(1) not in dates:
+                continue
+            try:
+                ms = self.pm.http.get(f"{GAMMA}/markets", {"slug": slug})
+            except Exception:
+                ms = None
+            for mk in ms or []:
+                outs = _jl(mk.get("outcomes"))
+                if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code("ncaaf", o) for o in outs} == set(outcomes):
+                    return mk
+            if not ms:  # closed/odd markets: read the event itself
+                try:
+                    evs = self.pm.http.get(f"{GAMMA}/events", {"slug": slug})
+                except Exception:
+                    evs = None
+                for mk in ((evs or [{}])[0].get("markets") or []):
+                    outs = _jl(mk.get("outcomes"))
+                    if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code("ncaaf", o) for o in outs} == set(outcomes):
+                        return mk
+        return None
+
     def polymarket_tennis(self, names: list[str]) -> Optional[dict]:
         q = " ".join(person_key(n) for n in names)
         keys = sorted(person_keys(names))
@@ -144,16 +207,22 @@ class EventAnalyzer:
             return self.analyze_lines(url, pp, ev, contracts_raw, line_types.pop(), settings=settings, contracts=contracts, target_margin=target_margin)
         if len(contracts_raw) != 2:
             return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name")}, "analysis": None, "note": f"{len(contracts_raw)} contracts — only two-outcome game/match markets are analysed"}
+        names = [clean_label(c.get("displayLongName") or c.get("displayShortName") or "") for c in contracts_raw]
         parsed = [parse_symbol(c.get("symbol", "")) for c in contracts_raw]
+        is_cdna_college = all(str(c.get("symbol", "")).startswith("NX.F.OPT.CFB") for c in contracts_raw)
+        if is_cdna_college:
+            parsed = self._parse_cdna_college(contracts_raw, names, ev)
         if any(p is None for p in parsed):
             return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name")}, "analysis": None, "note": "unrecognised contract symbols"}
         family = parsed[0]["family"]  # type: ignore[index]
         is_nfl = family == "NFLGAME"
+        is_ncaaf = family in ("NCAAFGAME", "CFBGAME")
         is_tennis = bool(re.search(r"(ATP|WTA|ITF)", family) and "MATCH" in family)
-        sport = "nfl" if is_nfl else "tennis" if is_tennis else "other"
-        names = [clean_label(c.get("displayLongName") or c.get("displayShortName") or "") for c in contracts_raw]
+        sport = "nfl" if is_nfl else "ncaaf" if is_ncaaf else "tennis" if is_tennis else "other"
         if is_nfl:
             outcomes = [nfl_team_code(c.get("displayShortName")) or nfl_team_code(n) or p["side"] for c, n, p in zip(contracts_raw, names, parsed)]  # type: ignore[index]
+        elif is_ncaaf:
+            outcomes = [team_code("ncaaf", c.get("displayShortName")) or team_code("ncaaf", n) or team_code("ncaaf", p["side"]) or p["side"] for c, n, p in zip(contracts_raw, names, parsed)]  # type: ignore[index]
         else:
             outcomes = person_keys(names)
         labels = dict(zip(outcomes, names))
@@ -189,6 +258,8 @@ class EventAnalyzer:
         pm_market = None
         if is_nfl and parsed[0]["teams"] and parsed[0]["date"]:  # type: ignore[index]
             pm_market = self.polymarket_nfl(parsed[0]["teams"], parsed[0]["date"])  # type: ignore[index]
+        elif is_ncaaf and parsed[0]["date"]:  # type: ignore[index]
+            pm_market = self.polymarket_cfb(names, outcomes, parsed[0]["date"])  # type: ignore[index]
         elif is_tennis:
             pm_market = self.polymarket_tennis(names)
         if pm_market:
@@ -198,7 +269,7 @@ class EventAnalyzer:
             pq: list[OutcomeQuote] = []
             tokens = _jl(pm_market.get("clobTokenIds"))
             for i, label in enumerate(outs):
-                key = (nfl_team_code(label) if is_nfl else person_key(label)) or ""
+                key = (nfl_team_code(label) if is_nfl else team_code("ncaaf", label) if is_ncaaf else person_key(label)) or ""
                 if key not in outcomes:
                     continue
                 bid, ask = sides[i]

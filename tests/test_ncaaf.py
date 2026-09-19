@@ -4,6 +4,7 @@ and ESPN's college scoreboard — offline fixtures recorded 2026-09-18."""
 import json
 import unittest
 
+from arb_engine.eventlookup import EventAnalyzer
 from arb_engine.fees.robinhood import exchange_from_symbol_or_enum
 from arb_engine.matching.teams import ncaaf_team_code, team_code, team_name
 from arb_engine.scanner import scan
@@ -106,6 +107,40 @@ class ESPNCollegeTests(unittest.TestCase):
         pre = keys["ncaaf:PUR|UCLA:2026-09-19"]
         self.assertEqual(pre.status, "pre")
         self.assertIsNotNone(pre.vegas_spread_home)
+
+
+class EventPageTests(unittest.TestCase):
+    """The overlay/bridge path for one CDNA-routed college event page."""
+
+    def _analyzer(self):
+        pp = load("ncaaf/robinhood_page_props_cfb.json")
+        ev = next(e for e in pp["events"] if e["name"] == "Purdue vs UCLA")
+        page = {"event": ev, "quotes": pp["quotes"], "eventStates": pp["eventStates"]}
+        html = '<script id="__NEXT_DATA__" type="application/json">' + json.dumps({"props": {"pageProps": page}}) + "</script>"
+        rh = FakeHttp({"/prediction-markets/college-football/events/3fbbb7f6/": html, "/marketdata/event/contract/quotes/v1/": pp["quotes"]})
+        km = {m["ticker"]: m for m in load("ncaaf/kalshi_markets_ncaaf.json")["markets"]}
+        kal = FakeHttp({"/markets/KXNCAAFGAME-26SEP19PURUCLA-PUR": {"market": km["KXNCAAFGAME-26SEP19PURUCLA-PUR"]}, "/markets/KXNCAAFGAME-26SEP19PURUCLA-UCLA": {"market": km["KXNCAAFGAME-26SEP19PURUCLA-UCLA"]}, "/series/KXNCAAFGAME": load("ncaaf/kalshi_series_kxncaafgame.json")})
+        pm_ev = next(e for e in load("ncaaf/polymarket_events_cfb.json") if e["slug"] == "cfb-pur-ucla-2026-09-19")
+        pm = FakeHttp({"/public-search": {"events": [{"slug": "ncaa-football-2026-national-champion"}, {"slug": "cfb-pur-ucla-2025-09-20"}, {"slug": "cfb-pur-ucla-2026-09-19"}]}, "/markets?slug=cfb-pur-ucla-2026-09-19": pm_ev["markets"]})
+        return EventAnalyzer(robinhood=RobinhoodAdapter(http=rh), kalshi=KalshiClient(env="prod", http=kal), polymarket=PolymarketAdapter(http=pm))
+
+    def test_cdna_event_page_gets_all_three_venues(self):
+        an = self._analyzer()
+        res = an.analyze_url("https://robinhood.com/us/en/prediction-markets/college-football/events/3fbbb7f6/", settings={})
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["event"]["sport"], "ncaaf")
+        self.assertEqual(res["event"]["key"], "ncaaf:PUR|UCLA:2026-09-19")
+        a = res["analysis"]
+        self.assertEqual(a["errors"], [])
+        self.assertEqual(sorted(a["venues"]), ["kalshi", "polymarket", "robinhood"])
+        pur = next(o for o in a["outcomes"] if o["outcome"] == "PUR")
+        by_venue = {v["venue"]: v for v in pur["venues"]}
+        self.assertEqual(by_venue["robinhood"]["exchange"], "cdna")
+        self.assertEqual(by_venue["robinhood"]["ask"], 0.15)
+        self.assertEqual(by_venue["kalshi"]["ask"], 0.15)
+        self.assertEqual(by_venue["polymarket"]["ask"], 0.16)
+        self.assertIsNotNone(by_venue["robinhood"]["max_buy_price"])
+        self.assertEqual(an.last_event.info.sport, "ncaaf")
 
 
 if __name__ == "__main__":

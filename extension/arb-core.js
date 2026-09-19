@@ -45,7 +45,7 @@
   // ---- Robinhood ------------------------------------------------------------------------
   // commission = min(round_up_cent(k P (1-P) C), $0.01 C) with k = 0.10 (0.05 Gold);
   // plus exchange fee up to $0.01/contract (ForecastEX embeds it in the spread).
-  const RH_EXCHANGE_FEE = { kalshi: 0.01, rothera: 0.01, nadex: 0.01, forecastex: 0 };
+  const RH_EXCHANGE_FEE = { kalshi: 0.01, rothera: 0.01, nadex: 0.01, forecastex: 0, cdna: 0.01 };  // cdna = college games (NX.F.OPT.*), assumed at the cap
   function feeRobinhood(price, contracts, role, opts) {
     opts = opts || {};
     const k = opts.gold ? 0.05 : 0.10;

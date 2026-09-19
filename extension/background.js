@@ -131,7 +131,9 @@ function rhExchange(c) {
   if (e.includes("KALSHI")) return "kalshi";
   if (e.includes("FORECAST")) return "forecastex";
   if (e.includes("NADEX") || e.includes("NORTH_AMERICAN")) return "nadex";
-  return (c.symbol || "").startsWith("KX") ? "kalshi" : "rothera";
+  if (e.includes("CDNA")) return "cdna";
+  const s = c.symbol || "";
+  return s.startsWith("KX") ? "kalshi" : s.startsWith("NX.") ? "cdna" : "rothera";
 }
 
 // ---- Kalshi ------------------------------------------------------------------------------
@@ -360,6 +362,11 @@ async function analyze(url, opts) {
   if (contracts.length && lineTypes.size === 1 && contracts.every((c) => { const p = ArbCore.parseSymbol(c.symbol); return p && LINE_FAMILIES[p.family]; })) return analyzeLines(url, ev, cfg, [...lineTypes][0]);
   if (contracts.length !== 2) return { ok: true, event: ev, analysis: null, note: `${contracts.length} contracts — the overlay handles game winners, spreads, totals and matches` };
   const parsed = contracts.map((c) => ArbCore.parseSymbol(c.symbol));
+  // College football on Robinhood is CDNA-routed (NX.F.OPT.CFB-…): no team codes in the symbol, so
+  // the Kalshi ticker and Polymarket slug can only be derived by the Python engine (761-team table).
+  if (contracts.every((c) => (c.symbol || "").startsWith("NX.F.OPT.CFB")) || parsed.every((p) => p && /^NCAAF/.test(p.family))) {
+    return { ok: true, event: ev, analysis: null, note: "College football needs the local engine: run `python -m arb_engine bridge` and set the popup's bridge to auto/on (direct mode cannot map college teams across venues)." };
+  }
   if (parsed.some((p) => !p)) return { ok: true, event: ev, analysis: null, note: "unrecognised contract symbols: " + contracts.map((c) => c.symbol).join(", ") };
   const family = parsed[0].family;
   const isNfl = /^NFLGAME$/.test(family);

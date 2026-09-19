@@ -127,3 +127,12 @@ consensus is positive) plus `ARB +x%` when the cheapest legs across venues sum b
 after fees. Spread/total cards are skipped (open the game for the line table). The panel
 shows the count analysed and the best edge. Rescans every `max(refresh, 20)` seconds.
 
+### College football pages
+
+Robinhood's college-football game winners are CDNA-routed (`NX.F.OPT.CFB-…` symbols): the
+symbol carries no team codes, so the worker cannot derive the Kalshi ticker or the Polymarket
+slug on its own. With the bridge running (`python -m arb_engine bridge`, popup bridge = auto/on)
+the Python engine resolves the teams through its 761-program table and the panel, tab badges
+and category-page badges work exactly as for the NFL; in direct mode the panel says so instead
+of showing nothing. CDNA quotes are priced with the $0.01/contract exchange fee (assumed).
+

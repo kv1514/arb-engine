@@ -119,6 +119,11 @@
   eq(calls.length, afterFirst, "many result cached per url");
   eq((await analyzeMany([url, "https://robinhood.com/x/", "https://robinhood.com/y/"], 1)).truncated, true, "many truncates at max");
 
+  // --- college football (CDNA symbols) in direct mode: needs the bridge ------------------
+  eq(rhExchange({ symbol: "NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228", exchange: "EXCHANGE_SOURCE_CDNA" }), "cdna", "cdna exchange from enum");
+  eq(rhExchange({ symbol: "NX.F.OPT.CFB-00027-260919-M.O.1.1.20270228" }), "cdna", "cdna exchange from symbol");
+  eq(Number(ArbCore.feeRobinhood(0.15, 100, { exchange: "cdna" })), 2.0, "cdna fee: $1 commission cap + $1 exchange for 100 contracts");
+
   print((failures ? "FAILED " + failures + "/" : "ok ") + checks + " checks");
   if (failures) throw new Error("background tests failed");
 })();
