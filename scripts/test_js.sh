@@ -15,7 +15,12 @@ run_js() {
 
 # 1) arb-core parity
 T1="$TMPD/arbcore-test-$$.js"
-{ printf 'const FEE_VECTORS = '; cat "$ROOT/tests/fixtures/fee_vectors.json"; printf ';\n'; cat "$ROOT/extension/arb-core.js" "$ROOT/tests/arb-core.test.js"; } > "$T1"
+{
+  printf 'const FEE_VECTORS = '; cat "$ROOT/tests/fixtures/fee_vectors.json"; printf ';\n'
+  # arb vectors (tie payouts, ticks, size steps) from the Python arbitrage module, when present
+  if [ -f "$ROOT/tests/fixtures/arb_vectors.json" ]; then printf 'globalThis.ARB_VECTORS = '; cat "$ROOT/tests/fixtures/arb_vectors.json"; printf ';\n'; fi
+  cat "$ROOT/extension/arb-core.js" "$ROOT/tests/arb-core.test.js"
+} > "$T1"
 run_js "$T1"; rm -f "$T1"
 
 # 2) background integration (fixtures embedded as a JSON object of file contents)

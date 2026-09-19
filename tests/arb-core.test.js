@@ -122,20 +122,23 @@
   };
   const arb = loadArbVectors();
   let arbChecked = 0, arbBad = 0;
+  // P09's file spells the fields `others` / `expected` (and adds gross_sum etc.); accept both spellings.
+  const EXPECT = (v) => (v.expect !== undefined ? v.expect : v.expected);
   for (const v of arb.vec.evaluate || []) {
     const res = A.evaluate(v.legs.map(LEG), v.contracts || 100);
     const got = { profit: res.profit, margin: res.margin, tie_margin: res.tieMargin, tie_payout_total: res.tiePayoutTotal, is_arb: res.isArb };
-    for (const k of Object.keys(v.expect || {})) {
+    for (const k of Object.keys(EXPECT(v) || {}).filter((k) => k in got)) {
       arbChecked++; checks++;
-      const exp = v.expect[k], act = got[k];
+      const exp = EXPECT(v)[k], act = got[k];
       const ok = typeof exp === "number" ? Math.abs(act - exp) < 1e-9 : act === exp;
       if (!ok) { arbBad++; failures++; if (arbBad < 10) print("FAIL arb evaluate " + k + " " + JSON.stringify(v) + " -> " + JSON.stringify(got)); }
     }
   }
   for (const v of arb.vec.max_price || []) {
     arbChecked++; checks++;
-    const act = A.maxPrice((v.other_legs || []).map(LEG), FEE(v.fee), v.contracts || 100, v.target_margin || 0, v.role || "taker", v.tick || 0.01, v.price_floor == null ? 0.01 : v.price_floor, v.price_cap == null ? 0.99 : v.price_cap);
-    const ok = v.expect == null ? act == null : (act != null && Math.abs(act - v.expect) < 1e-9);
+    const tick = v.tick || 0.01, exp = EXPECT(v);
+    const act = A.maxPrice((v.other_legs || v.others || []).map(LEG), FEE(v.fee), v.contracts || 100, v.target_margin || 0, v.role || "taker", tick, v.price_floor == null ? tick : v.price_floor, v.price_cap == null ? 1 - tick : v.price_cap);
+    const ok = exp == null ? act == null : (act != null && Math.abs(act - exp) < 1e-9);
     if (!ok) { arbBad++; failures++; if (arbBad < 10) print("FAIL arb max_price " + JSON.stringify(v) + " -> " + JSON.stringify(act)); }
   }
   for (const v of arb.vec.step || []) {
@@ -143,7 +146,10 @@
     const act = A.stepSize(v.size, v.step);
     if (Math.abs(act - v.expect) > 1e-9) { arbBad++; failures++; if (arbBad < 10) print("FAIL arb step " + JSON.stringify(v) + " -> " + act); }
   }
-  print("arb vectors (" + arb.src + "): " + arbChecked + " checked, " + arbBad + " mismatches");
+  // P09's sizing vectors (size_from_books with steps / min sizes) have no JS twin yet: the
+  // extension sizes from the bridge's sized_arb. Count them so a future twin is not forgotten.
+  const sizingOnlyPython = (arb.vec.size || []).length;
+  print("arb vectors (" + arb.src + "): " + arbChecked + " checked, " + arbBad + " mismatches" + (sizingOnlyPython ? " (" + sizingOnlyPython + " sizing vectors are Python-only)" : ""));
 
   // 3. Identity helpers.
   A.loadTeams({ teams: { LAR: { city: "Los Angeles R", nick: "Rams", aliases: ["LA", "Los Angeles Rams"] }, BUF: { city: "Buffalo", nick: "Bills", aliases: [] }, DET: { city: "Detroit", nick: "Lions", aliases: [] } } });
