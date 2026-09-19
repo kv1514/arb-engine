@@ -71,6 +71,17 @@
   eq(typeof brh.allIn, "number", "bridge all-in mapped");
   eq(typeof brh.maxBuyMaker, "number", "bridge maker max mapped");
   eq(b.analysis.arb && typeof b.analysis.arb.margin, "number", "bridge arb mapped");
+  // The in-play request must carry the popup's target margin (the bridge defaults it to 0 otherwise).
+  stored.targetMargin = 0.02; stored.positions = "robinhood:PHI:0.50:100\nkalshi:TEN:0.40:50"; cache.clear();
+  const b2 = await analyze(url);
+  const ipCall = calls.filter((u) => u.startsWith("http://127.0.0.1:8765/inplay")).pop();
+  eq(!!ipCall, true, "bridge mode requests /inplay");
+  eq(ipCall.indexOf("&target_margin=0.02&") >= 0, true, "inplay carries target_margin: " + ipCall);
+  eq(ipCall.indexOf("&contracts=100&") >= 0, true, "inplay carries contracts");
+  eq((ipCall.match(/&position=/g) || []).length, 2, "inplay carries both positions");
+  eq(ipCall.indexOf("position=robinhood%3APHI%3A0.50%3A100") >= 0, true, "position encoded");
+  eq(b2.analysis.inplay && b2.analysis.inplay.actions.length, 1, "inplay view attached");
+  delete stored.targetMargin; delete stored.positions;
 
   // --- bridge mapping for line pages (pure function on the Python engine's output) --------
   const bl = fromBridge(JSON.parse(FIXTURES["bridge_lines.json"]), { contracts: 100, targetMargin: 0, gold: false });

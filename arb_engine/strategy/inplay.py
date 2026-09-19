@@ -112,7 +112,7 @@ def model_home_wp(gs: Any, model: Any = None) -> Optional[float]:
             home_score=gs.home_score, away_score=gs.away_score, game_seconds_remaining=gs.game_seconds_remaining,
             possession=gs.possession, down=gs.down, distance=gs.distance, yardline_100=gs.yardline_100,
             home_timeouts=gs.home_timeouts if gs.home_timeouts is not None else 3, away_timeouts=gs.away_timeouts if gs.away_timeouts is not None else 3,
-            vegas_spread_home=gs.vegas_spread_home or 0.0, model=model,
+            vegas_spread_home=gs.vegas_spread_home or 0.0, receive_2h_ko_home=getattr(gs, "receive_2h_ko_home", None), model=model,
         )
     except Exception:
         return None
@@ -141,6 +141,11 @@ def game_line(gs: Any) -> Optional[str]:
 def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None) -> InplayView:
     settings = settings or {}
     info = me.info
+    # Two-way markets only: the lock buys *the* other side and the blend renormalises two
+    # probabilities. A three-way (soccer 1X2) event would get a "guaranteed" lock that leaves
+    # the third outcome uncovered and a mis-scaled fair value, so refuse it outright.
+    if len(info.outcomes) != 2:
+        raise ValueError(f"in-play evaluation needs exactly two outcomes, got {list(info.outcomes)}")
     lots = list(lots)
     held: dict[str, float] = {o: 0.0 for o in info.outcomes}
     cost: dict[str, float] = {o: 0.0 for o in info.outcomes}
@@ -155,7 +160,7 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
     # Which outcome is the home team: from the game state when we have it, else assume the
     # second code of "away @ home" ordering is unknown -> treat the first outcome as home only
     # for the blend's bookkeeping (the blend is symmetric, so this does not change results).
-    home_o, away_o = info.outcomes[0], info.outcomes[1] if len(info.outcomes) > 1 else info.outcomes[0]
+    home_o, away_o = info.outcomes[0], info.outcomes[1]
     if game_state is not None and getattr(game_state, "home", None) in info.outcomes and getattr(game_state, "away", None) in info.outcomes:
         home_o, away_o = game_state.home, game_state.away
     # ESPN's status is authoritative when we have it (the venues' in-play flag is a heuristic).
@@ -192,10 +197,12 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
         # Lock: how many of this side are needed to equalise payouts, and the max price for them.
         need = max_held - held[o]
         if need > 0 and best is not None:
-            other_cost = total_cost - cost[o]  # money already spent on the other side(s) + this side so far
-            # Existing spend on this side counts against the same payout, so it is part of the fixed cost.
-            fixed = total_cost
-            fixed_leg = Leg("held", "held", fixed / need, ZeroFees())  # per-contract share of everything already paid
+            # After buying `need` more, this side pays max_held if it wins. max_price_for_leg
+            # budgets `need * (1 - target_margin)` for the leg, so the fixed leg must carry
+            # everything already paid *net of* the payout the contracts already held on this
+            # side contribute: budget = max_held * (1 - target_margin) - total_cost.
+            fixed = total_cost - held[o] * (1.0 - target_margin)
+            fixed_leg = Leg("held", "held", fixed / need, ZeroFees())  # per-contract share, may be negative
             lock = max_price_for_leg([fixed_leg], best[2], need, target_margin, role="taker")
             sv.need, sv.lock_price = need, lock
             if lock is not None and best[0] is not None and best[1].ask <= lock + 1e-9:

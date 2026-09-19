@@ -86,6 +86,19 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(v.blend["weights"], {"market": 1.0})
         self.assertTrue(v.game_line.startswith("PRE"))
 
+    def test_first_half_kickoff_flag_reaches_the_model(self):
+        # Q2 7-7, KC (home) ball: with the 2H-kickoff recipient known the model must not
+        # return the average of the two assignments (they differ by ~8 points here).
+        from arb_engine.models.wp import home_win_probability
+        base = dict(home_score=7, away_score=7, period=2, clock_seconds_remaining_in_period=300, game_seconds_remaining=2100, possession="home", down=1, distance=10, yardline_100=70, vegas_spread_home=0.0, espn_home_wp=None)
+        gs = self._gs(**base, receive_2h_ko_home=True)
+        kc = next(s for s in evaluate_inplay(_me(), [], game_state=gs).sides if s.outcome == "KC")
+        args = dict(home_score=7, away_score=7, game_seconds_remaining=2100, possession="home", down=1, distance=10, yardline_100=70, home_timeouts=3, away_timeouts=2, vegas_spread_home=0.0)
+        self.assertAlmostEqual(kc.model_p, home_win_probability(receive_2h_ko_home=True, **args), places=9)
+        self.assertNotAlmostEqual(kc.model_p, home_win_probability(**args), places=3)
+        unknown = next(s for s in evaluate_inplay(_me(), [], game_state=self._gs(**base)).sides if s.outcome == "KC")
+        self.assertAlmostEqual(unknown.model_p, home_win_probability(**args), places=9)
+
     def test_watcher_passes_state(self):
         import os
         me = _me()
@@ -112,6 +125,31 @@ class InplayTests(unittest.TestCase):
         self.assertAlmostEqual(kc.lock_profit_if_now, 6.0)
         self.assertTrue(any(a.startswith("LOCK NOW") for a in v.actions))
         self.assertFalse(v.balanced)
+
+    def test_partial_hedge_lock_price_uses_full_payout(self):
+        # 100 DEN @ 0.50 ($52.00) + 40 KC @ 0.40 ($16.80): total $68.80, need 60 more KC to
+        # pay 100 either way. Budget 100 - 68.80 = 31.20 -> 60 @ 0.50 + $1.20 fees fits exactly.
+        # (The old code budgeted only `need` of payout, so a partial hedge got no lock at all.)
+        lots = [Lot("robinhood", "DEN", 0.50, 100), Lot("robinhood", "KC", 0.40, 40)]
+        v = evaluate_inplay(_me(), lots)
+        kc = next(s for s in v.sides if s.outcome == "KC")
+        self.assertAlmostEqual(v.total_cost, 68.80)
+        self.assertEqual((kc.need, kc.lock_price, kc.lock_available), (60.0, 0.50, True))
+        self.assertAlmostEqual(kc.lock_profit_if_now, 100 - 68.80 - (0.40 * 60 + 1.20))
+        self.assertTrue(any(a.startswith("LOCK NOW: buy 60 x Kansas City") for a in v.actions))
+        # Same book, no KC held: the classic case still locks at 0.46 (100 needed, budget 48).
+        base = next(s for s in evaluate_inplay(_me(), lots[:1]).sides if s.outcome == "KC")
+        self.assertEqual((base.need, base.lock_price), (100.0, 0.46))
+        # A target margin comes off the full payout too: 100 * 0.98 - 68.80 = 29.20 -> 0.46.
+        tm = next(s for s in evaluate_inplay(_me(), lots, target_margin=0.02).sides if s.outcome == "KC")
+        self.assertEqual(tm.lock_price, 0.46)
+
+    def test_three_way_market_is_refused(self):
+        info = EventInfo(event_key="epl:ARS|CHE:2026-09-21", sport="epl", market_type="moneyline", outcomes=["ARS", "DRAW", "CHE"], labels={}, in_play=True)
+        q = lambda o, ask: OutcomeQuote("kalshi", f"k-{o}", info.event_key, o, ask=ask, bid=ask - 0.02, fee_params=KFEE)  # noqa: E731
+        me = MergedEvent(info.event_key, info, {"kalshi": [q("ARS", 0.42), q("DRAW", 0.27), q("CHE", 0.32)]})
+        with self.assertRaises(ValueError):
+            evaluate_inplay(me, [Lot("kalshi", "ARS", 0.40, 100)])
 
     def test_wait_when_other_side_too_expensive(self):
         v = evaluate_inplay(_me(r_kc=(0.47, 0.49), k_kc=(0.48, 0.50)), [Lot("robinhood", "DEN", 0.50, 100)])

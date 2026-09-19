@@ -197,6 +197,7 @@ class GameState:
     status_detail: Optional[str] = None
     last_play_text: Optional[str] = None
     is_red_zone: Optional[bool] = None
+    receive_2h_ko_home: Optional[bool] = None  # home kicked off to open the game -> receives the 2H kickoff
     enriched: bool = False
 
     @property
@@ -351,6 +352,27 @@ def _last_play(summary: dict) -> Optional[dict]:
     return None
 
 
+def _first_drive(summary: dict) -> Optional[dict]:
+    drives = summary.get("drives") or {}
+    prev = drives.get("previous") or []
+    if prev:
+        return prev[0]
+    return drives.get("current") or None
+
+
+def receive_2h_ko_home_from(summary: dict, home_id: Optional[str], away_id: Optional[str]) -> Optional[bool]:
+    """Whether the home team receives the second-half kickoff: the team of the game's first
+    drive received the opening kickoff, so the *other* team gets the ball after halftime.
+    ``None`` when the summary has no drives yet (pre-game) or the team cannot be resolved."""
+    first = _first_drive(summary)
+    if not first:
+        return None
+    side = _possession_side((first.get("team") or {}).get("id"), home_id, away_id)
+    if side is None:
+        return None
+    return side == "away"
+
+
 def apply_summary(state: GameState, summary: dict) -> GameState:
     """Merge summary data (WP series, closing odds, header status, last play) into ``state``."""
     header = summary.get("header") or {}
@@ -369,17 +391,25 @@ def apply_summary(state: GameState, summary: dict) -> GameState:
     for c in hcomp.get("competitors") or []:
         side = c.get("homeAway")
         score = _int(c.get("score"))
+        cid = str(c.get("id") or (c.get("team") or {}).get("id") or "") or None
         if side == "home":
+            if state.home_team_id is None and cid:
+                state.home_team_id = cid
             if score is not None:
                 state.home_score = score
             if c.get("possession") is True:
                 state.possession = "home"
         elif side == "away":
+            if state.away_team_id is None and cid:
+                state.away_team_id = cid
             if score is not None:
                 state.away_score = score
             if c.get("possession") is True:
                 state.possession = "away"
     state.game_seconds_remaining = game_seconds_remaining(state.status, state.period, state.clock_seconds_remaining_in_period)
+    ko = receive_2h_ko_home_from(summary, state.home_team_id, state.away_team_id)
+    if ko is not None:
+        state.receive_2h_ko_home = ko
     series = parse_wp_series(summary)
     if series:
         state.espn_wp_series = series

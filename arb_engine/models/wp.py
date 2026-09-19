@@ -241,6 +241,7 @@ def home_win_probability(
     receive_2h_ko_home: Optional[bool] = None,
     half_seconds_remaining: Optional[float] = None,
     model: Optional[WinProbModel] = None,
+    monotone: bool = True,
 ) -> float:
     """P(home team wins) from an ESPN-style game state.
 
@@ -250,20 +251,22 @@ def home_win_probability(
     is the home team's sportsbook line (negative = home favoured). ``receive_2h_ko_home``
     says whether the home team receives the second-half kickoff (i.e. kicked off to open
     the game); ``None`` averages both possibilities.
+
+    ``monotone`` (default on) guards against the unconstrained residual trees: for each
+    perspective the model is also scored at every smaller margin between a tie and the
+    actual one, and the leader gets the running max (the trailer the running min), so a
+    bigger lead can never *lower* the leading team's probability at a fixed clock, spread
+    and field position. The raw export dips by up to ~10 points at thinly-trained splits
+    (e.g. a 17-point Q2 lead below a 16-point one); see docs/MODEL.md.
     """
     mdl = model or default_model()
     gsr = min(max(float(game_seconds_remaining), 0.0), REGULATION_SECONDS)
     second_half = gsr <= HALF_SECONDS
     spread_home = -float(vegas_spread_home or 0.0)  # nflverse sign: positive = home favoured
 
-    def perspective(is_home: bool, ko_home: Optional[bool], dn: float, dist: float, yl: float) -> float:
-        """P(home wins) with the given team as posteam and 2H-kickoff assignment."""
-        if second_half or ko_home is None:
-            receive = 0
-        else:
-            receive = 1 if (ko_home == is_home) else 0
+    def posteam_wp(is_home: bool, receive: int, sd: float, dn: float, dist: float, yl: float) -> float:
         feats = posteam_features(
-            score_differential=(home_score - away_score) if is_home else (away_score - home_score),
+            score_differential=sd,
             game_seconds_remaining=gsr,
             half_seconds_remaining=half_seconds_remaining,
             receive_2h_ko=receive,
@@ -275,7 +278,21 @@ def home_win_probability(
             defteam_timeouts_remaining=away_timeouts if is_home else home_timeouts,
             is_home=1 if is_home else 0,
         )
-        wp = mdl.predict_posteam_wp(feats)
+        return mdl.predict_posteam_wp(feats)
+
+    def perspective(is_home: bool, ko_home: Optional[bool], dn: float, dist: float, yl: float) -> float:
+        """P(home wins) with the given team as posteam and 2H-kickoff assignment."""
+        if second_half or ko_home is None:
+            receive = 0
+        else:
+            receive = 1 if (ko_home == is_home) else 0
+        sd = (home_score - away_score) if is_home else (away_score - home_score)
+        wp = posteam_wp(is_home, receive, sd, dn, dist, yl)
+        if monotone and sd != 0:
+            # Running extremum from the tie towards the actual margin (see docstring).
+            for smaller in range(0, int(sd), 1 if sd > 0 else -1):  # integer margins between tie and |sd|
+                v = posteam_wp(is_home, receive, smaller, dn, dist, yl)
+                wp = max(wp, v) if sd > 0 else min(wp, v)
         return wp if is_home else 1.0 - wp
 
     ko_options: list[Optional[bool]] = [True, False] if (receive_2h_ko_home is None and not second_half) else [receive_2h_ko_home]

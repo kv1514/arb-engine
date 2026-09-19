@@ -60,6 +60,27 @@ class EventAnalyzer:
         self.kalshi = kalshi or KalshiClient(env="prod")
         self.pm = polymarket or PolymarketAdapter()
         self._series_cache: dict[str, dict] = {}
+        self.last_event = None            # MergedEvent from the last game-winner analyze_url
+        self.last_url: Optional[str] = None
+        self.last_analyzed_at: float = 0.0
+
+    PUBLIC_CATEGORIES = ("nfl", "tennis", "college-football", "nba", "nhl", "baseball", "soccer", "mma", "golf", "pro-football", "esports", "cricket")
+
+    def resolve_public_event(self, slug: str) -> tuple[Optional[str], Optional[dict]]:
+        """Find the public category page that serves this event slug (cached per slug)."""
+        cache = getattr(self, "_slug_category", None)
+        if cache is None:
+            cache = self._slug_category = {}
+        cats = ([cache[slug]] if slug in cache else []) + [c for c in self.PUBLIC_CATEGORIES if c != cache.get(slug)]
+        for cat in cats:
+            try:
+                pp = self.rh.event_page(cat, slug)
+            except Exception:
+                continue
+            if pp.get("event"):
+                cache[slug] = cat
+                return cat, pp
+        return None, None
 
     # ---- lookups ------------------------------------------------------------------------
     def _series(self, ticker: str) -> dict:
@@ -103,10 +124,19 @@ class EventAnalyzer:
     def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0) -> dict[str, Any]:
         settings = settings or {}
         m = re.search(r"/prediction-markets/([^/]+)/events/([^/?#]+)", url)
-        if not m:
-            return {"ok": False, "error": "not a Robinhood prediction-market event URL"}
-        category, slug = m.group(1), m.group(2)
-        pp = self.rh.event_page(category, slug)
+        if m:
+            category, slug = m.group(1), m.group(2)
+            pp = self.rh.event_page(category, slug)
+        else:
+            # Logged-in trading route: robinhood.com/events/<slug>?contract=<id> (client-rendered,
+            # no category in the URL). The public page for the same slug carries the event data.
+            m = re.search(r"robinhood\.com/events/([^/?#]+)", url)
+            if not m:
+                return {"ok": False, "error": "not a Robinhood prediction-market event URL"}
+            slug = m.group(1)
+            category, pp = self.resolve_public_event(slug)
+            if pp is None:
+                return {"ok": False, "error": f"could not find a public event page for slug {slug!r}"}
         ev = pp.get("event") or {}
         contracts_raw = list((ev.get("eventContracts") or {}).values())
         line_types = {mt for c in contracts_raw for pfx, mt in LINE_SYMBOL_PREFIXES.get("nfl", {}).items() if str(c.get("symbol", "")).startswith(pfx)}
@@ -186,7 +216,8 @@ class EventAnalyzer:
         from .scanner import analyze_event
 
         me = MergedEvent(event_key=event_key, info=info, quotes_by_venue=quotes_by_venue)
-        self.last_event = me  # reused by the in-play watcher
+        self.last_event = me  # reused by the in-play watcher and the bridge's /inplay
+        self.last_url, self.last_analyzed_at = url, now
         report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now)
         out = asdict(report)
         out["errors"] = errors

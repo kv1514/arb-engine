@@ -16,9 +16,12 @@
   const fmtPct = (x, signed) => (x == null ? "–" : (signed && x > 0 ? "+" : "") + (x * 100).toFixed(1) + "%");
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  const APP_RE = /^\/events\/([^/?#]+)/;  // logged-in trading route: /events/<slug>?contract=<id>
   function eventUrl() {
     const m = EVENT_RE.exec(location.pathname);
-    return m ? location.origin + m[0].replace(/\/?$/, "/") : null;
+    if (m) return location.origin + m[0].replace(/\/?$/, "/");
+    const a = APP_RE.exec(location.pathname);
+    return a ? location.origin + "/events/" + a[1] + "/" : null;
   }
 
   function ensurePanel() {

@@ -10,6 +10,7 @@ globalThis.fetch = async (url) => {
   const res = (status, body) => ({ ok: status < 400, status, text: async () => body, json: async () => JSON.parse(body) });
   if (url.startsWith("http://127.0.0.1:8765/health")) return __bridgeOnline ? res(200, '{"ok":true}') : Promise.reject(new TypeError("Failed to fetch"));
   if (url.startsWith("http://127.0.0.1:8765/analyze")) return res(200, FIXTURES["bridge_analyze.json"]);
+  if (url.startsWith("http://127.0.0.1:8765/inplay")) return res(200, '{"ok":true,"view":{"actions":["wait: Tennessee locks a profit at <= 0.46"],"live":false}}');
   if (url.startsWith("data:application/json,")) return res(200, decodeURIComponent(url.slice("data:application/json,".length)));
   if (url.includes("/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals")) return res(200, FIXTURES["rh_totals_page.html"]);
   if (url.includes("/prediction-markets/nfl/events/")) return res(200, FIXTURES["rh_event_page.html"]);

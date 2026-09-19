@@ -60,6 +60,39 @@ class ExportedModelTests(unittest.TestCase):
             self.assertGreater(p, prev, f"lead {lead}")
             prev = p
 
+    def test_bigger_lead_never_lowers_the_leader(self):
+        # Scan leads -28..28 across clocks, spreads and both possessions: P(home) must be
+        # non-decreasing in the home margin (the raw trees dip by up to ~10 points).
+        for poss in ("home", "away"):
+            for gsr in (2700, 900, 120):
+                for spread in (-7, 0, 7):
+                    prev = -1.0
+                    for lead in range(-28, 29):
+                        p = self._home(home_score=20 + lead, away_score=20, game_seconds_remaining=gsr, possession=poss, down=1, distance=10, yardline_100=60, vegas_spread_home=spread)
+                        self.assertGreaterEqual(p, prev - 1e-12, f"poss {poss} gsr {gsr} spread {spread} lead {lead}: {p} < {prev}")
+                        prev = p
+        # Dead-ball state is an average of monotone perspectives, so it is monotone too.
+        prev = -1.0
+        for lead in range(-28, 29):
+            p = self._home(home_score=20 + lead, away_score=20, game_seconds_remaining=2700, vegas_spread_home=-3)
+            self.assertGreaterEqual(p, prev - 1e-12, f"neutral lead {lead}")
+            prev = p
+
+    def test_monotone_guard_fixes_the_q2_dip(self):
+        # Away up 16 vs 17, away ball, Q2 (2700 s), home -7: the raw export *raises* P(home)
+        # by ~10 points for the bigger away lead; the guard clamps it to the 16-point value.
+        st = dict(game_seconds_remaining=2700, possession="away", down=1, distance=10, yardline_100=60, vegas_spread_home=-7)
+        raw16 = self._home(home_score=20, away_score=36, monotone=False, **st)
+        raw17 = self._home(home_score=20, away_score=37, monotone=False, **st)
+        self.assertGreater(raw17 - raw16, 0.05, "the shipped export no longer dips here; keep the guard anyway")
+        self.assertAlmostEqual(self._home(home_score=20, away_score=36, **st), raw16, places=12)
+        self.assertLessEqual(self._home(home_score=20, away_score=37, **st), raw16 + 1e-12)
+        # Home leading with the ball, home +7: same shape from the other side.
+        st = dict(game_seconds_remaining=2700, possession="home", down=1, distance=10, yardline_100=60, vegas_spread_home=7)
+        self.assertGreaterEqual(self._home(home_score=37, away_score=20, **st), self._home(home_score=36, away_score=20, **st) - 1e-12)
+        # A tie is never touched by the guard.
+        self.assertAlmostEqual(self._home(home_score=20, away_score=20, **st), self._home(home_score=20, away_score=20, monotone=False, **st), places=12)
+
     def test_less_time_with_a_lead_means_higher_wp(self):
         prev = 0.0
         for gsr in (3000, 2400, 1500, 900, 300, 60):

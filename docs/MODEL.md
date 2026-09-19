@@ -53,9 +53,24 @@ Two stages, stacked:
    The trees only have to learn what the polynomial cannot (the pre-game spread curve at
    big spreads, end-of-half and 4th-down kinks), so they stay small.
 
-Stacking was chosen over either piece alone on the held-out season: plain XGBoost
+Because the trees are unconstrained they can dip at a thinly-trained split (the shipped
+export scores a 17-point Q2 lead *below* a 16-point one for the same clock, spread and
+field position — about 10 points of win probability). `home_win_probability` therefore
+enforces monotonicity in the score at inference: for each perspective it also scores every
+smaller margin from a tie up to the actual one and takes the running max (leader) / min
+(trailer), so a bigger lead never lowers the leader's probability. Retraining with
+`--monotone` (constraints on `score_differential`, `diff_time_ratio`, `spread_time`) removes
+the dips at the source at a cost of ~0.003 log-loss on 2025; the guard keeps the shipped
+export sane until that trade-off is revisited.
+
+Stacking was chosen over either piece alone on the 2025 season: plain XGBoost
 (300 rounds, depth 5) scored 0.4790, the logistic alone 0.4763, the stack 0.4751. A simple
-probability average of the two separate models did not beat the logistic alone.
+probability average of the two separate models did not beat the logistic alone. **Note that
+2025 doubled as the selection set**: the shipped configuration (`s_d4`) is the best of ~15
+stacked / plain / logistic variants compared on the same 2025 log-loss, so the 2025 numbers
+below are selection-biased and 2025 is not an unseen season in the strict sense. A clean
+estimate needs `--train-seasons 2016-2023 --test-season 2024` for model selection with the
+frozen config then scored once on 2025.
 
 The export (`arb_engine/data/nfl_wp_model.json`, 0.14 MB) holds the feature list,
 `base_score`, the logistic coefficients (`base_logistic`) and the trees from
@@ -79,10 +94,11 @@ and says so in the output and meta file.
 | nflfastR `vegas_wp` (same rows) | 0.4768 | 0.1588 | 0.019 |
 
 Correlation with `vegas_wp` 0.9954; mean absolute difference 0.022. nflfastR's model uses
-the same feature set on a much longer history of seasons; beating it by 0.0017 log-loss on
-an unseen season is a small but real edge (the 2025 season is ~284 games, so the standard
-error on a log-loss difference this size is of the same order — read it as "as good as
-nflfastR, probably a touch better", not as a large gap).
+the same feature set on a much longer history of seasons. The 0.0017 log-loss gap is **not
+an established edge**: the 2025 season is ~284 games, so the standard error on a log-loss
+difference this size is of the same order, and the configuration was picked as the best of
+~15 candidates on this very season (see above). Read the table as "as good as nflfastR on
+2025", nothing more, until the model is re-selected on 2024 and scored once on 2025.
 
 Calibration, this model (held-out 2025):
 

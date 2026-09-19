@@ -128,6 +128,26 @@ class SummaryTests(unittest.TestCase):
         self.assertIsNone(g.down)
         self.assertIsNone(g.yardline_100)
 
+    def test_second_half_kickoff_recipient_from_first_drive(self):
+        from arb_engine.venues.espn import receive_2h_ko_home_from
+        summary = load("espn/summary_401872932.json")
+        # DET (away, id 8) had the game's first drive -> received the opening kickoff, so
+        # BUF (home) receives the second-half kickoff.
+        self.assertEqual(summary["drives"]["previous"][0]["team"]["id"], "8")
+        self.assertIs(receive_2h_ko_home_from(summary, "2", "8"), True)
+        self.assertIs(receive_2h_ko_home_from(summary, "8", "2"), False)
+        self.assertIsNone(receive_2h_ko_home_from({"drives": {}}, "2", "8"))
+        self.assertIsNone(receive_2h_ko_home_from(summary, None, None))
+        g = apply_summary(copy.deepcopy(self.game), summary)
+        self.assertIs(g.receive_2h_ko_home, True)
+        self.assertIs(g.as_dict()["receive_2h_ko_home"], True)
+        # Header competitor ids fill the team ids when the scoreboard did not.
+        bare = copy.deepcopy(self.game)
+        bare.home_team_id = bare.away_team_id = None
+        g2 = apply_summary(bare, summary)
+        self.assertEqual((g2.home_team_id, g2.away_team_id), ("2", "8"))
+        self.assertIs(g2.receive_2h_ko_home, True)
+
     def test_summary_last_play_fills_live_state(self):
         summary = load("espn/summary_401872932.json")
         summary["header"]["competitions"][0]["status"] = {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": False}, "period": 4, "displayClock": "0:13"}

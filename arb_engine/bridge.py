@@ -3,7 +3,9 @@
     GET /health
     GET /analyze?url=<robinhood event url>[&contracts=100&target_margin=0&gold=0]
     GET /inplay?url=<robinhood event url>[&position=venue:outcome:price:count]...
-                                          in-play view: lock/steal actions, game state, blended fair
+                [&target_margin=0&max_age=10]  in-play view: lock/steal actions, game state, blended fair
+                                          (reuses the venue scan /analyze just did for the same
+                                          url when it is at most max_age seconds old)
     GET /kalshi/market/<ticker>          proxies for the extension (Kalshi's API refuses
     GET /kalshi/markets?event_ticker=…    browser Origins other than kalshi.com)
 
@@ -15,12 +17,29 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .config import settings_from_env
 from .eventlookup import EventAnalyzer
 from .venues.kalshi import KalshiClient
+
+
+DEFAULT_INPLAY_MAX_AGE = 10.0  # seconds; the overlay calls /inplay right after /analyze
+
+
+def recent_event(analyzer, url: str, max_age: float = DEFAULT_INPLAY_MAX_AGE, now: float | None = None):
+    """The MergedEvent ``analyzer.analyze_url`` produced for ``url`` within ``max_age``
+    seconds, else ``None`` (caller re-scans). Keeps bridge-mode overlay refreshes at one
+    venue scan per tick instead of two."""
+    me = getattr(analyzer, "last_event", None)
+    if me is None or getattr(analyzer, "last_url", None) != url:
+        return None
+    at = float(getattr(analyzer, "last_analyzed_at", 0.0) or 0.0)
+    if (time.time() if now is None else now) - at > max_age:
+        return None
+    return me
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -71,18 +90,21 @@ class Handler(BaseHTTPRequestHandler):
                 settings = settings_from_env()
                 if qs.get("gold") in ("1", "true"):
                     settings["robinhood_gold"] = True
-                res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)))
-                if not res.get("ok") or "lines" in (res.get("analysis") or {}) or getattr(self.analyzer, "last_event", None) is None:
-                    self._send(200, {"ok": False, "error": res.get("error") or "not a game-winner page"})
-                    return
+                me = recent_event(self.analyzer, url, max_age=float(qs.get("max_age", DEFAULT_INPLAY_MAX_AGE)))
+                if me is None:
+                    res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)))
+                    if not res.get("ok") or "lines" in (res.get("analysis") or {}) or getattr(self.analyzer, "last_event", None) is None:
+                        self._send(200, {"ok": False, "error": res.get("error") or "not a game-winner page"})
+                        return
+                    me = self.analyzer.last_event
                 lots = [Lot.parse(x) for x in parse_qs(u.query).get("position", []) if x.strip()]
                 gs = None
                 if qs.get("espn", "1") not in ("0", "false"):
                     try:
-                        gs = self._espn(self.analyzer.last_event.event_key)
+                        gs = self._espn(me.event_key)
                     except Exception:
                         gs = None
-                view = evaluate_inplay(self.analyzer.last_event, lots, settings, steal_edge=float(qs.get("steal_edge", 0.03)), target_margin=float(qs.get("target_margin", 0)), game_state=gs)
+                view = evaluate_inplay(me, lots, settings, steal_edge=float(qs.get("steal_edge", 0.03)), target_margin=float(qs.get("target_margin", 0)), game_state=gs)
                 self._send(200, {"ok": True, "view": asdict(view)})
             elif u.path == "/kalshi/markets":
                 data = self.kalshi.get("/markets", {k: v for k, v in qs.items() if k in ("event_ticker", "series_ticker", "status", "limit")})

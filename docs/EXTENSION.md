@@ -102,3 +102,16 @@ bridge.
 | `content.js`, `content.css` | Overlay panel and badges on robinhood.com event pages. |
 | `popup.html`, `popup.js`, `popup.css` | Settings (Gold, size, target margin, refresh, bridge, venues). |
 | `nfl_teams.json` | Team code mapping, exposed via `web_accessible_resources`. |
+
+
+## Which Robinhood pages the overlay works on
+
+| URL | What it is | Overlay |
+|---|---|---|
+| `robinhood.com/us/en/prediction-markets/<category>/events/<slug>/` | public (logged-out) event page, server-rendered | panel + contract-tab badges |
+| `robinhood.com/events/<slug>?contract=<id>` | logged-in trading page with the order ticket ("Trade the winner", Buy Yes/No, Review order) | panel (the page is client-rendered; the extension reads the public page for the same slug) |
+| `robinhood.com/prediction-markets/` | logged-in hub | none yet |
+
+The logged-in event page also lists the game's Spread and Totals rows and props on one page;
+the overlay analyses the market the URL's slug names (the game winner) — open the Spread /
+Totals event pages for line-by-line analysis.

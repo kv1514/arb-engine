@@ -91,9 +91,26 @@ function extractNextData(html) {
   if (!m) throw new Error("__NEXT_DATA__ not found on the Robinhood page");
   return JSON.parse(m[1]);
 }
+const PUBLIC_CATEGORIES = ["nfl", "tennis", "college-football", "nba", "nhl", "baseball", "soccer", "mma", "golf", "pro-football", "esports", "cricket"];
+const slugCategory = new Map();
+async function robinhoodPageProps(url) {
+  // Public marketing page: has __NEXT_DATA__. Logged-in trading route (/events/<slug>) is
+  // client-rendered, so fetch the public page for the same slug, trying categories.
+  const app = /robinhood\.com\/events\/([^/?#]+)/.exec(url);
+  if (!app) return extractNextData(await getText(url)).props.pageProps;
+  const slug = app[1];
+  const cats = (slugCategory.has(slug) ? [slugCategory.get(slug)] : []).concat(PUBLIC_CATEGORIES.filter((c) => c !== slugCategory.get(slug)));
+  for (const cat of cats) {
+    try {
+      const pp = extractNextData(await getText(`https://robinhood.com/us/en/prediction-markets/${cat}/events/${slug}/`)).props.pageProps;
+      if (pp && pp.event) { slugCategory.set(slug, cat); return pp; }
+    } catch (e) { /* try the next category */ }
+  }
+  throw new Error("no public event page found for " + slug);
+}
 async function robinhoodEvent(url) {
   return cached("rh:" + url, 60_000, async () => {
-    const pp = extractNextData(await getText(url)).props.pageProps;
+    const pp = await robinhoodPageProps(url);
     const ev = pp.event;
     if (!ev) throw new Error("not an event page");
     const contracts = Object.values(ev.eventContracts || {});
@@ -329,7 +346,7 @@ async function analyze(url) {
       if (out && out.ok && out.analysis && !out.analysis.lines) {
         try {
           const pos = String(cfg.positions || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x) => "&position=" + encodeURIComponent(x)).join("");
-          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&gold=${cfg.gold ? 1 : 0}${pos}`);
+          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}`);
           if (ip && ip.ok) out.analysis.inplay = ip.view;
         } catch (e) { /* optional */ }
       }
