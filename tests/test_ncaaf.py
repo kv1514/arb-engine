@@ -156,7 +156,7 @@ class EventPageTests(unittest.TestCase):
         km = {m["ticker"]: m for m in load("ncaaf/kalshi_markets_ncaaf.json")["markets"]}
         kal = FakeHttp({"/markets/KXNCAAFGAME-26SEP19PURUCLA-PUR": {"market": km["KXNCAAFGAME-26SEP19PURUCLA-PUR"]}, "/markets/KXNCAAFGAME-26SEP19PURUCLA-UCLA": {"market": km["KXNCAAFGAME-26SEP19PURUCLA-UCLA"]}, "/series/KXNCAAFGAME": load("ncaaf/kalshi_series_kxncaafgame.json")})
         pm_ev = next(e for e in load("ncaaf/polymarket_events_cfb.json") if e["slug"] == "cfb-pur-ucla-2026-09-19")
-        pm = FakeHttp({"/public-search": {"events": [{"slug": "ncaa-football-2026-national-champion"}, {"slug": "cfb-pur-ucla-2025-09-20"}, {"slug": "cfb-pur-ucla-2026-09-19"}]}, "/markets?slug=cfb-pur-ucla-2026-09-19": pm_ev["markets"]})
+        pm = FakeHttp({"/public-search": {"events": [{"slug": "ncaa-football-2026-national-champion"}, {"slug": "cfb-pur-ucla-2025-09-20"}, {"slug": "cfb-pur-ucla-2026-09-19"}]}, "/markets?slug=cfb-pur-ucla-2026-09-19": pm_ev["markets"], "clob.polymarket.com/book?token_id=": {"bids": [{"price": "0.15", "size": "400"}], "asks": [{"price": "0.16", "size": "250"}]}})
         return EventAnalyzer(robinhood=RobinhoodAdapter(http=rh), kalshi=KalshiClient(env="prod", http=kal), polymarket=PolymarketAdapter(http=pm))
 
     def test_cdna_event_page_gets_all_three_venues(self):
@@ -174,6 +174,7 @@ class EventPageTests(unittest.TestCase):
         self.assertEqual(by_venue["robinhood"]["ask"], 0.15)
         self.assertEqual(by_venue["kalshi"]["ask"], 0.15)
         self.assertEqual(by_venue["polymarket"]["ask"], 0.16)
+        self.assertEqual(by_venue["polymarket"]["ask_size"], 250.0)   # from the CLOB book, so a STEAL/arb here can be sized
         self.assertIsNotNone(by_venue["robinhood"]["max_buy_price"])
         self.assertEqual(an.last_event.info.sport, "ncaaf")
 

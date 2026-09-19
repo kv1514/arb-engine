@@ -302,6 +302,15 @@ class EventAnalyzer:
                 slug_ev = (pm_market.get("events") or [{}])[0].get("slug") or pm_market.get("slug")
                 pq.append(OutcomeQuote(venue="polymarket", venue_market_id=str(tokens[i]) if i < len(tokens) else "", event_key=event_key, outcome=key, outcome_label=label, ask=round(ask, 4) if ask and 0 < ask < 1 else None, bid=round(bid, 4) if bid and 0 < bid < 1 else None, fee_params={"feeSchedule": pm_market.get("feeSchedule"), "feesEnabled": pm_market.get("feesEnabled", True)}, url=f"https://polymarket.com/event/{slug_ev}", ts=now))
             if len(pq) == 2:
+                # Top-of-book sizes: Gamma's bestAsk carries no size, the CLOB book does (needed to
+                # size a STEAL / arb on Polymarket; two small calls).
+                book_errors: list[str] = []
+                try:
+                    self.pm.attach_books_for(pq, book_errors)
+                except Exception as e:
+                    book_errors.append(str(e))
+                if book_errors:
+                    errors.append("polymarket: book sizes unavailable (prices still live)")
                 quotes_by_venue["polymarket"] = pq
             else:
                 errors.append("polymarket: outcome names did not match")
