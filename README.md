@@ -101,6 +101,26 @@ that price is available and `STEAL` when a side is below fair by `--steal-edge` 
 model agrees** (a stale quote on one venue cannot trigger it alone). Plain-English fee
 mechanics and the Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
 
+### Backtest: replay a finished game against every price source
+
+```bash
+python -m arb_engine games                                          # prints the ESPN id per game
+python -m arb_engine backtest --espn 401872932 --rh-home <contract id> --rh-away <contract id> --pm-away <token id> --json out/backtest.json
+python -m arb_engine scan --sport nfl --record out/history.db       # persist every event + quote (SQLite)
+python -m arb_engine inplay "<game url>" --position … --record out/history.db   # persist every tick
+```
+
+`backtest` walks the game's ESPN play-by-play (wall-clock stamped), scores the WP model on
+each play's pre-snap state and looks up what Kalshi (1-min candles, bid/ask), Robinhood
+(5-min bars, trade prices) and Polymarket (1-min price history) were quoting at that moment;
+Kalshi tickers are derived from the teams and kickoff. It prints log-loss / Brier for the
+model, ESPN, each venue, the market consensus and the blend, and counts the minutes a
+fee-aware arb existed inside Kalshi's book and across Kalshi × Robinhood. DET @ BUF
+2026-09-17 (189 plays): model 0.070, Robinhood 0.078, ESPN 0.079, blend 0.078, Kalshi 0.087,
+Polymarket 0.089 log-loss; 0 Kalshi-book arb minutes, 6 indicative Kalshi × Robinhood minutes
+(Robinhood history is trades, not the book). `arb_engine/store.py` holds the SQLite schema
+(`scans`, `quotes`, `inplay_ticks`) and `Store.arb_stats()` for the recorded scans.
+
 ### Maker runner
 
 ```bash
@@ -183,7 +203,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 80 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 150 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

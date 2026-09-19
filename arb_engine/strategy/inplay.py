@@ -237,8 +237,9 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
 class InplayWatcher:
     """Poll one event and alert on STEAL / LOCK changes. ``fetch`` returns a MergedEvent."""
 
-    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None):
+    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, store: Any = None):
         self.fetch = fetch
+        self.store = store  # optional arb_engine.store.Store
         self.fetch_state = fetch_state  # () -> GameState | None (ESPN); optional
         self.model = model
         self.blend_weights = blend_weights
@@ -259,6 +260,11 @@ class InplayWatcher:
         view = evaluate_inplay(self.fetch(), self.lots, self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, blend_weights=self.blend_weights)
         if view.game_line:
             self.alerts.info(f"{view.game_line}  |  {view.fair_line or ''}", event=view.event_key, game_state=view.game_state, blend=view.blend)
+        if self.store is not None:
+            try:
+                self.store.record_tick(view)
+            except Exception as e:
+                self.alerts.info(f"record failed: {e!r}")
         for a in view.actions:
             key = a.split("(")[0]
             if key not in self.last_actions and (a.startswith("LOCK NOW") or a.startswith("STEAL")):

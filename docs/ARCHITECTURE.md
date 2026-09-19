@@ -85,3 +85,19 @@ blended_fair(market 0.50, model 0.35, espn 0.15; renormalised; market-only pre-g
 ```
 
 The bridge serves `GET /inplay?url=…&position=…` and the overlay renders it as the LIVE strip.
+
+## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
+
+```
+ESPN summary (drives/plays with wallclock) ─► espn_timeline() ─► PlayRow[] (state *before* each play, ts)
+Kalshi  /series/{s}/markets/{t}/candlesticks (1 min, yes_bid/yes_ask close) ─┐
+Robinhood /marketdata/event/contract/historicals/v1/ (5 min trade bars)     ─┼─► bar_at(bars, ts)
+Polymarket /prices-history (1 min)                                          ─┘
+GameReplayer.replay(): per play → model P / ESPN P / venue P / consensus / blend
+                        → per-source log-loss + Brier (all plays and in-play only)
+                        → arb minutes: Kalshi book (bid+ask) and Kalshi × Robinhood (indicative)
+Store (SQLite): scans / quotes (scan --record), inplay_ticks (inplay --record)
+```
+
+Kalshi candles carry the book (bid and ask) so intra-Kalshi arb minutes are exact; Robinhood
+and Polymarket histories are trade/mid prices, so cross-venue counts are indicative only.

@@ -29,7 +29,12 @@ Ordered by expected value for the NFL/tennis focus.
 7. **Tennis specifics.** Retirement/walkover rule table per venue; ITF/challenger
    coverage on Polymarket via tag ids; player-name canonicalisation with a small alias file.
 8. **NCAAF/NBA/NHL alias tables** like `data/nfl_teams.json`.
-9. **History & backtest.** Persist scans (SQLite) to measure how often and how long
-   fee-adjusted arbs exist, by sport, venue pair and time-to-kickoff.
+9. ~~History & backtest~~ — done 2026-09-18: `scan --record out/history.db` / `inplay --record`
+   persist every event, quote and in-play tick to SQLite (`arb_engine/store.py`);
+   `python -m arb_engine backtest --espn <id> …` replays a finished game play-by-play
+   against Kalshi 1-min candles, Robinhood 5-min bars and Polymarket price history and
+   scores every source (model / ESPN / each venue / blend) by log-loss and Brier, plus
+   counts the minutes an arb existed. Still open: a scheduled recorder (cron the scan every
+   few minutes through a week) so arb frequency by time-to-kickoff can be measured.
 10. **Category-page badges** in the extension (annotate every game card on
     `/prediction-markets/nfl/`), not only the event page.

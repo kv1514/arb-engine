@@ -106,6 +106,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=1, default=str)
         print(f"wrote {args.json}")
+    if args.record:
+        from .store import Store
+
+        st = Store(args.record)
+        n = st.record_scan(res)
+        st.close()
+        print(f"recorded {n} rows to {args.record}")
     print_scan(res, args.min_margin, args.limit, args.all, include_live=args.include_live, include_thin=args.include_thin)
     return 0
 
@@ -291,7 +298,12 @@ def cmd_inplay(args: argparse.Namespace) -> int:
     if not args.no_espn:
         first = fetch()
         fetch_state = _espn_state_fetcher(first.event_key)
-    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin, fetch_state=fetch_state)
+    store = None
+    if args.record:
+        from .store import Store
+
+        store = Store(args.record)
+    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin, fetch_state=fetch_state, store=store)
     if args.iterations == 1 or args.once:
         view = w.step()
         print(f"{view.title}  live={view.live}  cost=${view.total_cost:.2f}  payout_if={ {k: round(v, 1) for k, v in view.payout_if.items()} }" + (f"  locked P&L=${view.locked_pnl:.2f}" if view.balanced else ""))
@@ -330,7 +342,27 @@ def cmd_games(args: argparse.Namespace) -> int:
         extra = f"  P(home) model={p_home:.2f}" if p_home is not None else ""
         if g.espn_home_wp is not None:
             extra += f" espn={g.espn_home_wp:.2f}"
-        print(f"  [{g.status:<5}] {line}{extra}  key={g.event_key}")
+        print(f"  [{g.status:<5}] {line}{extra}  key={g.event_key}  espn={g.event_id}")
+    return 0
+
+
+def cmd_backtest(args: argparse.Namespace) -> int:
+    """Replay a finished game with public price history and score every fair-value source."""
+    from .backtest import GameReplayer, summarize
+
+    rh = None
+    if args.rh_home and args.rh_away:
+        rh = {"home": args.rh_home, "away": args.rh_away}
+    pm = None
+    if args.pm_home or args.pm_away:
+        pm = {k: v for k, v in (("home", args.pm_home), ("away", args.pm_away)) if v}
+    kt = {"home": args.kalshi_home, "away": args.kalshi_away} if args.kalshi_home and args.kalshi_away else None
+    res = GameReplayer().replay(args.espn, rh_contracts=rh, pm_tokens=pm, kalshi_tickers=kt)
+    print(summarize(res))
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(asdict(res), f, indent=1, default=str)
+        print(f"wrote {args.json}")
     return 0
 
 
@@ -376,6 +408,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     s.add_argument("--include-live", action="store_true", help="count in-play events as arbs (default: pre-game only)")
     s.add_argument("--include-thin", action="store_true", help="count arbs that are not fillable for >= 1 contract at the quoted size")
     s.add_argument("--json", help="write full result to this file")
+    s.add_argument("--record", metavar="DB", help="append every event and quote to this SQLite file (e.g. out/history.db)")
     s.set_defaults(func=cmd_scan)
 
     q = sub.add_parser("quote", help="show one event across venues (substring of key/title, e.g. PHI or 'Eagles')")
@@ -451,6 +484,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ip.add_argument("--once", action="store_true", help="evaluate once and print")
     ip.add_argument("--journal", default="out/inplay_journal.jsonl")
     ip.add_argument("--no-espn", action="store_true", help="do not pull live game state / model (market consensus only)")
+    ip.add_argument("--record", metavar="DB", help="append every tick (game state, sources, actions) to this SQLite file")
     ip.set_defaults(func=cmd_inplay)
 
     gm = sub.add_parser("games", help="this week's NFL games from ESPN: status, score, situation, spread, model P(home)")
@@ -458,6 +492,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.add_argument("--live-only", action="store_true")
     gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
     gm.set_defaults(func=cmd_games)
+
+    bt = sub.add_parser("backtest", help="replay a finished NFL game play-by-play with public price history; score model/ESPN/venues vs the outcome")
+    bt.add_argument("--espn", required=True, help="ESPN event id (from `arb-engine games` keys / ESPN URLs)")
+    bt.add_argument("--rh-home", help="Robinhood contract id for the home team (from the catalogue / fixtures)")
+    bt.add_argument("--rh-away")
+    bt.add_argument("--pm-home", help="Polymarket token id for the home outcome")
+    bt.add_argument("--pm-away")
+    bt.add_argument("--kalshi-home", help="override Kalshi ticker (default derived from teams + ET date)")
+    bt.add_argument("--kalshi-away")
+    bt.add_argument("--json", help="write the full replay to this file")
+    bt.set_defaults(func=cmd_backtest)
 
     ka = sub.add_parser("kalshi", help="authenticated Kalshi actions (demo env unless KALSHI_ENV=prod)")
     ka.add_argument("action", choices=["balance", "positions", "orders", "order"])

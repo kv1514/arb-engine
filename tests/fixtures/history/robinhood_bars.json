@@ -1,0 +1,205 @@
+{
+"status": "SUCCESS",
+"data": [
+{
+"status": "SUCCESS",
+"data": {
+"start_time": "2026-09-18T00:00:00Z",
+"end_time": "2026-09-19T05:04:46Z",
+"interval": "5minute",
+"data_points": [
+{
+"begins_at": "2026-09-18T00:00:00Z",
+"open_price": "0.7",
+"close_price": "0.7",
+"high_price": "0.7",
+"low_price": "0.69",
+"volume": 46260,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:05:00Z",
+"open_price": "0.7",
+"close_price": "0.69",
+"high_price": "0.7",
+"low_price": "0.69",
+"volume": 37857,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:10:00Z",
+"open_price": "0.7",
+"close_price": "0.7",
+"high_price": "0.7",
+"low_price": "0.69",
+"volume": 56731,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:15:00Z",
+"open_price": "0.7",
+"close_price": "0.71",
+"high_price": "0.71",
+"low_price": "0.69",
+"volume": 52014,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:20:00Z",
+"open_price": "0.72",
+"close_price": "0.77",
+"high_price": "0.77",
+"low_price": "0.68",
+"volume": 152568,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:25:00Z",
+"open_price": "0.78",
+"close_price": "0.78",
+"high_price": "0.79",
+"low_price": "0.76",
+"volume": 82356,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:30:00Z",
+"open_price": "0.79",
+"close_price": "0.81",
+"high_price": "0.83",
+"low_price": "0.77",
+"volume": 170861,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+},
+{
+"begins_at": "2026-09-18T00:35:00Z",
+"open_price": "0.81",
+"close_price": "0.89",
+"high_price": "0.89",
+"low_price": "0.79",
+"volume": 89022,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+}
+],
+"symbol": "NFLGAME-26SEP17DETBUF-BUF",
+"instrument_id": "68a948d7-0087-436b-86ce-78a24d2677a6"
+}
+},
+{
+"status": "SUCCESS",
+"data": {
+"start_time": "2026-09-18T00:00:00Z",
+"end_time": "2026-09-19T05:04:46Z",
+"interval": "5minute",
+"data_points": [
+{
+"begins_at": "2026-09-18T00:00:00Z",
+"open_price": "0.32",
+"close_price": "0.32",
+"high_price": "0.32",
+"low_price": "0.32",
+"volume": 41119,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:05:00Z",
+"open_price": "0.32",
+"close_price": "0.32",
+"high_price": "0.32",
+"low_price": "0.31",
+"volume": 72252,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:10:00Z",
+"open_price": "0.32",
+"close_price": "0.32",
+"high_price": "0.32",
+"low_price": "0.31",
+"volume": 136301,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:15:00Z",
+"open_price": "0.32",
+"close_price": "0.3",
+"high_price": "0.33",
+"low_price": "0.29",
+"volume": 175094,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:20:00Z",
+"open_price": "0.3",
+"close_price": "0.25",
+"high_price": "0.33",
+"low_price": "0.24",
+"volume": 113842,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:25:00Z",
+"open_price": "0.24",
+"close_price": "0.24",
+"high_price": "0.24",
+"low_price": "0.21",
+"volume": 234472,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:30:00Z",
+"open_price": "0.25",
+"close_price": "0.2",
+"high_price": "0.25",
+"low_price": "0.17",
+"volume": 138955,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+},
+{
+"begins_at": "2026-09-18T00:35:00Z",
+"open_price": "0.21",
+"close_price": "0.12",
+"high_price": "0.21",
+"low_price": "0.11",
+"volume": 129154,
+"interpolated": false,
+"is_market_open": true,
+"contract_id": "90efc89f-0754-444d-8416-f5caedee185d"
+}
+],
+"symbol": "NFLGAME-26SEP17DETBUF-DET",
+"instrument_id": "90efc89f-0754-444d-8416-f5caedee185d"
+}
+}
+]
+}
