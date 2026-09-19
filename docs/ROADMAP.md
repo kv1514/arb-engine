@@ -35,7 +35,10 @@ Ordered by expected value for the NFL/tennis focus.
    against Kalshi 1-min candles, Robinhood 5-min bars and Polymarket price history and
    scores every source (model / ESPN / each venue / blend) by log-loss and Brier, plus
    counts the minutes an arb existed; `backtest --week N` does a whole week and fits the
-   blend weights (week 1: model beats every market, weights moved to 0.30/0.55/0.15). Still open: a scheduled recorder (cron the scan every
-   few minutes through a week) so arb frequency by time-to-kickoff can be measured.
-10. **Category-page badges** in the extension (annotate every game card on
-    `/prediction-markets/nfl/`), not only the event page.
+   blend weights (week 1: model beats every market, weights moved to 0.30/0.55/0.15). `arb-engine record --every 300`
+   keeps scanning into SQLite and `arb-engine stats` reports the arb share by market type ×
+   hours-to-kickoff and the length of each arb episode — run it through a game week to learn
+   when the tail-line arbs appear and how long they last.
+10. ~~Category-page badges~~ — done 2026-09-18: on `/prediction-markets/<category>/` every
+    game card's price buttons get `fair · max` badges (first 16 games, `ARB +x%` when one
+    exists); worker `analyzeMany` with a small concurrency and per-URL cache.

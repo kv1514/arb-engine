@@ -48,12 +48,14 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (160)
+python -m unittest discover -s tests -t .      # Python tests (161)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>
 python -m arb_engine bridge                    # local server the extension uses when running
 python -m arb_engine maker --mode paper        # rest Kalshi orders at arb-creating prices (paper by default)
+python -m arb_engine backtest --week 1         # replay a week: model vs markets, blend fit, STEAL/LOCK simulation
+python -m arb_engine record --every 300        # scheduled scans into SQLite; `stats` summarises arb frequency
 python scripts/capture_fixtures.py             # refresh offline fixtures from the live APIs
 ```
 

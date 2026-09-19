@@ -110,6 +110,8 @@ python -m arb_engine games                                          # prints the
 python -m arb_engine backtest --espn 401872932 --rh-home <contract id> --rh-away <contract id> --pm-away <token id> --json out/backtest.json
 python -m arb_engine scan --sport nfl --record out/history.db       # persist every event + quote (SQLite)
 python -m arb_engine inplay "<game url>" --position … --record out/history.db   # persist every tick
+python -m arb_engine record --sport nfl --every 300 --books         # keep scanning on a schedule (Ctrl-C or --hours N)
+python -m arb_engine stats --db out/history.db                      # arb share by market × hours-to-kickoff, episodes + duration
 ```
 
 `--week N` replays every final of an NFL week with Kalshi (tickers derived), Polymarket
@@ -239,7 +241,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 160 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 161 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

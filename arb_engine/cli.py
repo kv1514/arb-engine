@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import asdict
 from typing import Any, Optional
 
@@ -381,6 +382,60 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record(args: argparse.Namespace) -> int:
+    """Scan on a schedule and append every event + quote to SQLite (measures arb frequency)."""
+    from .store import Store
+
+    st = Store(args.db)
+    n_runs = 0
+    deadline = time.time() + args.hours * 3600 if args.hours else None
+    try:
+        while True:
+            t0 = time.time()
+            try:
+                settings = settings_from_env()
+                if args.gold:
+                    settings["robinhood_gold"] = True
+                res = scan(args.sport, build_adapters([v.strip() for v in args.venues.split(",") if v.strip()], False), settings=settings, contracts=args.contracts, target_margin=args.target_margin, market_types={m.strip() for m in args.markets.split(",") if m.strip()}, depth_for_candidates=args.books)
+                n = st.record_scan(res)
+                arbs = sum(1 for e in res.events if e.fillable and not e.live)
+                print(f"{time.strftime('%H:%M:%S')} {args.sport}: {len(res.events)} events, {arbs} fillable arbs, {n} rows -> {args.db}  ({time.time() - t0:.1f}s)", flush=True)
+            except Exception as e:
+                print(f"{time.strftime('%H:%M:%S')} scan failed: {e!r}", flush=True)
+            n_runs += 1
+            if args.once or (deadline and time.time() >= deadline):
+                break
+            time.sleep(max(1.0, args.every - (time.time() - t0)))
+    except KeyboardInterrupt:
+        pass
+    st.close()
+    print(f"{n_runs} scan(s) recorded")
+    return 0
+
+
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Arb frequency / duration from a recorded SQLite file."""
+    from .store import Store
+
+    st = Store(args.db)
+    fq = st.arb_frequency(args.sport, min_margin=args.min_margin)
+    print(f"{fq['snapshots']} event snapshots in {args.db}" + (f" ({args.sport})" if args.sport else ""))
+    print("market      hours-to-kickoff  snapshots  with arb   share   max margin  sized profit")
+    for b in fq["buckets"]:
+        mm = f"{b['max_margin']*100:.2f}%" if b["max_margin"] is not None else "   -  "
+        print(f"{b['market_type']:<10} {b['bucket']:>16} {b['snapshots']:>10} {b['arb_snapshots']:>9}   {(b['arb_share'] or 0)*100:5.1f}%   {mm:>9}   ${b['profit_sum']:.2f}")
+    eps = fq["episodes"]
+    print(f"{len(eps)} arb episode(s)" + (f"; mean length {fq['episode_scans_mean']} scans / {fq['episode_seconds_mean']}s" if eps else ""))
+    for e in sorted(eps, key=lambda x: -x["max_margin"])[: args.limit]:
+        print(f"  {e['event_key']:<48} {e['market_type']:<9} {e['bucket']:>8}  {e['scans']:>3} scans  {e['end'] - e['start']:>6.0f}s  max {e['max_margin']*100:.2f}%")
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(fq, f, indent=1, default=str)
+        print(f"wrote {args.json}")
+    st.close()
+    return 0
+
+
 def cmd_kalshi(args: argparse.Namespace) -> int:
     from .execution.kalshi import KalshiExecutor
 
@@ -507,6 +562,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.add_argument("--live-only", action="store_true")
     gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
     gm.set_defaults(func=cmd_games)
+
+    rc = sub.add_parser("record", help="scan on a schedule and append every event + quote to SQLite (arb frequency by time-to-kickoff)")
+    rc.add_argument("--sport", default="nfl")
+    rc.add_argument("--every", type=float, default=300, help="seconds between scans (default 300)")
+    rc.add_argument("--hours", type=float, help="stop after this many hours (default: run until Ctrl-C)")
+    rc.add_argument("--once", action="store_true")
+    rc.add_argument("--books", action="store_true", help="fetch depth for candidates (slower, sized arbs)")
+    rc.add_argument("--db", default="out/history.db")
+    rc.add_argument("--venues", default="kalshi,polymarket,robinhood")
+    rc.add_argument("--markets", default="moneyline,spread,total")
+    rc.add_argument("--contracts", type=int, default=100)
+    rc.add_argument("--target-margin", type=float, default=0.0)
+    rc.add_argument("--gold", action="store_true")
+    rc.set_defaults(func=cmd_record)
+
+    stt = sub.add_parser("stats", help="arb frequency / duration from a recorded SQLite file")
+    stt.add_argument("--db", default="out/history.db")
+    stt.add_argument("--sport")
+    stt.add_argument("--min-margin", type=float, default=0.0)
+    stt.add_argument("--limit", type=int, default=20, help="episodes to list")
+    stt.add_argument("--json")
+    stt.set_defaults(func=cmd_stats)
 
     bt = sub.add_parser("backtest", help="replay a finished NFL game play-by-play with public price history; score model/ESPN/venues vs the outcome")
     bt.add_argument("--espn", help="ESPN event id (from `arb-engine games` keys / ESPN URLs)")
