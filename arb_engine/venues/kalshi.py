@@ -1,22 +1,33 @@
 """Kalshi Trade API v2 — public market data plus (optional) signed portfolio/order calls.
 
 Public endpoints need no key. Authenticated ones sign ``timestamp_ms + METHOD + path``
-with RSA-PSS (SHA-256, MGF1, max salt) and send ``KALSHI-ACCESS-KEY`` /
-``KALSHI-ACCESS-SIGNATURE`` / ``KALSHI-ACCESS-TIMESTAMP`` headers. Requires ``cryptography``.
+with RSA-PSS (SHA-256, MGF1, **digest-length salt** — see ``KalshiClient._sign``) and send
+``KALSHI-ACCESS-KEY`` / ``KALSHI-ACCESS-SIGNATURE`` / ``KALSHI-ACCESS-TIMESTAMP`` headers.
+Requires ``cryptography``.
+
+Hosts: Kalshi moved the REST API to ``external-api.kalshi.com`` (prod) and
+``external-api.demo.kalshi.co`` (demo); the older ``api.elections.kalshi.com`` /
+``demo-api.kalshi.co`` still answer and are kept as ``LEGACY_REST_BASE`` — the client falls
+back to them once on a *connection* error (DNS, refused, timeout), never on an HTTP status.
+``KALSHI_BASE_URL`` overrides both and disables the fallback.
 
 Environment: ``KALSHI_ENV`` (``demo`` default | ``prod``), ``KALSHI_API_KEY``,
-``KALSHI_PRIVATE_KEY_PATH``. Same variables the 9crusher/mcp-server-kalshi MCP server uses,
-so one ``.env`` serves both.
+``KALSHI_PRIVATE_KEY_PATH``, ``KALSHI_BASE_URL``, ``KALSHI_RATE_LIMIT`` (public reads/s,
+default 15). Same key variables the 9crusher/mcp-server-kalshi MCP server uses, so one
+``.env`` serves both.
 """
 
 from __future__ import annotations
 
 import base64
+import http.client
 import os
 import re
+import socket
 import time
+import urllib.error
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Sequence
 
 from ..models import VENUE_KALSHI, Book, EventInfo, Level, OutcomeQuote, VenueSnapshot
 from ..matching.normalize import (
@@ -36,19 +47,55 @@ from ..matching.normalize import (
     total_event_key,
 )
 from ..matching.teams import TEAM_SPORTS, nfl_team_city, nfl_team_code, team_code, team_name
-from .http import HttpClient
+from .http import HttpClient, HttpError
 
 ENV_REST_BASE = {
+    "prod": "https://external-api.kalshi.com/trade-api/v2",
+    "demo": "https://external-api.demo.kalshi.co/trade-api/v2",
+}
+# Pre-2026 hosts. Still served (both answered 200 on /exchange/status, 2026-09-19); the
+# extension's DNR header rule and history.py still target api.elections.kalshi.com.
+LEGACY_REST_BASE = {
     "prod": "https://api.elections.kalshi.com/trade-api/v2",
     "demo": "https://demo-api.kalshi.co/trade-api/v2",
 }
+DEFAULT_RATE_LIMIT = 15.0  # public reads/s; Kalshi's documented read budget is well above this and 429s still back off
+BATCH_CANCEL_MAX = 20      # orders per DELETE /portfolio/events/orders/batched call (the cap scales with the account's write tier)
+
+# Errors that mean "we never reached the host" — the only trigger for the legacy-host fallback.
+_CONNECTION_ERRORS: tuple[type[BaseException], ...] = (urllib.error.URLError, socket.gaierror, ConnectionError, TimeoutError, http.client.HTTPException)
 
 
 # Kalshi tennis rule text (rules_primary/secondary on every KX{ATP,WTA}MATCH market, 2026-09-18):
 # "If X wins the match after a ball has been played, then Yes"; no ball played (injury, walkover,
 # forfeiture, cancellation) -> "the market will resolve to a fair price in accordance with the
 # rules"; postponed -> stays open up to two weeks. Robinhood's tennis contracts are this book.
-TENNIS_SETTLEMENT = {"retirement": "advancer", "walkover": "fair_price", "cancelled": "fair_price", "postponed": "open_2w"}
+# The settlement registry (matching/settlement_rules, P08) is the source of truth when present;
+# this literal is the fallback so the adapter imports without it.
+_TENNIS_SETTLEMENT_FALLBACK = {"retirement": "advancer", "walkover": "fair_price", "cancelled": "fair_price", "postponed": "open_2w"}
+
+
+def _registry_tennis_settlement() -> tuple[dict[str, str], str]:
+    """(rules, source): the registry's Kalshi entry when P08's module exists (either a flat
+    rule dict or one keyed by venue), else the literal above. The registry exports ``{}``
+    when its JSON is missing or corrupt and documents that as "use the adapters' literals",
+    so an empty or missing Kalshi entry is the fallback too — otherwise every tennis
+    EventInfo would carry an empty settlement dict and the scanner's mismatch flags would
+    silently stop firing."""
+    try:
+        from ..matching.settlement_rules import TENNIS_SETTLEMENT as reg  # type: ignore[import-not-found]
+    except ImportError:
+        return dict(_TENNIS_SETTLEMENT_FALLBACK), "fallback"
+    if not isinstance(reg, dict):
+        return dict(_TENNIS_SETTLEMENT_FALLBACK), "fallback"
+    venue_keyed = any(isinstance(v, dict) for v in reg.values())  # {"kalshi": {...}, "polymarket": {...}}
+    rules = reg.get("kalshi") if venue_keyed else reg
+    if not isinstance(rules, dict) or not rules or not all(isinstance(v, str) for v in rules.values()):
+        return dict(_TENNIS_SETTLEMENT_FALLBACK), "fallback"
+    return dict(rules), "registry"
+
+
+TENNIS_SETTLEMENT, TENNIS_SETTLEMENT_SOURCE = _registry_tennis_settlement()
 
 # Series we scan per sport. Game-level series carry maker fees (quadratic_with_maker_fees).
 SPORT_SERIES: dict[str, list[dict[str, Any]]] = {
@@ -84,10 +131,14 @@ def _f(x: Any) -> Optional[float]:
 class KalshiClient:
     def __init__(self, env: Optional[str] = None, api_key: Optional[str] = None, private_key_path: Optional[str] = None, base_url: Optional[str] = None, http: Optional[HttpClient] = None):
         self.env = (env or os.environ.get("KALSHI_ENV") or "demo").lower()
-        self.base_url = (base_url or os.environ.get("KALSHI_BASE_URL") or ENV_REST_BASE.get(self.env, ENV_REST_BASE["demo"])).rstrip("/")
+        explicit = base_url or os.environ.get("KALSHI_BASE_URL")
+        self.base_url = (explicit or ENV_REST_BASE.get(self.env, ENV_REST_BASE["demo"])).rstrip("/")
+        # Only the default host gets a legacy fallback; an explicit URL is the operator's choice.
+        self.legacy_base_url: Optional[str] = None if explicit else LEGACY_REST_BASE.get(self.env, LEGACY_REST_BASE["demo"]).rstrip("/")
+        self.fell_back = False
         self.api_key = api_key or os.environ.get("KALSHI_API_KEY")
         self.private_key_path = private_key_path or os.environ.get("KALSHI_PRIVATE_KEY_PATH")
-        self.http = http or HttpClient(rate_limit=float(os.environ.get("KALSHI_RATE_LIMIT", "8")), retries=3)
+        self.http = http or HttpClient(rate_limit=float(os.environ.get("KALSHI_RATE_LIMIT", str(DEFAULT_RATE_LIMIT))), retries=3)
         self._private_key = None
 
     # ---- auth -----------------------------------------------------------------------
@@ -106,12 +157,17 @@ class KalshiClient:
         return self._private_key
 
     def _sign(self, method: str, path: str) -> dict[str, str]:
+        """RSA-PSS over ``timestamp_ms + METHOD + path`` with SHA-256 / MGF1-SHA256 and
+        ``salt_length = DIGEST_LENGTH`` (32 bytes). Kalshi's docs and starter client
+        (docs.kalshi.com/getting_started/api_keys; ``clients.py`` uses
+        ``padding.PSS.DIGEST_LENGTH``) sign this way and the gateway verifies with that salt,
+        so a ``MAX_LENGTH`` salt (222 bytes on a 2048-bit key) is rejected as a bad signature."""
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import padding
 
         ts = str(int(time.time() * 1000))
         msg = (ts + method.upper() + path).encode()
-        sig = self._load_key().sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+        sig = self._load_key().sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
         return {
             "KALSHI-ACCESS-KEY": self.api_key or "",
             "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
@@ -125,16 +181,46 @@ class KalshiClient:
         prefix = self.base_url[self.base_url.index("/trade-api"):]
         return self._sign(method, prefix + path)
 
+    # ---- request layer (host fallback) ----------------------------------------------
+    @staticmethod
+    def _is_connection_error(e: BaseException) -> bool:
+        """True for errors raised before any HTTP status came back (curl exit codes surface as
+        ``HttpError(status=0)``). A 4xx/5xx is the host talking to us and is never a reason
+        to change hosts."""
+        return isinstance(e, _CONNECTION_ERRORS) or (isinstance(e, HttpError) and e.status == 0)
+
+    def _request(self, method: str, path: str, params: Optional[dict] = None, body: Any = None, auth: bool = False) -> Any:
+        """Issue ``method path`` on ``base_url``; on a connection error, switch once to the
+        legacy host for the rest of the session and retry. Signed headers are rebuilt per
+        attempt (fresh timestamp) and cover the path prefix, which is the same on both hosts.
+        A re-sent POST is safe for orders because every payload carries a ``client_order_id``
+        the exchange de-duplicates (``HttpClient`` already re-sends on timeouts)."""
+        for attempt in (0, 1):
+            headers = self._auth_headers(method, path) if (auth or method != "GET") else None
+            try:
+                if method == "GET":
+                    return self.http.get(self.base_url + path, params=params, headers=headers)
+                if method == "POST":
+                    return self.http.post(self.base_url + path, json_body=body, headers=headers)
+                if body is None:
+                    return self.http.delete(self.base_url + path, headers=headers)
+                return self.http.request("DELETE", self.base_url + path, json_body=body, headers=headers)
+            except Exception as e:
+                if attempt == 0 and self.legacy_base_url and not self.fell_back and self._is_connection_error(e):
+                    self.base_url, self.legacy_base_url, self.fell_back = self.legacy_base_url, None, True
+                    continue
+                raise
+        raise AssertionError("unreachable")  # pragma: no cover
+
     # ---- public market data ---------------------------------------------------------
     def get(self, path: str, params: Optional[dict] = None, auth: bool = False) -> Any:
-        headers = self._auth_headers("GET", path) if auth else None
-        return self.http.get(self.base_url + path, params=params, headers=headers)
+        return self._request("GET", path, params=params, auth=auth)
 
     def post(self, path: str, body: dict) -> Any:
-        return self.http.post(self.base_url + path, json_body=body, headers=self._auth_headers("POST", path))
+        return self._request("POST", path, body=body, auth=True)
 
-    def delete(self, path: str) -> Any:
-        return self.http.delete(self.base_url + path, headers=self._auth_headers("DELETE", path))
+    def delete(self, path: str, body: Optional[dict] = None) -> Any:
+        return self._request("DELETE", path, body=body, auth=True)
 
     def exchange_status(self) -> dict:
         return self.get("/exchange/status")
@@ -169,14 +255,52 @@ class KalshiClient:
     def positions(self, **params: Any) -> dict:
         return self.get("/portfolio/positions", params or None, auth=True)
 
+    # Reads have one path family. Kalshi's "V2" migration only moved the *writes* to
+    # /portfolio/events/...; GET /portfolio/orders, /portfolio/orders/{id} and /portfolio/fills
+    # stay the documented readers (api-reference/orders/get-orders, get-order,
+    # portfolio/get-fills, 2026-09-19) and their rows carry both the legacy ``side``/``action``
+    # and the canonical ``outcome_side``/``book_side`` + ``yes_price_dollars`` fields. There is
+    # no GET under /portfolio/events/.
     def orders(self, **params: Any) -> dict:
+        """One raw page of ``GET /portfolio/orders`` (``{"orders": [...], "cursor": ...}``);
+        the ``kalshi orders`` CLI prints it. :meth:`orders_v2` follows the cursor."""
         return self.get("/portfolio/orders", params or None, auth=True)
 
     def order(self, order_id: str) -> dict:
+        """``GET /portfolio/orders/{id}`` unwrapped to the ``Order`` row (what
+        ``KalshiBroker.poll`` reads)."""
         return self.get(f"/portfolio/orders/{order_id}", auth=True).get("order", {})
 
+    order_v2 = order  # same documented path; kept so callers written against the V2 name work
+
     def fills(self, **params: Any) -> dict:
+        """One raw page of ``GET /portfolio/fills``; :meth:`fills_v2` follows the cursor."""
         return self.get("/portfolio/fills", params or None, auth=True)
+
+    def orders_v2(self, **params: Any) -> list[dict]:
+        """Every ``Order`` row of ``GET /portfolio/orders`` matching ``params`` (``status``
+        resting|canceled|executed, ``ticker``, ``event_ticker``, ``limit``...), following
+        ``cursor`` pages. Direction is ``outcome_side`` yes/no (``book_side`` bid/ask is the
+        same bit); prices are ``yes_price_dollars`` / ``no_price_dollars`` strings; counts are
+        ``*_count_fp`` strings — see :func:`order_side_price`."""
+        return self._paged("/portfolio/orders", "orders", params)
+
+    def fills_v2(self, **params: Any) -> list[dict]:
+        """Every ``Fill`` row of ``GET /portfolio/fills`` (same direction/price vocabulary as
+        :meth:`orders_v2`, plus ``fill_id``/``trade_id``, ``is_taker``, ``fee_cost``)."""
+        return self._paged("/portfolio/fills", "fills", params)
+
+    def _paged(self, path: str, key: str, params: Optional[dict], max_pages: int = 20) -> list[dict]:
+        out: list[dict] = []
+        q = dict(params or {})
+        for _ in range(max_pages):
+            data = self.get(path, q or None, auth=True)
+            out.extend(data.get(key) or [])
+            cursor = data.get("cursor")
+            if not cursor:
+                break
+            q["cursor"] = cursor
+        return out
 
     def trades(self, ticker: str, limit: int = 100, min_ts: Optional[int] = None) -> list[dict]:
         """Public trade prints for a market (newest first)."""
@@ -188,14 +312,119 @@ class KalshiClient:
         return self.post("/portfolio/events/orders", payload)
 
     def cancel_order(self, order_id: str) -> dict:
+        """``DELETE /portfolio/events/orders/{id}`` -> flat ``{order_id, client_order_id,
+        reduced_by, ts_ms}`` (not an order object; ``reduced_by`` is the count taken off the
+        book). 404 when the id is unknown."""
         return self.delete(f"/portfolio/events/orders/{order_id}")
 
+    def cancel_orders_batched(self, orders: Sequence[str | dict]) -> list[dict]:
+        """``DELETE /portfolio/events/orders/batched`` in chunks of :data:`BATCH_CANCEL_MAX`.
 
-def build_order_payload(ticker: str, action: str, side: str, count: float, price: float, *, time_in_force: str = "good_till_canceled", post_only: bool = False, client_order_id: Optional[str] = None, exchange_index: Optional[int] = None) -> dict:
+        Body per the documented ``BatchCancelOrdersV2Request``: ``{"orders": [{"order_id": ...,
+        "exchange_index"?: int, "market_ticker"?: str, "subaccount"?: int}]}``; each item here
+        is an id string or such a dict. ``exchange_index`` routes the cancel to the shard that
+        holds the order (``market_ticker`` lets the gateway auto-route when it is unknown).
+        One round trip per chunk is what makes a shutdown sweep of a full maker book fast
+        enough to finish before a supervisor kills the process. Returns one response per
+        chunk, each ``{"orders": [{order_id, client_order_id, reduced_by, ts_ms}]}`` where
+        ``reduced_by`` is ``"0.00"`` when that cancel errored — see
+        :func:`batch_cancel_reduced`. An empty list makes no request."""
+        entries = [e for e in (_cancel_entry(o) for o in orders) if e]
+        out: list[dict] = []
+        for i in range(0, len(entries), BATCH_CANCEL_MAX):
+            out.append(self.delete("/portfolio/events/orders/batched", {"orders": entries[i : i + BATCH_CANCEL_MAX]}))
+        return out
+
+    def cancel_all_orders(self, subaccount: Optional[int] = None) -> None:
+        """``DELETE /portfolio/events/orders`` — the exchange cancels every resting order of
+        the member on every shard (204, no body). Needs no listing, so it is the sweep that
+        still works when ``GET /portfolio/orders`` does not; orders placed within the next
+        minute may be cancelled too, so it belongs to shutdown paths only."""
+        q = f"?subaccount={int(subaccount)}" if subaccount is not None else ""
+        self.delete("/portfolio/events/orders" + q)
+
+
+def _cancel_entry(o: Any) -> Optional[dict]:
+    if isinstance(o, dict):
+        oid = str(o.get("order_id") or o.get("id") or "")
+        if not oid:
+            return None
+        e: dict[str, Any] = {"order_id": oid}
+        for k in ("exchange_index", "market_ticker", "subaccount"):
+            if o.get(k) is not None and o.get(k) != "":
+                e[k] = o[k]
+        return e
+    return {"order_id": str(o)} if o else None
+
+
+def batch_cancel_reduced(responses: Iterable[dict]) -> dict[str, float]:
+    """``order_id -> reduced_by`` over batched-cancel responses; ``0.0`` means the exchange
+    reported that cancel as errored (or the order had nothing left to cancel)."""
+    out: dict[str, float] = {}
+    for res in responses or ():
+        for row in (res or {}).get("orders") or []:
+            oid = str(row.get("order_id") or "")
+            if oid:
+                out[oid] = _f(row.get("reduced_by")) or 0.0
+    return out
+
+
+def order_side_price(od: dict) -> tuple[str, Optional[float]]:
+    """(``yes``|``no``, price of that side) from an ``Order``/``Fill`` row. Canonical fields
+    first (``outcome_side``, else ``book_side`` bid->yes / ask->no, else legacy ``side``);
+    the price is ``yes_price_dollars`` for a YES order and ``no_price_dollars`` for a NO
+    order, falling back to ``1 - yes`` and to the legacy cent fields."""
+    side = str(od.get("outcome_side") or "").lower()
+    if side not in ("yes", "no"):
+        bs = str(od.get("book_side") or "").lower()
+        side = "yes" if bs == "bid" else "no" if bs == "ask" else str(od.get("side") or "yes").lower()
+    yes = _f(od.get("yes_price_dollars"))
+    if yes is None and od.get("yes_price") is not None:
+        yes = (_f(od.get("yes_price")) or 0.0) / 100.0
+    no = _f(od.get("no_price_dollars"))
+    if no is None and od.get("no_price") is not None:
+        no = (_f(od.get("no_price")) or 0.0) / 100.0
+    if side == "yes":
+        price = yes if yes is not None else (round(1.0 - no, 4) if no is not None else None)
+    else:
+        price = no if no is not None else (round(1.0 - yes, 4) if yes is not None else None)
+    return side, price
+
+
+IOC_TIFS = {"immediate_or_cancel", "fill_or_kill", "ioc", "fok"}
+
+
+def order_expiration(kickoff: Optional[float | datetime], now: Optional[float] = None, gtd_horizon_s: Optional[float] = None) -> Optional[int]:
+    """Expiry for a resting order: the earlier of kickoff and ``now + gtd_horizon_s``, as a
+    Unix timestamp in whole seconds (``CreateOrderV2Request.expiration_time`` is
+    ``integer/int64``; an RFC 3339 string fails the gateway's validation), or ``None`` when
+    neither bound is known. A resting maker order must not outlive the process that hedges
+    it (the horizon) nor the pre-game book it was priced against (kickoff)."""
+    now = time.time() if now is None else float(now)
+    cands: list[float] = []
+    if isinstance(kickoff, datetime):
+        cands.append(kickoff.timestamp())
+    elif kickoff is not None:
+        cands.append(float(kickoff))
+    if gtd_horizon_s is not None and gtd_horizon_s > 0:
+        cands.append(now + float(gtd_horizon_s))
+    if not cands:
+        return None
+    exp = max(min(cands), now + 1.0)  # never emit an already-expired timestamp
+    return int(exp)
+
+
+def build_order_payload(ticker: str, action: str, side: str, count: float, price: float, *, time_in_force: str = "good_till_canceled", post_only: bool = False, client_order_id: Optional[str] = None, exchange_index: Optional[int] = None, expiration_time: Optional[int | float | datetime] = None, cancel_order_on_pause: Optional[bool] = None, order_group_id: Optional[str] = None) -> dict:
     """Natural (buy/sell, yes/no, price of that side) -> Kalshi V2 (bid/ask on the YES leg).
 
     buy YES @ p  -> bid @ p          sell YES @ p -> ask @ p
     buy NO  @ p  -> ask @ 1 - p      sell NO  @ p -> bid @ 1 - p
+
+    ``expiration_time`` (Unix seconds from :func:`order_expiration`; a datetime is converted)
+    is sent as an int64 per the V2 schema, only makes sense for a resting order and is
+    dropped for IOC/FOK (the gateway rejects the combination). ``cancel_order_on_pause`` asks the exchange to
+    pull the order if trading pauses (a paused market re-opens on news we have not priced).
+    Every new kwarg is optional so older callers and their tests are unchanged.
     """
     action = action.lower()
     side = side.lower()
@@ -215,6 +444,12 @@ def build_order_payload(ticker: str, action: str, side: str, count: float, price
         payload["client_order_id"] = client_order_id
     if exchange_index is not None:
         payload["exchange_index"] = exchange_index
+    if expiration_time and time_in_force.lower() not in IOC_TIFS:
+        payload["expiration_time"] = int(expiration_time.timestamp()) if isinstance(expiration_time, datetime) else int(expiration_time)
+    if cancel_order_on_pause is not None:
+        payload["cancel_order_on_pause"] = bool(cancel_order_on_pause)
+    if order_group_id:
+        payload["order_group_id"] = order_group_id
     return payload
 
 

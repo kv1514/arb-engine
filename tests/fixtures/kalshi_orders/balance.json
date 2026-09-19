@@ -1,0 +1,8 @@
+{
+ "_fixture": "assumed from docs.kalshi.com api-reference (2026-09-19), replaced by scripts/kalshi_demo_check.py --record",
+ "balance": 1000000,
+ "balance_dollars": "10000.0000",
+ "payout": 0,
+ "portfolio_value": 0,
+ "updated_ts": 1789858554
+}

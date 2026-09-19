@@ -381,11 +381,20 @@ class BrokerContractTests(unittest.TestCase):
         r.watches["nfl:ATL|CAR:2026-09-20:total:65.5|kalshi:under"].order = None
         r.reconcile()
         self.assertEqual([o.order_id for o in seen[-1]], [other.order_id])
-        # The stock PaperBroker (no resting kwarg) still works: nothing is passed.
+        # The stock PaperBroker now declares resting= (the self-match guard, P12); a broker
+        # without the kwarg still works and simply is not told.
         r2 = _runner()
-        self.assertFalse(r2._place_accepts_resting)
+        self.assertTrue(r2._place_accepts_resting)
         r2.step()
         self.assertTrue(any(o.status == "resting" for o in r2.orders))
+
+        class Plain(PaperBroker):
+            def place(self, ticker, side, price, count, watch_key="", exchange_index=None):  # no resting kwarg, no **kw
+                return super().place(ticker, side, price, count, watch_key=watch_key, exchange_index=exchange_index)
+        r3 = MakerRunner(cfg, FakeFeed(), Plain(), Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), "maker_test_journal.jsonl"), quiet=True, desktop=False, webhook=""), settings={}, scan_fn=lambda: [_event()])
+        self.assertFalse(r3._place_accepts_resting)
+        r3.step()
+        self.assertTrue(any(o.status == "resting" for o in r3.orders))
 
     def test_shutdown_uses_batched_cancel_all_when_the_broker_has_it(self):
         calls = []

@@ -1,0 +1,24 @@
+{
+ "_fixture": "assumed from docs.kalshi.com api-reference (2026-09-19), replaced by scripts/kalshi_demo_check.py --record",
+ "fills": [
+  {
+   "fill_id": "f-demo-000000000001",
+   "trade_id": "f-demo-000000000001",
+   "exchange_index": 0,
+   "order_id": "0b3c7a2e-demo-4c1f-9a11-000000000003",
+   "ticker": "KXNFLGAME-26SEP20PHITEN-PHI",
+   "market_ticker": "KXNFLGAME-26SEP20PHITEN-PHI",
+   "outcome_side": "yes",
+   "book_side": "bid",
+   "side": "yes",
+   "action": "buy",
+   "count_fp": "2.00",
+   "yes_price_dollars": "0.7200",
+   "no_price_dollars": "0.2800",
+   "is_taker": false,
+   "fee_cost": "0.0000",
+   "created_time": "2026-09-19T20:05:00Z"
+  }
+ ],
+ "cursor": ""
+}
