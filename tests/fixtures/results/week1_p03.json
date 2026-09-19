@@ -1,0 +1,1741 @@
+{
+ "bar_mode": "before",
+ "class_gaps": {
+  "end_period": {
+   "mean_abs_gap": 0.0584,
+   "n": 6,
+   "n_gap": 6,
+   "steal": {
+    "0.03": 1,
+    "0.05": 0,
+    "0.08": 0
+   }
+  },
+  "kickoff": {
+   "mean_abs_gap": 0.0611,
+   "n": 11,
+   "n_gap": 11,
+   "steal": {
+    "0.03": 4,
+    "0.05": 2,
+    "0.08": 0
+   }
+  },
+  "kickoff_pending_synth": {
+   "mean_abs_gap": 0.1166,
+   "n": 6,
+   "n_gap": 6,
+   "steal": {
+    "0.03": 2,
+    "0.05": 2,
+    "0.08": 2
+   }
+  },
+  "kneel": {
+   "mean_abs_gap": 0.0267,
+   "n": 3,
+   "n_gap": 3,
+   "steal": {
+    "0.03": 0,
+    "0.05": 0,
+    "0.08": 0
+   }
+  },
+  "scrimmage": {
+   "mean_abs_gap": 0.0653,
+   "n": 66,
+   "n_gap": 66,
+   "steal": {
+    "0.03": 11,
+    "0.05": 9,
+    "0.08": 3
+   }
+  },
+  "timeout": {
+   "mean_abs_gap": 0.0332,
+   "n": 7,
+   "n_gap": 7,
+   "steal": {
+    "0.03": 1,
+    "0.05": 0,
+    "0.08": 0
+   }
+  },
+  "try_synth": {
+   "mean_abs_gap": 0.1155,
+   "n": 6,
+   "n_gap": 6,
+   "steal": {
+    "0.03": 2,
+    "0.05": 2,
+    "0.08": 2
+   }
+  }
+ },
+ "fit": {
+  "best": {
+   "espn": 1.0,
+   "log_loss": 0.2648,
+   "market": 0.0,
+   "model": 0.0,
+   "pool": "linear"
+  },
+  "corners": {
+   "espn": 0.2648,
+   "market": 0.2727,
+   "model": 0.3271
+  },
+  "current": {
+   "espn": 0.15,
+   "log_loss": 0.2994,
+   "market": 0.3,
+   "model": 0.55
+  },
+  "games": 2,
+  "n": 66,
+  "pool": "linear",
+  "top5": [
+   {
+    "espn": 1.0,
+    "log_loss": 0.2648,
+    "market": 0.0,
+    "model": 0.0
+   },
+   {
+    "espn": 0.95,
+    "log_loss": 0.265,
+    "market": 0.05,
+    "model": 0.0
+   },
+   {
+    "espn": 0.9,
+    "log_loss": 0.2651,
+    "market": 0.1,
+    "model": 0.0
+   },
+   {
+    "espn": 0.85,
+    "log_loss": 0.2653,
+    "market": 0.15,
+    "model": 0.0
+   },
+   {
+    "espn": 0.8,
+    "log_loss": 0.2656,
+    "market": 0.2,
+    "model": 0.0
+   }
+  ]
+ },
+ "fit_logit": {
+  "best": {
+   "espn": 0.7,
+   "log_loss": 0.2636,
+   "market": 0.3,
+   "model": 0.0,
+   "pool": "logit"
+  },
+  "corners": {
+   "espn": 0.2648,
+   "market": 0.2727,
+   "model": 0.3271
+  },
+  "current": {
+   "espn": 0.15,
+   "log_loss": 0.2994,
+   "market": 0.3,
+   "model": 0.55
+  },
+  "games": 2,
+  "n": 66,
+  "pool": "logit",
+  "top5": [
+   {
+    "espn": 0.7,
+    "log_loss": 0.2636,
+    "market": 0.3,
+    "model": 0.0
+   },
+   {
+    "espn": 0.75,
+    "log_loss": 0.2636,
+    "market": 0.25,
+    "model": 0.0
+   },
+   {
+    "espn": 0.65,
+    "log_loss": 0.2637,
+    "market": 0.35,
+    "model": 0.0
+   },
+   {
+    "espn": 0.8,
+    "log_loss": 0.2637,
+    "market": 0.2,
+    "model": 0.0
+   },
+   {
+    "espn": 0.6,
+    "log_loss": 0.2638,
+    "market": 0.4,
+    "model": 0.0
+   }
+  ]
+ },
+ "intervals": {
+  "best_grid_minus_current": {
+   "B": 1000,
+   "frac_positive": 0.0,
+   "games_needed_at_observed": 1,
+   "hi90": -0.03434827009211826,
+   "level": 0.9,
+   "lo90": -0.03480261835282482,
+   "mean": -0.03457544422247154,
+   "n_games": 2,
+   "sd_per_game": 0.0003212727361659225
+  },
+  "blend_minus_model": {
+   "B": 1000,
+   "frac_positive": 0.0,
+   "games_needed_at_observed": 1,
+   "hi90": -0.023129452585975808,
+   "level": 0.9,
+   "lo90": -0.03167943032819104,
+   "mean": -0.02740444145708342,
+   "n_games": 2,
+   "sd_per_game": 0.006045747240514437
+  },
+  "espn_minus_model": {
+   "B": 1000,
+   "frac_positive": 0.0,
+   "games_needed_at_observed": 1,
+   "hi90": -0.05747772267809406,
+   "level": 0.9,
+   "lo90": -0.0667799890062351,
+   "mean": -0.06212885584216458,
+   "n_games": 2,
+   "sd_per_game": 0.006577695601031809
+  },
+  "model_after_minus_kalshi_after": {
+   "B": 1000,
+   "frac_positive": 1.0,
+   "games_needed_at_observed": 1,
+   "hi90": 0.05622079234740645,
+   "level": 0.9,
+   "lo90": 0.04126823505255819,
+   "mean": 0.04874451369998232,
+   "n_games": 2,
+   "sd_per_game": 0.010573054659267585
+  },
+  "model_minus_kalshi_after": {
+   "B": 1000,
+   "frac_positive": 1.0,
+   "games_needed_at_observed": 1,
+   "hi90": 0.07176862030812206,
+   "level": 0.9,
+   "lo90": 0.05808539435035246,
+   "mean": 0.06492700732923726,
+   "n_games": 2,
+   "sd_per_game": 0.009675501863246675
+  },
+  "model_minus_kalshi_before": {
+   "B": 1000,
+   "frac_positive": 1.0,
+   "games_needed_at_observed": 1,
+   "hi90": 0.06231277000963271,
+   "level": 0.9,
+   "lo90": 0.04600765036922101,
+   "mean": 0.05416021018942686,
+   "n_games": 2,
+   "sd_per_game": 0.011529460665793072
+  }
+ },
+ "lineless_q1q2": {
+  "games": 1,
+  "log_loss_spread_zero": 0.4775,
+  "log_loss_with_fallback": 0.3678,
+  "n": 23
+ },
+ "n_games": 2,
+ "n_inplay": 93,
+ "n_rows": 95,
+ "pooled_all": {
+  "blend": {
+   "brier": 0.0693,
+   "games": 2,
+   "log_loss": 0.2714,
+   "n": 95
+  },
+  "blend_after": {
+   "brier": 0.0665,
+   "games": 2,
+   "log_loss": 0.2618,
+   "n": 95
+  },
+  "espn": {
+   "brier": 0.0627,
+   "games": 2,
+   "log_loss": 0.2392,
+   "n": 95
+  },
+  "kalshi": {
+   "brier": 0.0648,
+   "games": 2,
+   "log_loss": 0.2507,
+   "n": 95
+  },
+  "kalshi_after": {
+   "brier": 0.0617,
+   "games": 2,
+   "log_loss": 0.2398,
+   "n": 95
+  },
+  "kalshi_before": {
+   "brier": 0.0648,
+   "games": 2,
+   "log_loss": 0.2507,
+   "n": 95
+  },
+  "kalshi_tight": {
+   "brier": 0.0634,
+   "games": 2,
+   "log_loss": 0.246,
+   "n": 92
+  },
+  "kalshi_wide": {
+   "brier": 0.1068,
+   "games": 1,
+   "log_loss": 0.3956,
+   "n": 3
+  },
+  "market": {
+   "brier": 0.0648,
+   "games": 2,
+   "log_loss": 0.2507,
+   "n": 95
+  },
+  "model": {
+   "brier": 0.0769,
+   "games": 2,
+   "log_loss": 0.2943,
+   "n": 95
+  },
+  "model_after": {
+   "brier": 0.073,
+   "games": 2,
+   "log_loss": 0.2824,
+   "n": 95
+  },
+  "model_when_tight": {
+   "brier": 0.0744,
+   "games": 2,
+   "log_loss": 0.2876,
+   "n": 92
+  },
+  "polymarket": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  },
+  "robinhood": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  }
+ },
+ "pooled_inplay": {
+  "blend": {
+   "brier": 0.0708,
+   "games": 2,
+   "log_loss": 0.277,
+   "n": 93
+  },
+  "blend_after": {
+   "brier": 0.0679,
+   "games": 2,
+   "log_loss": 0.2673,
+   "n": 93
+  },
+  "espn": {
+   "brier": 0.064,
+   "games": 2,
+   "log_loss": 0.2444,
+   "n": 93
+  },
+  "kalshi": {
+   "brier": 0.0662,
+   "games": 2,
+   "log_loss": 0.2554,
+   "n": 93
+  },
+  "kalshi_after": {
+   "brier": 0.063,
+   "games": 2,
+   "log_loss": 0.2445,
+   "n": 93
+  },
+  "kalshi_before": {
+   "brier": 0.0662,
+   "games": 2,
+   "log_loss": 0.2554,
+   "n": 93
+  },
+  "kalshi_tight": {
+   "brier": 0.0648,
+   "games": 2,
+   "log_loss": 0.2507,
+   "n": 90
+  },
+  "kalshi_wide": {
+   "brier": 0.1068,
+   "games": 1,
+   "log_loss": 0.3956,
+   "n": 3
+  },
+  "market": {
+   "brier": 0.0662,
+   "games": 2,
+   "log_loss": 0.2554,
+   "n": 93
+  },
+  "model": {
+   "brier": 0.0786,
+   "games": 2,
+   "log_loss": 0.3006,
+   "n": 93
+  },
+  "model_after": {
+   "brier": 0.0746,
+   "games": 2,
+   "log_loss": 0.2885,
+   "n": 93
+  },
+  "model_when_tight": {
+   "brier": 0.0761,
+   "games": 2,
+   "log_loss": 0.294,
+   "n": 90
+  },
+  "polymarket": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  },
+  "robinhood": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  }
+ },
+ "pooled_scrimmage": {
+  "blend": {
+   "brier": 0.0771,
+   "games": 2,
+   "log_loss": 0.2996,
+   "n": 66
+  },
+  "blend_after": {
+   "brier": 0.0737,
+   "games": 2,
+   "log_loss": 0.2876,
+   "n": 66
+  },
+  "espn": {
+   "brier": 0.0696,
+   "games": 2,
+   "log_loss": 0.2648,
+   "n": 66
+  },
+  "kalshi": {
+   "brier": 0.0703,
+   "games": 2,
+   "log_loss": 0.2727,
+   "n": 66
+  },
+  "kalshi_after": {
+   "brier": 0.0682,
+   "games": 2,
+   "log_loss": 0.262,
+   "n": 66
+  },
+  "kalshi_before": {
+   "brier": 0.0703,
+   "games": 2,
+   "log_loss": 0.2727,
+   "n": 66
+  },
+  "kalshi_tight": {
+   "brier": 0.0685,
+   "games": 2,
+   "log_loss": 0.2668,
+   "n": 63
+  },
+  "kalshi_wide": {
+   "brier": 0.1068,
+   "games": 1,
+   "log_loss": 0.3956,
+   "n": 3
+  },
+  "market": {
+   "brier": 0.0703,
+   "games": 2,
+   "log_loss": 0.2727,
+   "n": 66
+  },
+  "model": {
+   "brier": 0.0868,
+   "games": 2,
+   "log_loss": 0.3271,
+   "n": 66
+  },
+  "model_after": {
+   "brier": 0.0813,
+   "games": 2,
+   "log_loss": 0.3109,
+   "n": 66
+  },
+  "model_when_tight": {
+   "brier": 0.0836,
+   "games": 2,
+   "log_loss": 0.319,
+   "n": 63
+  },
+  "polymarket": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  },
+  "robinhood": {
+   "brier": null,
+   "games": 0,
+   "log_loss": null,
+   "n": 0
+  }
+ },
+ "season": 2026,
+ "simulations": [
+  {
+   "by_edge": {
+    "0.03": {
+     "cost": 3.5,
+     "edge": 0.03,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.05": {
+     "cost": 3.81,
+     "edge": 0.05,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.81,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -2.22
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.08": {
+     "cost": 2.33,
+     "edge": 0.08,
+     "games_traded": 1,
+     "locks": 0,
+     "losses": 1,
+     "pnl": -2.33,
+     "pnl_per_game_90": null,
+     "roi": -1.0,
+     "steals": 1,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "pre_before",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.03": {
+     "cost": 3.81,
+     "edge": 0.03,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.81,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -2.22
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.05": {
+     "cost": 3.81,
+     "edge": 0.05,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.81,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -2.22
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.08": {
+     "cost": 2.33,
+     "edge": 0.08,
+     "games_traded": 1,
+     "locks": 0,
+     "losses": 1,
+     "pnl": -2.33,
+     "pnl_per_game_90": null,
+     "roi": -1.0,
+     "steals": 1,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "post_after",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.03": {
+     "cost": 3.5,
+     "edge": 0.03,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.05": {
+     "cost": 3.5,
+     "edge": 0.05,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.08": {
+     "cost": 3.5,
+     "edge": 0.08,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "pre_after",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.03": {
+     "cost": 3.5,
+     "edge": 0.03,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.05": {
+     "cost": 3.5,
+     "edge": 0.05,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.08": {
+     "cost": 3.5,
+     "edge": 0.08,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "shift",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.03": {
+     "cost": 3.81,
+     "edge": 0.03,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.81,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -2.22
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.05": {
+     "cost": 3.81,
+     "edge": 0.05,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.81,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -2.22
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.08": {
+     "cost": 2.33,
+     "edge": 0.08,
+     "games_traded": 1,
+     "locks": 0,
+     "losses": 1,
+     "pnl": -2.33,
+     "pnl_per_game_90": null,
+     "roi": -1.0,
+     "steals": 1,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "post_after",
+   "placebo": "shuffle",
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.02": {
+     "cost": 16.8,
+     "edge": 0.02,
+     "games_traded": 2,
+     "locks": 2,
+     "losses": 0,
+     "pnl": 3.2,
+     "pnl_per_game_90": {
+      "hi": 2.91,
+      "lo": 0.29
+     },
+     "roi": 0.1905,
+     "steals": 2,
+     "wins": 2
+    },
+    "0.04": {
+     "cost": 17.11,
+     "edge": 0.04,
+     "games_traded": 2,
+     "locks": 2,
+     "losses": 0,
+     "pnl": 2.89,
+     "pnl_per_game_90": {
+      "hi": 2.6,
+      "lo": 0.29
+     },
+     "roi": 0.1689,
+     "steals": 2,
+     "wins": 2
+    },
+    "0.06": {
+     "cost": 7.4,
+     "edge": 0.06,
+     "games_traded": 1,
+     "locks": 1,
+     "losses": 0,
+     "pnl": 2.6,
+     "pnl_per_game_90": null,
+     "roi": 0.3514,
+     "steals": 1,
+     "wins": 1
+    },
+    "0.1": {
+     "cost": 0,
+     "edge": 0.1,
+     "games_traded": 0,
+     "locks": 0,
+     "losses": 0,
+     "pnl": 0,
+     "pnl_per_game_90": null,
+     "roi": null,
+     "steals": 0,
+     "wins": 0
+    }
+   },
+   "lock": true,
+   "pairing": "post_after",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.02": {
+     "cost": 16.8,
+     "edge": 0.02,
+     "games_traded": 2,
+     "locks": 2,
+     "losses": 0,
+     "pnl": 3.2,
+     "pnl_per_game_90": {
+      "hi": 2.91,
+      "lo": 0.29
+     },
+     "roi": 0.1905,
+     "steals": 2,
+     "wins": 2
+    },
+    "0.04": {
+     "cost": 17.11,
+     "edge": 0.04,
+     "games_traded": 2,
+     "locks": 2,
+     "losses": 0,
+     "pnl": 2.89,
+     "pnl_per_game_90": {
+      "hi": 2.6,
+      "lo": 0.29
+     },
+     "roi": 0.1689,
+     "steals": 2,
+     "wins": 2
+    },
+    "0.06": {
+     "cost": 7.4,
+     "edge": 0.06,
+     "games_traded": 1,
+     "locks": 1,
+     "losses": 0,
+     "pnl": 2.6,
+     "pnl_per_game_90": null,
+     "roi": 0.3514,
+     "steals": 1,
+     "wins": 1
+    },
+    "0.1": {
+     "cost": 0,
+     "edge": 0.1,
+     "games_traded": 0,
+     "locks": 0,
+     "losses": 0,
+     "pnl": 0,
+     "pnl_per_game_90": null,
+     "roi": null,
+     "steals": 0,
+     "wins": 0
+    }
+   },
+   "lock": true,
+   "pairing": "post_after",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.02": {
+     "cost": 8.68,
+     "edge": 0.02,
+     "games_traded": 2,
+     "locks": 1,
+     "losses": 1,
+     "pnl": 1.32,
+     "pnl_per_game_90": {
+      "hi": 2.91,
+      "lo": -1.59
+     },
+     "roi": 0.1521,
+     "steals": 2,
+     "wins": 1
+    },
+    "0.04": {
+     "cost": 8.99,
+     "edge": 0.04,
+     "games_traded": 2,
+     "locks": 1,
+     "losses": 1,
+     "pnl": 1.01,
+     "pnl_per_game_90": {
+      "hi": 2.6,
+      "lo": -1.59
+     },
+     "roi": 0.1123,
+     "steals": 2,
+     "wins": 1
+    },
+    "0.06": {
+     "cost": 7.4,
+     "edge": 0.06,
+     "games_traded": 1,
+     "locks": 1,
+     "losses": 0,
+     "pnl": 2.6,
+     "pnl_per_game_90": null,
+     "roi": 0.3514,
+     "steals": 1,
+     "wins": 1
+    },
+    "0.1": {
+     "cost": 0,
+     "edge": 0.1,
+     "games_traded": 0,
+     "locks": 0,
+     "losses": 0,
+     "pnl": 0,
+     "pnl_per_game_90": null,
+     "roi": null,
+     "steals": 0,
+     "wins": 0
+    }
+   },
+   "lock": true,
+   "pairing": "post_after",
+   "placebo": null,
+   "source": "blend"
+  },
+  {
+   "by_edge": {
+    "0.02": {
+     "cost": 7.54,
+     "edge": 0.02,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -7.54,
+     "pnl_per_game_90": {
+      "hi": -3.77,
+      "lo": -3.77
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.04": {
+     "cost": 3.5,
+     "edge": 0.04,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.06": {
+     "cost": 3.5,
+     "edge": 0.06,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    },
+    "0.1": {
+     "cost": 3.5,
+     "edge": 0.1,
+     "games_traded": 2,
+     "locks": 0,
+     "losses": 2,
+     "pnl": -3.5,
+     "pnl_per_game_90": {
+      "hi": -1.59,
+      "lo": -1.91
+     },
+     "roi": -1.0,
+     "steals": 2,
+     "wins": 0
+    }
+   },
+   "lock": false,
+   "pairing": "post_after",
+   "placebo": null,
+   "source": "model"
+  }
+ ],
+ "sport": "nfl",
+ "spread_sources": {
+  "pickcenter": 1,
+  "pregame_kalshi": 1
+ },
+ "strata": {
+  "by_lead": {
+   "1-3": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "n": 0
+   },
+   "17+": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "n": 0
+   },
+   "4-8": {
+    "blend": {
+     "brier": 0.0328,
+     "log_loss": 0.1785,
+     "n": 46
+    },
+    "blend_after": {
+     "brier": 0.0339,
+     "log_loss": 0.1759,
+     "n": 46
+    },
+    "espn": {
+     "brier": 0.0224,
+     "log_loss": 0.1312,
+     "n": 46
+    },
+    "kalshi_after": {
+     "brier": 0.0217,
+     "log_loss": 0.1317,
+     "n": 46
+    },
+    "kalshi_before": {
+     "brier": 0.0179,
+     "log_loss": 0.1268,
+     "n": 46
+    },
+    "model": {
+     "brier": 0.0485,
+     "log_loss": 0.2236,
+     "n": 46
+    },
+    "model_after": {
+     "brier": 0.0478,
+     "log_loss": 0.2158,
+     "n": 46
+    },
+    "n": 46
+   },
+   "9-16": {
+    "blend": {
+     "brier": 0.0025,
+     "log_loss": 0.0505,
+     "n": 10
+    },
+    "blend_after": {
+     "brier": 0.0026,
+     "log_loss": 0.0508,
+     "n": 10
+    },
+    "espn": {
+     "brier": 0.0003,
+     "log_loss": 0.0148,
+     "n": 10
+    },
+    "kalshi_after": {
+     "brier": 0.001,
+     "log_loss": 0.031,
+     "n": 10
+    },
+    "kalshi_before": {
+     "brier": 0.001,
+     "log_loss": 0.031,
+     "n": 10
+    },
+    "model": {
+     "brier": 0.0051,
+     "log_loss": 0.0715,
+     "n": 10
+    },
+    "model_after": {
+     "brier": 0.0052,
+     "log_loss": 0.072,
+     "n": 10
+    },
+    "n": 10
+   },
+   "tie": {
+    "blend": {
+     "brier": 0.1365,
+     "log_loss": 0.4606,
+     "n": 37
+    },
+    "blend_after": {
+     "brier": 0.1278,
+     "log_loss": 0.4394,
+     "n": 37
+    },
+    "espn": {
+     "brier": 0.1329,
+     "log_loss": 0.4472,
+     "n": 37
+    },
+    "kalshi_after": {
+     "brier": 0.1311,
+     "log_loss": 0.4425,
+     "n": 37
+    },
+    "kalshi_before": {
+     "brier": 0.1438,
+     "log_loss": 0.4759,
+     "n": 37
+    },
+    "model": {
+     "brier": 0.1359,
+     "log_loss": 0.4582,
+     "n": 37
+    },
+    "model_after": {
+     "brier": 0.1267,
+     "log_loss": 0.4374,
+     "n": 37
+    },
+    "n": 37
+   }
+  },
+  "by_play_class": {
+   "end_period": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "n": 6
+   },
+   "kickoff": {
+    "blend": {
+     "brier": 0.0757,
+     "log_loss": 0.2892,
+     "n": 11
+    },
+    "blend_after": {
+     "brier": 0.0718,
+     "log_loss": 0.2808,
+     "n": 11
+    },
+    "espn": {
+     "brier": 0.0606,
+     "log_loss": 0.243,
+     "n": 11
+    },
+    "kalshi_after": {
+     "brier": 0.0599,
+     "log_loss": 0.2441,
+     "n": 11
+    },
+    "kalshi_before": {
+     "brier": 0.0758,
+     "log_loss": 0.2727,
+     "n": 11
+    },
+    "model": {
+     "brier": 0.0829,
+     "log_loss": 0.3135,
+     "n": 11
+    },
+    "model_after": {
+     "brier": 0.0827,
+     "log_loss": 0.3121,
+     "n": 11
+    },
+    "n": 11
+   },
+   "kickoff_pending_synth": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "n": 6
+   },
+   "kneel": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 3
+    },
+    "n": 3
+   },
+   "scrimmage": {
+    "blend": {
+     "brier": 0.0771,
+     "log_loss": 0.2996,
+     "n": 66
+    },
+    "blend_after": {
+     "brier": 0.0737,
+     "log_loss": 0.2876,
+     "n": 66
+    },
+    "espn": {
+     "brier": 0.0696,
+     "log_loss": 0.2648,
+     "n": 66
+    },
+    "kalshi_after": {
+     "brier": 0.0682,
+     "log_loss": 0.262,
+     "n": 66
+    },
+    "kalshi_before": {
+     "brier": 0.0703,
+     "log_loss": 0.2727,
+     "n": 66
+    },
+    "model": {
+     "brier": 0.0868,
+     "log_loss": 0.3271,
+     "n": 66
+    },
+    "model_after": {
+     "brier": 0.0813,
+     "log_loss": 0.3109,
+     "n": 66
+    },
+    "n": 66
+   },
+   "timeout": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 7
+    },
+    "n": 7
+   },
+   "try_synth": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 6
+    },
+    "n": 6
+   }
+  },
+  "by_slice": {
+   "ot": {
+    "blend": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "blend_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "espn": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "kalshi_before": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "model_after": {
+     "brier": null,
+     "log_loss": null,
+     "n": 0
+    },
+    "n": 0
+   },
+   "q1": {
+    "blend": {
+     "brier": 0.1231,
+     "log_loss": 0.4295,
+     "n": 22
+    },
+    "blend_after": {
+     "brier": 0.1188,
+     "log_loss": 0.4197,
+     "n": 22
+    },
+    "espn": {
+     "brier": 0.1101,
+     "log_loss": 0.3967,
+     "n": 22
+    },
+    "kalshi_after": {
+     "brier": 0.1074,
+     "log_loss": 0.3901,
+     "n": 22
+    },
+    "kalshi_before": {
+     "brier": 0.1122,
+     "log_loss": 0.4016,
+     "n": 22
+    },
+    "model": {
+     "brier": 0.1342,
+     "log_loss": 0.4549,
+     "n": 22
+    },
+    "model_after": {
+     "brier": 0.1288,
+     "log_loss": 0.4432,
+     "n": 22
+    },
+    "n": 22
+   },
+   "q2": {
+    "blend": {
+     "brier": 0.0856,
+     "log_loss": 0.3336,
+     "n": 23
+    },
+    "blend_after": {
+     "brier": 0.0829,
+     "log_loss": 0.325,
+     "n": 23
+    },
+    "espn": {
+     "brier": 0.0703,
+     "log_loss": 0.2859,
+     "n": 23
+    },
+    "kalshi_after": {
+     "brier": 0.0692,
+     "log_loss": 0.2806,
+     "n": 23
+    },
+    "kalshi_before": {
+     "brier": 0.0711,
+     "log_loss": 0.2876,
+     "n": 23
+    },
+    "model": {
+     "brier": 0.103,
+     "log_loss": 0.3771,
+     "n": 23
+    },
+    "model_after": {
+     "brier": 0.0985,
+     "log_loss": 0.3646,
+     "n": 23
+    },
+    "n": 23
+   },
+   "q3": {
+    "blend": {
+     "brier": 0.074,
+     "log_loss": 0.2857,
+     "n": 21
+    },
+    "blend_after": {
+     "brier": 0.0734,
+     "log_loss": 0.2817,
+     "n": 21
+    },
+    "espn": {
+     "brier": 0.0871,
+     "log_loss": 0.3014,
+     "n": 21
+    },
+    "kalshi_after": {
+     "brier": 0.0863,
+     "log_loss": 0.3021,
+     "n": 21
+    },
+    "kalshi_before": {
+     "brier": 0.0839,
+     "log_loss": 0.3015,
+     "n": 21
+    },
+    "model": {
+     "brier": 0.0669,
+     "log_loss": 0.2747,
+     "n": 21
+    },
+    "model_after": {
+     "brier": 0.0647,
+     "log_loss": 0.2675,
+     "n": 21
+    },
+    "n": 21
+   },
+   "q4_early": {
+    "blend": {
+     "brier": 0.0224,
+     "log_loss": 0.1399,
+     "n": 12
+    },
+    "blend_after": {
+     "brier": 0.0161,
+     "log_loss": 0.1203,
+     "n": 12
+    },
+    "espn": {
+     "brier": 0.0054,
+     "log_loss": 0.0595,
+     "n": 12
+    },
+    "kalshi_after": {
+     "brier": 0.0052,
+     "log_loss": 0.0636,
+     "n": 12
+    },
+    "kalshi_before": {
+     "brier": 0.018,
+     "log_loss": 0.0951,
+     "n": 12
+    },
+    "model": {
+     "brier": 0.0373,
+     "log_loss": 0.1922,
+     "n": 12
+    },
+    "model_after": {
+     "brier": 0.031,
+     "log_loss": 0.172,
+     "n": 12
+    },
+    "n": 12
+   },
+   "q4_late": {
+    "blend": {
+     "brier": 0.006,
+     "log_loss": 0.0641,
+     "n": 15
+    },
+    "blend_after": {
+     "brier": 0.0041,
+     "log_loss": 0.0525,
+     "n": 15
+    },
+    "espn": {
+     "brier": 0.0014,
+     "log_loss": 0.0254,
+     "n": 15
+    },
+    "kalshi_after": {
+     "brier": 0.0019,
+     "log_loss": 0.0397,
+     "n": 15
+    },
+    "kalshi_before": {
+     "brier": 0.0049,
+     "log_loss": 0.0553,
+     "n": 15
+    },
+    "model": {
+     "brier": 0.0089,
+     "log_loss": 0.0801,
+     "n": 15
+    },
+    "model_after": {
+     "brier": 0.0071,
+     "log_loss": 0.0676,
+     "n": 15
+    },
+    "n": 15
+   }
+  },
+  "min_n": 10,
+  "sources": [
+   "model",
+   "model_after",
+   "espn",
+   "kalshi_before",
+   "kalshi_after",
+   "blend",
+   "blend_after"
+  ]
+ },
+ "week": 1
+}

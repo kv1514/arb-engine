@@ -1,0 +1,43 @@
+{
+ "candlesticks": [
+  {
+   "end_period_ts": 1789701300,
+   "yes_bid": {
+    "close_dollars": "0.6000"
+   },
+   "yes_ask": {
+    "close_dollars": "0.6200"
+   },
+   "price": {
+    "close_dollars": "0.6100"
+   },
+   "volume_fp": "10.00"
+  },
+  {
+   "end_period_ts": 1789701360,
+   "yes_bid": {
+    "close_dollars": "0.7000"
+   },
+   "yes_ask": {
+    "close_dollars": "0.7200"
+   },
+   "price": {
+    "close_dollars": "0.7100"
+   },
+   "volume_fp": "10.00"
+  },
+  {
+   "end_period_ts": 1789701420,
+   "yes_bid": {
+    "close_dollars": "0.8000"
+   },
+   "yes_ask": {
+    "close_dollars": "0.8400"
+   },
+   "price": {
+    "close_dollars": "0.8200"
+   },
+   "volume_fp": "10.00"
+  }
+ ]
+}
