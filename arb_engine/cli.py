@@ -357,6 +357,20 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     if args.pm_home or args.pm_away:
         pm = {k: v for k, v in (("home", args.pm_home), ("away", args.pm_away)) if v}
     kt = {"home": args.kalshi_home, "away": args.kalshi_away} if args.kalshi_home and args.kalshi_away else None
+    if args.week is not None:
+        from .backtest import fit_blend_weights, replay_week, summarize_many
+
+        results, skipped = replay_week(args.season, args.week, polymarket=not args.no_polymarket, limit=args.limit, progress=print)
+        fit = fit_blend_weights(results) if results else None
+        print(summarize_many(results, skipped, fit))
+        if args.json:
+            with open(args.json, "w", encoding="utf-8") as f:
+                json.dump({"season": args.season, "week": args.week, "fit": fit, "skipped": skipped, "games": [asdict(r) for r in results]}, f, indent=1, default=str)
+            print(f"wrote {args.json}")
+        return 0
+    if not args.espn:
+        print("need --espn <event id> or --week N", file=sys.stderr)
+        return 2
     res = GameReplayer().replay(args.espn, rh_contracts=rh, pm_tokens=pm, kalshi_tickers=kt)
     print(summarize(res))
     if args.json:
@@ -494,13 +508,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.set_defaults(func=cmd_games)
 
     bt = sub.add_parser("backtest", help="replay a finished NFL game play-by-play with public price history; score model/ESPN/venues vs the outcome")
-    bt.add_argument("--espn", required=True, help="ESPN event id (from `arb-engine games` keys / ESPN URLs)")
+    bt.add_argument("--espn", help="ESPN event id (from `arb-engine games` keys / ESPN URLs)")
     bt.add_argument("--rh-home", help="Robinhood contract id for the home team (from the catalogue / fixtures)")
     bt.add_argument("--rh-away")
     bt.add_argument("--pm-home", help="Polymarket token id for the home outcome")
     bt.add_argument("--pm-away")
     bt.add_argument("--kalshi-home", help="override Kalshi ticker (default derived from teams + ET date)")
     bt.add_argument("--kalshi-away")
+    bt.add_argument("--week", type=int, help="replay every finished game of this NFL regular-season week (Kalshi + Polymarket + ESPN + model) and fit the blend weights")
+    bt.add_argument("--season", type=int, default=2026)
+    bt.add_argument("--limit", type=int, help="with --week: only the first N games")
+    bt.add_argument("--no-polymarket", action="store_true", help="with --week: skip the Polymarket history lookup")
     bt.add_argument("--json", help="write the full replay to this file")
     bt.set_defaults(func=cmd_backtest)
 

@@ -80,7 +80,8 @@ class ReplayTests(unittest.TestCase):
             self.assertGreater(res.metrics[k]["n"], 0)
             self.assertGreaterEqual(res.metrics[k]["log_loss"], 0.0)
         # The fixture candles cover only the first 12 minutes; late plays have no Kalshi bar within max_gap.
-        self.assertTrue(all(r.model_p is None or 0 < r.model_p < 1 for r in res.rows))
+        self.assertTrue(all(r.model_p is None or 0 <= r.model_p <= 1 for r in res.rows))
+        self.assertEqual(res.rows[-1].model_p, 1.0)  # final whistle, BUF up 41-31: decided
         text = summarize(res)
         self.assertIn("DET 31-41 BUF", text)
         self.assertIn("arb minutes", text)

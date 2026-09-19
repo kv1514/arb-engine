@@ -7,15 +7,23 @@ Sources (all expressed as P(home wins)):
   (score, clock, possession, down/distance, field position, timeouts, pre-game spread).
 * **espn** — ESPN's own win-probability number for the last play (``espn_home_wp``).
 
-Why the market gets the most weight in play (default 0.50 / 0.35 / 0.15)
--------------------------------------------------------------------------
+Why the model gets the most weight in play (default 0.30 / 0.55 / 0.15)
+------------------------------------------------------------------------
 Exchange prices embed information the state model cannot see: injuries in the game,
 weather, the quarterback who just limped off, a team's tempo, and the *next* play that the
 ESPN feed has not published yet (its clock lags the broadcast by 5–20 s). Held out on the
-2025 season the model matches nflfastR's ``vegas_wp`` (log-loss 0.475 vs 0.477), which is
-good, but a liquid two-sided book during a game is still a better estimator of the true
-probability than any public state model, so it anchors the blend. ESPN's model is a third
-opinion with a smaller weight because it is unaudited and depends on the same lagging feed.
+2025 season the model matches nflfastR's ``vegas_wp`` (log-loss 0.475 vs 0.477). The
+original default anchored on the market (0.50 / 0.35 / 0.15) on the theory that a liquid
+two-sided book beats any public state model. Replaying 2026 week 1 play by play
+(``arb-engine backtest --week 1``: 16 games, 2,888 in-play plays) said otherwise for
+*these* books: model 0.389 log-loss, ESPN 0.411, Polymarket 0.432, Kalshi mid 0.451 —
+the in-play NFL books are thin and slow, so the model was the best single source and
+every step of the weight grid towards it lowered the loss. The default moved to
+0.30 / 0.55 / 0.15 rather than the grid optimum (model-only) because one week is one
+week and the market still carries the pre-game information the model only sees through
+the spread. ``market_confidence_from_spread`` scales the market weight down further when
+the Kalshi book is wide. ESPN's model is a third opinion with a smaller weight because
+it is unaudited and depends on the same lagging feed.
 
 When to trust the model more
 ----------------------------
@@ -41,7 +49,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
-DEFAULT_WEIGHTS: dict[str, float] = {"market": 0.5, "model": 0.35, "espn": 0.15}
+DEFAULT_WEIGHTS: dict[str, float] = {"market": 0.30, "model": 0.55, "espn": 0.15}
+
+
+def market_confidence_from_spread(spread: Optional[float], tight: float = 0.04, wide: float = 0.12, floor: float = 0.3) -> float:
+    """Scale for the market weight from the best book's width: 1.0 at/under ``tight``,
+    falling linearly to ``floor`` at ``wide`` and beyond. Unknown spread -> 1.0."""
+    if spread is None:
+        return 1.0
+    s = float(spread)
+    if s <= tight:
+        return 1.0
+    if s >= wide:
+        return floor
+    return 1.0 - (1.0 - floor) * (s - tight) / (wide - tight)
 PREGAME_ORDER = ("market", "model", "espn")  # fallback order when not live
 
 

@@ -80,7 +80,7 @@ client (8 req/s) shared by the scan adapter and the feed.
 venues (Kalshi / Polymarket / Rothera quotes) ─► consensus_fair_value ─► market P(home)
 ESPN scoreboard (+summary every 30 s)       ─► GameState ─► models/wp.home_win_probability ─► model P(home)
                                                           └─► espn_home_wp
-blended_fair(market 0.50, model 0.35, espn 0.15; renormalised; market-only pre-game)
+blended_fair(market 0.30 × confidence(book width), model 0.55, espn 0.15; renormalised; market-only pre-game)
   └─► STEAL (blend AND model ≥ all-in + edge) · LOCK price for the short side · disagreement > 0.05 flagged
 ```
 

@@ -259,6 +259,9 @@ def home_win_probability(
     and field position. The raw export dips by up to ~10 points at thinly-trained splits
     (e.g. a 17-point Q2 lead below a 16-point one); see docs/MODEL.md.
     """
+    # Final whistle in regulation with a margin: decided (a tie at 0:00 goes to overtime, model it).
+    if float(game_seconds_remaining) <= 0 and home_score != away_score:
+        return 1.0 if home_score > away_score else 0.0
     mdl = model or default_model()
     gsr = min(max(float(game_seconds_remaining), 0.0), REGULATION_SECONDS)
     second_half = gsr <= HALF_SECONDS

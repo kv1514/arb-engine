@@ -8,7 +8,7 @@ class BlendTests(unittest.TestCase):
         b = blended_fair({"KC": 0.60, "DEN": 0.40}, model_home_wp=0.50, espn_home_wp=None, home_outcome="KC", away_outcome="DEN", live=True)
         self.assertAlmostEqual(sum(b.weights.values()), 1.0)
         self.assertEqual(set(b.weights), {"market", "model"})
-        self.assertAlmostEqual(b.home_p, (0.6 * 0.5 + 0.5 * 0.35) / 0.85)
+        self.assertAlmostEqual(b.home_p, (0.6 * 0.30 + 0.5 * 0.55) / 0.85)
         self.assertAlmostEqual(b.fair["KC"] + b.fair["DEN"], 1.0)
         self.assertAlmostEqual(b.disagreement, 0.10)
 

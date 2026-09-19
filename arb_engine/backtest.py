@@ -17,7 +17,7 @@ import json
 import math
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from .fees.kalshi import KalshiFees
@@ -25,8 +25,9 @@ from .fees.robinhood import RobinhoodFees
 from .matching.normalize import kalshi_ticker_date
 from .matching.teams import nfl_team_code
 from .quant.arbitrage import Leg, evaluate
-from .quant.inplay_fair import blended_fair
+from .quant.inplay_fair import blended_fair, market_confidence_from_spread
 from .venues.espn import ESPNClient
+from .matching.normalize import parse_iso
 from .venues.history import Bar, HistoryClient, PlayRow, bar_at, espn_timeline
 
 
@@ -49,6 +50,7 @@ class ReplayRow:
     kalshi_arb_margin: Optional[float]
     cross_arb_margin: Optional[float]
     text: str = ""
+    kalshi_spread: Optional[float] = None  # ask - bid of the Kalshi candle used (book width)
 
 
 @dataclass
@@ -75,6 +77,10 @@ def _scores(pred: list[float], y: int) -> dict[str, float]:
     return {"n": len(ps), "log_loss": round(ll, 4), "brier": round(br, 4), "mean_p_home": round(sum(ps) / len(ps), 4)}
 
 
+# Kalshi's ticker codes where they differ from the standard NFL abbreviations.
+KALSHI_TICKER_CODES = {"JAX": "JAC"}
+
+
 class GameReplayer:
     def __init__(self, espn: Optional[ESPNClient] = None, history: Optional[HistoryClient] = None, model: Any = None):
         self.espn = espn or ESPNClient()
@@ -88,8 +94,9 @@ class GameReplayer:
         d = et_date(kickoff)
         y, m, dd = d.split("-")
         mon = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][int(m) - 1]
-        code = f"{y[2:]}{mon}{dd}{away}{home}"
-        return f"KXNFLGAME-{code}-{home}", f"KXNFLGAME-{code}-{away}"
+        home_k, away_k = KALSHI_TICKER_CODES.get(home, home), KALSHI_TICKER_CODES.get(away, away)
+        code = f"{y[2:]}{mon}{dd}{away_k}{home_k}"
+        return f"KXNFLGAME-{code}-{home_k}", f"KXNFLGAME-{code}-{away_k}"
 
     def replay(self, espn_event_id: str, rh_contracts: Optional[dict[str, str]] = None, pm_tokens: Optional[dict[str, str]] = None, pre_minutes: int = 30, post_minutes: int = 10, kalshi_tickers: Optional[dict[str, str]] = None) -> ReplayResult:
         summary = self.espn.summary(espn_event_id)
@@ -156,7 +163,11 @@ class GameReplayer:
             polymarket_p = pb_h.close if pb_h and pb_h.close is not None else ((1 - pb_a.close) if pb_a and pb_a.close is not None else None)
             mids = [v for v in (kalshi_p, robinhood_p, polymarket_p) if v is not None]
             market_p = sum(mids) / len(mids) if mids else None
-            b = blended_fair({home: market_p, away: (1 - market_p) if market_p is not None else None} if market_p is not None else None, model_p, p.espn_home_wp, home, away, live=True)
+            k_spread = None
+            for bar in (bh, ba):
+                if bar and bar.ask is not None and bar.bid is not None:
+                    k_spread = round(bar.ask - bar.bid, 4) if k_spread is None else min(k_spread, round(bar.ask - bar.bid, 4))
+            b = blended_fair({home: market_p, away: (1 - market_p) if market_p is not None else None} if market_p is not None else None, model_p, p.espn_home_wp, home, away, live=True, market_confidence=market_confidence_from_spread(k_spread))
             # Arbitrage checks at this minute.
             k_margin = x_margin = None
             if bh and ba and bh.ask is not None and ba.ask is not None:
@@ -171,7 +182,7 @@ class GameReplayer:
                 if x_margin > 0:
                     x_arb_minutes.add(int(p.ts // 60))
                     best_x = max(best_x or -1, x_margin)
-            rows.append(ReplayRow(ts=p.ts, period=p.period, clock=p.clock_seconds, home_score=p.home_score, away_score=p.away_score, possession=p.possession, model_p=model_p, espn_p=p.espn_home_wp, kalshi_p=kalshi_p, robinhood_p=robinhood_p, polymarket_p=polymarket_p, market_p=market_p, blend_p=b.home_p, disagreement=b.disagreement, kalshi_arb_margin=k_margin, cross_arb_margin=x_margin, text=p.text))
+            rows.append(ReplayRow(ts=p.ts, period=p.period, clock=p.clock_seconds, home_score=p.home_score, away_score=p.away_score, possession=p.possession, model_p=model_p, espn_p=p.espn_home_wp, kalshi_p=kalshi_p, robinhood_p=robinhood_p, polymarket_p=polymarket_p, market_p=market_p, blend_p=b.home_p, disagreement=b.disagreement, kalshi_arb_margin=k_margin, cross_arb_margin=x_margin, text=p.text, kalshi_spread=k_spread))
             for k, v in (("model", model_p), ("espn", p.espn_home_wp), ("kalshi", kalshi_p), ("robinhood", robinhood_p), ("polymarket", polymarket_p), ("market", market_p), ("blend", b.home_p)):
                 if v is not None:
                     preds[k].append(v)
@@ -214,3 +225,217 @@ def summarize(res: ReplayResult) -> str:
         f = lambda x: "  -  " if x is None else f"{x:.3f}"  # noqa: E731
         lines.append(f"{t}  {r.period}  {(r.clock or 0) // 60:02d}:{(r.clock or 0) % 60:02d}  {r.away_score:>2}-{r.home_score:<2}   {str(r.possession or '-'):<5}  {f(r.model_p)}  {f(r.espn_p)}  {f(r.kalshi_p)}  {f(r.robinhood_p)}  {f(r.polymarket_p)}  {f(r.blend_p)}  {f(r.disagreement)}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------------------------
+# Many games: resolve venue ids automatically, pool the scores, fit the blend weights.
+
+GAMMA = "https://gamma-api.polymarket.com"
+
+
+# Polymarket's slug codes where they differ from the standard NFL abbreviations.
+POLYMARKET_SLUG_CODES = {"LAR": "la", "JAX": "jax", "WSH": "was", "LV": "lv", "LAC": "lac"}
+
+
+def _polymarket_event(http: Any, slug: str) -> Optional[dict]:
+    try:
+        events = http.get(f"{GAMMA}/events", {"slug": slug})
+    except Exception:
+        return None
+    return (events or [None])[0]
+
+
+def resolve_polymarket_tokens(http: Any, away: str, home: str, kickoff: Any, away_name: Optional[str] = None, home_name: Optional[str] = None) -> Optional[dict[str, str]]:
+    """Moneyline CLOB token ids for an NFL game from its Gamma event slug
+    ``nfl-{away}-{home}-{UTC date}`` (works for closed games; ``/markets?slug=`` does not).
+    Falls back to ``/public-search`` with the team names when the codes differ."""
+    import json as _json
+    import re as _re
+
+    if kickoff is None:
+        return None
+    if isinstance(kickoff, datetime):
+        ko = kickoff
+    elif isinstance(kickoff, str):
+        ko = parse_iso(kickoff)
+        if ko is None:
+            return None
+    else:
+        ko = datetime.fromtimestamp(float(kickoff), tz=timezone.utc)
+    date = ko.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    slug = f"nfl-{POLYMARKET_SLUG_CODES.get(away, away.lower())}-{POLYMARKET_SLUG_CODES.get(home, home.lower())}-{date}"
+    ev = _polymarket_event(http, slug)
+    if ev is None and (away_name or home_name):
+        try:
+            found = http.get(f"{GAMMA}/public-search", {"q": f"{(away_name or away).split()[-1]} {(home_name or home).split()[-1]}", "limit_per_type": 10})
+        except Exception:
+            found = None
+        for cand in (found or {}).get("events") or []:
+            cs = str(cand.get("slug") or "")
+            if _re.match(r"^nfl-[a-z]+-[a-z]+-" + _re.escape(date) + "$", cs):
+                slug = cs
+                ev = _polymarket_event(http, cs) or cand
+                break
+    if not ev:
+        return None
+    for _ev in (ev,):
+        for m in _ev.get("markets") or []:
+            if m.get("slug") != slug and (m.get("sportsMarketType") or "").lower() != "moneyline":
+                continue
+            try:
+                outs = _json.loads(m.get("outcomes") or "[]")
+                toks = _json.loads(m.get("clobTokenIds") or "[]")
+            except Exception:
+                continue
+            if len(outs) != 2 or len(toks) != 2:
+                continue
+            codes = [nfl_team_code(o) for o in outs]
+            if home in codes and away in codes:
+                return {"home": str(toks[codes.index(home)]), "away": str(toks[codes.index(away)])}
+    return None
+
+
+def week_games(espn: ESPNClient, season: int, week: int) -> list[dict[str, Any]]:
+    """Finished games of a week: ``[{id, name, date}]``."""
+    sb = espn.scoreboard_week(season, week)
+    out = []
+    for ev in sb.get("events") or []:
+        st = ((ev.get("status") or {}).get("type") or {}).get("name") or ""
+        if st == "STATUS_FINAL":
+            out.append({"id": str(ev.get("id")), "name": ev.get("name"), "date": ev.get("date")})
+    return out
+
+
+SOURCES = ("model", "espn", "kalshi", "robinhood", "polymarket", "market", "blend")
+TIGHT_BOOK = 0.04  # Kalshi ask - bid at or under this is a "real" two-sided market
+
+
+def _pred(r: ReplayRow, k: str) -> Optional[float]:
+    if k == "kalshi_tight":
+        return r.kalshi_p if r.kalshi_spread is not None and r.kalshi_spread <= TIGHT_BOOK else None
+    if k == "kalshi_wide":
+        return r.kalshi_p if r.kalshi_spread is not None and r.kalshi_spread > TIGHT_BOOK else None
+    if k == "model_when_tight":  # the model on exactly the plays kalshi_tight covers (fair comparison)
+        return r.model_p if r.kalshi_spread is not None and r.kalshi_spread <= TIGHT_BOOK else None
+    return getattr(r, f"{k}_p")
+
+
+POOLED_KEYS = SOURCES + ("kalshi_tight", "model_when_tight", "kalshi_wide")
+
+
+def pooled_metrics(results: list[ReplayResult], inplay_only: bool = False) -> dict[str, dict[str, float]]:
+    """Log-loss / Brier over every play of every game, per source (plus Kalshi split by book width)."""
+    out: dict[str, dict[str, float]] = {}
+    for k in POOLED_KEYS:
+        ll = br = 0.0
+        n = 0
+        for res in results:
+            y = 1 if res.home_won else 0
+            for r in res.rows:
+                if inplay_only and not (r.period and (r.period < 4 or (r.clock or 0) > 0)):
+                    continue
+                p = _pred(r, k)
+                if p is None:
+                    continue
+                p = min(max(p, 1e-6), 1 - 1e-6)
+                ll += -(math.log(p) if y else math.log(1 - p))
+                br += (p - y) ** 2
+                n += 1
+        out[k] = {"n": n, "log_loss": round(ll / n, 4) if n else None, "brier": round(br / n, 4) if n else None, "games": sum(1 for res in results if any(_pred(r, k) is not None for r in res.rows))}
+    return out
+
+
+def fit_blend_weights(results: list[ReplayResult], step: float = 0.05, inplay_only: bool = True) -> dict[str, Any]:
+    """Grid-search (market, model, espn) weights on the simplex that minimise pooled log-loss
+    over plays where all three sources exist. Reports the current default too."""
+    from .quant.inplay_fair import DEFAULT_WEIGHTS
+
+    rows = []
+    for res in results:
+        y = 1 if res.home_won else 0
+        for r in res.rows:
+            if inplay_only and not (r.period and (r.period < 4 or (r.clock or 0) > 0)):
+                continue
+            if r.market_p is not None and r.model_p is not None and r.espn_p is not None:
+                rows.append((r.market_p, r.model_p, r.espn_p, y))
+    if not rows:
+        return {"n": 0}
+
+    def loss(wm: float, wo: float, we: float) -> float:
+        tot = wm + wo + we
+        s = 0.0
+        for a, b, c, y in rows:
+            p = min(max((wm * a + wo * b + we * c) / tot, 1e-6), 1 - 1e-6)
+            s += -(math.log(p) if y else math.log(1 - p))
+        return s / len(rows)
+
+    grid = []
+    k = int(round(1 / step))
+    for i in range(k + 1):
+        for j in range(k + 1 - i):
+            wm, wo = i * step, j * step
+            we = max(0.0, 1 - wm - wo)
+            grid.append((loss(wm, wo, we), round(wm, 2), round(wo, 2), round(we, 2)))
+    grid.sort()
+    d = DEFAULT_WEIGHTS
+    cur = loss(d.get("market", 0.5), d.get("model", 0.35), d.get("espn", 0.15))
+    return {
+        "n": len(rows),
+        "games": len(results),
+        "best": {"market": grid[0][1], "model": grid[0][2], "espn": grid[0][3], "log_loss": round(grid[0][0], 4)},
+        "current": {"market": d.get("market"), "model": d.get("model"), "espn": d.get("espn"), "log_loss": round(cur, 4)},
+        "corners": {"market": round(loss(1, 0, 0), 4), "model": round(loss(0, 1, 0), 4), "espn": round(loss(0, 0, 1), 4)},
+        "top5": [{"market": g[1], "model": g[2], "espn": g[3], "log_loss": round(g[0], 4)} for g in grid[:5]],
+    }
+
+
+def replay_week(season: int, week: int, replayer: Optional[GameReplayer] = None, http: Any = None, polymarket: bool = True, limit: Optional[int] = None, progress: Any = None) -> tuple[list[ReplayResult], list[dict[str, Any]]]:
+    """Replay every finished game of a week (Kalshi + Polymarket + ESPN + model; Robinhood
+    history needs contract ids, which the catalogue only holds for open events)."""
+    rep = replayer or GameReplayer()
+    http = http or rep.history.http
+    games = week_games(rep.espn, season, week)
+    if limit:
+        games = games[:limit]
+    results: list[ReplayResult] = []
+    skipped: list[dict[str, Any]] = []
+    for g in games:
+        try:
+            summary = rep.espn.summary(g["id"])
+            _, meta = espn_timeline(summary)
+            home, away = nfl_team_code(meta["home"]) or meta["home"], nfl_team_code(meta["away"]) or meta["away"]
+            names = str(g.get("name") or "").split(" at ")
+            pm = resolve_polymarket_tokens(http, away, home, meta.get("kickoff"), away_name=names[0] if len(names) == 2 else None, home_name=names[1] if len(names) == 2 else None) if polymarket else None
+            res = rep.replay(g["id"], pm_tokens=pm)
+            results.append(res)
+            if progress:
+                progress(f"{res.final:<22} plays={res.n_plays:<4} kalshi={res.arb_minutes['kalshi_candles']:<4} pm={res.arb_minutes['polymarket_points']:<4} model={res.metrics['model'].get('log_loss')} kalshi_ll={res.metrics['kalshi'].get('log_loss')}")
+        except Exception as e:  # keep going; report at the end
+            skipped.append({"id": g["id"], "name": g["name"], "error": repr(e)})
+            if progress:
+                progress(f"skip {g['name']}: {e!r}")
+    return results, skipped
+
+
+def summarize_many(results: list[ReplayResult], skipped: list[dict[str, Any]], fit: Optional[dict[str, Any]] = None) -> str:
+    lines = [f"{len(results)} games replayed, {sum(r.n_plays for r in results)} plays" + (f", {len(skipped)} skipped" if skipped else "")]
+    for res in results:
+        lines.append(f"  {res.final:<22} {res.n_plays:>4} plays  model {_fmt(res.metrics['model'].get('log_loss'))}  espn {_fmt(res.metrics['espn'].get('log_loss'))}  kalshi {_fmt(res.metrics['kalshi'].get('log_loss'))}  poly {_fmt(res.metrics['polymarket'].get('log_loss'))}  blend {_fmt(res.metrics['blend'].get('log_loss'))}  kalshi-arb-min {res.arb_minutes['kalshi_book_minutes']}")
+    for title, inplay in (("all plays", False), ("in play only (score can still change)", True)):
+        pm = pooled_metrics(results, inplay_only=inplay)
+        lines.append(f"pooled — {title}:")
+        lines.append("  source            games     n   log-loss   brier")
+        for k in POOLED_KEYS:
+            m = pm[k]
+            label = {"kalshi_tight": f"kalshi ≤{TIGHT_BOOK*100:.0f}¢ book", "model_when_tight": "model (same plays)", "kalshi_wide": f"kalshi >{TIGHT_BOOK*100:.0f}¢ book"}.get(k, k)
+            lines.append(f"  {label:<18} {m['games']:>4} {m['n']:>6}   {_fmt(m['log_loss'])}   {_fmt(m['brier'])}")
+    if fit and fit.get("n"):
+        b, c, co = fit["best"], fit["current"], fit["corners"]
+        lines.append(f"blend weights (in play, {fit['n']} plays with all three sources): best market {b['market']} / model {b['model']} / espn {b['espn']} -> {b['log_loss']}; current {c['market']} / {c['model']} / {c['espn']} -> {c['log_loss']}; market-only {co['market']}, model-only {co['model']}, espn-only {co['espn']}")
+    for s in skipped:
+        lines.append(f"  skipped {s['name']}: {s['error']}")
+    return "\n".join(lines)
+
+
+def _fmt(v: Any) -> str:
+    return f"{v:.4f}" if isinstance(v, (int, float)) and v is not None else "  -   "

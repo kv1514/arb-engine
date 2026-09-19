@@ -179,5 +179,16 @@ class FeatureMathTests(unittest.TestCase):
         self.assertAlmostEqual(WinProbModel(lr).predict_posteam_wp({**base, "score_differential": 2}), 1 / (1 + 2.718281828459045 ** -2))
 
 
+
+class FinalWhistleTests(unittest.TestCase):
+    def test_decided_at_zero_seconds(self):
+        from arb_engine.models.wp import home_win_probability
+
+        self.assertEqual(home_win_probability(home_score=24, away_score=20, game_seconds_remaining=0, possession="away"), 1.0)
+        self.assertEqual(home_win_probability(home_score=20, away_score=24, game_seconds_remaining=0, possession="home"), 0.0)
+        tie = home_win_probability(home_score=20, away_score=20, game_seconds_remaining=0, possession="home")
+        self.assertTrue(0.2 < tie < 0.8)  # overtime: still modelled
+
+
 if __name__ == "__main__":
     unittest.main()

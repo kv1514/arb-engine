@@ -182,3 +182,34 @@ python3 -m unittest tests.test_wp_model
 `--train-seasons 2016-2025 --test-season 2026` once a new season of play-by-play exists;
 the meta file (`arb_engine/data/nfl_wp_model.meta.json`) records the held-out metrics,
 calibration table, parity check and pre-game table for whatever was last exported.
+
+## In-play replay against the markets (2026 week 1)
+
+`python -m arb_engine backtest --week 1` replays each of the 16 finals play by play
+(ESPN wall-clock stamps), scores the model on the pre-snap state and looks up what Kalshi
+(1-minute candle bid/ask close) and Polymarket (1-minute last trade) were quoting at that
+moment. Everything is P(home wins); the market bars end *after* the play, so the market has
+at least as much information as the model at every row.
+
+| source | plays | log-loss | Brier |
+|---|---|---|---|
+| model | 2,888 | 0.391 | 0.128 |
+| blend 0.30 / 0.55 / 0.15 | 2,888 | 0.403 | 0.132 |
+| ESPN | 2,888 | 0.413 | 0.137 |
+| market consensus | 2,877 | 0.429 | 0.143 |
+| Kalshi mid | 2,874 | 0.429 | 0.142 |
+| Polymarket | 2,877 | 0.432 | 0.144 |
+| Kalshi, book ≤ 4¢ | 2,547 | 0.482 | 0.160 |
+| model, same plays | 2,547 | 0.437 | 0.143 |
+
+Grid search over the (market, model, ESPN) simplex is monotone towards the model (model-only
+0.389; the old 0.50/0.35/0.15 default 0.409). The default moved to 0.30/0.55/0.15 rather than
+model-only: one week of one season, and the market carries pre-game information (injuries,
+weather) that reaches the model only through the closing spread. `market_confidence_from_spread`
+additionally scales the market weight down when the best book is wider than 4¢.
+
+Caveats: no Robinhood/Rothera history in the week run (contract ids are only discoverable
+for open events); Polymarket history is trades, so a quiet minute repeats a stale price; the
+model saw 2025 during configuration selection (above) but 2026 is fully out of sample.
+Rerun `--week N` as weeks finish; the last line of the output reports the refit.
+

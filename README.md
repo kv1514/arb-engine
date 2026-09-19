@@ -92,8 +92,9 @@ XGBoost stack trained on nflverse play-by-play 2016–2024; on the held-out 2025
 matches nflfastR's `vegas_wp` (log-loss 0.475 vs 0.477, Brier 0.158 vs 0.159, ECE 0.02) —
 see [docs/MODEL.md](docs/MODEL.md). Inference is stdlib (`arb_engine/models/wp.py`).
 
-Fair value in play = blend of **market consensus** (0.50), **model** (0.35) and **ESPN**
-(0.15), renormalised over what is available; pre-game the market alone. Per side it prints
+Fair value in play = blend of **model** (0.55), **market consensus** (0.30, scaled down
+when the best book is wide) and **ESPN** (0.15), renormalised over what is available;
+pre-game the market alone. The weights come from the week-1 replay below. Per side it prints
 what you hold and its all-in average, the fair with its three sources, the cheapest venue,
 and — for the side you are short of — the **lock price**: the most you can pay (fees
 included) so the pair pays $1 either way for less than you spent. Alerts `LOCK NOW` when
@@ -104,11 +105,33 @@ mechanics and the Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/F
 ### Backtest: replay a finished game against every price source
 
 ```bash
+python -m arb_engine backtest --week 1                              # every finished game of the week: pooled scores + blend-weight fit
 python -m arb_engine games                                          # prints the ESPN id per game
 python -m arb_engine backtest --espn 401872932 --rh-home <contract id> --rh-away <contract id> --pm-away <token id> --json out/backtest.json
 python -m arb_engine scan --sport nfl --record out/history.db       # persist every event + quote (SQLite)
 python -m arb_engine inplay "<game url>" --position … --record out/history.db   # persist every tick
 ```
+
+`--week N` replays every final of an NFL week with Kalshi (tickers derived), Polymarket
+(token ids resolved from the Gamma event slug), ESPN and the model, pools the scores and
+grid-searches the blend weights. **2026 week 1, 16 games, 2,888 in-play plays** (P(home)
+per play, lower is better):
+
+| source | log-loss | Brier |
+|---|---|---|
+| model (`models/wp.py`) | **0.391** | **0.128** |
+| blend (0.30 market / 0.55 model / 0.15 ESPN) | 0.403 | 0.132 |
+| ESPN win probability | 0.413 | 0.137 |
+| market consensus (Kalshi + Polymarket mids) | 0.429 | 0.143 |
+| Kalshi mid (candle close) | 0.429 | 0.142 |
+| Polymarket last trade | 0.432 | 0.144 |
+
+On the 2,547 plays where Kalshi's book was ≤4¢ wide the comparison is the same (Kalshi
+0.482 vs the model 0.437 on those plays): the in-play NFL books are thin and slow, not
+just wide. That is why the blend leans on the model, why `STEAL` requires the model to
+agree, and it is the edge the in-play watcher is built to take. It is also one week; rerun
+with `--week N` as the season goes and the fit line at the bottom of the output says
+whether the weights should move.
 
 `backtest` walks the game's ESPN play-by-play (wall-clock stamped), scores the WP model on
 each play's pre-snap state and looks up what Kalshi (1-min candles, bid/ask), Robinhood
@@ -118,7 +141,8 @@ model, ESPN, each venue, the market consensus and the blend, and counts the minu
 fee-aware arb existed inside Kalshi's book and across Kalshi × Robinhood. DET @ BUF
 2026-09-17 (189 plays): model 0.070, Robinhood 0.078, ESPN 0.079, blend 0.078, Kalshi 0.087,
 Polymarket 0.089 log-loss; 0 Kalshi-book arb minutes, 6 indicative Kalshi × Robinhood minutes
-(Robinhood history is trades, not the book). `arb_engine/store.py` holds the SQLite schema
+(Robinhood history is trades, not the book; Robinhood contract ids are only known for open
+events, so `--week` runs without it). `arb_engine/store.py` holds the SQLite schema
 (`scans`, `quotes`, `inplay_ticks`) and `Store.arb_stats()` for the recorded scans.
 
 ### Maker runner
@@ -203,7 +227,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 150 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 157 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

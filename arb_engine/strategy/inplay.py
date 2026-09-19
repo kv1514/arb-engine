@@ -27,7 +27,7 @@ from ..matching.matcher import MergedEvent
 from ..models import OutcomeQuote
 from ..quant.arbitrage import Leg, max_price_for_leg
 from ..quant.fairvalue import consensus_fair_value
-from ..quant.inplay_fair import BlendedFair, blended_fair
+from ..quant.inplay_fair import BlendedFair, blended_fair, market_confidence_from_spread
 from .alerts import Alerter
 
 
@@ -138,6 +138,19 @@ def game_line(gs: Any) -> Optional[str]:
     return " · ".join(parts)
 
 
+def _best_spread(quotes_by_venue: Any) -> Optional[float]:
+    """Narrowest two-sided book (ask - bid) across venues and outcomes, or None."""
+    best = None
+    for per_outcome in (quotes_by_venue or {}).values():
+        vals = per_outcome.values() if isinstance(per_outcome, dict) else (per_outcome if isinstance(per_outcome, (list, tuple)) else [per_outcome])
+        for q in vals:
+            ask, bid = getattr(q, "ask", None), getattr(q, "bid", None)
+            if ask is not None and bid is not None and ask >= bid:
+                s = ask - bid
+                best = s if best is None else min(best, s)
+    return best
+
+
 def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None) -> InplayView:
     settings = settings or {}
     info = me.info
@@ -168,7 +181,7 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
     live = (gs_status == "live") if gs_status in ("pre", "live", "final") else bool(info.in_play)
     m_wp = model_home_wp(game_state, model)
     e_wp = getattr(game_state, "espn_home_wp", None) if game_state is not None else None
-    blend: BlendedFair = blended_fair(market_probs, m_wp, e_wp, home_o, away_o, weights=blend_weights, live=live)
+    blend: BlendedFair = blended_fair(market_probs, m_wp, e_wp, home_o, away_o, weights=blend_weights, live=live, market_confidence=market_confidence_from_spread(_best_spread(me.quotes_by_venue)))
     fair = {o: blend.fair.get(o) for o in info.outcomes} if blend.fair else {o: market_probs[o] for o in info.outcomes}
     model_probs = {home_o: m_wp, away_o: (1 - m_wp) if m_wp is not None else None}
     espn_probs = {home_o: e_wp, away_o: (1 - e_wp) if e_wp is not None else None}

@@ -1,0 +1,107 @@
+{
+"week": {
+"number": 1
+},
+"season": {
+"type": 2,
+"year": 2026
+},
+"events": [
+{
+"id": "401872656",
+"name": "New England Patriots at Seattle Seahawks",
+"date": "2026-09-10T00:20Z",
+"status": {
+"type": {
+"name": "STATUS_FINAL"
+}
+},
+"competitions": [
+{
+"competitors": [
+{
+"homeAway": "home",
+"team": {
+"abbreviation": "SEA",
+"displayName": "Seattle Seahawks"
+},
+"score": "13"
+},
+{
+"homeAway": "away",
+"team": {
+"abbreviation": "NE",
+"displayName": "New England Patriots"
+},
+"score": "10"
+}
+]
+}
+]
+},
+{
+"id": "401872657",
+"name": "San Francisco 49ers at Los Angeles Rams",
+"date": "2026-09-11T00:35Z",
+"status": {
+"type": {
+"name": "STATUS_FINAL"
+}
+},
+"competitions": [
+{
+"competitors": [
+{
+"homeAway": "home",
+"team": {
+"abbreviation": "LAR",
+"displayName": "Los Angeles Rams"
+},
+"score": "7"
+},
+{
+"homeAway": "away",
+"team": {
+"abbreviation": "SF",
+"displayName": "San Francisco 49ers"
+},
+"score": "27"
+}
+]
+}
+]
+},
+{
+"id": "401872925",
+"name": "Tampa Bay Buccaneers at Cincinnati Bengals",
+"date": "2026-09-13T17:00Z",
+"status": {
+"type": {
+"name": "STATUS_SCHEDULED"
+}
+},
+"competitions": [
+{
+"competitors": [
+{
+"homeAway": "home",
+"team": {
+"abbreviation": "CIN",
+"displayName": "Cincinnati Bengals"
+},
+"score": "33"
+},
+{
+"homeAway": "away",
+"team": {
+"abbreviation": "TB",
+"displayName": "Tampa Bay Buccaneers"
+},
+"score": "27"
+}
+]
+}
+]
+}
+]
+}

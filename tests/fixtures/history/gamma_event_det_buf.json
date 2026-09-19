@@ -1,0 +1,21 @@
+[
+{
+"id": "810546",
+"slug": "nfl-det-buf-2026-09-18",
+"title": "Lions vs. Bills",
+"startDate": "2026-08-07T12:00:28Z",
+"closed": true,
+"markets": [
+{
+"id": "3398287",
+"slug": "nfl-det-buf-2026-09-18",
+"question": "Lions vs. Bills",
+"outcomes": "[\"Lions\", \"Bills\"]",
+"clobTokenIds": "[\"35946349809644018221594766900800697897892667107929166603091569173318790894279\", \"68292865232440391438170820255426555083906992551631182646472978758644386719\"]",
+"sportsMarketType": "moneyline",
+"closed": true,
+"gameStartTime": "2026-09-18 00:15:00+00"
+}
+]
+}
+]
