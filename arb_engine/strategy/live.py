@@ -142,7 +142,10 @@ def _p(x: Optional[float]) -> str:
 
 
 def format_view(v: InplayView) -> str:
-    head = v.game_line or f"{'LIVE' if v.live else 'PRE'} {v.title}"  # game_line already carries LIVE/PRE
+    # Pre-game lines already start with "PRE …"; live lines are "Q3 04:12 · …", so tag those.
+    head = v.game_line or f"{'LIVE' if v.live else 'PRE'} {v.title}"
+    if v.live and not head.startswith("LIVE"):
+        head = "LIVE " + head
     parts = [head]
     for sv in v.sides:
         parts.append(f"    {sv.label:<16} fair {_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}]  best {sv.best_venue or '-':<10} ask {_p(sv.best_ask)} all-in {_p(sv.best_all_in)}  edge {'' if sv.steal_edge is None else f'{sv.steal_edge*100:+.1f}%'}{'  STEAL' if sv.steal else ''}")
