@@ -254,12 +254,26 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 ## Status (2026-09-18)
 
 Live data verified for all three venues; 178 Python tests + 2 JS suites (2,160 fee parity
-vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
-efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
-depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone
-by Friday — the maker runner exists to sit at the prices where they reappear. Tennis on
-Robinhood is Kalshi's book re-sold, so the useful answer there is fee routing. See
-`docs/ROADMAP.md`.
+vectors, background-worker integration incl. totals and category pages) pass; CI runs them on
+Python 3.10–3.13. What the data has said so far:
+
+* **NFL** moneylines are efficient to within fees; the ~1,000 spread/total lines held 16
+  fillable, depth-checked arbs on a Tuesday (Rothera far-tail overs vs Kalshi unders, ≈1 % on
+  capital) that were gone by Friday — the maker runner sits at the prices where they reappear.
+* **College football** (Kalshi × Polymarket × Robinhood/CDNA): 263 moneylines and 10,525
+  spread/total lines on a Friday, 1,384 lines on all three venues, two fillable tail arbs.
+* **In play**, the win-probability model beat every market on NFL week 1 (2,888 plays) and
+  matched ESPN / beat the market consensus on two college weeks (185 games); the STEAL/LOCK
+  simulation says hold-to-settlement entries were +EV and break-even locks were not
+  ([docs/MODEL.md](docs/MODEL.md)). One week each — data points, not a track record.
+* **Tennis** on Robinhood is Kalshi's book re-sold (fee routing only); Kalshi × Polymarket
+  pairs settle walkovers differently and are flagged.
+* **NHL/NBA** are wired for the season (NHL preseason already merges Kalshi × Polymarket).
+
+Everything left on `docs/ROADMAP.md` needs credentials I do not have: a Kalshi key for the
+websocket feed and the demo broker, a Polymarket wallet for auto-hedging, an Odds API key for
+sportsbook consensus — plus one Robinhood order-ticket fee preview to pin the Rothera/CDNA
+exchange fee and Kalshi's cent rounding.
 
 Not investment advice. Prediction-market contracts can lose their full cost; rule
 differences (ties, retirements, postponements) can break a "hedge". Verify every fee and

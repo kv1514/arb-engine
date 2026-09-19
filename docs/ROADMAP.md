@@ -50,3 +50,16 @@ Ordered by expected value for the NFL/tennis focus.
 10. ~~Category-page badges~~ — done 2026-09-18: on `/prediction-markets/<category>/` every
     game card's price buttons get `fair · max` badges (first 16 games, `ARB +x%` when one
     exists); worker `analyzeMany` with a small concurrency and per-URL cache.
+
+## Needs you (2026-09-18)
+
+Every remaining item is blocked on something only the account holder can supply:
+
+| Item | What is needed | Then |
+|---|---|---|
+| 4. Streaming quotes | Kalshi API key (`KALSHI_KEY`, `KALSHI_PRIVATE_KEY_PATH`) — the websocket is authenticated | `maker`/`live` switch from 8 req/s polling to pushed books |
+| 3. Maker runner, demo → live | a Kalshi **demo** key first, then prod with `ARB_LIVE_TRADING=1` | rest real post-only orders at the arb-creating prices |
+| 5. Polymarket auto-hedge | a funded Polymarket wallet + `py-clob-client` | hedge legs on Polymarket instead of alerting |
+| 6. Sportsbook consensus | The Odds API key | sportsbook de-vigged lines as a fourth fair-value source |
+| Fees | one screenshot of a Robinhood order ticket (100 contracts, Rothera and CDNA) before pressing submit | pin the exchange fee and Kalshi's cent-vs-centicent rounding |
+
