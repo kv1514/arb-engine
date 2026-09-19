@@ -24,7 +24,25 @@ from .quant.fairvalue import consensus_fair_value
 from .venues.kalshi import KalshiClient
 from .venues.polymarket import GAMMA, PolymarketAdapter, _f, _jl
 from .matching.normalize import parse_iso
-from .venues.robinhood import LINE_SYMBOL_PREFIXES, RobinhoodAdapter, _event_day_from_timeline, _in_play_from_progress, clean_label
+from .venues.robinhood import LINE_SYMBOL_PREFIXES, RobinhoodAdapter, _event_day_from_timeline, _in_play_from_progress, clean_label, tie_payout_for
+from .matching.teams import TEAM_SPORTS
+
+
+def polymarket_order_meta(m: dict) -> dict[str, Any]:
+    """Order-grid facts the arbitrage math needs from a Gamma market, the same keys the scan
+    adapter sets: ``tick`` (``orderPriceMinTickSize``, 0.001 on tails), ``min_size``
+    (``orderMinSize``, 5 shares) and ``restricted`` (Gamma's US flag -> signal-only row).
+
+    Parity note: every recorded Gamma sports market is ``restricted``, so bridge-mode
+    ``/analyze`` keeps the Polymarket row for the fair value but never uses it as a leg
+    (``signal-only:polymarket``), exactly as ``scan`` does. The overlay's direct mode
+    (``extension/arb-core.js``) does not read this flag yet and can still show a Polymarket
+    leg for the same event until the JS twin consumes ``tests/fixtures/arb_vectors.json``
+    and the compliance table lands (later items)."""
+    out: dict[str, Any] = {"tick": _f(m.get("orderPriceMinTickSize")), "min_size": _f(m.get("orderMinSize"))}
+    if m.get("restricted") is True:
+        out["restricted"] = True
+    return out
 
 _SYM = re.compile(r"^(KX)?([A-Z0-9]+)-(\d{2})([A-Z]{3})(\d{2})([A-Z0-9]+)-([A-Z0-9]+)$")
 
@@ -209,7 +227,10 @@ class EventAnalyzer:
         return None
 
     # ---- analysis -----------------------------------------------------------------------
-    def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0) -> dict[str, Any]:
+    def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, emit_no_side: bool = False, executable_venues: Optional[set[str]] = None) -> dict[str, Any]:
+        """``emit_no_side`` adds the NO side of each Robinhood game contract as its own leg
+        (off: the overlay keeps today's row counts); ``executable_venues`` marks the other
+        venues signal-only (default: ``scanner.resolve_executable_venues(settings)``)."""
         settings = settings or {}
         m = re.search(r"/prediction-markets/([^/]+)/events/([^/?#]+)", url)
         if m:
@@ -229,7 +250,7 @@ class EventAnalyzer:
         contracts_raw = list((ev.get("eventContracts") or {}).values())
         line_types = {mt for c in contracts_raw for pfx, mt in LINE_SYMBOL_PREFIXES.get("nfl", {}).items() if str(c.get("symbol", "")).startswith(pfx)}
         if contracts_raw and len(line_types) == 1:
-            return self.analyze_lines(url, pp, ev, contracts_raw, line_types.pop(), settings=settings, contracts=contracts, target_margin=target_margin)
+            return self.analyze_lines(url, pp, ev, contracts_raw, line_types.pop(), settings=settings, contracts=contracts, target_margin=target_margin, executable_venues=executable_venues)
         if len(contracts_raw) != 2:
             return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name")}, "analysis": None, "note": f"{len(contracts_raw)} contracts — only two-outcome game/match markets are analysed"}
         names = [clean_label(c.get("displayLongName") or c.get("displayShortName") or "") for c in contracts_raw]
@@ -261,10 +282,23 @@ class EventAnalyzer:
         except Exception:
             live = {}
         ssr = pp.get("quotes") or {}
-        for c, o, p in zip(contracts_raw, outcomes, parsed):
+        for i, (c, o, p) in enumerate(zip(contracts_raw, outcomes, parsed)):
             qd = live.get(c["id"]) or ssr.get(c["id"]) or {}
             exch = exchange_from_symbol_or_enum(c.get("symbol"), c.get("exchange"))
-            quotes_by_venue["robinhood"].append(OutcomeQuote(venue="robinhood", venue_market_id=c["id"], event_key=event_key, outcome=o, outcome_label=labels[o], ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size")), fee_params={"exchange": exch, "symbol": c.get("symbol")}, url=url, ts=now, meta={"exchange": exch, "symbol": c.get("symbol")}, book_id="kalshi" if exch == "kalshi" else exch))
+            common = dict(venue="robinhood", event_key=event_key, fee_params={"exchange": exch, "symbol": c.get("symbol")}, url=url, ts=now, book_id="kalshi" if exch == "kalshi" else exch)
+            meta: dict[str, Any] = {"exchange": exch, "symbol": c.get("symbol"), "side": "yes", "contract_id": c["id"]}
+            tie_yes = tie_payout_for(exch, "yes") if sport in TEAM_SPORTS else None
+            if tie_yes is not None:
+                meta["tie_payout"] = tie_yes
+            quotes_by_venue["robinhood"].append(OutcomeQuote(venue_market_id=c["id"], outcome=o, outcome_label=labels[o], ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size")), meta=meta, **common))
+            if emit_no_side and len(outcomes) == 2:
+                # NO on this team is a bet on the other team (Rothera: pays $1 on a tie).
+                other = outcomes[1 - i]
+                no_meta: dict[str, Any] = {"exchange": exch, "symbol": c.get("symbol"), "side": "no", "contract_id": c["id"], "no_of": o}
+                tie_no = tie_payout_for(exch, "no") if sport in TEAM_SPORTS else None
+                if tie_no is not None:
+                    no_meta["tie_payout"] = tie_no
+                quotes_by_venue["robinhood"].append(OutcomeQuote(venue_market_id=c["id"] + "#no", outcome=other, outcome_label=f"NO {labels[o]}", ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size")), meta=no_meta, **common))
 
         errors: list[str] = []
         kq: list[OutcomeQuote] = []
@@ -300,7 +334,7 @@ class EventAnalyzer:
                     continue
                 bid, ask = sides[i]
                 slug_ev = (pm_market.get("events") or [{}])[0].get("slug") or pm_market.get("slug")
-                pq.append(OutcomeQuote(venue="polymarket", venue_market_id=str(tokens[i]) if i < len(tokens) else "", event_key=event_key, outcome=key, outcome_label=label, ask=round(ask, 4) if ask and 0 < ask < 1 else None, bid=round(bid, 4) if bid and 0 < bid < 1 else None, fee_params={"feeSchedule": pm_market.get("feeSchedule"), "feesEnabled": pm_market.get("feesEnabled", True)}, url=f"https://polymarket.com/event/{slug_ev}", ts=now))
+                pq.append(OutcomeQuote(venue="polymarket", venue_market_id=str(tokens[i]) if i < len(tokens) else "", event_key=event_key, outcome=key, outcome_label=label, ask=round(ask, 4) if ask and 0 < ask < 1 else None, bid=round(bid, 4) if bid and 0 < bid < 1 else None, fee_params={"feeSchedule": pm_market.get("feeSchedule"), "feesEnabled": pm_market.get("feesEnabled", True)}, url=f"https://polymarket.com/event/{slug_ev}", ts=now, meta=dict(polymarket_order_meta(pm_market), outcome_index=i)))
             if len(pq) == 2:
                 # Top-of-book sizes: Gamma's bestAsk carries no size, the CLOB book does (needed to
                 # size a STEAL / arb on Polymarket; two small calls).
@@ -319,12 +353,12 @@ class EventAnalyzer:
 
         info = EventInfo(event_key=event_key, sport=sport, market_type="moneyline", outcomes=sorted(outcomes), labels=labels, in_play=_in_play_from_progress(str((pp.get("eventStates") or {}).get(ev.get("id"), {}).get("eventProgress") or "").strip(), None) if isinstance(pp.get("eventStates"), dict) else None)
         from .matching.matcher import MergedEvent
-        from .scanner import analyze_event
+        from .scanner import analyze_event, resolve_executable_venues
 
         me = MergedEvent(event_key=event_key, info=info, quotes_by_venue=quotes_by_venue)
         self.last_event = me  # reused by the in-play watcher and the bridge's /inplay
         self.last_url, self.last_analyzed_at = url, now
-        report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now)
+        report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now, executable_venues=resolve_executable_venues(settings, executable_venues))
         out = asdict(report)
         out["errors"] = errors
         return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name"), "sport": sport, "url": url, "key": event_key}, "analysis": out}
@@ -343,11 +377,12 @@ class EventAnalyzer:
                 return evs[0]
         return None
 
-    def analyze_lines(self, url: str, pp: dict, ev: dict, contracts_raw: list[dict], mtype: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0) -> dict[str, Any]:
+    def analyze_lines(self, url: str, pp: dict, ev: dict, contracts_raw: list[dict], mtype: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, executable_venues: Optional[set[str]] = None) -> dict[str, Any]:
         from .matching.matcher import MergedEvent
-        from .scanner import analyze_event
+        from .scanner import analyze_event, resolve_executable_venues
 
         settings = settings or {}
+        exec_venues = resolve_executable_venues(settings, executable_venues)
         now = time.time()
         sym0 = contracts_raw[0].get("symbol", "")
         p0 = parse_symbol(sym0)
@@ -461,13 +496,13 @@ class EventAnalyzer:
                 tokens = _jl(pm_m.get("clobTokenIds"))
                 purl = f"https://polymarket.com/event/{(pm_event or {}).get('slug')}"
                 qbv["polymarket"] = [
-                    OutcomeQuote(venue="polymarket", venue_market_id=str(tokens[i]) if i < len(tokens) else "", event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(sides[i][1], 4) if sides[i][1] and 0 < sides[i][1] < 1 else None, bid=round(sides[i][0], 4) if sides[i][0] and 0 < sides[i][0] < 1 else None, fee_params={"feeSchedule": pm_m.get("feeSchedule"), "feesEnabled": pm_m.get("feesEnabled", True)}, url=purl, ts=now, meta={"slug": pm_m.get("slug")})
+                    OutcomeQuote(venue="polymarket", venue_market_id=str(tokens[i]) if i < len(tokens) else "", event_key=key, outcome=keys[i], outcome_label=labels[keys[i]], ask=round(sides[i][1], 4) if sides[i][1] and 0 < sides[i][1] < 1 else None, bid=round(sides[i][0], 4) if sides[i][0] and 0 < sides[i][0] < 1 else None, fee_params={"feeSchedule": pm_m.get("feeSchedule"), "feesEnabled": pm_m.get("feesEnabled", True)}, url=purl, ts=now, meta=dict(polymarket_order_meta(pm_m), slug=pm_m.get("slug"), outcome_index=i))
                     for i in range(2)
                 ]
             me = MergedEvent(event_key=key, info=info, quotes_by_venue=qbv)
             self.last_lines = getattr(self, "last_lines", {})
             self.last_lines[key] = me
-            rep = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now)
+            rep = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now, executable_venues=exec_venues)
             d = asdict(rep)
             d["contract_id"] = c["id"]
             d["symbol"] = sym

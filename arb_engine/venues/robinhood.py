@@ -16,6 +16,19 @@ Event metadata: ``/prediction-markets/v1/events?ids=`` and ``/event_state?event_
 
 There is no public order-entry API; the extension overlays this data onto robinhood.com
 and you place orders in the app yourself.
+
+Ties. Rothera's game contracts define the winner by *strictly greater* points with no tie
+clause, so a Rothera YES pays $0 on a tie and a Rothera NO pays $1, unlike Kalshi's $0.50
+per side. That reading comes from the plan rationale, not from a rule we can cite yet: the
+public event blurb does not spell it out (``docs/VENUES.md``: "not spelled out", hence
+``tie_rule="unknown"`` and the ``tie-rule-unverified`` flag), and the certified rules
+document is to be cited by the docs item (P14). Until then treat ``TIE_PAYOUT["rothera"]`` as
+unverified; the flag stays on so a tie-exposed hedge is never presented as clean.
+Every game-winner quote carries ``meta["tie_payout"]`` so the arbitrage math can price the
+tie case, and ``fetch(..., emit_no_side=True)`` additionally emits the NO side of each
+Rothera contract as its own quote on the *other* team (``<id>#no``, ``meta.side="no"``),
+because Kalshi YES-A + Rothera NO-A pays $1.50 on a tie while Kalshi YES-A + Rothera YES-B
+pays only $0.50.
 """
 
 from __future__ import annotations
@@ -65,6 +78,20 @@ LINE_SYMBOL_PREFIXES: dict[str, dict[str, str]] = {
 # CDNA (college) lines share the winner symbol family; the event type tells them apart.
 CDNA_LINE_EVENT_TYPES = {"EVENT_TYPE_SPREAD": "spread", "EVENT_TYPE_TOTALS": "total"}
 CDNA_PREFIX = "NX.F.OPT."
+
+# Dollars a $1 game-winner contract pays if the game ties, by exchange and side. Rothera:
+# derived from the "strictly greater" winner definition (no tie clause) -- unverified against
+# the certified rules, see the module docstring. Kalshi-routed contracts settle on Kalshi's
+# rules ($0.50 per side, docs/VENUES.md). CDNA: unverified, so the $0.50 default applies (no
+# key emitted).
+TIE_PAYOUT: dict[str, dict[str, float]] = {
+    "rothera": {"yes": 0.0, "no": 1.0},
+    "kalshi": {"yes": 0.5, "no": 0.5},
+}
+
+
+def tie_payout_for(exchange: Optional[str], side: str) -> Optional[float]:
+    return (TIE_PAYOUT.get(exchange or "") or {}).get(side)
 
 
 def _f(x: Any) -> Optional[float]:
@@ -205,7 +232,10 @@ class RobinhoodAdapter:
         return out
 
     # ---- normalisation ----------------------------------------------------------------
-    def fetch(self, sport: str) -> VenueSnapshot:
+    def fetch(self, sport: str, emit_no_side: bool = False) -> VenueSnapshot:
+        """``emit_no_side`` adds the NO contract of every game-winner market as its own
+        quote on the other team (see the module docstring); off by default so the bridge and
+        the overlay keep today's row counts until they opt in."""
         snap = VenueSnapshot(venue=self.venue, fetched_at=time.time())
         category = SPORT_CATEGORY.get(sport, sport)
         try:
@@ -223,7 +253,7 @@ class RobinhoodAdapter:
                 quotes.update(self.quotes(ids))
             except Exception as e:
                 snap.errors.append(f"quotes refresh: {e}")
-        self.ingest(snap, sport, category, events, quotes, states)
+        self.ingest(snap, sport, category, events, quotes, states, emit_no_side=emit_no_side)
         if lines:
             self.ingest_lines(snap, sport, category, lines, quotes, states)
         return snap
@@ -263,7 +293,7 @@ class RobinhoodAdapter:
                         break
         return out
 
-    def ingest(self, snap: VenueSnapshot, sport: str, category: str, events: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:
+    def ingest(self, snap: VenueSnapshot, sport: str, category: str, events: list[dict], quotes: dict[str, dict], states: dict[str, dict], emit_no_side: bool = False) -> None:
         for item in events:
             ev, contracts = item["event"], item["contracts"]
             st = states.get(ev.get("id"), {})
@@ -305,15 +335,32 @@ class RobinhoodAdapter:
             for i, c in enumerate(contracts):
                 qd = quotes.get(c["id"]) or {}
                 exch = exchange_from_symbol_or_enum(c.get("symbol"), c.get("exchange"))
+                # Tie payouts only mean something where a tie can happen and the rule is known
+                # (team sports on Rothera / Kalshi); tennis and CDNA keep the default.
+                tie_side = tie_payout_for(exch, "yes") if sport in TEAM_SPORTS else None
+                meta = {"symbol": c.get("symbol"), "exchange": exch, "state": qd.get("state"), "last": _f(qd.get("last_trade_price")), "updated_at": qd.get("updated_at"), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price")), "side": "yes", "contract_id": c["id"]}
+                if tie_side is not None:
+                    meta["tie_payout"] = tie_side
+                common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": c.get("symbol"), "exchange_enum": c.get("exchange")}, url=url, ts=snap.fetched_at, book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
                 q = OutcomeQuote(
-                    venue=self.venue, venue_market_id=c["id"], event_key=key, outcome=codes[i], outcome_label=names[i],
+                    venue_market_id=c["id"], outcome=codes[i], outcome_label=names[i],
                     ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), bid_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")),
-                    fee_params={"exchange": exch, "symbol": c.get("symbol"), "exchange_enum": c.get("exchange")}, url=url, ts=snap.fetched_at,
-                    meta={"symbol": c.get("symbol"), "exchange": exch, "state": qd.get("state"), "last": _f(qd.get("last_trade_price")), "updated_at": qd.get("updated_at"), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price"))},
-                    book_id="kalshi" if exch == "kalshi" else exch,
-                    quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")),
+                    meta=meta, **common,
                 )
                 snap.quotes.append(q)
+                if emit_no_side:
+                    # Buying NO on team i is a bet on the other team; the NO ask's size is the
+                    # YES bid's size (same resting orders seen from the other side).
+                    j = 1 - i
+                    no_meta = {"symbol": c.get("symbol"), "exchange": exch, "state": qd.get("state"), "side": "no", "contract_id": c["id"], "no_of": codes[i]}
+                    tie_no = tie_payout_for(exch, "no") if sport in TEAM_SPORTS else None
+                    if tie_no is not None:
+                        no_meta["tie_payout"] = tie_no
+                    snap.quotes.append(OutcomeQuote(
+                        venue_market_id=c["id"] + "#no", outcome=codes[j], outcome_label=f"NO {names[i]}",
+                        ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")),
+                        meta=no_meta, **common,
+                    ))
 
 
     def ingest_lines(self, snap: VenueSnapshot, sport: str, category: str, items: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:

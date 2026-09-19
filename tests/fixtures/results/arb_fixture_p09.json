@@ -1,0 +1,42 @@
+{
+ "item": "P09",
+ "title": "Tie-aware cross-venue arb metrics on the committed fixture scans",
+ "generated_by": "tests/test_scanner.py::FixtureMetricsTests (re-computed on every run; edit only by regenerating)",
+ "definitions": {
+  "cross_book_pairs": "two-leg combinations across different order books for a two-outcome moneyline event (scanner.cross_book_pairs)",
+  "kalshi_x_rothera_pairs": "pairs with one Kalshi leg and one Rothera (Robinhood) leg, YES or NO",
+  "kalshi_x_rothera_negative_tie_margin": "of those, pairs whose tie_margin < 0 (Kalshi YES + Rothera YES: $0.50 on a tie); previously invisible",
+  "arbs": "pairs with margin > 0 at 100 contracts",
+  "arbs_negative_tie_margin": "arbs that lose money if the game ties",
+  "rothera_no_leg_dominates": "outcomes where the Rothera NO contract on the other team is at or below the Rothera YES ask (strictly better: same win payout, $1 vs $0 on a tie)",
+  "reports_with_no_leg_chosen": "scan reports whose chosen legs include a Robinhood NO contract",
+  "tie_rule_mismatch_flags": "reports flagged tie-rule-mismatch (chosen legs settle a tie differently)",
+  "below_min_size_flags": "reports flagged below-min-size (a leg's venue minimum exceeds what is on offer)"
+ },
+ "fixtures": {
+  "nfl": {
+   "moneyline_events": 2,
+   "cross_book_pairs": 10,
+   "kalshi_x_rothera_pairs": 4,
+   "kalshi_x_rothera_negative_tie_margin": 2,
+   "arbs": 0,
+   "arbs_negative_tie_margin": 0,
+   "rothera_no_leg_dominates": 4,
+   "reports_with_no_leg_chosen": 1,
+   "tie_rule_mismatch_flags": 0,
+   "below_min_size_flags": 0
+  },
+  "ncaaf": {
+   "moneyline_events": 3,
+   "cross_book_pairs": 20,
+   "kalshi_x_rothera_pairs": 0,
+   "kalshi_x_rothera_negative_tie_margin": 0,
+   "arbs": 0,
+   "arbs_negative_tie_margin": 0,
+   "rothera_no_leg_dominates": 0,
+   "reports_with_no_leg_chosen": 1,
+   "tie_rule_mismatch_flags": 0,
+   "below_min_size_flags": 0
+  }
+ }
+}

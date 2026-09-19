@@ -558,16 +558,19 @@ class LineEdgeTests(unittest.TestCase):
 
     def test_line_fair_needs_twice_the_edge(self):
         # fair 0.56 vs all-in ~0.518 (0.50 + fee): +4.2% clears 3% but not the 6% line rule.
-        v = evaluate_inplay(self._line_me(0.56, 0.50), [], steal_edge=0.03)
+        v = evaluate_inplay(self._line_me(0.56, 0.50), [], settings={"line_fair": True}, steal_edge=0.03)
         fav = _side(v, "KC-2.5")
         self.assertAlmostEqual(fav.fair, 0.56)
         self.assertAlmostEqual(fav.steal_threshold, 0.06)
         self.assertGreater(fav.steal_edge, 0.03)
         self.assertFalse(fav.steal)
         self.assertEqual(v.blend["weights"], {"line": 1.0})
-        v2 = evaluate_inplay(self._line_me(0.60, 0.50), [], steal_edge=0.03)
+        v2 = evaluate_inplay(self._line_me(0.60, 0.50), [], settings={"line_fair": True}, steal_edge=0.03)
         self.assertTrue(_side(v2, "KC-2.5").steal)
         self.assertTrue(any("[line 2x edge]" in a for a in v2.actions))
+        # The knob is off by default (shared with scanner.py's line_fair): the attached fair is ignored.
+        v3 = evaluate_inplay(self._line_me(0.56, 0.50), [], steal_edge=0.03)
+        self.assertNotEqual(v3.blend["weights"], {"line": 1.0})
 
     def test_moneyline_ignores_line_fair(self):
         me = _me(r_kc=(0.28, 0.30))

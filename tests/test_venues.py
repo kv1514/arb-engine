@@ -6,7 +6,7 @@ import unittest
 from arb_engine.models import Book
 from arb_engine.venues.kalshi import KalshiAdapter, KalshiClient, build_order_payload, parse_orderbook
 from arb_engine.venues.polymarket import PolymarketAdapter, parse_clob_book
-from arb_engine.venues.robinhood import RobinhoodAdapter, _in_play_from_progress, clean_label, extract_next_data
+from arb_engine.venues.robinhood import RobinhoodAdapter, _in_play_from_progress, clean_label, extract_next_data, tie_payout_for
 
 from .helpers import FakeHttp, load
 
@@ -188,6 +188,32 @@ class RobinhoodAdapterTests(unittest.TestCase):
         self.assertEqual(info.start_time.isoformat(), "2026-09-18T00:15:00+00:00")
         self.assertTrue(any("quotes/v1" in c for c in self.http.calls))
 
+    def test_moneyline_quotes_carry_tie_payouts_and_optional_no_side(self):
+        snap = self.adapter.fetch("nfl")
+        ml = [q for q in snap.quotes if q.event_key == "nfl:BUF|DET:2026-09-17"]
+        self.assertEqual(len(ml), 2)  # default: today's row count (bridge/overlay unchanged)
+        self.assertEqual({q.meta["side"] for q in ml}, {"yes"})
+        self.assertEqual({q.meta["tie_payout"] for q in ml}, {0.0})  # Rothera YES pays nothing on a tie
+        snap = self.adapter.fetch("nfl", emit_no_side=True)
+        ml = {q.venue_market_id: q for q in snap.quotes if q.event_key == "nfl:BUF|DET:2026-09-17"}
+        self.assertEqual(len(ml), 4)
+        det = next(q for q in ml.values() if q.outcome == "DET" and q.meta["side"] == "yes")
+        no_det = ml[det.venue_market_id + "#no"]
+        self.assertEqual((no_det.outcome, no_det.meta["side"], no_det.meta["tie_payout"], no_det.meta["no_of"]), ("BUF", "no", 1.0, "DET"))
+        self.assertEqual(no_det.outcome_label, "NO Detroit")
+        self.assertEqual((no_det.ask, no_det.bid), (0.68, 0.66))      # no_ask_price / no_bid_price
+        self.assertEqual(no_det.ask_size, det.bid_size)              # the NO ask is the YES bid seen from the other side
+        self.assertEqual((no_det.book_id, no_det.fee_params["exchange"]), ("rothera", "rothera"))
+        # Every event gets its two NO rows; line markets are untouched (already YES/NO).
+        self.assertEqual(sum(1 for q in snap.quotes if q.venue_market_id.endswith("#no") and q.meta.get("no_of")), 4)
+        self.assertEqual(sum(1 for q in snap.quotes if q.event_key == "nfl:BUF|DET:2026-09-17:total:49.5"), 2)
+
+    def test_tie_payout_table(self):
+        self.assertEqual((tie_payout_for("rothera", "yes"), tie_payout_for("rothera", "no")), (0.0, 1.0))
+        self.assertEqual((tie_payout_for("kalshi", "yes"), tie_payout_for("kalshi", "no")), (0.5, 0.5))
+        self.assertIsNone(tie_payout_for("cdna", "yes"))   # unverified -> the $0.50 default applies downstream
+        self.assertIsNone(tie_payout_for(None, "yes"))
+
     def test_kalshi_routed_contract_shares_kalshi_book(self):
         ev = json.loads(json.dumps(self.pp["events"][0]))
         for c in ev["eventContracts"].values():
@@ -200,6 +226,10 @@ class RobinhoodAdapterTests(unittest.TestCase):
         self.assertEqual({q.book_id for q in snap2.quotes}, {"kalshi"})
         self.assertEqual({q.fee_params["exchange"] for q in snap2.quotes}, {"kalshi"})
         self.assertEqual({q.book_id for q in snap.quotes}, {"rothera"})
+        self.assertEqual({q.meta["tie_payout"] for q in snap2.quotes}, {0.5})  # Kalshi's rules: $0.50 per side
+        snap3 = VenueSnapshot(venue="robinhood")
+        RobinhoodAdapter(http=self.http, refresh_quotes=False).ingest(snap3, "nfl", "nfl", [{"event": ev, "contracts": list(ev["eventContracts"].values())}], self.pp["quotes"], self.pp["eventStates"], emit_no_side=True)
+        self.assertEqual({q.meta["tie_payout"] for q in snap3.quotes if q.meta["side"] == "no"}, {0.5})
 
     def test_progress_parsing(self):
         self.assertFalse(_in_play_from_progress("Sep 16", "EVENT_STATUS_UPCOMING"))

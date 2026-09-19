@@ -70,7 +70,7 @@ SETTINGS: dict[str, tuple[str, Any, Callable[[str], Any], str]] = {
     "inplay_stale_after_s": ("INPLAY_STALE_AFTER_S", 15.0, float, "seconds without an ESPN state change (while a venue mid moves) before STEAL/LOCK are gated as feed-stale"),
     "inplay_delay_haircut_cdna": ("INPLAY_DELAY_HAIRCUT_CDNA", 0.02, float, "extra edge a STEAL on a CDNA-routed Robinhood contract needs, for its 3 s order delay"),
     "inplay_slate_cap": ("INPLAY_SLATE_CAP", None, float, "dollars the live slate may deploy per tick across every STEAL (default: the bankroll); stakes scale proportionally"),
-    "line_fair": ("LINE_FAIR", True, lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), "use the line (spread/total) fair value attached to an event when one is; STEAL on lines then needs 2x the edge (set 0 to ignore attached line fairs)"),
+    "line_fair": ("LINE_FAIR", False, lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), "scan(): attach quant.lines fair values to spread/total events when that module exists"),  # same key/default as scanner.py: one knob attaches AND uses line fairs
 }
 if _declare_setting is not None:
     for _k, (_env, _default, _cast, _doc) in SETTINGS.items():
@@ -534,7 +534,7 @@ def _line_fair(me: MergedEvent, settings: Optional[dict[str, Any]]) -> Optional[
     P13's quant.lines): ``me.line_fair`` or ``info.venues['_line_fair']``. Moneylines never."""
     if me.info.market_type not in ("spread", "total"):
         return None
-    if not setting(settings, "line_fair", True):  # the documented knob: LINE_FAIR=0 disables the rule
+    if not setting(settings, "line_fair", False):  # the one line_fair knob (shared with scanner.py) turns this on
         return None
     lf = getattr(me, "line_fair", None) or (me.info.venues or {}).get("_line_fair")
     if isinstance(lf, dict) and lf.get("fair") and isinstance(lf.get("fair"), dict):

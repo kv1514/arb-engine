@@ -1,0 +1,1127 @@
+{
+ "notes": "Vectors for quant/arbitrage.py and its JS twin (extension/arb-core.js). Prices in dollars per $1 contract. Each leg's fee is {venue, params, settings} exactly as fee_vectors.json spells it; tie_payout defaults to 0.5 when absent; legs may carry ask_size, book [[price,size],...] and min_size for the sizing vectors. Expected values come from the Python implementation; compare floats to 1e-9.",
+ "evaluate": [
+  {
+   "name": "kalshi_yesA_rothera_yesB_tie_loses",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.52,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5,
+     "side": "yes"
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.47,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.0,
+     "side": "yes"
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 102.75,
+    "profit": -2.75,
+    "margin": -0.0275,
+    "is_arb": false,
+    "gross_sum": 0.99,
+    "tie_payout_total": 0.5,
+    "tie_margin": -0.5275
+   }
+  },
+  {
+   "name": "kalshi_yesA_rothera_noA_tie_wins",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.52,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5,
+     "side": "yes"
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.47,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 1.0,
+     "side": "no"
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 102.75,
+    "profit": -2.75,
+    "margin": -0.0275,
+    "is_arb": false,
+    "gross_sum": 0.99,
+    "tie_payout_total": 1.5,
+    "tie_margin": 0.4725
+   }
+  },
+  {
+   "name": "default_tie_payout_equals_margin",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 97.94,
+    "profit": 2.06,
+    "margin": 0.0206,
+    "is_arb": true,
+    "gross_sum": 0.95,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0206
+   }
+  },
+  {
+   "name": "gross_arb_killed_by_fees",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.26,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.73,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 101.342,
+    "profit": -1.342,
+    "margin": -0.01342,
+    "is_arb": false,
+    "gross_sum": 0.99,
+    "tie_payout_total": 1.0,
+    "tie_margin": -0.01342
+   }
+  },
+  {
+   "name": "two_rothera_no_legs",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "robinhood",
+     "price": 0.77,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 1.0,
+     "side": "no"
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.25,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 1.0,
+     "side": "no"
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 106.0,
+    "profit": -6.0,
+    "margin": -0.06,
+    "is_arb": false,
+    "gross_sum": 1.02,
+    "tie_payout_total": 2.0,
+    "tie_margin": 0.94
+   }
+  },
+  {
+   "name": "fee_free_ten_contracts",
+   "contracts": 10,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "book",
+     "price": 0.48,
+     "fee": {
+      "venue": "book",
+      "params": {}
+     },
+     "role": "taker",
+     "tie_payout": 0.5
+    },
+    {
+     "outcome": "B",
+     "venue": "book",
+     "price": 0.5,
+     "fee": {
+      "venue": "book",
+      "params": {}
+     },
+     "role": "taker",
+     "tie_payout": 0.5
+    }
+   ],
+   "expected": {
+    "contracts": 10.0,
+    "total_cost": 9.8,
+    "profit": 0.2,
+    "margin": 0.02,
+    "is_arb": true,
+    "gross_sum": 0.98,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.02
+   }
+  },
+  {
+   "name": "odd_size_rounding",
+   "contracts": 7,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.61,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.36,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 1.0,
+     "side": "no"
+    }
+   ],
+   "expected": {
+    "contracts": 7.0,
+    "total_cost": 7.05,
+    "profit": -0.05,
+    "margin": -0.007142857142857143,
+    "is_arb": false,
+    "gross_sum": 0.97,
+    "tie_payout_total": 1.5,
+    "tie_margin": 0.4928571428571429
+   }
+  },
+  {
+   "name": "kalshi_maker_leg",
+   "contracts": 100,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "maker",
+     "tie_payout": 0.5
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.44,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.0
+    }
+   ],
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 101.44,
+    "profit": -1.44,
+    "margin": -0.0144,
+    "is_arb": false,
+    "gross_sum": 0.99,
+    "tie_payout_total": 0.5,
+    "tie_margin": -0.5144
+   }
+  },
+  {
+   "name": "polymarket_tail_pair",
+   "contracts": 1000,
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.004,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.98,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5
+    }
+   ],
+   "expected": {
+    "contracts": 1000.0,
+    "total_cost": 985.5792,
+    "profit": 14.4208,
+    "margin": 0.0144208,
+    "is_arb": true,
+    "gross_sum": 0.984,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0144208
+   }
+  }
+ ],
+ "max_price": [
+  {
+   "name": "rothera_vs_polymarket_0.25",
+   "others": [
+    {
+     "outcome": "TEN",
+     "venue": "polymarket",
+     "price": 0.25,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "robinhood",
+    "params": {
+     "exchange": "rothera"
+    },
+    "settings": {
+     "robinhood_gold": false
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.01,
+   "role": "taker",
+   "expected": 0.72
+  },
+  {
+   "name": "kalshi_target_0.01",
+   "others": [
+    {
+     "outcome": "TEN",
+     "venue": "polymarket",
+     "price": 0.25,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "kalshi",
+    "params": {
+     "fee_type": "quadratic_with_maker_fees",
+     "fee_multiplier": 1
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.01,
+   "tick": 0.01,
+   "role": "taker",
+   "expected": 0.71
+  },
+  {
+   "name": "kalshi_maker",
+   "others": [
+    {
+     "outcome": "TEN",
+     "venue": "polymarket",
+     "price": 0.25,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "kalshi",
+    "params": {
+     "fee_type": "quadratic_with_maker_fees",
+     "fee_multiplier": 1
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.01,
+   "role": "maker",
+   "expected": 0.73
+  },
+  {
+   "name": "polymarket_tail_tick_0.001",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.97,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "polymarket",
+    "params": {
+     "feeSchedule": {
+      "rate": 0.05,
+      "exponent": 1,
+      "takerOnly": true
+     },
+     "feesEnabled": true
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.001,
+   "role": "taker",
+   "expected": 0.026
+  },
+  {
+   "name": "polymarket_tail_tick_0.001_vs_rothera",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "robinhood",
+     "price": 0.955,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "polymarket",
+    "params": {
+     "feeSchedule": {
+      "rate": 0.05,
+      "exponent": 1,
+      "takerOnly": true
+     },
+     "feesEnabled": true
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.001,
+   "role": "taker",
+   "expected": 0.029
+  },
+  {
+   "name": "polymarket_tick_0.001_mid",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.4,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "polymarket",
+    "params": {
+     "feeSchedule": {
+      "rate": 0.05,
+      "exponent": 1,
+      "takerOnly": true
+     },
+     "feesEnabled": true
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.001,
+   "role": "taker",
+   "expected": 0.57
+  },
+  {
+   "name": "impossible",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.99,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "kalshi",
+    "params": {
+     "fee_type": "quadratic_with_maker_fees",
+     "fee_multiplier": 1
+    }
+   },
+   "contracts": 100,
+   "target_margin": 0.05,
+   "tick": 0.01,
+   "role": "taker",
+   "expected": null
+  },
+  {
+   "name": "cap_0.99",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "book",
+     "price": 0.01,
+     "fee": {
+      "venue": "book",
+      "params": {}
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "book",
+    "params": {}
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.01,
+   "role": "taker",
+   "expected": 0.99
+  },
+  {
+   "name": "tick_0.001_floor_is_one_tick",
+   "others": [
+    {
+     "outcome": "A",
+     "venue": "book",
+     "price": 0.997,
+     "fee": {
+      "venue": "book",
+      "params": {}
+     },
+     "role": "taker"
+    }
+   ],
+   "fee": {
+    "venue": "book",
+    "params": {}
+   },
+   "contracts": 100,
+   "target_margin": 0.0,
+   "tick": 0.001,
+   "role": "taker",
+   "expected": 0.003
+  }
+ ],
+ "size": [
+  {
+   "name": "step_5_top_of_book",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "ask_size": 33
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "ask_size": 500
+    }
+   ],
+   "step": 5.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": {
+    "contracts": 30.0,
+    "total_cost": 29.38,
+    "profit": 0.62,
+    "margin": 0.020666666666666667,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.020666666666666667
+   }
+  },
+  {
+   "name": "min_size_5_only_3_on_offer",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "ask_size": 3,
+     "min_size": 5
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "ask_size": 500
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": null
+  },
+  {
+   "name": "min_size_5_twelve_on_offer",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "ask_size": 12,
+     "min_size": 5
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "ask_size": 500
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": {
+    "contracts": 12.0,
+    "total_cost": 11.754,
+    "profit": 0.246,
+    "margin": 0.0205,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0205
+   }
+  },
+  {
+   "name": "book_breakpoints",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "book": [
+      [
+       0.4,
+       100
+      ],
+      [
+       0.6,
+       1000
+      ]
+     ]
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "book": [
+      [
+       0.55,
+       1000
+      ]
+     ]
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 97.94,
+    "profit": 2.06,
+    "margin": 0.0206,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0206
+   }
+  },
+  {
+   "name": "book_breakpoints_step_5",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "book": [
+      [
+       0.4,
+       103
+      ],
+      [
+       0.6,
+       1000
+      ]
+     ]
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "book": [
+      [
+       0.55,
+       1000
+      ]
+     ]
+    }
+   ],
+   "step": 5.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": {
+    "contracts": 100.0,
+    "total_cost": 97.94,
+    "profit": 2.06,
+    "margin": 0.0206,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0206
+   }
+  },
+  {
+   "name": "tie_margin_reported_at_size",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "kalshi",
+     "price": 0.4,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "tie_payout": 0.5,
+     "ask_size": 40
+    },
+    {
+     "outcome": "B",
+     "venue": "robinhood",
+     "price": 0.55,
+     "fee": {
+      "venue": "robinhood",
+      "params": {
+       "exchange": "rothera"
+      },
+      "settings": {
+       "robinhood_gold": false
+      }
+     },
+     "role": "taker",
+     "tie_payout": 1.0,
+     "side": "no",
+     "ask_size": 1000
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.0,
+   "max_contracts": null,
+   "expected": {
+    "contracts": 40.0,
+    "total_cost": 39.48,
+    "profit": 0.52,
+    "margin": 0.013,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.5,
+    "tie_margin": 0.513
+   }
+  },
+  {
+   "name": "max_contracts_cap",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.4,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker"
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.55,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker"
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.0,
+   "max_contracts": 25,
+   "expected": {
+    "contracts": 25.0,
+    "total_cost": 24.49,
+    "profit": 0.51,
+    "margin": 0.0204,
+    "is_arb": true,
+    "gross_sum": 0.9500000000000001,
+    "tie_payout_total": 1.0,
+    "tie_margin": 0.0204
+   }
+  },
+  {
+   "name": "no_size_clears_min_margin",
+   "legs": [
+    {
+     "outcome": "A",
+     "venue": "polymarket",
+     "price": 0.49,
+     "fee": {
+      "venue": "polymarket",
+      "params": {
+       "feeSchedule": {
+        "rate": 0.05,
+        "exponent": 1,
+        "takerOnly": true
+       },
+       "feesEnabled": true
+      }
+     },
+     "role": "taker",
+     "ask_size": 100
+    },
+    {
+     "outcome": "B",
+     "venue": "kalshi",
+     "price": 0.49,
+     "fee": {
+      "venue": "kalshi",
+      "params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     "role": "taker",
+     "ask_size": 100
+    }
+   ],
+   "step": 1.0,
+   "min_margin": 0.05,
+   "max_contracts": null,
+   "expected": null
+  }
+ ]
+}
