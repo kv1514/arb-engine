@@ -1,0 +1,34 @@
+{
+ "trades": [
+  {
+   "trade_id": "t002",
+   "ticker": "KXNFLGAME-26SEP14DETBUF-BUF",
+   "count": 7,
+   "yes_price": 57,
+   "no_price": 43,
+   "taker_side": "yes",
+   "created_time": "2026-09-14T17:04:26.345924Z"
+  },
+  {
+   "trade_id": "t001",
+   "ticker": "KXNFLGAME-26SEP14DETBUF-BUF",
+   "count": 6,
+   "yes_price": 56,
+   "no_price": 44,
+   "taker_side": "yes",
+   "created_time": "2026-09-14T17:03:49.345801Z",
+   "yes_price_dollars": "0.5600",
+   "count_fp": "6.00"
+  },
+  {
+   "trade_id": "t000",
+   "ticker": "KXNFLGAME-26SEP14DETBUF-BUF",
+   "count": 5,
+   "yes_price": 55,
+   "no_price": 45,
+   "taker_side": "no",
+   "created_time": "2026-09-14T17:03:12.345678Z"
+  }
+ ],
+ "cursor": ""
+}

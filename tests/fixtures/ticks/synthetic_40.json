@@ -1,0 +1,3381 @@
+{
+ "event_key": "nfl:DEN|KC:2026-09-21",
+ "sport": "nfl",
+ "home": "KC",
+ "away": "DEN",
+ "description": "40 polls at 10 s: stale-feed episode (10-15), score before play id (16-17), review + reversal (23-27), genuine RH DEN steal (32-34), final (39)",
+ "ticks": [
+  {
+   "ts": 1800000000.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 500,
+    "game_seconds_remaining": 1400,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1799999999.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1799999999.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1799999999.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1799999999.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000010.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 495,
+    "game_seconds_remaining": 1395,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000009.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000009.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000009.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000009.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000020.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 490,
+    "game_seconds_remaining": 1390,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000019.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000019.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000019.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000019.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000030.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 485,
+    "game_seconds_remaining": 1385,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000029.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000029.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000029.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000029.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000040.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 480,
+    "game_seconds_remaining": 1380,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000039.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000039.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000039.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000039.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000050.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 475,
+    "game_seconds_remaining": 1375,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000049.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000049.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000049.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000049.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000060.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 470,
+    "game_seconds_remaining": 1370,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000059.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000059.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000059.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000059.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000070.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 465,
+    "game_seconds_remaining": 1365,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000069.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000069.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000069.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000069.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000080.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 460,
+    "game_seconds_remaining": 1360,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000079.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000079.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000079.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000079.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000090.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.35,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000089.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.65,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000089.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000089.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000089.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000100.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.31,
+      "ask": 0.33,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000099.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.67,
+      "ask": 0.69,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000099.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.33,
+      "ask": 0.36,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000099.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.64,
+      "ask": 0.67,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000099.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000110.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.29,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000109.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.71,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000109.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.28,
+      "ask": 0.31,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000109.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.69,
+      "ask": 0.72,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000109.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000120.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.24,
+      "ask": 0.26,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000119.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.74,
+      "ask": 0.76,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000119.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.24,
+      "ask": 0.27,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000119.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.73,
+      "ask": 0.76,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000119.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000130.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.22,
+      "ask": 0.24,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000129.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.76,
+      "ask": 0.78,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000129.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.23,
+      "ask": 0.26,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000129.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.74,
+      "ask": 0.77,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000129.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000140.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.22,
+      "ask": 0.24,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000139.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.76,
+      "ask": 0.78,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000139.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.23,
+      "ask": 0.26,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000139.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.74,
+      "ask": 0.77,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000139.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000150.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 17,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 455,
+    "game_seconds_remaining": 1355,
+    "possession": "away",
+    "down": 2,
+    "distance": 7,
+    "yardline_100": 45,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.35,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.22,
+      "ask": 0.24,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000149.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.76,
+      "ask": 0.78,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000149.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.23,
+      "ask": 0.26,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000149.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.74,
+      "ask": 0.77,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000149.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000160.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 380,
+    "game_seconds_remaining": 1280,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000159.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000159.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000159.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000159.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000170.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 375,
+    "game_seconds_remaining": 1275,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p100",
+    "last_play_text": "play p100"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000169.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000169.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000169.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000169.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000180.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 370,
+    "game_seconds_remaining": 1270,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p101",
+    "last_play_text": "play p101"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000179.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000179.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000179.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000179.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000190.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 365,
+    "game_seconds_remaining": 1265,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p101",
+    "last_play_text": "play p101"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000189.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000189.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000189.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000189.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000200.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 360,
+    "game_seconds_remaining": 1260,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p101",
+    "last_play_text": "play p101"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000199.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000199.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000199.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000199.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000210.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 355,
+    "game_seconds_remaining": 1255,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p101",
+    "last_play_text": "play p101"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000209.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000209.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000209.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000209.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000220.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 350,
+    "game_seconds_remaining": 1250,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.21,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p101",
+    "last_play_text": "play p101"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.21,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000219.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.79,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000219.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.19,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000219.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.81,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000219.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000230.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 21,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 300,
+    "game_seconds_remaining": 1200,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.36,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p110",
+    "last_play_text": "play p110",
+    "review_pending": true,
+    "suspect": true,
+    "state_source": "scoreboard"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.29,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000229.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.71,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000229.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.3,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000229.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.7,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000229.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000240.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 21,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 300,
+    "game_seconds_remaining": 1200,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.36,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p110",
+    "last_play_text": "play p110",
+    "review_pending": true,
+    "suspect": false,
+    "state_source": "scoreboard"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.29,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000239.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.71,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000239.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.3,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000239.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.7,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000239.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000250.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 21,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 300,
+    "game_seconds_remaining": 1200,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.36,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p110",
+    "last_play_text": "play p110",
+    "review_pending": true,
+    "suspect": false,
+    "state_source": "scoreboard"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.29,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000249.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.71,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000249.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.3,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000249.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.7,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000249.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000260.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 21,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 300,
+    "game_seconds_remaining": 1200,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.36,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p110",
+    "last_play_text": "play p110",
+    "review_pending": true,
+    "suspect": false,
+    "state_source": "scoreboard"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.29,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000259.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.71,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000259.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.27,
+      "ask": 0.3,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000259.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.7,
+      "ask": 0.73,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000259.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000270.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 295,
+    "game_seconds_remaining": 1195,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 35,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.18,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p111",
+    "last_play_text": "play p111"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.19,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000269.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.81,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000269.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.2,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000269.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.8,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000269.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000280.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 290,
+    "game_seconds_remaining": 1190,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 35,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.18,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p111",
+    "last_play_text": "play p111"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.19,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000279.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.81,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000279.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.2,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000279.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.8,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000279.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000290.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 3,
+    "clock_seconds_remaining_in_period": 285,
+    "game_seconds_remaining": 1185,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 35,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.18,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p112",
+    "last_play_text": "play p112"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.19,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000289.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.81,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000289.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.17,
+      "ask": 0.2,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000289.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.8,
+      "ask": 0.83,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000289.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000300.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 300,
+    "game_seconds_remaining": 300,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 60,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.1,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p120",
+    "last_play_text": "play p120"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000299.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000299.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.11,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000299.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.89,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000299.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000310.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 295,
+    "game_seconds_remaining": 295,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 60,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.1,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p120",
+    "last_play_text": "play p120"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000309.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000309.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.11,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000309.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.89,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000309.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000320.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 290,
+    "game_seconds_remaining": 290,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 60,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.1,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p121",
+    "last_play_text": "play p121"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000319.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000319.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.2,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000319.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.8,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000319.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000330.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 285,
+    "game_seconds_remaining": 285,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 60,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.1,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p121",
+    "last_play_text": "play p121"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000329.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000329.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.2,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000329.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.8,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000329.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000340.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 280,
+    "game_seconds_remaining": 280,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 60,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.1,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p121",
+    "last_play_text": "play p121"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000339.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000339.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.2,
+      "ask": 0.22,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000339.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.78,
+      "ask": 0.8,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000339.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000350.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 275,
+    "game_seconds_remaining": 275,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 55,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.09,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p122",
+    "last_play_text": "play p122"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.07,
+      "ask": 0.09,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000349.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.91,
+      "ask": 0.93,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000349.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000349.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000349.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000360.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 270,
+    "game_seconds_remaining": 270,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 55,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.09,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p122",
+    "last_play_text": "play p122"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.07,
+      "ask": 0.09,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000359.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.91,
+      "ask": 0.93,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000359.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000359.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000359.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000370.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 265,
+    "game_seconds_remaining": 265,
+    "possession": "home",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 55,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.09,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p122",
+    "last_play_text": "play p122"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.07,
+      "ask": 0.09,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000369.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.91,
+      "ask": 0.93,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000369.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.08,
+      "ask": 0.1,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000369.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.9,
+      "ask": 0.92,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000369.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000380.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "live",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 120,
+    "game_seconds_remaining": 120,
+    "possession": "away",
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 50,
+    "home_timeouts": 0,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.02,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p130",
+    "last_play_text": "play p130"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.01,
+      "ask": 0.03,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000379.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.97,
+      "ask": 0.99,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000379.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.01,
+      "ask": 0.03,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000379.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.97,
+      "ask": 0.99,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000379.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "ts": 1800000390.0,
+   "state": {
+    "event_id": "401",
+    "home": "KC",
+    "away": "DEN",
+    "home_score": 14,
+    "away_score": 24,
+    "status": "final",
+    "period": 4,
+    "clock_seconds_remaining_in_period": 0,
+    "game_seconds_remaining": 0,
+    "possession": null,
+    "down": 1,
+    "distance": 10,
+    "yardline_100": 75,
+    "home_timeouts": 3,
+    "away_timeouts": 2,
+    "espn_home_wp": 0.0,
+    "vegas_spread_home": -3.0,
+    "last_play_id": "p140",
+    "last_play_text": "play p140"
+   },
+   "quotes": {
+    "kalshi": [
+     {
+      "outcome": "KC",
+      "bid": 0.01,
+      "ask": 0.02,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000389.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-KC",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.98,
+      "ask": 0.99,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000389.0,
+      "book_id": "kalshi",
+      "venue_market_id": "kalshi-DEN",
+      "fee_params": {
+       "fee_type": "quadratic_with_maker_fees",
+       "fee_multiplier": 1
+      }
+     }
+    ],
+    "robinhood": [
+     {
+      "outcome": "KC",
+      "bid": 0.01,
+      "ask": 0.02,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000389.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-KC",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     },
+     {
+      "outcome": "DEN",
+      "bid": 0.98,
+      "ask": 0.99,
+      "bid_size": 200,
+      "ask_size": 150,
+      "quote_time": 1800000389.0,
+      "book_id": "rothera",
+      "venue_market_id": "robinhood-DEN",
+      "fee_params": {
+       "exchange": "rothera"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
