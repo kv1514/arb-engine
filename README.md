@@ -46,6 +46,7 @@ book (taker) or as a resting order (maker, lower fees on Kalshi, none on Polymar
 | `arb_engine/scanner.py` | Sport-wide scan: merge → fees → arbs/edges/max-buy; an arb must be **fillable** (≥ 1 contract at quoted depth); `--books` runs a second pass with real order books for candidate events and reports the profit-maximising size. Flags live matches, stale snapshots, thin quotes and same-book quotes. |
 | `arb_engine/eventlookup.py`, `bridge.py` | One Robinhood event across venues; local HTTP server for the overlay. |
 | `arb_engine/execution` | Kalshi order plans + executor with three safety gates (dry-run → demo → prod needs `ARB_LIVE_TRADING=1`). |
+| `arb_engine/venues/espn.py`, `arb_engine/models/wp.py` | Live NFL game state from ESPN (score, clock, situation, timeouts, ESPN WP, DraftKings line) and the in-game win-probability model (XGBoost on nflverse play-by-play, stdlib inference; `scripts/train_wp_model.py` retrains). |
 | `arb_engine/strategy` | **Maker runner**: rests post-only Kalshi orders at the price where a fill *creates* an arb against the cheapest hedge elsewhere, re-prices/cancels as the hedge moves, and fires a HEDGE-NOW alert (bell, macOS notification, webhook, JSONL journal) with the exact hedge instruction when a fill lands. Paper broker (simulated fills from live prices), demo and live Kalshi brokers. |
 | `extension/` | Chrome MV3 overlay for `robinhood.com/us/en/prediction-markets/…/events/…`: panel + badges with fair value, all-in cost, edge, max-buy; direct mode or via the bridge. |
 | `.mcp.json` | Wires the [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi) MCP server so Claude Code / Codex can browse and (with your keys) trade Kalshi. |
@@ -76,20 +77,29 @@ python -m arb_engine kelly --bankroll 2000 --fair 0.58 --cost 0.53
 python -m arb_engine bridge                           # serves the overlay on 127.0.0.1:8765
 ```
 
-### In-play: buy one side, wait, lock the other on the dip
+### In-play: live game state + win-probability model
 
 ```bash
+python -m arb_engine games                       # this week's NFL games: status, score, situation, spread, model P(home)
 python -m arb_engine inplay "https://robinhood.com/us/en/prediction-markets/nfl/events/<game>/" --position robinhood:DEN:0.50:100 --once
 python -m arb_engine inplay "<game url>" --position robinhood:DEN:0.50:100 --position robinhood:DEN:0.40:100   # keeps watching
 ```
 
-Prints, per side: what you hold and its all-in average, the consensus fair value, the
-cheapest venue's all-in, and — for the side you are short of — the **lock price**: the most
-you can pay for it (fees included) so that the pair pays $1 either way for less than you
-spent. Alerts `LOCK NOW` when that price is available and `STEAL` when a side's all-in is
-below fair by `--steal-edge`. In-play the "fair" is the market consensus across venues, not
-a game model. Plain-English fee mechanics and the Chiefs/Broncos worked example:
-[docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
+Every tick pulls the venues' quotes **and** ESPN's live game state (score, clock,
+possession, down & distance, field position, timeouts, ESPN's own win probability, the
+DraftKings line) and scores our **in-game win-probability model** on it. The model is an
+XGBoost stack trained on nflverse play-by-play 2016–2024; on the held-out 2025 season it
+matches nflfastR's `vegas_wp` (log-loss 0.475 vs 0.477, Brier 0.158 vs 0.159, ECE 0.02) —
+see [docs/MODEL.md](docs/MODEL.md). Inference is stdlib (`arb_engine/models/wp.py`).
+
+Fair value in play = blend of **market consensus** (0.50), **model** (0.35) and **ESPN**
+(0.15), renormalised over what is available; pre-game the market alone. Per side it prints
+what you hold and its all-in average, the fair with its three sources, the cheapest venue,
+and — for the side you are short of — the **lock price**: the most you can pay (fees
+included) so the pair pays $1 either way for less than you spent. Alerts `LOCK NOW` when
+that price is available and `STEAL` when a side is below fair by `--steal-edge` **and the
+model agrees** (a stale quote on one venue cannot trigger it alone). Plain-English fee
+mechanics and the Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
 
 ### Maker runner
 
@@ -122,12 +132,18 @@ Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADI
 
 ### Robinhood overlay
 
-1. `chrome://extensions` → Developer mode → **Load unpacked** → select `extension/`.
+1. `chrome://extensions` → **Developer mode** (toggle, top-right) → **Load unpacked** → select the
+   folder named **`extension`** *inside* this repo (`…/arb-engine/extension`), not the repo
+   root. Run `python3 scripts/check_extension.py` first; it must print `PASS`. Install steps,
+   Chrome error strings and debugging: [docs/EXTENSION.md](docs/EXTENSION.md).
 2. Open any game/match page under `robinhood.com/us/en/prediction-markets/…/events/…`.
 3. The panel (bottom-right) shows per outcome: consensus fair value, each venue's ask/bid,
    fee per contract, all-in cost, and max-buy prices; contract tabs get a badge. On a
    game's **Spread** or **Totals** page it lists every line (arbs first) with your all-in
    cost, the max price to pay here, the cheapest hedge for the other side and the margin.
+   With the bridge running, game pages also get a **LIVE strip**: score/clock/situation,
+   model vs market vs ESPN fair per side, and LOCK/STEAL hints for the lots you enter in
+   the popup. If "Load unpacked" fails, see [docs/EXTENSION.md](docs/EXTENSION.md).
 4. Optional but recommended: run `python -m arb_engine bridge` — the extension detects it and
    lets the Python engine do the modelling (popup → "Local engine bridge").
 

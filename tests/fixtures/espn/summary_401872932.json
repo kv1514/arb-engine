@@ -1,0 +1,2058 @@
+{
+ "format": {
+  "regulation": {
+   "periods": 4,
+   "displayName": "Quarter",
+   "slug": "quarter",
+   "clock": 900.0
+  },
+  "overtime": {
+   "periods": 1,
+   "displayName": "sudden-death",
+   "slug": "sudden-death",
+   "clock": 600.0
+  },
+  "suddenDeath": {
+   "periods": 1,
+   "clock": 600.0
+  }
+ },
+ "header": {
+  "id": "401872932",
+  "season": {
+   "year": 2026,
+   "current": true,
+   "type": 2
+  },
+  "week": 2,
+  "competitions": [
+   {
+    "id": "401872932",
+    "date": "2026-09-18T00:15Z",
+    "neutralSite": false,
+    "liveAvailable": false,
+    "status": {
+     "type": {
+      "id": "3",
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "Final",
+      "detail": "Final",
+      "shortDetail": "Final"
+     },
+     "isTBDFlex": false
+    },
+    "competitors": [
+     {
+      "id": "2",
+      "order": 0,
+      "homeAway": "home",
+      "winner": true,
+      "score": "41",
+      "possession": false,
+      "linescores": [
+       {
+        "displayValue": "14"
+       },
+       {
+        "displayValue": "13"
+       },
+       {
+        "displayValue": "7"
+       },
+       {
+        "displayValue": "7"
+       }
+      ],
+      "team": {
+       "id": "2",
+       "location": "Buffalo",
+       "name": "Bills",
+       "abbreviation": "BUF",
+       "displayName": "Buffalo Bills"
+      }
+     },
+     {
+      "id": "8",
+      "order": 1,
+      "homeAway": "away",
+      "winner": false,
+      "score": "31",
+      "possession": false,
+      "linescores": [
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "10"
+       },
+       {
+        "displayValue": "7"
+       },
+       {
+        "displayValue": "14"
+       }
+      ],
+      "team": {
+       "id": "8",
+       "location": "Detroit",
+       "name": "Lions",
+       "abbreviation": "DET",
+       "displayName": "Detroit Lions"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "pickcenter": [
+  {
+   "details": "BUF -5.5",
+   "overUnder": 54.5,
+   "spread": -5.5,
+   "overOdds": -118.0,
+   "underOdds": -102.0,
+   "provider": {
+    "id": "100",
+    "name": "Draft Kings"
+   },
+   "homeTeamOdds": {
+    "favorite": true,
+    "underdog": false,
+    "moneyLine": -245,
+    "spreadOdds": -105.0,
+    "teamId": "2",
+    "favoriteAtOpen": true
+   },
+   "awayTeamOdds": {
+    "favorite": false,
+    "underdog": true,
+    "moneyLine": 200,
+    "spreadOdds": -115.0,
+    "teamId": "8",
+    "favoriteAtOpen": false
+   },
+   "pointSpread": {
+    "home": {
+     "open": {
+      "line": "-3",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "-5.5",
+      "odds": "-105"
+     }
+    },
+    "away": {
+     "open": {
+      "line": "+3",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "+5.5",
+      "odds": "-115"
+     }
+    }
+   },
+   "moneyline": {
+    "home": {
+     "open": {
+      "odds": "-162"
+     },
+     "close": {
+      "odds": "-245"
+     }
+    },
+    "away": {
+     "open": {
+      "odds": "+136"
+     },
+     "close": {
+      "odds": "+200"
+     }
+    }
+   },
+   "total": {
+    "over": {
+     "open": {
+      "line": "o52.5",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "o54.5",
+      "odds": "-118"
+     }
+    },
+    "under": {
+     "open": {
+      "line": "u52.5",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "u54.5",
+      "odds": "-102"
+     }
+    }
+   }
+  }
+ ],
+ "odds": [],
+ "winprobability": [
+  {
+   "homeWinPercentage": 0.668,
+   "tiePercentage": 0.0,
+   "playId": "4018729321"
+  },
+  {
+   "homeWinPercentage": 0.6736,
+   "tiePercentage": 0.0,
+   "playId": "40187293240"
+  },
+  {
+   "homeWinPercentage": 0.6904,
+   "tiePercentage": 0.0,
+   "playId": "40187293274"
+  },
+  {
+   "homeWinPercentage": 0.6949,
+   "tiePercentage": 0.0,
+   "playId": "40187293299"
+  },
+  {
+   "homeWinPercentage": 0.6628,
+   "tiePercentage": 0.0,
+   "playId": "401872932121"
+  },
+  {
+   "homeWinPercentage": 0.7086,
+   "tiePercentage": 0.0,
+   "playId": "401872932156"
+  },
+  {
+   "homeWinPercentage": 0.6923,
+   "tiePercentage": 0.0,
+   "playId": "401872932194"
+  },
+  {
+   "homeWinPercentage": 0.7248,
+   "tiePercentage": 0.0,
+   "playId": "401872932216"
+  },
+  {
+   "homeWinPercentage": 0.7431,
+   "tiePercentage": 0.0,
+   "playId": "401872932243"
+  },
+  {
+   "homeWinPercentage": 0.7595,
+   "tiePercentage": 0.0,
+   "playId": "401872932273"
+  },
+  {
+   "homeWinPercentage": 0.7802,
+   "tiePercentage": 0.0,
+   "playId": "401872932295"
+  },
+  {
+   "homeWinPercentage": 0.7929,
+   "tiePercentage": 0.0,
+   "playId": "401872932317"
+  },
+  {
+   "homeWinPercentage": 0.7945,
+   "tiePercentage": 0.0,
+   "playId": "401872932348"
+  },
+  {
+   "homeWinPercentage": 0.7822,
+   "tiePercentage": 0.0,
+   "playId": "401872932355"
+  },
+  {
+   "homeWinPercentage": 0.7901,
+   "tiePercentage": 0.0,
+   "playId": "401872932379"
+  },
+  {
+   "homeWinPercentage": 0.7986,
+   "tiePercentage": 0.0,
+   "playId": "401872932404"
+  },
+  {
+   "homeWinPercentage": 0.8199,
+   "tiePercentage": 0.0,
+   "playId": "401872932426"
+  },
+  {
+   "homeWinPercentage": 0.8115,
+   "tiePercentage": 0.0,
+   "playId": "401872932446"
+  },
+  {
+   "homeWinPercentage": 0.8115,
+   "tiePercentage": 0.0,
+   "playId": "401872932456"
+  },
+  {
+   "homeWinPercentage": 0.7981,
+   "tiePercentage": 0.0,
+   "playId": "401872932466"
+  },
+  {
+   "homeWinPercentage": 0.8002,
+   "tiePercentage": 0.0,
+   "playId": "401872932496"
+  },
+  {
+   "homeWinPercentage": 0.8207,
+   "tiePercentage": 0.0,
+   "playId": "401872932518"
+  },
+  {
+   "homeWinPercentage": 0.8102,
+   "tiePercentage": 0.0,
+   "playId": "401872932548"
+  },
+  {
+   "homeWinPercentage": 0.843,
+   "tiePercentage": 0.0,
+   "playId": "401872932570"
+  },
+  {
+   "homeWinPercentage": 0.8248,
+   "tiePercentage": 0.0,
+   "playId": "401872932595"
+  },
+  {
+   "homeWinPercentage": 0.8157,
+   "tiePercentage": 0.0,
+   "playId": "401872932617"
+  },
+  {
+   "homeWinPercentage": 0.8971,
+   "tiePercentage": 0.0,
+   "playId": "401872932640"
+  },
+  {
+   "homeWinPercentage": 0.9073,
+   "tiePercentage": 0.0,
+   "playId": "401872932674"
+  },
+  {
+   "homeWinPercentage": 0.891,
+   "tiePercentage": 0.0,
+   "playId": "401872932681"
+  },
+  {
+   "homeWinPercentage": 0.8807,
+   "tiePercentage": 0.0,
+   "playId": "401872932711"
+  },
+  {
+   "homeWinPercentage": 0.867,
+   "tiePercentage": 0.0,
+   "playId": "401872932733"
+  },
+  {
+   "homeWinPercentage": 0.8978,
+   "tiePercentage": 0.0,
+   "playId": "401872932760"
+  },
+  {
+   "homeWinPercentage": 0.9103,
+   "tiePercentage": 0.0,
+   "playId": "401872932790"
+  },
+  {
+   "homeWinPercentage": 0.9196,
+   "tiePercentage": 0.0,
+   "playId": "401872932817"
+  },
+  {
+   "homeWinPercentage": 0.9198,
+   "tiePercentage": 0.0,
+   "playId": "401872932833"
+  },
+  {
+   "homeWinPercentage": 0.9281,
+   "tiePercentage": 0.0,
+   "playId": "401872932848"
+  },
+  {
+   "homeWinPercentage": 0.9247,
+   "tiePercentage": 0.0,
+   "playId": "401872932877"
+  },
+  {
+   "homeWinPercentage": 0.9253,
+   "tiePercentage": 0.0,
+   "playId": "401872932900"
+  },
+  {
+   "homeWinPercentage": 0.9255,
+   "tiePercentage": 0.0,
+   "playId": "401872932922"
+  },
+  {
+   "homeWinPercentage": 0.9318,
+   "tiePercentage": 0.0,
+   "playId": "401872932942"
+  },
+  {
+   "homeWinPercentage": 0.9465,
+   "tiePercentage": 0.0,
+   "playId": "401872932972"
+  },
+  {
+   "homeWinPercentage": 0.9459,
+   "tiePercentage": 0.0,
+   "playId": "401872932997"
+  },
+  {
+   "homeWinPercentage": 0.9407,
+   "tiePercentage": 0.0,
+   "playId": "4018729321022"
+  },
+  {
+   "homeWinPercentage": 0.9514,
+   "tiePercentage": 0.0,
+   "playId": "4018729321045"
+  },
+  {
+   "homeWinPercentage": 0.9533,
+   "tiePercentage": 0.0,
+   "playId": "4018729321083"
+  },
+  {
+   "homeWinPercentage": 0.9534,
+   "tiePercentage": 0.0,
+   "playId": "4018729321100"
+  },
+  {
+   "homeWinPercentage": 0.9528,
+   "tiePercentage": 0.0,
+   "playId": "4018729321117"
+  },
+  {
+   "homeWinPercentage": 0.9623,
+   "tiePercentage": 0.0,
+   "playId": "4018729321146"
+  },
+  {
+   "homeWinPercentage": 0.9628,
+   "tiePercentage": 0.0,
+   "playId": "4018729321180"
+  },
+  {
+   "homeWinPercentage": 0.9604,
+   "tiePercentage": 0.0,
+   "playId": "4018729321187"
+  },
+  {
+   "homeWinPercentage": 0.9611,
+   "tiePercentage": 0.0,
+   "playId": "4018729321225"
+  },
+  {
+   "homeWinPercentage": 0.9562,
+   "tiePercentage": 0.0,
+   "playId": "4018729321247"
+  },
+  {
+   "homeWinPercentage": 0.9651,
+   "tiePercentage": 0.0,
+   "playId": "4018729321277"
+  },
+  {
+   "homeWinPercentage": 0.9667,
+   "tiePercentage": 0.0,
+   "playId": "4018729321310"
+  },
+  {
+   "homeWinPercentage": 0.9611,
+   "tiePercentage": 0.0,
+   "playId": "4018729321332"
+  },
+  {
+   "homeWinPercentage": 0.953,
+   "tiePercentage": 0.0,
+   "playId": "4018729321357"
+  },
+  {
+   "homeWinPercentage": 0.9595,
+   "tiePercentage": 0.0,
+   "playId": "4018729321379"
+  },
+  {
+   "homeWinPercentage": 0.953,
+   "tiePercentage": 0.0,
+   "playId": "4018729321401"
+  },
+  {
+   "homeWinPercentage": 0.9477,
+   "tiePercentage": 0.0,
+   "playId": "4018729321423"
+  },
+  {
+   "homeWinPercentage": 0.9525,
+   "tiePercentage": 0.0,
+   "playId": "4018729321448"
+  },
+  {
+   "homeWinPercentage": 0.9405,
+   "tiePercentage": 0.0,
+   "playId": "4018729321471"
+  },
+  {
+   "homeWinPercentage": 0.9338,
+   "tiePercentage": 0.0,
+   "playId": "4018729321501"
+  },
+  {
+   "homeWinPercentage": 0.9197,
+   "tiePercentage": 0.0,
+   "playId": "4018729321523"
+  },
+  {
+   "homeWinPercentage": 0.9189,
+   "tiePercentage": 0.0,
+   "playId": "4018729321557"
+  },
+  {
+   "homeWinPercentage": 0.9237,
+   "tiePercentage": 0.0,
+   "playId": "4018729321564"
+  },
+  {
+   "homeWinPercentage": 0.9337,
+   "tiePercentage": 0.0,
+   "playId": "4018729321594"
+  },
+  {
+   "homeWinPercentage": 0.9543,
+   "tiePercentage": 0.0,
+   "playId": "4018729321626"
+  },
+  {
+   "homeWinPercentage": 0.9574,
+   "tiePercentage": 0.0,
+   "playId": "4018729321653"
+  },
+  {
+   "homeWinPercentage": 0.9443,
+   "tiePercentage": 0.0,
+   "playId": "4018729321675"
+  },
+  {
+   "homeWinPercentage": 0.9444,
+   "tiePercentage": 0.0,
+   "playId": "4018729321694"
+  },
+  {
+   "homeWinPercentage": 0.9702,
+   "tiePercentage": 0.0,
+   "playId": "4018729321712"
+  },
+  {
+   "homeWinPercentage": 0.9634,
+   "tiePercentage": 0.0,
+   "playId": "4018729321763"
+  },
+  {
+   "homeWinPercentage": 0.9594,
+   "tiePercentage": 0.0,
+   "playId": "4018729321786"
+  },
+  {
+   "homeWinPercentage": 0.9639,
+   "tiePercentage": 0.0,
+   "playId": "4018729321811"
+  },
+  {
+   "homeWinPercentage": 0.9555,
+   "tiePercentage": 0.0,
+   "playId": "4018729321834"
+  },
+  {
+   "homeWinPercentage": 0.9556,
+   "tiePercentage": 0.0,
+   "playId": "4018729321847"
+  },
+  {
+   "homeWinPercentage": 0.9621,
+   "tiePercentage": 0.0,
+   "playId": "4018729321859"
+  },
+  {
+   "homeWinPercentage": 0.9718,
+   "tiePercentage": 0.0,
+   "playId": "4018729321904"
+  },
+  {
+   "homeWinPercentage": 0.9717,
+   "tiePercentage": 0.0,
+   "playId": "4018729321914"
+  },
+  {
+   "homeWinPercentage": 0.9702,
+   "tiePercentage": 0.0,
+   "playId": "4018729321924"
+  },
+  {
+   "homeWinPercentage": 0.971,
+   "tiePercentage": 0.0,
+   "playId": "4018729321957"
+  },
+  {
+   "homeWinPercentage": 0.635,
+   "tiePercentage": 0.0,
+   "playId": "4018729321971"
+  },
+  {
+   "homeWinPercentage": 0.9738,
+   "tiePercentage": 0.0,
+   "playId": "4018729321985"
+  },
+  {
+   "homeWinPercentage": 0.9752,
+   "tiePercentage": 0.0,
+   "playId": "4018729322017"
+  },
+  {
+   "homeWinPercentage": 0.9741,
+   "tiePercentage": 0.0,
+   "playId": "4018729322051"
+  },
+  {
+   "homeWinPercentage": 0.9718,
+   "tiePercentage": 0.0,
+   "playId": "4018729322074"
+  },
+  {
+   "homeWinPercentage": 0.9677,
+   "tiePercentage": 0.0,
+   "playId": "4018729322100"
+  },
+  {
+   "homeWinPercentage": 0.9674,
+   "tiePercentage": 0.0,
+   "playId": "4018729322123"
+  },
+  {
+   "homeWinPercentage": 0.9697,
+   "tiePercentage": 0.0,
+   "playId": "4018729322143"
+  },
+  {
+   "homeWinPercentage": 0.9667,
+   "tiePercentage": 0.0,
+   "playId": "4018729322166"
+  },
+  {
+   "homeWinPercentage": 0.9677,
+   "tiePercentage": 0.0,
+   "playId": "4018729322179"
+  },
+  {
+   "homeWinPercentage": 0.9622,
+   "tiePercentage": 0.0,
+   "playId": "4018729322191"
+  },
+  {
+   "homeWinPercentage": 0.9656,
+   "tiePercentage": 0.0,
+   "playId": "4018729322207"
+  },
+  {
+   "homeWinPercentage": 0.9656,
+   "tiePercentage": 0.0,
+   "playId": "4018729322223"
+  },
+  {
+   "homeWinPercentage": 0.9689,
+   "tiePercentage": 0.0,
+   "playId": "4018729322253"
+  },
+  {
+   "homeWinPercentage": 0.9581,
+   "tiePercentage": 0.0,
+   "playId": "4018729322277"
+  },
+  {
+   "homeWinPercentage": 0.9586,
+   "tiePercentage": 0.0,
+   "playId": "4018729322302"
+  },
+  {
+   "homeWinPercentage": 0.9529,
+   "tiePercentage": 0.0,
+   "playId": "4018729322330"
+  },
+  {
+   "homeWinPercentage": 0.9525,
+   "tiePercentage": 0.0,
+   "playId": "4018729322347"
+  },
+  {
+   "homeWinPercentage": 0.9626,
+   "tiePercentage": 0.0,
+   "playId": "4018729322363"
+  },
+  {
+   "homeWinPercentage": 0.9533,
+   "tiePercentage": 0.0,
+   "playId": "4018729322390"
+  },
+  {
+   "homeWinPercentage": 0.9443,
+   "tiePercentage": 0.0,
+   "playId": "4018729322408"
+  },
+  {
+   "homeWinPercentage": 0.9516,
+   "tiePercentage": 0.0,
+   "playId": "4018729322431"
+  },
+  {
+   "homeWinPercentage": 0.9466,
+   "tiePercentage": 0.0,
+   "playId": "4018729322453"
+  },
+  {
+   "homeWinPercentage": 0.9361,
+   "tiePercentage": 0.0,
+   "playId": "4018729322483"
+  },
+  {
+   "homeWinPercentage": 0.9446,
+   "tiePercentage": 0.0,
+   "playId": "4018729322523"
+  },
+  {
+   "homeWinPercentage": 0.9489,
+   "tiePercentage": 0.0,
+   "playId": "4018729322551"
+  },
+  {
+   "homeWinPercentage": 0.9563,
+   "tiePercentage": 0.0,
+   "playId": "4018729322573"
+  },
+  {
+   "homeWinPercentage": 0.9225,
+   "tiePercentage": 0.0,
+   "playId": "4018729322598"
+  },
+  {
+   "homeWinPercentage": 0.9276,
+   "tiePercentage": 0.0,
+   "playId": "4018729322623"
+  },
+  {
+   "homeWinPercentage": 0.9105,
+   "tiePercentage": 0.0,
+   "playId": "4018729322645"
+  },
+  {
+   "homeWinPercentage": 0.9034,
+   "tiePercentage": 0.0,
+   "playId": "4018729322681"
+  },
+  {
+   "homeWinPercentage": 0.8826,
+   "tiePercentage": 0.0,
+   "playId": "4018729322706"
+  },
+  {
+   "homeWinPercentage": 0.8808,
+   "tiePercentage": 0.0,
+   "playId": "4018729322740"
+  },
+  {
+   "homeWinPercentage": 0.8831,
+   "tiePercentage": 0.0,
+   "playId": "4018729322747"
+  },
+  {
+   "homeWinPercentage": 0.8967,
+   "tiePercentage": 0.0,
+   "playId": "4018729322777"
+  },
+  {
+   "homeWinPercentage": 0.8952,
+   "tiePercentage": 0.0,
+   "playId": "4018729322799"
+  },
+  {
+   "homeWinPercentage": 0.899,
+   "tiePercentage": 0.0,
+   "playId": "4018729322821"
+  },
+  {
+   "homeWinPercentage": 0.8998,
+   "tiePercentage": 0.0,
+   "playId": "4018729322843"
+  },
+  {
+   "homeWinPercentage": 0.9053,
+   "tiePercentage": 0.0,
+   "playId": "4018729322865"
+  },
+  {
+   "homeWinPercentage": 0.9147,
+   "tiePercentage": 0.0,
+   "playId": "4018729322890"
+  },
+  {
+   "homeWinPercentage": 0.9051,
+   "tiePercentage": 0.0,
+   "playId": "4018729322917"
+  },
+  {
+   "homeWinPercentage": 0.9213,
+   "tiePercentage": 0.0,
+   "playId": "4018729322937"
+  },
+  {
+   "homeWinPercentage": 0.9267,
+   "tiePercentage": 0.0,
+   "playId": "4018729322962"
+  },
+  {
+   "homeWinPercentage": 0.9151,
+   "tiePercentage": 0.0,
+   "playId": "4018729322986"
+  },
+  {
+   "homeWinPercentage": 0.9178,
+   "tiePercentage": 0.0,
+   "playId": "4018729322998"
+  },
+  {
+   "homeWinPercentage": 0.9396,
+   "tiePercentage": 0.0,
+   "playId": "4018729323009"
+  },
+  {
+   "homeWinPercentage": 0.9406,
+   "tiePercentage": 0.0,
+   "playId": "4018729323050"
+  },
+  {
+   "homeWinPercentage": 0.9606,
+   "tiePercentage": 0.0,
+   "playId": "4018729323072"
+  },
+  {
+   "homeWinPercentage": 0.9673,
+   "tiePercentage": 0.0,
+   "playId": "4018729323102"
+  },
+  {
+   "homeWinPercentage": 0.9769,
+   "tiePercentage": 0.0,
+   "playId": "4018729323135"
+  },
+  {
+   "homeWinPercentage": 0.9774,
+   "tiePercentage": 0.0,
+   "playId": "4018729323166"
+  },
+  {
+   "homeWinPercentage": 0.9737,
+   "tiePercentage": 0.0,
+   "playId": "4018729323173"
+  },
+  {
+   "homeWinPercentage": 0.9778,
+   "tiePercentage": 0.0,
+   "playId": "4018729323203"
+  },
+  {
+   "homeWinPercentage": 0.9599,
+   "tiePercentage": 0.0,
+   "playId": "4018729323230"
+  },
+  {
+   "homeWinPercentage": 0.961,
+   "tiePercentage": 0.0,
+   "playId": "4018729323260"
+  },
+  {
+   "homeWinPercentage": 0.9665,
+   "tiePercentage": 0.0,
+   "playId": "4018729323280"
+  },
+  {
+   "homeWinPercentage": 0.9675,
+   "tiePercentage": 0.0,
+   "playId": "4018729323310"
+  },
+  {
+   "homeWinPercentage": 0.9552,
+   "tiePercentage": 0.0,
+   "playId": "4018729323332"
+  },
+  {
+   "homeWinPercentage": 0.9429,
+   "tiePercentage": 0.0,
+   "playId": "4018729323357"
+  },
+  {
+   "homeWinPercentage": 0.9519,
+   "tiePercentage": 0.0,
+   "playId": "4018729323387"
+  },
+  {
+   "homeWinPercentage": 0.977,
+   "tiePercentage": 0.0,
+   "playId": "4018729323409"
+  },
+  {
+   "homeWinPercentage": 0.9779,
+   "tiePercentage": 0.0,
+   "playId": "4018729323432"
+  },
+  {
+   "homeWinPercentage": 0.9538,
+   "tiePercentage": 0.0,
+   "playId": "4018729323456"
+  },
+  {
+   "homeWinPercentage": 0.9524,
+   "tiePercentage": 0.0,
+   "playId": "4018729323490"
+  },
+  {
+   "homeWinPercentage": 0.9658,
+   "tiePercentage": 0.0,
+   "playId": "4018729323517"
+  },
+  {
+   "homeWinPercentage": 0.9483,
+   "tiePercentage": 0.0,
+   "playId": "4018729323539"
+  },
+  {
+   "homeWinPercentage": 0.938,
+   "tiePercentage": 0.0,
+   "playId": "4018729323573"
+  },
+  {
+   "homeWinPercentage": 0.9441,
+   "tiePercentage": 0.0,
+   "playId": "4018729323607"
+  },
+  {
+   "homeWinPercentage": 0.9516,
+   "tiePercentage": 0.0,
+   "playId": "4018729323614"
+  },
+  {
+   "homeWinPercentage": 0.9416,
+   "tiePercentage": 0.0,
+   "playId": "4018729323639"
+  },
+  {
+   "homeWinPercentage": 0.9501,
+   "tiePercentage": 0.0,
+   "playId": "4018729323662"
+  },
+  {
+   "homeWinPercentage": 0.9631,
+   "tiePercentage": 0.0,
+   "playId": "4018729323687"
+  },
+  {
+   "homeWinPercentage": 0.9605,
+   "tiePercentage": 0.0,
+   "playId": "4018729323709"
+  },
+  {
+   "homeWinPercentage": 0.9581,
+   "tiePercentage": 0.0,
+   "playId": "4018729323731"
+  },
+  {
+   "homeWinPercentage": 0.9468,
+   "tiePercentage": 0.0,
+   "playId": "4018729323754"
+  },
+  {
+   "homeWinPercentage": 0.9557,
+   "tiePercentage": 0.0,
+   "playId": "4018729323777"
+  },
+  {
+   "homeWinPercentage": 0.9564,
+   "tiePercentage": 0.0,
+   "playId": "4018729323787"
+  },
+  {
+   "homeWinPercentage": 0.9646,
+   "tiePercentage": 0.0,
+   "playId": "4018729323797"
+  },
+  {
+   "homeWinPercentage": 0.9697,
+   "tiePercentage": 0.0,
+   "playId": "4018729323827"
+  },
+  {
+   "homeWinPercentage": 0.9804,
+   "tiePercentage": 0.0,
+   "playId": "4018729323849"
+  },
+  {
+   "homeWinPercentage": 0.9731,
+   "tiePercentage": 0.0,
+   "playId": "4018729323872"
+  },
+  {
+   "homeWinPercentage": 0.9741,
+   "tiePercentage": 0.0,
+   "playId": "4018729323888"
+  },
+  {
+   "homeWinPercentage": 0.9683,
+   "tiePercentage": 0.0,
+   "playId": "4018729323903"
+  },
+  {
+   "homeWinPercentage": 0.9687,
+   "tiePercentage": 0.0,
+   "playId": "4018729323932"
+  },
+  {
+   "homeWinPercentage": 0.9869,
+   "tiePercentage": 0.0,
+   "playId": "4018729323954"
+  },
+  {
+   "homeWinPercentage": 0.9814,
+   "tiePercentage": 0.0,
+   "playId": "4018729323987"
+  },
+  {
+   "homeWinPercentage": 0.9951,
+   "tiePercentage": 0.0,
+   "playId": "4018729324014"
+  },
+  {
+   "homeWinPercentage": 0.997,
+   "tiePercentage": 0.0,
+   "playId": "4018729324038"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324071"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324101"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324132"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324139"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324174"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324197"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324217"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324240"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324270"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324283"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324295"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324313"
+  },
+  {
+   "homeWinPercentage": 0.9983,
+   "tiePercentage": 0.0,
+   "playId": "4018729324330"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324379"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324402"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324413"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324424"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324464"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324486"
+  },
+  {
+   "homeWinPercentage": 0.999,
+   "tiePercentage": 0.0,
+   "playId": "4018729324508"
+  },
+  {
+   "homeWinPercentage": 1.0,
+   "tiePercentage": 0.0,
+   "playId": "4018729324530"
+  }
+ ],
+ "drives": {
+  "previous": [
+   {
+    "id": "40187293217",
+    "description": "7 plays, 68 yards, 1:08",
+    "start": {
+     "period": {
+      "type": "quarter",
+      "number": 4
+     },
+     "clock": {
+      "displayValue": "2:50"
+     },
+     "yardLine": 68,
+     "text": "DET 32"
+    },
+    "end": {
+     "period": {
+      "type": "quarter",
+      "number": 4
+     },
+     "clock": {
+      "displayValue": "1:42"
+     },
+     "yardLine": 0,
+     "text": "BUF 0"
+    },
+    "timeElapsed": {
+     "displayValue": "1:08"
+    },
+    "yards": 68,
+    "isScore": true,
+    "offensivePlays": 7,
+    "result": "TD",
+    "displayResult": "Touchdown",
+    "team": {
+     "id": "8",
+     "name": "Lions",
+     "abbreviation": "DET",
+     "displayName": "Detroit Lions"
+    },
+    "plays": [
+     {
+      "id": "4018729324139",
+      "sequenceNumber": "413900",
+      "text": "T.Bass kicks 56 yards from BUF 35 to DET 9. T.Kennedy pushed ob at DET 32 for 23 yards (D.Igbinosun).",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:50"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:15:26Z",
+      "statYardage": 23,
+      "isTurnover": false,
+      "type": {
+       "id": "53",
+       "text": "Kickoff",
+       "abbreviation": "K"
+      },
+      "start": {
+       "down": 0,
+       "distance": 0,
+       "yardLine": 35,
+       "yardsToEndzone": 65,
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 68,
+       "yardsToEndzone": 68,
+       "downDistanceText": "1st & 10 at DET 32",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 32",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324174",
+      "sequenceNumber": "417400",
+      "text": "(Shotgun) J.Goff pass incomplete short right to J.Gibbs.",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:45"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:16:04Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "3",
+       "text": "Pass Incompletion"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 68,
+       "yardsToEndzone": 68,
+       "downDistanceText": "1st & 10 at DET 32",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 32",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 2,
+       "distance": 10,
+       "yardLine": 68,
+       "yardsToEndzone": 68,
+       "downDistanceText": "2nd & 10 at DET 32",
+       "shortDownDistanceText": "2nd & 10",
+       "possessionText": "DET 32",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324197",
+      "sequenceNumber": "419700",
+      "text": "(Shotgun) J.Goff sacked at DET 24 for -8 yards (sack split by M.Hoecht and B.Chubb).",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:41"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:16:37Z",
+      "statYardage": -8,
+      "isTurnover": false,
+      "type": {
+       "id": "7",
+       "text": "Sack"
+      },
+      "start": {
+       "down": 2,
+       "distance": 10,
+       "yardLine": 68,
+       "yardsToEndzone": 68,
+       "downDistanceText": "2nd & 10 at DET 32",
+       "shortDownDistanceText": "2nd & 10",
+       "possessionText": "DET 32",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 3,
+       "distance": 18,
+       "yardLine": 76,
+       "yardsToEndzone": 76,
+       "downDistanceText": "3rd & 18 at DET 24",
+       "shortDownDistanceText": "3rd & 18",
+       "possessionText": "DET 24",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324217",
+      "sequenceNumber": "421700",
+      "text": "(No Huddle, Shotgun) J.Goff pass incomplete deep middle to A.St. Brown.",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:16"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:17:02Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "3",
+       "text": "Pass Incompletion"
+      },
+      "start": {
+       "down": 3,
+       "distance": 18,
+       "yardLine": 76,
+       "yardsToEndzone": 76,
+       "downDistanceText": "3rd & 18 at DET 24",
+       "shortDownDistanceText": "3rd & 18",
+       "possessionText": "DET 24",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 4,
+       "distance": 18,
+       "yardLine": 76,
+       "yardsToEndzone": 76,
+       "downDistanceText": "4th & 18 at DET 24",
+       "shortDownDistanceText": "4th & 18",
+       "possessionText": "DET 24",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324240",
+      "sequenceNumber": "424000",
+      "text": "(Shotgun) J.Goff pass deep left to I.TeSlaa pushed ob at DET 44 for 20 yards (C.Benford).",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:12"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:17:37Z",
+      "statYardage": 20,
+      "isTurnover": false,
+      "type": {
+       "id": "24",
+       "text": "Pass Reception",
+       "abbreviation": "REC"
+      },
+      "start": {
+       "down": 4,
+       "distance": 18,
+       "yardLine": 76,
+       "yardsToEndzone": 76,
+       "downDistanceText": "4th & 18 at DET 24",
+       "shortDownDistanceText": "4th & 18",
+       "possessionText": "DET 24",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 56,
+       "yardsToEndzone": 56,
+       "downDistanceText": "1st & 10 at DET 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 44",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324270",
+      "sequenceNumber": "427000",
+      "text": "(No Huddle, Shotgun) J.Goff pass short middle to J.Gibbs to BUF 44 for 12 yards (C.Bishop).",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:06"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:18:04Z",
+      "statYardage": 12,
+      "isTurnover": false,
+      "type": {
+       "id": "24",
+       "text": "Pass Reception",
+       "abbreviation": "REC"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 56,
+       "yardsToEndzone": 56,
+       "downDistanceText": "1st & 10 at DET 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 44",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 44,
+       "yardsToEndzone": 44,
+       "downDistanceText": "1st & 10 at BUF 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 44",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324283",
+      "sequenceNumber": "428300",
+      "text": "Two-Minute Warning",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:18:32Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "75",
+       "text": "Two-minute warning",
+       "abbreviation": "2Min Warn"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 44,
+       "yardsToEndzone": 0,
+       "downDistanceText": "1st & 10 at BUF 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 44",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 44,
+       "yardsToEndzone": 44,
+       "downDistanceText": "1st & 10 at BUF 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 44",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324295",
+      "sequenceNumber": "429500",
+      "text": "(Shotgun) J.Goff pass deep left to J.Williams to BUF 27 for 17 yards (T.Bernard; D.Hamlin). BUF-J.Solomon was injured during the play.",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "2:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:20:16Z",
+      "statYardage": 17,
+      "isTurnover": false,
+      "type": {
+       "id": "24",
+       "text": "Pass Reception",
+       "abbreviation": "REC"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 44,
+       "yardsToEndzone": 44,
+       "downDistanceText": "1st & 10 at BUF 44",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 44",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 27,
+       "yardsToEndzone": 27,
+       "downDistanceText": "1st & 10 at BUF 27",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 27",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324313",
+      "sequenceNumber": "431300",
+      "text": "Timeout #1 by BUF at 01:48.",
+      "awayScore": 24,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:48"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:21:01Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "21",
+       "text": "Timeout",
+       "abbreviation": "TO"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 27,
+       "yardsToEndzone": 0,
+       "downDistanceText": "1st & 10 at BUF 27",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 27",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 27,
+       "yardsToEndzone": 27,
+       "downDistanceText": "1st & 10 at BUF 27",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 27",
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729324330",
+      "sequenceNumber": "433000",
+      "text": "(Shotgun) J.Goff pass deep middle to A.St. Brown for 27 yards, TOUCHDOWN [M.Danna]. J.Bates extra point is GOOD, Center-H.Hatten, Holder-J.Fox.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:42"
+      },
+      "scoringPlay": true,
+      "wallclock": "2026-09-18T03:22:06Z",
+      "statYardage": 27,
+      "isTurnover": false,
+      "type": {
+       "id": "67",
+       "text": "Passing Touchdown",
+       "abbreviation": "TD"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 27,
+       "yardsToEndzone": 27,
+       "downDistanceText": "1st & 10 at BUF 27",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "BUF 27",
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": -1,
+       "distance": 10,
+       "yardLine": 0,
+       "yardsToEndzone": 0,
+       "team": {
+        "id": "8"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "40187293218",
+    "description": "4 plays, 13 yards, 1:42",
+    "start": {
+     "period": {
+      "type": "quarter",
+      "number": 4
+     },
+     "clock": {
+      "displayValue": "1:42"
+     },
+     "yardLine": 64,
+     "text": "DET 36"
+    },
+    "end": {
+     "period": {
+      "type": "quarter",
+      "number": 4
+     },
+     "yardLine": 78,
+     "text": "DET 22"
+    },
+    "timeElapsed": {
+     "displayValue": "1:42"
+    },
+    "yards": 13,
+    "isScore": false,
+    "offensivePlays": 4,
+    "result": "END OF GAME",
+    "displayResult": "End of Game",
+    "team": {
+     "id": "2",
+     "name": "Bills",
+     "abbreviation": "BUF",
+     "displayName": "Buffalo Bills"
+    },
+    "plays": [
+     {
+      "id": "4018729324379",
+      "sequenceNumber": "437900",
+      "text": "J.Bates kicks onside 12 yards from DET 35 to DET 47. K.Shakir to DET 36 for 11 yards (J.Saylors).",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:42"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:24:32Z",
+      "statYardage": 11,
+      "isTurnover": false,
+      "type": {
+       "id": "53",
+       "text": "Kickoff",
+       "abbreviation": "K"
+      },
+      "start": {
+       "down": 0,
+       "distance": 0,
+       "yardLine": 65,
+       "yardsToEndzone": 65,
+       "team": {
+        "id": "8"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 64,
+       "yardsToEndzone": 36,
+       "downDistanceText": "1st & 10 at DET 36",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 36",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324402",
+      "sequenceNumber": "440200",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:39"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:25:23Z",
+      "statYardage": 1,
+      "isTurnover": false,
+      "type": {
+       "id": "5",
+       "text": "Rush",
+       "abbreviation": "RUSH"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 64,
+       "yardsToEndzone": 36,
+       "downDistanceText": "1st & 10 at DET 36",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 36",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 2,
+       "distance": 9,
+       "yardLine": 65,
+       "yardsToEndzone": 35,
+       "downDistanceText": "2nd & 9 at DET 35",
+       "shortDownDistanceText": "2nd & 9",
+       "possessionText": "DET 35",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324413",
+      "sequenceNumber": "441300",
+      "text": "Timeout #2 by DET at 01:33.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:33"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:25:38Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "21",
+       "text": "Timeout",
+       "abbreviation": "TO"
+      },
+      "start": {
+       "down": 2,
+       "distance": 9,
+       "yardLine": 65,
+       "yardsToEndzone": 0,
+       "downDistanceText": "2nd & 9 at DET 35",
+       "shortDownDistanceText": "2nd & 9",
+       "possessionText": "DET 35",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 2,
+       "distance": 9,
+       "yardLine": 65,
+       "yardsToEndzone": 35,
+       "downDistanceText": "2nd & 9 at DET 35",
+       "shortDownDistanceText": "2nd & 9",
+       "possessionText": "DET 35",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324424",
+      "sequenceNumber": "442400",
+      "text": "J.Cook left tackle to DET 38 for -3 yards (T.Lacy, T.Williams).PENALTY on DET-T.Lacy, Face Mask, 15 yards, enforced at DET 35 - No Play.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:33"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:26:23Z",
+      "statYardage": 15,
+      "isTurnover": false,
+      "type": {
+       "id": "8",
+       "text": "Penalty",
+       "abbreviation": "PEN"
+      },
+      "start": {
+       "down": 2,
+       "distance": 9,
+       "yardLine": 65,
+       "yardsToEndzone": 35,
+       "downDistanceText": "2nd & 9 at DET 35",
+       "shortDownDistanceText": "2nd & 9",
+       "possessionText": "DET 35",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 80,
+       "yardsToEndzone": 20,
+       "downDistanceText": "1st & 10 at DET 20",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 20",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324464",
+      "sequenceNumber": "446400",
+      "text": "J.Allen kneels to DET 21 for -1 yards.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "1:28"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:27:28Z",
+      "statYardage": -1,
+      "isTurnover": false,
+      "type": {
+       "id": "5",
+       "text": "Rush",
+       "abbreviation": "RUSH"
+      },
+      "start": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 80,
+       "yardsToEndzone": 20,
+       "downDistanceText": "1st & 10 at DET 20",
+       "shortDownDistanceText": "1st & 10",
+       "possessionText": "DET 20",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 2,
+       "distance": 11,
+       "yardLine": 79,
+       "yardsToEndzone": 21,
+       "downDistanceText": "2nd & 11 at DET 21",
+       "shortDownDistanceText": "2nd & 11",
+       "possessionText": "DET 21",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324486",
+      "sequenceNumber": "448600",
+      "text": " J.Allen kneels to DET 22 for -1 yards.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "0:49"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:28:07Z",
+      "statYardage": -1,
+      "isTurnover": false,
+      "type": {
+       "id": "5",
+       "text": "Rush",
+       "abbreviation": "RUSH"
+      },
+      "start": {
+       "down": 2,
+       "distance": 11,
+       "yardLine": 79,
+       "yardsToEndzone": 21,
+       "downDistanceText": "2nd & 11 at DET 21",
+       "shortDownDistanceText": "2nd & 11",
+       "possessionText": "DET 21",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 3,
+       "distance": 12,
+       "yardLine": 78,
+       "yardsToEndzone": 22,
+       "downDistanceText": "3rd & 12 at DET 22",
+       "shortDownDistanceText": "3rd & 12",
+       "possessionText": "DET 22",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324508",
+      "sequenceNumber": "450800",
+      "text": " J.Allen kneels to DET 23 for -1 yards.",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "0:11"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:28:45Z",
+      "statYardage": -1,
+      "isTurnover": false,
+      "type": {
+       "id": "5",
+       "text": "Rush",
+       "abbreviation": "RUSH"
+      },
+      "start": {
+       "down": 3,
+       "distance": 12,
+       "yardLine": 78,
+       "yardsToEndzone": 22,
+       "downDistanceText": "3rd & 12 at DET 22",
+       "shortDownDistanceText": "3rd & 12",
+       "possessionText": "DET 22",
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 4,
+       "distance": 13,
+       "yardLine": 77,
+       "yardsToEndzone": 23,
+       "downDistanceText": "4th & 13 at DET 23",
+       "shortDownDistanceText": "4th & 13",
+       "possessionText": "DET 23",
+       "team": {
+        "id": "2"
+       }
+      }
+     },
+     {
+      "id": "4018729324530",
+      "sequenceNumber": "453000",
+      "text": "END GAME",
+      "awayScore": 31,
+      "homeScore": 41,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "0:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:28:45Z",
+      "statYardage": 0,
+      "isTurnover": false,
+      "type": {
+       "id": "66",
+       "text": "End of Game",
+       "abbreviation": "EG"
+      },
+      "start": {
+       "down": 0,
+       "distance": 0,
+       "yardLine": 77,
+       "yardsToEndzone": 0,
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 0,
+       "distance": 13,
+       "yardLine": 77,
+       "yardsToEndzone": 23,
+       "team": {
+        "id": "2"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "meta": {
+  "gp_topic": "gp-football-nfl-401872932",
+  "gameSwitcherEnabled": true,
+  "picker_topic": "picker-football-nfl",
+  "lastUpdatedAt": "2026-09-18T03:28:45Z",
+  "firstPlayWallClock": "2026-09-18T00:17:35Z",
+  "lastPlayWallClock": "2026-09-18T03:28:45Z",
+  "gameState": "post",
+  "syncUrl": "https://client.espncdn.com/fauxcast/stats/28/401872932/en/us/"
+ }
+}

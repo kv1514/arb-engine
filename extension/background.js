@@ -14,7 +14,7 @@ const RH_API = "https://api.robinhood.com";
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
 const GAMMA = "https://gamma-api.polymarket.com";
 const BRIDGE = "http://127.0.0.1:8765";
-const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 15, venues: { kalshi: true, polymarket: true }, showBadges: true, bridge: "auto" };
+const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 15, venues: { kalshi: true, polymarket: true }, showBadges: true, bridge: "auto", positions: "" };
 
 // Kalshi's production API answers 403 to any browser Origin other than kalshi.com. Strip the
 // Origin header on our own requests to it (allowed by declarativeNetRequestWithHostAccess).
@@ -324,7 +324,16 @@ async function analyze(url) {
   if (cfg.bridge !== "off" && (await bridgeAvailable())) {
     try {
       const res = await getJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}`);
-      return fromBridge(res, cfg);
+      const out = fromBridge(res, cfg);
+      // In-play view (game state, model vs market, LOCK/STEAL) for game-winner pages.
+      if (out && out.ok && out.analysis && !out.analysis.lines) {
+        try {
+          const pos = String(cfg.positions || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x) => "&position=" + encodeURIComponent(x)).join("");
+          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&gold=${cfg.gold ? 1 : 0}${pos}`);
+          if (ip && ip.ok) out.analysis.inplay = ip.view;
+        } catch (e) { /* optional */ }
+      }
+      return out;
     } catch (e) { if (cfg.bridge === "on") throw e; /* else fall through to direct mode */ }
   }
   const ev = await robinhoodEvent(url);

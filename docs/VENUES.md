@@ -60,3 +60,20 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 
 Lines carry vig; use `quant.odds.devig_power` / `devig_shin` before comparing. The Odds API
 (`ODDS_API_KEY`) is the planned source — see `docs/ROADMAP.md`.
+
+## ESPN (game state — not a venue, no prices)
+
+Unofficial, undocumented JSON the espn.com front-end uses. No key, no `Origin` restriction
+observed, but ESPN can change or throttle it without notice — treat every field as
+best-effort and never as a settlement source. Adapter: `arb_engine/venues/espn.py`
+(`ESPNClient`, `ESPNFeed`, `GameState`). Fixtures recorded 2026-09-18 in
+`tests/fixtures/espn/` (week 2: DET@BUF final `401872932`, MIN@CHI and PHI@TEN scheduled).
+
+| Item | Value | Source |
+|---|---|---|
+| Scoreboard | `GET https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard[?dates=YYYYMMDD]` — whole week in one ~280 KB call. Per event: `id`, `date` (UTC, `2026-09-18T00:15Z`), `status.type.{name,state,completed}` (`STATUS_SCHEDULED`/`STATUS_IN_PROGRESS`/`STATUS_HALFTIME`/`STATUS_FINAL`…; `state` = `pre`/`in`/`post`), `status.period`, `status.displayClock` (`MM:SS`), `competitions[0].competitors[].{homeAway,score,team.abbreviation,id}`, `competitions[0].odds[0]` (pre-game only: DraftKings `details` `'CHI -4.5'`, `spread` (home-relative), `overUnder`, `pointSpread.home.close.line`, `moneyline`) | observed 2026-09-18 |
+| Live-only block | `competitions[0].situation`: `possession` (team id), `down`, `distance`, `yardLine` (absolute 0–100 from the **home** goal line), `possessionText` (`'BUF 34'`), `downDistanceText`, `shortDownDistanceText`, `homeTimeouts`, `awayTimeouts`, `isRedZone`, `lastPlay.{text,probability.homeWinPercentage}`. Absent before kickoff and after the final; `competitors[].possession` (bool) also flips live | ESPN scoreboard schema; field-position convention verified on 342 plays of DET@BUF |
+| Summary | `GET …/nfl/summary?event=<id>` (~630 KB raw). Used: `winprobability[]` (`homeWinPercentage`, `tiePercentage`, `playId` — ESPN's own model, one row per play, 190 rows for a full game), `pickcenter[0]` (closing DraftKings `details`/`spread`/`overUnder`/`pointSpread`/`moneyline`, present after the final too), `header.competitions[0].{status,competitors[].score/possession,situation}`, `drives.{current,previous}[].plays[].{end.down,end.distance,end.yardsToEndzone,end.team.id,text}`. Ignored: `boxscore`, `news`, `article`, `videos`, `standings`, `leaders`, `injuries` | observed 2026-09-18 |
+| Derived | `status` `pre`/`live`/`final`/`other` (postponed); `game_seconds_remaining` = `(4 − period) × 900 + clock` in regulation, `clock` (≤ 600) in OT (period 5); `yardline_100` = `100 − yardLine` for home possession, `yardLine` for away (fallback: parse `possessionText`); `vegas_spread_home` negative = home favoured (`pointSpread.home.close.line` → `details` re-signed by home code → numeric `spread`); `event_key` = `nfl:<A>|<H>:<ET date>` so it joins Kalshi/Robinhood/Polymarket events | adapter |
+| Cadence | Scoreboard every **10–15 s** while any game is live (one call covers all games; ESPN updates it a few seconds after each play), every 60 s otherwise; summary only on demand (WP series / closing line), at most once per 30 s per game. The client rate-limits itself to 4 req/s | recommendation |
+| Caveats | Unofficial: no SLA, no changelog, fields disappear (odds vanish from the scoreboard at kickoff, `situation` at the final). `winprobability` is ESPN's model, use it as a benchmark not a feature. `yardLine` for timeouts/kickoffs is unreliable (ESPN emits `yardsToEndzone 0` on official timeouts). Clock can lag the broadcast by 5–20 s; Kalshi/Rothera in-play quotes usually move first | observed |

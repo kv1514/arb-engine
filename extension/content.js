@@ -52,6 +52,7 @@
     lastAnalysis = a;
     if (a.lines) { renderLines(res); return; }
     let html = "";
+    if (a.inplay) html += renderInplay(a.inplay);
     if (a.arb) {
       const cls = a.arb.isArb ? "arbe-good" : "arbe-bad";
       const legs = a.arb.legs.map((l) => `${esc(l.label || l.outcome)} @ ${fmtP(l.price)} on ${esc(l.venue)}`).join(" + ");
@@ -70,6 +71,21 @@
     html += `<div class="arbe-muted arbe-small">Size ${a.contracts} contracts · target margin ${fmtPct(a.targetMargin)} · fees: Robinhood commission (Gold ${a.gold ? "on" : "off"}) + $0.01/ct exchange; Kalshi 7% taker / 1.75% maker × p(1−p); Polymarket 5% taker × p(1−p). Max buy = highest price on this venue that still locks the margin after hedging the other side at its cheapest current ask. Informational only — verify before trading.</div>`;
     body.innerHTML = html;
     decorateTabs(a);
+  }
+
+  // In-play strip: game state, model vs market fair, and LOCK / STEAL actions (bridge only).
+  function renderInplay(v) {
+    const live = v.live ? "LIVE" : "PRE";
+    let html = `<div class="arbe-arb ${v.live ? "arbe-live" : ""}"><b>${live}</b> ${esc(v.game_line || "")}${v.fair_line ? `<div class="arbe-muted">${esc(v.fair_line)}</div>` : ""}`;
+    for (const sv of v.sides || []) {
+      const held = sv.held ? ` · held ${sv.held} @ ${fmtP(sv.avg_all_in)}` : "";
+      const lock = sv.need ? ` · <b class="${sv.lock_available ? "arbe-good" : ""}">LOCK ≤ ${fmtP(sv.lock_price)}</b>${sv.lock_available ? " NOW" : ""}` : "";
+      const steal = sv.steal ? ` · <b class="arbe-good">STEAL +${fmtPct(sv.steal_edge)}</b>` : "";
+      html += `<div class="arbe-small">${esc(sv.label)}: fair ${fmtP(sv.fair)} (mkt ${fmtP(sv.market_p)} / model ${fmtP(sv.model_p)}${sv.espn_p != null ? " / espn " + fmtP(sv.espn_p) : ""}) · best ${esc(sv.best_venue || "–")} all-in ${fmtP(sv.best_all_in)}${held}${lock}${steal}</div>`;
+    }
+    for (const act of (v.actions || []).filter((x) => /^(LOCK NOW|STEAL|FLAT)/.test(x))) html += `<div class="arbe-good arbe-small">→ ${esc(act)}</div>`;
+    html += `</div>`;
+    return html;
   }
 
   // Spread / total pages: one row per line, arbs first.

@@ -26,3 +26,4 @@
 .arbe-badge.arbe-bad { color: #f28b82; border: 1px solid #5d2f2f; }
 #arbe-panel .arbe-thin td { color: #c9a227; }
 #arbe-panel tr.arbe-good td { background: #17261d; }
+#arbe-panel .arbe-live { border-left: 3px solid #7fe0a0; }

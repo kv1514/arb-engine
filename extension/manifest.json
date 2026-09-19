@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Arb Engine — Robinhood prediction market overlay",
+  "name": "Arb Engine Robinhood Overlay",
+  "short_name": "Arb Engine",
   "version": "0.1.0",
   "description": "Fee-aware fair value, cross-venue prices (Kalshi, Polymarket) and max-buy prices overlaid on Robinhood event contracts.",
+  "minimum_chrome_version": "101",
   "permissions": ["storage", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
     "https://robinhood.com/*",

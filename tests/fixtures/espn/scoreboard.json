@@ -1,0 +1,532 @@
+{
+ "leagues": [
+  {
+   "id": "28",
+   "name": "National Football League",
+   "abbreviation": "NFL",
+   "season": {
+    "year": 2026,
+    "type": {
+     "id": "2",
+     "name": "Regular Season"
+    }
+   }
+  }
+ ],
+ "season": {
+  "type": 2,
+  "year": 2026
+ },
+ "week": {
+  "number": 2
+ },
+ "events": [
+  {
+   "id": "401872932",
+   "uid": "s:20~l:28~e:401872932",
+   "date": "2026-09-18T00:15Z",
+   "name": "Detroit Lions at Buffalo Bills",
+   "shortName": "DET @ BUF",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 2
+   },
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 4,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401872932",
+     "date": "2026-09-18T00:15Z",
+     "neutralSite": false,
+     "playByPlayAvailable": true,
+     "startDate": "2026-09-18T00:15Z",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 4,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "isTBDFlex": false
+     },
+     "format": {
+      "regulation": {
+       "periods": 4
+      }
+     },
+     "venue": {
+      "fullName": "Highmark Stadium"
+     },
+     "competitors": [
+      {
+       "id": "2",
+       "homeAway": "home",
+       "winner": true,
+       "score": "41",
+       "order": 0,
+       "team": {
+        "id": "2",
+        "location": "Buffalo",
+        "name": "Bills",
+        "abbreviation": "BUF",
+        "displayName": "Buffalo Bills",
+        "shortDisplayName": "Bills"
+       },
+       "linescores": [
+        {
+         "value": 14.0,
+         "displayValue": "14",
+         "period": 1
+        },
+        {
+         "value": 13.0,
+         "displayValue": "13",
+         "period": 2
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 3
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 4
+        }
+       ]
+      },
+      {
+       "id": "8",
+       "homeAway": "away",
+       "winner": false,
+       "score": "31",
+       "order": 1,
+       "team": {
+        "id": "8",
+        "location": "Detroit",
+        "name": "Lions",
+        "abbreviation": "DET",
+        "displayName": "Detroit Lions",
+        "shortDisplayName": "Lions"
+       },
+       "linescores": [
+        {
+         "value": 0.0,
+         "displayValue": "0",
+         "period": 1
+        },
+        {
+         "value": 10.0,
+         "displayValue": "10",
+         "period": 2
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 3
+        },
+        {
+         "value": 14.0,
+         "displayValue": "14",
+         "period": 4
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401872937",
+   "uid": "s:20~l:28~e:401872937",
+   "date": "2026-09-20T17:00Z",
+   "name": "Minnesota Vikings at Chicago Bears",
+   "shortName": "MIN @ CHI",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 2
+   },
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 0,
+    "type": {
+     "id": "1",
+     "name": "STATUS_SCHEDULED",
+     "state": "pre",
+     "completed": false,
+     "description": "Scheduled",
+     "detail": "Sun, September 20th at 1:00 PM EDT",
+     "shortDetail": "9/20 - 1:00 PM EDT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401872937",
+     "date": "2026-09-20T17:00Z",
+     "neutralSite": false,
+     "playByPlayAvailable": false,
+     "startDate": "2026-09-20T17:00Z",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sun, September 20th at 1:00 PM EDT",
+       "shortDetail": "9/20 - 1:00 PM EDT"
+      },
+      "isTBDFlex": false
+     },
+     "format": {
+      "regulation": {
+       "periods": 4
+      }
+     },
+     "venue": {
+      "fullName": "Soldier Field"
+     },
+     "competitors": [
+      {
+       "id": "3",
+       "homeAway": "home",
+       "score": "0",
+       "order": 0,
+       "team": {
+        "id": "3",
+        "location": "Chicago",
+        "name": "Bears",
+        "abbreviation": "CHI",
+        "displayName": "Chicago Bears",
+        "shortDisplayName": "Bears"
+       }
+      },
+      {
+       "id": "16",
+       "homeAway": "away",
+       "score": "0",
+       "order": 1,
+       "team": {
+        "id": "16",
+        "location": "Minnesota",
+        "name": "Vikings",
+        "abbreviation": "MIN",
+        "displayName": "Minnesota Vikings",
+        "shortDisplayName": "Vikings"
+       }
+      }
+     ],
+     "odds": [
+      {
+       "details": "CHI -4.5",
+       "overUnder": 48.5,
+       "spread": -4.5,
+       "provider": {
+        "id": "100",
+        "name": "Draft Kings"
+       },
+       "homeTeamOdds": {
+        "favorite": true,
+        "underdog": false,
+        "favoriteAtOpen": true,
+        "team": {
+         "id": "3",
+         "abbreviation": "CHI"
+        }
+       },
+       "awayTeamOdds": {
+        "favorite": false,
+        "underdog": true,
+        "favoriteAtOpen": false,
+        "team": {
+         "id": "16",
+         "abbreviation": "MIN"
+        }
+       },
+       "pointSpread": {
+        "displayName": "Spread",
+        "home": {
+         "open": {
+          "line": "-3.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "-4.5",
+          "odds": "-110"
+         }
+        },
+        "away": {
+         "open": {
+          "line": "+3.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "+4.5",
+          "odds": "-110"
+         }
+        }
+       },
+       "moneyline": {
+        "displayName": "Moneyline",
+        "home": {
+         "open": {
+          "odds": "-185"
+         },
+         "close": {
+          "odds": "-205"
+         }
+        },
+        "away": {
+         "open": {
+          "odds": "+154"
+         },
+         "close": {
+          "odds": "+170"
+         }
+        }
+       },
+       "total": {
+        "displayName": "Total",
+        "over": {
+         "open": {
+          "line": "o45.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "o48.5",
+          "odds": "-110"
+         }
+        },
+        "under": {
+         "open": {
+          "line": "u45.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "u48.5",
+          "odds": "-110"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401872939",
+   "uid": "s:20~l:28~e:401872939",
+   "date": "2026-09-20T17:00Z",
+   "name": "Philadelphia Eagles at Tennessee Titans",
+   "shortName": "PHI @ TEN",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 2
+   },
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 0,
+    "type": {
+     "id": "1",
+     "name": "STATUS_SCHEDULED",
+     "state": "pre",
+     "completed": false,
+     "description": "Scheduled",
+     "detail": "Sun, September 20th at 1:00 PM EDT",
+     "shortDetail": "9/20 - 1:00 PM EDT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401872939",
+     "date": "2026-09-20T17:00Z",
+     "neutralSite": false,
+     "playByPlayAvailable": false,
+     "startDate": "2026-09-20T17:00Z",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sun, September 20th at 1:00 PM EDT",
+       "shortDetail": "9/20 - 1:00 PM EDT"
+      },
+      "isTBDFlex": false
+     },
+     "format": {
+      "regulation": {
+       "periods": 4
+      }
+     },
+     "venue": {
+      "fullName": "Nissan Stadium"
+     },
+     "competitors": [
+      {
+       "id": "10",
+       "homeAway": "home",
+       "score": "0",
+       "order": 0,
+       "team": {
+        "id": "10",
+        "location": "Tennessee",
+        "name": "Titans",
+        "abbreviation": "TEN",
+        "displayName": "Tennessee Titans",
+        "shortDisplayName": "Titans"
+       }
+      },
+      {
+       "id": "21",
+       "homeAway": "away",
+       "score": "0",
+       "order": 1,
+       "team": {
+        "id": "21",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia Eagles",
+        "shortDisplayName": "Eagles"
+       }
+      }
+     ],
+     "odds": [
+      {
+       "details": "PHI -7",
+       "overUnder": 39.5,
+       "spread": 7.0,
+       "provider": {
+        "id": "100",
+        "name": "Draft Kings"
+       },
+       "homeTeamOdds": {
+        "favorite": false,
+        "underdog": true,
+        "favoriteAtOpen": false,
+        "team": {
+         "id": "10",
+         "abbreviation": "TEN"
+        }
+       },
+       "awayTeamOdds": {
+        "favorite": true,
+        "underdog": false,
+        "favoriteAtOpen": true,
+        "team": {
+         "id": "21",
+         "abbreviation": "PHI"
+        }
+       },
+       "pointSpread": {
+        "displayName": "Spread",
+        "home": {
+         "open": {
+          "line": "+4.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "+7",
+          "odds": "-110"
+         }
+        },
+        "away": {
+         "open": {
+          "line": "-4.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "-7",
+          "odds": "-110"
+         }
+        }
+       },
+       "moneyline": {
+        "displayName": "Moneyline",
+        "home": {
+         "open": {
+          "odds": "+180"
+         },
+         "close": {
+          "odds": "+250"
+         }
+        },
+        "away": {
+         "open": {
+          "odds": "-218"
+         },
+         "close": {
+          "odds": "-310"
+         }
+        }
+       },
+       "total": {
+        "displayName": "Total",
+        "over": {
+         "open": {
+          "line": "o42.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "o39.5",
+          "odds": "-110"
+         }
+        },
+        "under": {
+         "open": {
+          "line": "u42.5",
+          "odds": "-110"
+         },
+         "close": {
+          "line": "u39.5",
+          "odds": "-110"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

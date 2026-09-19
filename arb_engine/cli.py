@@ -234,6 +234,39 @@ def cmd_maker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _espn_state_fetcher(event_key: str, refresh_summary_every: float = 30.0):
+    """Returns a zero-arg fetcher for the ESPN GameState of one event (scoreboard every call,
+    summary — win-probability series + odds — at most every ``refresh_summary_every`` s)."""
+    from .venues.espn import ESPNFeed
+
+    feed = ESPNFeed()
+    parts = event_key.split(":")
+    date = parts[2] if len(parts) > 2 and parts[2] else None
+    state = {"last_summary": 0.0, "cache": None}
+
+    def fetch():
+        import time as _t
+
+        gs = feed.find(event_key, date)
+        if gs is None:
+            return state["cache"]
+        if gs.status != "pre" and _t.time() - state["last_summary"] >= refresh_summary_every:
+            try:
+                gs = feed.enrich(gs)
+                state["last_summary"] = _t.time()
+            except Exception:
+                pass
+        elif state["cache"] is not None and state["cache"].event_id == gs.event_id:
+            # keep the last enriched fields between summary refreshes
+            for k in ("espn_home_wp", "espn_wp_series", "vegas_spread_home", "vegas_total", "odds_provider"):
+                if getattr(gs, k, None) in (None, []) and getattr(state["cache"], k, None) not in (None, []):
+                    setattr(gs, k, getattr(state["cache"], k))
+        state["cache"] = gs
+        return gs
+
+    return fetch
+
+
 def cmd_inplay(args: argparse.Namespace) -> int:
     """Watch one Robinhood event with your open lots; alert on STEAL / LOCK NOW."""
     from .eventlookup import EventAnalyzer
@@ -254,17 +287,50 @@ def cmd_inplay(args: argparse.Namespace) -> int:
             raise RuntimeError("inplay watches a game-winner (moneyline) page; open the game's main event page")
         return an.last_event
 
-    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin)
+    fetch_state = None
+    if not args.no_espn:
+        first = fetch()
+        fetch_state = _espn_state_fetcher(first.event_key)
+    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin, fetch_state=fetch_state)
     if args.iterations == 1 or args.once:
         view = w.step()
         print(f"{view.title}  live={view.live}  cost=${view.total_cost:.2f}  payout_if={ {k: round(v, 1) for k, v in view.payout_if.items()} }" + (f"  locked P&L=${view.locked_pnl:.2f}" if view.balanced else ""))
+        if view.game_line:
+            print(f"  {view.game_line}")
+        if view.fair_line:
+            print(f"  {view.fair_line}")
         for sv in view.sides:
-            print(f"  {sv.label:<20} held={sv.held:g} avg={_p(sv.avg_all_in)} fair={_p(sv.fair)} best={sv.best_venue or '-'} ask={_p(sv.best_ask)} all-in={_p(sv.best_all_in)} edge={_pct(sv.steal_edge)}" + (f"  need={sv.need:g} lock<= {_p(sv.lock_price)} {'AVAILABLE' if sv.lock_available else ''}" if sv.need else ""))
+            print(f"  {sv.label:<20} held={sv.held:g} avg={_p(sv.avg_all_in)} fair={_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}] best={sv.best_venue or '-'} ask={_p(sv.best_ask)} all-in={_p(sv.best_all_in)} edge={_pct(sv.steal_edge)}" + (f"  need={sv.need:g} lock<= {_p(sv.lock_price)} {'AVAILABLE' if sv.lock_available else ''}" if sv.need else ""))
         for a in view.actions:
             print("  ->", a)
         return 0
-    print(f"watching {args.url} every {args.interval}s with {len(lots)} lot(s); journal={args.journal}")
+    print(f"watching {args.url} every {args.interval}s with {len(lots)} lot(s); espn={'on' if fetch_state else 'off'}; journal={args.journal}")
     w.run(interval=args.interval, duration=args.duration, max_iterations=args.iterations)
+    return 0
+
+
+def cmd_games(args: argparse.Namespace) -> int:
+    """This week's NFL games from ESPN with status, score, spread and the model's pre-game P(home)."""
+    from .strategy.inplay import game_line, model_home_wp
+    from .venues.espn import ESPNFeed
+
+    feed = ESPNFeed()
+    games = feed.games(args.date)
+    print(f"{len(games)} games" + (f" on {args.date}" if args.date else " this week") + "  (spread = home line, DraftKings via ESPN; P(home) = our WP model)")
+    for g in sorted(games, key=lambda x: (x.start_time or 0).timestamp() if x.start_time else 0):
+        if args.live_only and g.status != "live":
+            continue
+        if g.status != "pre" and args.enrich:
+            try:
+                g = feed.enrich(g)
+            except Exception:
+                pass
+        p_home = model_home_wp(g)
+        line = game_line(g) or ""
+        extra = f"  P(home) model={p_home:.2f}" if p_home is not None else ""
+        if g.espn_home_wp is not None:
+            extra += f" espn={g.espn_home_wp:.2f}"
+        print(f"  [{g.status:<5}] {line}{extra}  key={g.event_key}")
     return 0
 
 
@@ -384,7 +450,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     ip.add_argument("--iterations", type=int, default=None)
     ip.add_argument("--once", action="store_true", help="evaluate once and print")
     ip.add_argument("--journal", default="out/inplay_journal.jsonl")
+    ip.add_argument("--no-espn", action="store_true", help="do not pull live game state / model (market consensus only)")
     ip.set_defaults(func=cmd_inplay)
+
+    gm = sub.add_parser("games", help="this week's NFL games from ESPN: status, score, situation, spread, model P(home)")
+    gm.add_argument("--date", default=None, help="YYYY-MM-DD (default: current week)")
+    gm.add_argument("--live-only", action="store_true")
+    gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
+    gm.set_defaults(func=cmd_games)
 
     ka = sub.add_parser("kalshi", help="authenticated Kalshi actions (demo env unless KALSHI_ENV=prod)")
     ka.add_argument("action", choices=["balance", "positions", "orders", "order"])

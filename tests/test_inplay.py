@@ -18,6 +18,84 @@ def _me(k_den=(0.59, 0.61), k_kc=(0.39, 0.41), r_den=(0.60, 0.62), r_kc=(0.38, 0
     })
 
 
+class GameStateTests(unittest.TestCase):
+    """Blend + agreement filter + game line with a synthetic ESPN state."""
+
+    def _gs(self, **kw):
+        from arb_engine.venues.espn import GameState
+        base = dict(event_id="1", home="KC", away="DEN", home_score=14, away_score=17, status="live", period=3, clock_seconds_remaining_in_period=252, game_seconds_remaining=900 + 252, possession="away", down=2, distance=7, yardline_100=35, home_timeouts=3, away_timeouts=2, espn_home_wp=0.43, vegas_spread_home=-3.0)
+        base.update(kw)
+        return GameState(**base)
+
+    def test_model_and_espn_enter_the_blend(self):
+        v = evaluate_inplay(_me(), [], game_state=self._gs())
+        kc = next(s for s in v.sides if s.outcome == "KC")
+        self.assertTrue(v.live)
+        self.assertIsNotNone(kc.model_p)
+        self.assertAlmostEqual(kc.espn_p, 0.43)
+        self.assertTrue(0 < kc.model_p < 1)
+        self.assertIsNotNone(kc.fair)
+        self.assertIn("Q3 04:12", v.game_line)
+        self.assertIn("DEN 17-14 KC", v.game_line)
+        self.assertIn("DEN ball 2nd & 7", v.game_line)
+        self.assertIn("TO 2/3", v.game_line)
+        self.assertIn("market", v.fair_line)
+        self.assertIn("model", v.fair_line)
+        self.assertEqual(v.blend["live"], True)
+        self.assertEqual(set(v.blend["weights"]), {"market", "model", "espn"})
+
+    def test_steal_requires_model_agreement_in_play(self):
+        # Robinhood KC ask 0.30 while the market consensus says ~0.40 -> market-only STEAL...
+        me = _me(r_kc=(0.28, 0.30))
+        pre = evaluate_inplay(me, [], steal_edge=0.03)
+        self.assertTrue(next(s for s in pre.sides if s.outcome == "KC").steal)
+        # ...but live, with a model that also says KC is only ~0.30, it is not a steal.
+        class StubModel:
+            pass
+        import arb_engine.strategy.inplay as ip
+        orig = ip.model_home_wp
+        try:
+            ip.model_home_wp = lambda gs, model=None: 0.31  # P(KC=home)
+            live = evaluate_inplay(me, [], steal_edge=0.03, game_state=self._gs(espn_home_wp=None))
+        finally:
+            ip.model_home_wp = orig
+        kc = next(s for s in live.sides if s.outcome == "KC")
+        self.assertFalse(kc.steal)
+        self.assertTrue(any("likely a stale quote" in a for a in live.actions))
+        try:
+            ip.model_home_wp = lambda gs, model=None: 0.45
+            live2 = evaluate_inplay(me, [], steal_edge=0.03, game_state=self._gs(espn_home_wp=None))
+        finally:
+            ip.model_home_wp = orig
+        self.assertTrue(next(s for s in live2.sides if s.outcome == "KC").steal)
+
+    def test_disagreement_reported(self):
+        import arb_engine.strategy.inplay as ip
+        orig = ip.model_home_wp
+        try:
+            ip.model_home_wp = lambda gs, model=None: 0.70
+            v = evaluate_inplay(_me(), [], game_state=self._gs(espn_home_wp=0.40))
+        finally:
+            ip.model_home_wp = orig
+        self.assertGreater(v.disagreement, 0.05)
+        self.assertTrue(any(a.startswith("sources disagree") for a in v.actions))
+
+    def test_pregame_state_keeps_market_fair(self):
+        v = evaluate_inplay(_me(), [], game_state=self._gs(status="pre", possession=None, home_score=0, away_score=0, game_seconds_remaining=3600, espn_home_wp=None))
+        self.assertFalse(v.live)
+        self.assertEqual(v.blend["weights"], {"market": 1.0})
+        self.assertTrue(v.game_line.startswith("PRE"))
+
+    def test_watcher_passes_state(self):
+        import os
+        me = _me()
+        w = InplayWatcher(lambda: me, [Lot("robinhood", "DEN", 0.50, 100)], Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), "inplay_test2.jsonl"), quiet=True, desktop=False, webhook=""), fetch_state=lambda: self._gs())
+        view = w.step()
+        self.assertIsNotNone(view.game_state)
+        self.assertEqual(view.game_state["home"], "KC")
+        self.assertTrue(any(e["kind"] == "info" and "Q3 04:12" in e["msg"] for e in w.alerts.events))
+
+
 class InplayTests(unittest.TestCase):
     def test_lot_parse_and_fees(self):
         lot = Lot.parse("robinhood:DEN:0.50:100")

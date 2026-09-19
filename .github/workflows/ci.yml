@@ -24,4 +24,5 @@ jobs:
         with:
           node-version: "22"
       - run: bash scripts/test_js.sh
-      - run: node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json','utf8')); console.log('manifest ok')"
+      - run: python3 scripts/check_extension.py extension
+      - run: bash scripts/package_extension.sh

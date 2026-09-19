@@ -2,6 +2,8 @@
 
     GET /health
     GET /analyze?url=<robinhood event url>[&contracts=100&target_margin=0&gold=0]
+    GET /inplay?url=<robinhood event url>[&position=venue:outcome:price:count]...
+                                          in-play view: lock/steal actions, game state, blended fair
     GET /kalshi/market/<ticker>          proxies for the extension (Kalshi's API refuses
     GET /kalshi/markets?event_ticker=…    browser Origins other than kalshi.com)
 
@@ -24,6 +26,15 @@ from .venues.kalshi import KalshiClient
 class Handler(BaseHTTPRequestHandler):
     analyzer: EventAnalyzer
     kalshi: KalshiClient
+    espn_fetchers: dict = {}
+
+    def _espn(self, event_key: str):
+        from .cli import _espn_state_fetcher
+
+        f = self.espn_fetchers.get(event_key)
+        if f is None:
+            f = self.espn_fetchers[event_key] = _espn_state_fetcher(event_key)
+        return f()
 
     def _send(self, code: int, payload: dict) -> None:
         body = json.dumps(payload, default=str).encode("utf-8")
@@ -51,6 +62,28 @@ class Handler(BaseHTTPRequestHandler):
                     settings["robinhood_gold"] = True
                 res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)), target_margin=float(qs.get("target_margin", 0)))
                 self._send(200, res)
+            elif u.path == "/inplay":
+                from dataclasses import asdict
+
+                from .strategy.inplay import Lot, evaluate_inplay
+
+                url = qs.get("url", "")
+                settings = settings_from_env()
+                if qs.get("gold") in ("1", "true"):
+                    settings["robinhood_gold"] = True
+                res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)))
+                if not res.get("ok") or "lines" in (res.get("analysis") or {}) or getattr(self.analyzer, "last_event", None) is None:
+                    self._send(200, {"ok": False, "error": res.get("error") or "not a game-winner page"})
+                    return
+                lots = [Lot.parse(x) for x in parse_qs(u.query).get("position", []) if x.strip()]
+                gs = None
+                if qs.get("espn", "1") not in ("0", "false"):
+                    try:
+                        gs = self._espn(self.analyzer.last_event.event_key)
+                    except Exception:
+                        gs = None
+                view = evaluate_inplay(self.analyzer.last_event, lots, settings, steal_edge=float(qs.get("steal_edge", 0.03)), target_margin=float(qs.get("target_margin", 0)), game_state=gs)
+                self._send(200, {"ok": True, "view": asdict(view)})
             elif u.path == "/kalshi/markets":
                 data = self.kalshi.get("/markets", {k: v for k, v in qs.items() if k in ("event_ticker", "series_ticker", "status", "limit")})
                 self._send(200, data)

@@ -36,3 +36,6 @@ PY
   cat "$ROOT/tests/background.test.js"
 } > "$T2"
 run_js "$T2"; rm -f "$T2"
+
+# 3) static extension self-check (manifest, referenced files, permissions, JS syntax)
+python3 "$ROOT/scripts/check_extension.py" "$ROOT/extension"

@@ -14,9 +14,11 @@ Ordered by expected value for the NFL/tennis focus.
    on Polymarket once the CLOB client is wired; partial-fill handling in paper mode; a
    queue-position estimate from the order book (rest only when expected fill time is short);
    run the demo broker against a demo API key to verify the V2 order/fill field names.
-3b. **In-play model.** `strategy/inplay.py` flags STEAL against the cross-venue consensus; a
-   real in-game win-probability model (score, clock, possession, pre-game line) would let it
-   judge steals when every venue moves together. Data: ESPN/NFL play-by-play or a paid feed.
+3b. ~~In-play model~~ — done 2026-09-18: ESPN live game state (`venues/espn.py`) + XGBoost
+   WP model on nflverse play-by-play (`models/wp.py`, `docs/MODEL.md`), blended with the
+   market in `quant/inplay_fair.py`; `arb-engine games` / `inplay --espn`; overlay LIVE strip.
+   Next: retrain each week (`scripts/train_wp_model.py`), add injuries/weather features, and
+   back-test the STEAL signal on journaled ticks.
 4. **Streaming quotes.** Kalshi websocket (`wss://api.elections.kalshi.com/trade-api/ws/v2`)
    and Polymarket market channel instead of polling; the Robinhood quotes API polls fine at
    ~2 s.

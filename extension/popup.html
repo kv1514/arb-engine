@@ -11,6 +11,7 @@
   <label>Local engine bridge <select id="bridge"><option value="auto">auto (use if running)</option><option value="on">required</option><option value="off">never</option></select></label>
   <label><input type="checkbox" id="venue_kalshi"> Compare with Kalshi</label>
   <label><input type="checkbox" id="venue_polymarket"> Compare with Polymarket</label>
+  <label>Open lots for the in-play strip (one per line: venue:outcome:price:count, e.g. robinhood:DEN:0.50:100)<textarea id="positions" rows="3" style="width:100%;display:block;margin-top:4px;background:#1e242b;color:#eee;border:1px solid #333b44;border-radius:4px"></textarea></label>
   <button id="save">Save</button> <span id="status" class="muted"></span>
   <p class="muted small">Informational only. Nothing here places orders.</p>
   <script src="popup.js"></script>

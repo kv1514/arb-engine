@@ -33,7 +33,8 @@ fee schedules and API facts every change must respect.
 arb_engine/
   fees/        venue fee models (Kalshi, Robinhood, Polymarket, Polymarket US) — Decimal math
   quant/       odds & de-vig, arbitrage evaluation, max-buy price, depth sizing, Kelly, fair value
-  venues/      adapters: kalshi.py (public + signed), polymarket.py (Gamma/CLOB), robinhood.py (public web/API)
+  venues/      adapters: kalshi.py (public + signed), polymarket.py (Gamma/CLOB), robinhood.py (public web/API), espn.py (live game state)
+  models/      __init__.py = the core dataclasses (was models.py); wp.py = stdlib win-probability inference; data/nfl_wp_model.json
   matching/    canonical team/player keys, Eastern-date event keys, cross-venue merge
   scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
   execution/   Kalshi order plans + gated executor
@@ -46,7 +47,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (87)
+python -m unittest discover -s tests -t .      # Python tests (134)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>

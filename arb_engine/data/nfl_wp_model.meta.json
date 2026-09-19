@@ -1,0 +1,219 @@
+{
+  "trained_at": "2026-09-18T22:18:44Z",
+  "train_seasons": "2016-2024",
+  "test_season": 2025,
+  "train_rows": 362579,
+  "test_rows": 40371,
+  "model": "xgboost 3.4.1 binary:logistic, 200 trees, depth 4, eta 0.05 stacked on a logistic baseline",
+  "heldout": {
+    "model": {
+      "log_loss": 0.47511480559746144,
+      "brier": 0.15841171561936573,
+      "ece": 0.020152617299342937,
+      "log_loss_on_vegas_rows": 0.47511480559746144,
+      "brier_on_vegas_rows": 0.15841171561936573
+    },
+    "nflfastr_vegas_wp": {
+      "log_loss": 0.47684853572715935,
+      "brier": 0.15876288636126962,
+      "rows": 40371,
+      "ece": 0.019050354816715423
+    },
+    "logistic_baseline": {
+      "log_loss": 0.4762808610527442,
+      "brier": 0.15870762683680018,
+      "ece": 0.019336877303499162
+    }
+  },
+  "file": "nfl_wp_model.json",
+  "size_mb": 0.136,
+  "params": {
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "eta": 0.05,
+    "max_depth": 4,
+    "min_child_weight": 20.0,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "gamma": 0.0,
+    "lambda": 1.0,
+    "tree_method": "hist",
+    "base_score": 0.5,
+    "seed": 2024
+  },
+  "features": [
+    "score_differential",
+    "game_seconds_remaining",
+    "half_seconds_remaining",
+    "receive_2h_ko",
+    "spread_time",
+    "diff_time_ratio",
+    "down",
+    "ydstogo",
+    "yardline_100",
+    "posteam_timeouts_remaining",
+    "defteam_timeouts_remaining",
+    "is_home"
+  ],
+  "metrics": {
+    "model": {
+      "log_loss": 0.47511480559746144,
+      "brier": 0.15841171561936573,
+      "calibration": [
+        {
+          "bin": "0.0-0.1",
+          "n": 5834,
+          "pred_mean": 0.03369344112052687,
+          "actual_rate": 0.057250599931436406
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 3525,
+          "pred_mean": 0.1501178737058707,
+          "actual_rate": 0.18014184397163122
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 3609,
+          "pred_mean": 0.24922573683284333,
+          "actual_rate": 0.28899972291493486
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 3282,
+          "pred_mean": 0.3495205260227542,
+          "actual_rate": 0.35039609993906157
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 3438,
+          "pred_mean": 0.44942632708492636,
+          "actual_rate": 0.4389179755671902
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 3507,
+          "pred_mean": 0.5514507902834468,
+          "actual_rate": 0.5489021956087824
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 3689,
+          "pred_mean": 0.6494966910020482,
+          "actual_rate": 0.6665763079425319
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 3623,
+          "pred_mean": 0.7495999551760436,
+          "actual_rate": 0.7256417333701353
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 3591,
+          "pred_mean": 0.8505054320408686,
+          "actual_rate": 0.8075744917850181
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 6273,
+          "pred_mean": 0.9649064911432326,
+          "actual_rate": 0.9529730591423561
+        }
+      ],
+      "ece": 0.020152617299342937,
+      "log_loss_on_vegas_rows": 0.47511480559746144,
+      "brier_on_vegas_rows": 0.15841171561936573
+    },
+    "nflfastr_vegas_wp": {
+      "log_loss": 0.47684853572715935,
+      "brier": 0.15876288636126962,
+      "calibration": [
+        {
+          "bin": "0.0-0.1",
+          "n": 5794,
+          "pred_mean": 0.034834049021913616,
+          "actual_rate": 0.06316879530548844
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 3252,
+          "pred_mean": 0.15188097121906532,
+          "actual_rate": 0.16512915129151293
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 3652,
+          "pred_mean": 0.24944896349705845,
+          "actual_rate": 0.28148959474260676
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 3391,
+          "pred_mean": 0.3488140924600541,
+          "actual_rate": 0.3341197286936007
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 3684,
+          "pred_mean": 0.4501614796076613,
+          "actual_rate": 0.44462540716612375
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 3593,
+          "pred_mean": 0.5512598551086089,
+          "actual_rate": 0.5641525187865294
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 3951,
+          "pred_mean": 0.6489767995975314,
+          "actual_rate": 0.6699569729182485
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 3629,
+          "pred_mean": 0.7490657717605438,
+          "actual_rate": 0.7349131992284376
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 3360,
+          "pred_mean": 0.8496900823854264,
+          "actual_rate": 0.8098214285714286
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 6065,
+          "pred_mean": 0.9658791493996056,
+          "actual_rate": 0.9559769167353669
+        }
+      ],
+      "rows": 40371,
+      "ece": 0.019050354816715423
+    },
+    "logistic_baseline": {
+      "log_loss": 0.4762808610527442,
+      "brier": 0.15870762683680018,
+      "ece": 0.019336877303499162
+    }
+  },
+  "corr_with_vegas_wp": 0.995395619466947,
+  "mean_abs_diff_vs_vegas_wp": 0.02153647003990007,
+  "walker_parity_max_abs_diff": 3.046334363654424e-07,
+  "pregame_home_wp_by_spread": {
+    "-10": 0.7919,
+    "-7": 0.7137,
+    "-3": 0.5721,
+    "-1": 0.4997,
+    "0": 0.485,
+    "1": 0.4705,
+    "3": 0.3996,
+    "7": 0.257
+  },
+  "data": {
+    "source": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{year}.csv.gz",
+    "filters": "posteam present; down 1-4; finite clock/field/timeouts/spread; result != 0; qtr <= 4 (regulation only)"
+  }
+}

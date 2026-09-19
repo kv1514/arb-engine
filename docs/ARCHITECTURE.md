@@ -73,3 +73,15 @@ Brokers: `PaperBroker` (fills when the venue's best ask reaches our price — op
 queue position), `KalshiBroker` (post-only V2 orders; demo unless `KALSHI_ENV=prod` +
 `ARB_LIVE_TRADING=1` + `--confirm`). All venue data goes through one rate-limited Kalshi
 client (8 req/s) shared by the scan adapter and the feed.
+
+## In-play pricing (`strategy/inplay.py`)
+
+```
+venues (Kalshi / Polymarket / Rothera quotes) ─► consensus_fair_value ─► market P(home)
+ESPN scoreboard (+summary every 30 s)       ─► GameState ─► models/wp.home_win_probability ─► model P(home)
+                                                          └─► espn_home_wp
+blended_fair(market 0.50, model 0.35, espn 0.15; renormalised; market-only pre-game)
+  └─► STEAL (blend AND model ≥ all-in + edge) · LOCK price for the short side · disagreement > 0.05 flagged
+```
+
+The bridge serves `GET /inplay?url=…&position=…` and the overlay renders it as the LIVE strip.

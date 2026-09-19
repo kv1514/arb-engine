@@ -127,3 +127,9 @@ class VenueSnapshot:
     quotes: list[OutcomeQuote] = field(default_factory=list)
     fetched_at: float = 0.0
     errors: list[str] = field(default_factory=list)
+
+
+# Statistical models with standard-library inference live in submodules
+# (``arb_engine.models.wp`` — in-game NFL win probability trained on nflverse play-by-play
+# by ``scripts/train_wp_model.py``). Import them explicitly:
+#   from arb_engine.models.wp import home_win_probability
