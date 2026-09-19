@@ -68,7 +68,8 @@ until a college replay says otherwise. College spreads/totals: Kalshi `KXNCAAFSP
 each, same ⌈line⌉ ticker suffix as the NFL) and Robinhood's CDNA line events
 (`EVENT_TYPE_SPREAD` / `EVENT_TYPE_TOTALS`, ~45 contracts per game named "Oregon -93.5 points" /
 "Over 44.5 points", one contract per line, favourite named on the contract) are ingested;
-a scan on 2026-09-18 produced 8,689 line events, 2,990 of them on both Kalshi and CDNA, with
-three thin positive-margin spreads and nothing fillable. Polymarket's college spreads/totals are ingested too (teams taken
+a scan on 2026-09-18 with all three venues produced 10,525 line events, 1,384 of them on
+Kalshi, Polymarket and CDNA together, nine positive-margin spreads and two fillable ones
+(≈1 % on capital, Polymarket × CDNA tails) — the same far-tail pattern as the NFL. Polymarket's college spreads/totals are ingested too (teams taken
 from the event's moneyline outcomes because the slug codes are Polymarket's own).
 
