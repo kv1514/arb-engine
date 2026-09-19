@@ -362,7 +362,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         from .backtest import fit_blend_weights, replay_week, simulate_steal, summarize_many
 
         results, skipped = replay_week(args.season, args.week, polymarket=not args.no_polymarket, limit=args.limit, progress=print, sport=args.sport)
-        fit = fit_blend_weights(results) if results else None
+        fit = fit_blend_weights(results, sport=args.sport) if results else None
         sims = [simulate_steal(results, contracts=args.contracts, source="blend", lock=True, lock_fraction=lf) for lf in (0.0, 0.5, 1.0)] + [simulate_steal(results, contracts=args.contracts, source="blend", lock=False), simulate_steal(results, contracts=args.contracts, source="model", lock=False)] if results else []
         print(summarize_many(results, skipped, fit, sims))
         if args.json:

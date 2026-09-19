@@ -116,6 +116,7 @@ mechanics and the Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/F
 
 ```bash
 python -m arb_engine backtest --week 1                              # every finished game of the week: pooled scores + blend-weight fit
+python -m arb_engine backtest --sport ncaaf --week 2                # same for college football (86 games; the NFL model transfers, docs/MODEL.md)
 python -m arb_engine games                                          # prints the ESPN id per game
 python -m arb_engine backtest --espn 401872932 --rh-home <contract id> --rh-away <contract id> --pm-away <token id> --json out/backtest.json
 python -m arb_engine scan --sport nfl --record out/history.db       # persist every event + quote (SQLite)

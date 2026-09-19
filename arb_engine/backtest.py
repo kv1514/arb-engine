@@ -359,10 +359,10 @@ def pooled_metrics(results: list[ReplayResult], inplay_only: bool = False) -> di
     return out
 
 
-def fit_blend_weights(results: list[ReplayResult], step: float = 0.05, inplay_only: bool = True) -> dict[str, Any]:
+def fit_blend_weights(results: list[ReplayResult], step: float = 0.05, inplay_only: bool = True, sport: str = "nfl") -> dict[str, Any]:
     """Grid-search (market, model, espn) weights on the simplex that minimise pooled log-loss
-    over plays where all three sources exist. Reports the current default too."""
-    from .quant.inplay_fair import DEFAULT_WEIGHTS
+    over plays where all three sources exist. Reports the sport's current weights too."""
+    from .quant.inplay_fair import DEFAULT_WEIGHTS, SPORT_WEIGHTS
 
     rows = []
     for res in results:
@@ -391,7 +391,7 @@ def fit_blend_weights(results: list[ReplayResult], step: float = 0.05, inplay_on
             we = max(0.0, 1 - wm - wo)
             grid.append((loss(wm, wo, we), round(wm, 2), round(wo, 2), round(we, 2)))
     grid.sort()
-    d = DEFAULT_WEIGHTS
+    d = SPORT_WEIGHTS.get(sport, DEFAULT_WEIGHTS)
     cur = loss(d.get("market", 0.5), d.get("model", 0.35), d.get("espn", 0.15))
     return {
         "n": len(rows),

@@ -50,9 +50,11 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
 DEFAULT_WEIGHTS: dict[str, float] = {"market": 0.30, "model": 0.55, "espn": 0.15}
-# The WP model is trained on NFL play-by-play; for college games it is an approximation
-# (different OT, pace and variance), so the market keeps the anchor there until a replay says otherwise.
-SPORT_WEIGHTS: dict[str, dict[str, float]] = {"ncaaf": {"market": 0.50, "model": 0.35, "espn": 0.15}}
+# The WP model is trained on NFL play-by-play. Replaying 2026 college week 2 (86 games,
+# 14,916 in-play plays; docs/MODEL.md) it was still the best single source (0.221 log-loss vs
+# ESPN 0.233, market 0.244) and the NFL default weights beat a market-anchored 0.50/0.35/0.15
+# (0.2377 vs 0.2389 on the plays with all three sources), so college uses the same weights.
+SPORT_WEIGHTS: dict[str, dict[str, float]] = {"ncaaf": dict(DEFAULT_WEIGHTS)}
 
 
 def market_confidence_from_spread(spread: Optional[float], tight: float = 0.04, wide: float = 0.12, floor: float = 0.3) -> float:
