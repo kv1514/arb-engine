@@ -81,11 +81,15 @@ PLUGIN = '''
 
 class GoldenHelpTest(unittest.TestCase):
     def test_every_builtin_help_is_unchanged_without_plugins(self):
+        # argparse wraps the usage line differently across Python minor versions (CI runs
+        # 3.10-3.13; the goldens were captured on 3.13), so compare with whitespace collapsed:
+        # any flag, choice or help-text change still fails, line-wrapping does not.
+        norm = lambda t: " ".join(t.split())  # noqa: E731
         with _PluginDir({}):
             for cmd in [None] + SUBCOMMANDS:
                 got = _help([cmd] if cmd else [])
                 want = (GOLDEN / f"{cmd or 'root'}.txt").read_text(encoding="utf-8")
-                self.assertEqual(got, want, f"--help of {cmd or 'root'} changed")
+                self.assertEqual(norm(got), norm(want), f"--help of {cmd or 'root'} changed")
 
     def test_builtin_subcommand_list_is_complete(self):
         with _PluginDir({}):
