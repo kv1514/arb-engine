@@ -44,19 +44,50 @@
 
   // ---- Robinhood ------------------------------------------------------------------------
   // commission = min(round_up_cent(k P (1-P) C), $0.01 C) with k = 0.10 (0.05 Gold);
-  // plus exchange fee up to $0.01/contract (ForecastEX embeds it in the spread).
+  // plus the routing exchange's fee (fees/robinhood.py). Exchange-fee models, all opt-in and
+  // defaulting to the historical flat $0.01/contract until an order ticket confirms them:
+  //   rotheraFeeModel: "flat_001" | "quadratic"  — Rothera Fee Schedule 20260520:
+  //       max(round_half_up(0.02 P (1-P) C, cent), $0.01) PER ORDER (floor is per order, so
+  //       a 1-lot pays a full cent while 100 @ $0.99 pays $0.02)
+  //   cdnaFeeModel: "flat_001" | "flat_002" | "weighted_007" — CDNA (ex-Nadex; also the
+  //       "nadex" key): $0.01/ct, $0.02/ct, or round_up_cent(0.07 P (1-P) C). Unverified.
+  // ForecastEX embeds its fee in the spread.
   const RH_EXCHANGE_FEE = { kalshi: 0.01, rothera: 0.01, nadex: 0.01, forecastex: 0, cdna: 0.01 };  // cdna = college games (NX.F.OPT.*), assumed at the cap
+  const ROTHERA_RETAIL_K = 0.02;
+  function rotheraOrderFee(price, contracts, k) {
+    const C = contractsU(contracts);
+    if (C <= 0n) return 0;
+    const p = toCentiCents(price), q = 10000n - p;
+    // k scaled at 1e-6 (not whole cents) so a non-schedule rate such as 0.025 matches Python's exact Decimal.
+    const N = BI(Math.round((k == null ? ROTHERA_RETAIL_K : Number(k)) * 1e6)) * p * q * C;   // scale 10^16
+    let cents = roundHalfUpDiv(N, pow10(14));
+    if (cents < 1n) cents = 1n;
+    return money(cents);
+  }
+  function rhExchangeFeeModel(exch, opts) {
+    if (exch === "rothera") return opts.rotheraFeeModel || "flat_001";
+    if (exch === "cdna" || exch === "nadex") return opts.cdnaFeeModel || "flat_001";
+    return "flat_001";
+  }
   function feeRobinhood(price, contracts, role, opts) {
     opts = opts || {};
     const k = opts.gold ? 0.05 : 0.10;
     const p = toCentiCents(price), q = 10000n - p, C = contractsU(contracts);
+    if (C <= 0n) return 0;
     const N = BI(Math.round(k * 100)) * p * q * C;           // scale 10^(2+4+4+2) = 10^12
     let cents = ceilDiv(N, pow10(10));
     const capCents = C / 100n;                                 // $0.01 per contract
     if (cents > capCents) cents = capCents;
     const exch = opts.exchange || "rothera";
-    const per = RH_EXCHANGE_FEE[exch] == null ? 0.01 : RH_EXCHANGE_FEE[exch];
-    const exchangeCents = BI(Math.round(per * 100)) * C / 100n;
+    const model = rhExchangeFeeModel(exch, opts);
+    let exchangeCents;
+    if (model === "quadratic") exchangeCents = BI(Math.round(rotheraOrderFee(price, contracts, opts.rotheraK) * 100));
+    else if (model === "weighted_007") exchangeCents = ceilDiv(rateU(0.07) * C * p * q, pow10(14));   // scale 10^(6+2+4+4) -> cents
+    else if (model === "flat_002") exchangeCents = 2n * C / 100n;
+    else {
+      const per = RH_EXCHANGE_FEE[exch] == null ? 0.01 : RH_EXCHANGE_FEE[exch];
+      exchangeCents = BI(Math.round(per * 100)) * C / 100n;
+    }
     return money(cents + exchangeCents);
   }
 
@@ -95,7 +126,8 @@
       return (price, c, role) => feeKalshi(price, c, role, o);
     }
     if (venue === "robinhood") {
-      const o = { gold: !!settings.gold, exchange: params.exchange || "rothera" };
+      // A quote's own fee_params pin the model (params.rothera_fee_model) over the user setting.
+      const o = { gold: !!settings.gold, exchange: params.exchange || "rothera", rotheraFeeModel: params.rothera_fee_model || settings.rotheraFeeModel || "flat_001", cdnaFeeModel: params.cdna_fee_model || settings.cdnaFeeModel || "flat_001", rotheraK: params.rothera_k };
       return (price, c, role) => feeRobinhood(price, c, role, o);
     }
     if (venue === "polymarket") {
@@ -108,46 +140,67 @@
   }
 
   // ---- arbitrage ------------------------------------------------------------------------
-  // legs: [{outcome, venue, price, fee: fn(price, contracts, role), role}]
+  // legs: [{outcome, venue, price, fee: fn(price, contracts, role), role, tiePayout}]
+  // tiePayout is what one contract of the leg pays if the game ties (quant/arbitrage.py):
+  // 0.5 on venues that settle a tie half/half (Kalshi, Polymarket, Kalshi-routed Robinhood),
+  // 0 for a Rothera YES and 1 for a Rothera NO. tieMargin is the locked margin *if* the game
+  // ties; margin/isArb are unchanged (a tie is a separate risk the caller flags).
+  const DEFAULT_TIE_PAYOUT = 0.5;
+  function tiePayoutOf(l) { return l.tiePayout == null ? DEFAULT_TIE_PAYOUT : Number(l.tiePayout); }
   function evaluate(legs, contracts) {
     contracts = contracts || 100;
-    let total = 0, gross = 0;
+    let total = 0, gross = 0, tieTotal = 0;
     const out = legs.map((l) => {
       const fee = l.fee(l.price, contracts, l.role || "taker");
       const cost = l.price * contracts + fee;
-      total += cost; gross += l.price;
-      return { outcome: l.outcome, venue: l.venue, price: l.price, fee, cost, allIn: cost / contracts, role: l.role || "taker", label: l.label || "" };
+      total += cost; gross += l.price; tieTotal += tiePayoutOf(l);
+      return { outcome: l.outcome, venue: l.venue, price: l.price, fee, cost, allIn: cost / contracts, role: l.role || "taker", label: l.label || "", tiePayout: tiePayoutOf(l) };
     });
     const profit = contracts - total;
-    return { contracts, totalCost: total, payout: contracts, profit, margin: profit / contracts, roi: total ? profit / total : 0, legs: out, isArb: profit > 0, grossSum: gross };
+    const tieProfit = tieTotal * contracts - total;
+    return { contracts, totalCost: total, payout: contracts, profit, margin: profit / contracts, roi: total ? profit / total : 0, legs: out, isArb: profit > 0, grossSum: gross, tiePayoutTotal: tieTotal, tieMargin: tieProfit / contracts };
   }
 
   function legCost(l, contracts) { return l.price * contracts + l.fee(l.price, contracts, l.role || "taker"); }
 
-  // Highest price on the tick grid at which this leg still locks target margin against the others.
-  function maxPrice(otherLegs, fee, contracts, targetMargin, role, tick) {
+  // Highest price on the tick grid (0.01 Kalshi/Robinhood, 0.001 Polymarket tails) between
+  // priceFloor and priceCap at which this leg still locks target margin against the others.
+  // Prices are built as integer ticks so a 0.001 grid yields exact 3-dp values.
+  function maxPrice(otherLegs, fee, contracts, targetMargin, role, tick, priceFloor, priceCap) {
     contracts = contracts || 100; targetMargin = targetMargin || 0; role = role || "taker"; tick = tick || 0.01;
+    priceFloor = priceFloor == null ? 0.01 : priceFloor; priceCap = priceCap == null ? 0.99 : priceCap;
     const others = otherLegs.reduce((s, l) => s + legCost(l, contracts), 0);
     const budget = contracts * (1 - targetMargin) - others;
     if (budget <= 0) return null;
-    const ticks = Math.round(1 / tick);
-    let t = Math.min(Math.round(0.99 * ticks), Math.floor((budget / contracts) * ticks + 1e-9));
-    for (; t >= 1; t--) {
-      const p = t / ticks;
+    const ticks = Math.round(1 / tick), dp = Math.max(0, Math.ceil(Math.log10(ticks) - 1e-9));
+    const floorT = Math.max(1, Math.ceil(priceFloor * ticks - 1e-9));
+    let t = Math.min(Math.floor(priceCap * ticks + 1e-9), Math.floor((budget / contracts) * ticks + 1e-9));
+    for (; t >= floorT; t--) {
+      const p = Number((t / ticks).toFixed(dp));
       if (p * contracts + fee(p, contracts, role) <= budget + 1e-9) return p;
     }
     return null;
   }
 
+  // Largest multiple of `step` (a venue's minimum order size, e.g. 5 Polymarket shares) not
+  // above `size`; 0 when even one step does not fit (mirrors size_from_books' cap rounding).
+  function stepSize(size, step) {
+    step = step || 1;
+    if (!(size > 0)) return 0;
+    return Math.floor(size / step + 1e-9) * step;
+  }
+
+  // Cheapest all-in leg per outcome; on an all-in tie prefer the leg that pays more if the
+  // game ties (a Rothera NO over a Rothera YES at the same ask).
   function bestLegPerOutcome(quotesByOutcome, contracts) {
     const legs = [];
     for (const outcome of Object.keys(quotesByOutcome)) {
       let best = null, bestCost = Infinity;
       for (const q of quotesByOutcome[outcome]) {
         if (q.ask == null || q.mirror) continue;
-        const leg = { outcome, venue: q.venue, price: q.ask, fee: q.fee, role: "taker", label: q.label, quote: q };
+        const leg = { outcome, venue: q.venue, price: q.ask, fee: q.fee, role: "taker", label: q.label, quote: q, tiePayout: q.tiePayout };
         const cost = legCost(leg, contracts);
-        if (cost < bestCost) { best = leg; bestCost = cost; }
+        if (cost < bestCost - 1e-12 || (best && Math.abs(cost - bestCost) <= 1e-12 && tiePayoutOf(leg) > tiePayoutOf(best))) { best = leg; bestCost = cost; }
       }
       if (best) legs.push(best);
     }
@@ -264,5 +317,5 @@
     return m ? { code: m[1], cents: Number(m[2]) } : null;
   }
 
-  root.ArbCore = { feeKalshi, feeRobinhood, feePolymarket, feePolymarketUS, feeFn, evaluate, maxPrice, bestLegPerOutcome, consensusFair, loadTeams, nflTeamCode, personKey, normalizePerson, parseSymbol, polymarketNflSlugs, addDays, categoryPath, categoryGameHref, contractCode };
+  root.ArbCore = { feeKalshi, feeRobinhood, rotheraOrderFee, feePolymarket, feePolymarketUS, feeFn, evaluate, maxPrice, stepSize, bestLegPerOutcome, consensusFair, loadTeams, nflTeamCode, personKey, normalizePerson, parseSymbol, polymarketNflSlugs, addDays, categoryPath, categoryGameHref, contractCode };
 })(typeof globalThis !== "undefined" ? globalThis : this);

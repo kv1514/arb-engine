@@ -1,0 +1,91 @@
+{
+ "baseline": {
+  "cdna_fee_model": "flat_001",
+  "rothera_fee_model": "flat_001"
+ },
+ "fixtures": {
+  "ncaaf": {
+   "cdna:flat_002": {
+    "arbs_after": 1,
+    "arbs_before": 1,
+    "events": 56,
+    "margin_sign_flips": 0,
+    "margins_improved": 0,
+    "max_margin_after": 0.0101,
+    "max_margin_before": 0.0101,
+    "robinhood_rows": 18,
+    "rows_moved": 14,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 16
+   },
+   "cdna:weighted_007": {
+    "arbs_after": 1,
+    "arbs_before": 1,
+    "events": 56,
+    "margin_sign_flips": 0,
+    "margins_improved": 0,
+    "max_margin_after": 0.0101,
+    "max_margin_before": 0.0101,
+    "robinhood_rows": 18,
+    "rows_moved": 14,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 16
+   },
+   "rothera:quadratic": {
+    "arbs_after": 1,
+    "arbs_before": 1,
+    "events": 56,
+    "margin_sign_flips": 0,
+    "margins_improved": 0,
+    "max_margin_after": 0.0101,
+    "max_margin_before": 0.0101,
+    "robinhood_rows": 18,
+    "rows_moved": 0,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 0
+   }
+  },
+  "nfl": {
+   "cdna:flat_002": {
+    "arbs_after": 0,
+    "arbs_before": 0,
+    "events": 5,
+    "margin_sign_flips": 0,
+    "margins_improved": 0,
+    "max_margin_after": -0.026555,
+    "max_margin_before": -0.026555,
+    "robinhood_rows": 10,
+    "rows_moved": 0,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 0
+   },
+   "cdna:weighted_007": {
+    "arbs_after": 0,
+    "arbs_before": 0,
+    "events": 5,
+    "margin_sign_flips": 0,
+    "margins_improved": 0,
+    "max_margin_after": -0.026555,
+    "max_margin_before": -0.026555,
+    "robinhood_rows": 10,
+    "rows_moved": 0,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 0
+   },
+   "rothera:quadratic": {
+    "arbs_after": 0,
+    "arbs_before": 0,
+    "events": 5,
+    "margin_sign_flips": 0,
+    "margins_improved": 3,
+    "max_margin_after": -0.026355,
+    "max_margin_before": -0.026555,
+    "robinhood_rows": 10,
+    "rows_moved": 10,
+    "rows_moved_off_exchange": 0,
+    "rows_on_exchange": 10
+   }
+  }
+ },
+ "item": "P10"
+}

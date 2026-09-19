@@ -15,6 +15,12 @@ Polymarket US (CFTC-regulated, docs.polymarket.us/fees) — a separate product:
 
     fee = theta x C x P x (1 - P), banker's rounding to the cent
     taker theta 0.06 (0.0695 from 2026-09-16), maker rebate theta -0.0125
+
+The fee page's worked example (verified 2026-09-19): 1,000 contracts at $0.50 pay a taker
+fee of 0.0695 x 1,000 x 0.25 = $17.375 -> **$17.38** and earn a maker rebate of
+-0.0125 x 1,000 x 0.25 = -$3.125 -> **-$3.12** (both banker's-rounded: 17.375 rounds to
+the even 8, -3.125 to the even 2). ``POLY_US_WORKED_EXAMPLE`` pins it for the tests and
+``check_polymarket_us_worked_example`` recomputes it from the model.
 """
 
 from __future__ import annotations
@@ -80,6 +86,8 @@ POLY_US_TAKER_THETA_BEFORE = Decimal("0.06")
 POLY_US_TAKER_THETA_AFTER = Decimal("0.0695")
 POLY_US_THETA_CHANGE_DATE = date(2026, 9, 16)
 POLY_US_MAKER_THETA = Decimal("-0.0125")
+#: docs.polymarket.us/fees worked example at the post-2026-09-16 taker theta.
+POLY_US_WORKED_EXAMPLE = {"contracts": 1000, "price": "0.50", "taker": Decimal("17.38"), "maker": Decimal("-3.12")}
 
 
 @dataclass(frozen=True)
@@ -105,3 +113,11 @@ class PolymarketUSFees(_Base):
         if role != "maker" and self.volume_rebate:
             raw = raw * (Decimal(1) - self.volume_rebate)
         return round_half_even_to(raw, CENT)
+
+
+def check_polymarket_us_worked_example(model: "PolymarketUSFees | None" = None) -> bool:
+    """True when ``model`` (default: the post-change thetas) reproduces the fee page's
+    1,000 @ $0.50 example exactly — the guard that a theta or rounding edit must trip."""
+    fm = model or PolymarketUSFees(taker_theta=POLY_US_TAKER_THETA_AFTER, maker_theta=POLY_US_MAKER_THETA)
+    ex = POLY_US_WORKED_EXAMPLE
+    return fm.fee(ex["price"], ex["contracts"], "taker") == ex["taker"] and fm.fee(ex["price"], ex["contracts"], "maker") == ex["maker"]
