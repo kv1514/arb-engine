@@ -1,0 +1,39 @@
+usage: arb-engine [-h] [--version]
+                  {scan,quote,fees,kelly,rh-event,bridge,maker,inplay,games,live,record,stats,backtest,kalshi} ...
+
+Command line: ``python -m arb_engine <command>``.
+
+scan     pull venues, merge events, print arbs / edges / max-buy prices
+quote    one event or team: every venue's price, fee, all-in, fair value, max buy
+fees     fee calculator for a venue
+kelly    size a +EV (non-arb) position
+kalshi   balance / positions / orders / order (dry-run unless --confirm)
+
+positional arguments:
+  {scan,quote,fees,kelly,rh-event,bridge,maker,inplay,games,live,record,stats,backtest,kalshi}
+    scan                scan a sport across venues
+    quote               show one event across venues (substring of key/title, e.g. PHI or
+                        'Eagles')
+    fees                fee calculator
+    kelly               Kelly sizing for a +EV contract
+    rh-event            analyse one Robinhood event page URL across venues (what the overlay
+                        shows)
+    bridge              local HTTP bridge for the browser overlay (127.0.0.1:8765)
+    maker               rest Kalshi orders at arb-creating prices vs the cheapest hedge elsewhere;
+                        alert on fills
+    inplay              watch one game with your open lots: STEAL (below fair) and LOCK NOW (other
+                        side cheap enough to guarantee profit)
+    games               this week's NFL games from ESPN: status, score, situation, spread, model
+                        P(home)
+    live                price every live NFL game at once (model/market/ESPN fair, cheapest venue,
+                        STEAL flags)
+    record              scan on a schedule and append every event + quote to SQLite (arb frequency
+                        by time-to-kickoff)
+    stats               arb frequency / duration from a recorded SQLite file
+    backtest            replay a finished NFL game play-by-play with public price history; score
+                        model/ESPN/venues vs the outcome
+    kalshi              authenticated Kalshi actions (demo env unless KALSHI_ENV=prod)
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit

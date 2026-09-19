@@ -1,0 +1,17 @@
+usage: arb-engine record [-h] [--sport SPORT] [--every EVERY] [--hours HOURS] [--once] [--books]
+                         [--db DB] [--venues VENUES] [--markets MARKETS] [--contracts CONTRACTS]
+                         [--target-margin TARGET_MARGIN] [--gold]
+
+options:
+  -h, --help            show this help message and exit
+  --sport SPORT
+  --every EVERY         seconds between scans (default 300)
+  --hours HOURS         stop after this many hours (default: run until Ctrl-C)
+  --once
+  --books               fetch depth for candidates (slower, sized arbs)
+  --db DB
+  --venues VENUES
+  --markets MARKETS
+  --contracts CONTRACTS
+  --target-margin TARGET_MARGIN
+  --gold

@@ -1,0 +1,10 @@
+usage: arb-engine stats [-h] [--db DB] [--sport SPORT] [--min-margin MIN_MARGIN] [--limit LIMIT]
+                        [--json JSON]
+
+options:
+  -h, --help            show this help message and exit
+  --db DB
+  --sport SPORT
+  --min-margin MIN_MARGIN
+  --limit LIMIT         episodes to list
+  --json JSON

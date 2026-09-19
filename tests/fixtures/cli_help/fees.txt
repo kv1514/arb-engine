@@ -1,0 +1,17 @@
+usage: arb-engine fees [-h] --venue VENUE --price PRICE [--contracts CONTRACTS]
+                       [--role {taker,maker}] [--gold] [--exchange EXCHANGE]
+                       [--multiplier MULTIPLIER] [--maker-fees] [--rounding {cent,centicent}]
+                       [--rate RATE]
+
+options:
+  -h, --help            show this help message and exit
+  --venue VENUE
+  --price PRICE
+  --contracts CONTRACTS
+  --role {taker,maker}
+  --gold
+  --exchange EXCHANGE
+  --multiplier MULTIPLIER
+  --maker-fees          series charges maker fees (game markets do)
+  --rounding {cent,centicent}
+  --rate RATE           polymarket feeSchedule rate override

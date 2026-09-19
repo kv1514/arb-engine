@@ -1,0 +1,26 @@
+usage: arb-engine quote [-h] [--sport {nfl,tennis,ncaaf,nba,nhl,mlb}] [--venues VENUES]
+                        [--contracts CONTRACTS] [--target-margin TARGET_MARGIN] [--books]
+                        [--candidate-margin CANDIDATE_MARGIN] [--gold]
+                        [--max-quote-age MAX_QUOTE_AGE] [--markets MARKETS]
+                        query
+
+positional arguments:
+  query
+
+options:
+  -h, --help            show this help message and exit
+  --sport {nfl,tennis,ncaaf,nba,nhl,mlb}
+  --venues VENUES
+  --contracts CONTRACTS
+                        reference size for fee rounding
+  --target-margin TARGET_MARGIN
+                        required locked-in margin per $1 payout for max-buy prices
+  --books               second pass: fetch real order books for candidate events (margin above
+                        --candidate-margin) and re-size
+  --candidate-margin CANDIDATE_MARGIN
+                        events at or above this top-of-book margin get real depth in the --books
+                        pass
+  --gold                price Robinhood commission at the Gold rate
+  --max-quote-age MAX_QUOTE_AGE
+                        seconds; snapshots older than this are excluded from arb legs
+  --markets MARKETS     comma list of market types to include

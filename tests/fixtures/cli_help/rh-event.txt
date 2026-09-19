@@ -1,0 +1,18 @@
+usage: arb-engine rh-event [-h] [--contracts CONTRACTS] [--target-margin TARGET_MARGIN] [--gold]
+                           [--json] [--all] [--limit LIMIT] [--min-margin MIN_MARGIN]
+                           [--include-thin]
+                           url
+
+positional arguments:
+  url
+
+options:
+  -h, --help            show this help message and exit
+  --contracts CONTRACTS
+  --target-margin TARGET_MARGIN
+  --gold
+  --json
+  --all                 print every line, not only arbs (line pages)
+  --limit LIMIT
+  --min-margin MIN_MARGIN
+  --include-thin

@@ -1,0 +1,25 @@
+usage: arb-engine backtest [-h] [--espn ESPN] [--rh-home RH_HOME] [--rh-away RH_AWAY]
+                           [--pm-home PM_HOME] [--pm-away PM_AWAY] [--kalshi-home KALSHI_HOME]
+                           [--kalshi-away KALSHI_AWAY] [--week WEEK] [--season SEASON]
+                           [--sport {nfl,ncaaf}] [--limit LIMIT] [--no-polymarket]
+                           [--contracts CONTRACTS] [--json JSON]
+
+options:
+  -h, --help            show this help message and exit
+  --espn ESPN           ESPN event id (from `arb-engine games` keys / ESPN URLs)
+  --rh-home RH_HOME     Robinhood contract id for the home team (from the catalogue / fixtures)
+  --rh-away RH_AWAY
+  --pm-home PM_HOME     Polymarket token id for the home outcome
+  --pm-away PM_AWAY
+  --kalshi-home KALSHI_HOME
+                        override Kalshi ticker (default derived from teams + ET date)
+  --kalshi-away KALSHI_AWAY
+  --week WEEK           replay every finished game of this NFL regular-season week (Kalshi +
+                        Polymarket + ESPN + model) and fit the blend weights
+  --season SEASON
+  --sport {nfl,ncaaf}
+  --limit LIMIT         with --week: only the first N games
+  --no-polymarket       with --week: skip the Polymarket history lookup
+  --contracts CONTRACTS
+                        with --week: contracts per simulated STEAL/LOCK entry
+  --json JSON           write the full replay to this file

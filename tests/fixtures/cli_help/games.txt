@@ -1,0 +1,8 @@
+usage: arb-engine games [-h] [--date DATE] [--live-only] [--enrich] [--sport {nfl,ncaaf,nba,nhl}]
+
+options:
+  -h, --help            show this help message and exit
+  --date DATE           YYYY-MM-DD (default: current week)
+  --live-only
+  --enrich              also pull each game's summary (ESPN win probability)
+  --sport {nfl,ncaaf,nba,nhl}

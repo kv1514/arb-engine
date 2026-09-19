@@ -10,17 +10,18 @@
 from __future__ import annotations
 
 import argparse
+import importlib
+import inspect
 import json
 import os
+import pkgutil
 import sys
 import time
 from dataclasses import asdict
-from typing import Any, Optional
-
-import os
+from typing import Any, Callable, Optional
 
 from . import __version__
-from .config import load_dotenv, settings_from_env
+from .config import load_dotenv, load_settings
 from .fees import KalshiFees, PolymarketFees, PolymarketUSFees, RobinhoodFees
 from .quant.sizing import kelly_stake
 from .scanner import ScanResult, scan
@@ -95,8 +96,8 @@ def print_scan(res: ScanResult, min_margin: float, limit: int, show_all: bool, i
             print(f"  legs@{ev.arb['contracts']:.0f}: {legs}  => cost ${ev.arb['total_cost']:.2f} for ${ev.arb['payout']:.0f} payout, profit ${ev.arb['profit']:.2f}")
 
 
-def cmd_scan(args: argparse.Namespace) -> int:
-    settings = settings_from_env()
+def cmd_scan(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
@@ -118,8 +119,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_quote(args: argparse.Namespace) -> int:
-    settings = settings_from_env()
+def cmd_quote(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
@@ -135,7 +136,7 @@ def cmd_quote(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_fees(args: argparse.Namespace) -> int:
+def cmd_fees(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     venue = args.venue
     if venue == "kalshi":
         fm = KalshiFees(multiplier=KalshiFees.from_series({"fee_multiplier": args.multiplier}).multiplier, maker_fees=args.maker_fees, rounding=args.rounding)
@@ -153,16 +154,16 @@ def cmd_fees(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_kelly(args: argparse.Namespace) -> int:
+def cmd_kelly(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     r = kelly_stake(args.bankroll, args.fair, args.cost, args.fraction)
     print(json.dumps(r, indent=1))
     return 0
 
 
-def cmd_rh_event(args: argparse.Namespace) -> int:
+def cmd_rh_event(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     from .eventlookup import EventAnalyzer
 
-    settings = settings_from_env()
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     res = EventAnalyzer().analyze_url(args.url, settings=settings, contracts=args.contracts, target_margin=args.target_margin)
@@ -190,21 +191,21 @@ def cmd_rh_event(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_bridge(args: argparse.Namespace) -> int:
+def cmd_bridge(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     from .bridge import serve
 
     serve(args.host, args.port)
     return 0
 
 
-def cmd_maker(args: argparse.Namespace) -> int:
+def cmd_maker(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     from .matching.matcher import merge_snapshots
     from .strategy.alerts import Alerter
     from .strategy.broker import KalshiBroker, PaperBroker
     from .strategy.maker import MakerConfig, MakerRunner, MarketFeed
     from .venues import KalshiClient, PolymarketAdapter, RobinhoodAdapter
 
-    settings = settings_from_env()
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
@@ -275,13 +276,13 @@ def _espn_state_fetcher(event_key: str, refresh_summary_every: float = 30.0):
     return fetch
 
 
-def cmd_inplay(args: argparse.Namespace) -> int:
+def cmd_inplay(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """Watch one Robinhood event with your open lots; alert on STEAL / LOCK NOW."""
     from .eventlookup import EventAnalyzer
     from .strategy.alerts import Alerter
     from .strategy.inplay import InplayWatcher, Lot
 
-    settings = settings_from_env()
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     lots = [Lot.parse(p) for p in (args.position or [])]
@@ -322,7 +323,7 @@ def cmd_inplay(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_games(args: argparse.Namespace) -> int:
+def cmd_games(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """This week's NFL games from ESPN with status, score, spread and the model's pre-game P(home)."""
     from .strategy.inplay import game_line, model_home_wp
     from .venues.espn import ESPNClient, ESPNFeed
@@ -347,7 +348,7 @@ def cmd_games(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_backtest(args: argparse.Namespace) -> int:
+def cmd_backtest(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """Replay a finished game with public price history and score every fair-value source."""
     from .backtest import GameReplayer, summarize
 
@@ -382,12 +383,12 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_live(args: argparse.Namespace) -> int:
+def cmd_live(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """Price every live (and about-to-start) game at once: fair per side, cheapest venue, STEALs."""
     from .strategy.alerts import Alerter
     from .strategy.live import LiveSlate, format_tick
 
-    settings = settings_from_env()
+    settings = dict(settings) if settings is not None else load_settings()
     if args.gold:
         settings["robinhood_gold"] = True
     store = None
@@ -405,7 +406,7 @@ def cmd_live(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_record(args: argparse.Namespace) -> int:
+def cmd_record(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """Scan on a schedule and append every event + quote to SQLite (measures arb frequency)."""
     from .store import Store
 
@@ -416,7 +417,7 @@ def cmd_record(args: argparse.Namespace) -> int:
         while True:
             t0 = time.time()
             try:
-                settings = settings_from_env()
+                settings = dict(settings) if settings is not None else load_settings()
                 if args.gold:
                     settings["robinhood_gold"] = True
                 res = scan(args.sport, build_adapters([v.strip() for v in args.venues.split(",") if v.strip()], False), settings=settings, contracts=args.contracts, target_margin=args.target_margin, market_types={m.strip() for m in args.markets.split(",") if m.strip()}, depth_for_candidates=args.books)
@@ -436,7 +437,7 @@ def cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stats(args: argparse.Namespace) -> int:
+def cmd_stats(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     """Arb frequency / duration from a recorded SQLite file."""
     from .store import Store
 
@@ -459,7 +460,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_kalshi(args: argparse.Namespace) -> int:
+def cmd_kalshi(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None) -> int:
     from .execution.kalshi import KalshiExecutor
 
     ex = KalshiExecutor()
@@ -475,8 +476,55 @@ def cmd_kalshi(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[list[str]] = None) -> int:
-    load_dotenv()
+Handler = Callable[..., Any]
+
+
+def _call_handler(handler: Handler, args: argparse.Namespace, settings: dict[str, Any]) -> int:
+    """Dispatch ``handler(args, settings)``; a legacy one-argument ``handler(args)`` still works."""
+    try:
+        params = inspect.signature(handler).parameters
+    except (TypeError, ValueError):  # builtins / C callables: assume the modern shape
+        params = None
+    if params is not None and len([q for q in params.values() if q.kind in (q.POSITIONAL_ONLY, q.POSITIONAL_OR_KEYWORD)]) < 2 and not any(q.kind == q.VAR_POSITIONAL for q in params.values()):
+        return int(handler(args) or 0)
+    return int(handler(args, settings) or 0)
+
+
+def load_plugins(subparsers: argparse._SubParsersAction, parsers: dict[str, argparse.ArgumentParser], package: Any = None) -> dict[str, Handler]:
+    """Import every public module in ``arb_engine.cli_plugins`` (name order) and call its
+    ``register(subparsers, existing_parsers)``; collect ``{subcommand: handler}`` overrides.
+
+    A plugin that raises is reported on stderr and skipped: one feature's bug must not take
+    the whole CLI down, and its own tests exercise it directly. ``package`` is injectable so
+    tests can point the loader at a scratch package; the plugin search path is the package's
+    ``__path__``, which tests may also monkeypatch to an empty directory."""
+    if package is None:
+        from . import cli_plugins as package
+    overrides: dict[str, Handler] = {}
+    for info in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):
+        if info.name.startswith("_"):
+            continue
+        qualname = f"{package.__name__}.{info.name}"
+        try:
+            mod = importlib.import_module(qualname)
+            register = getattr(mod, "register", None)
+            if register is None:
+                continue
+            ret = register(subparsers, parsers)
+        except Exception as e:  # noqa: BLE001 - a broken plugin is reported, not fatal
+            print(f"! cli plugin {qualname} skipped: {type(e).__name__}: {e}", file=sys.stderr)
+            continue
+        for name, sp in subparsers.choices.items():
+            parsers.setdefault(name, sp)
+        if ret:
+            overrides.update(ret)
+    return overrides
+
+
+def build_parser(plugins: bool = True) -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
+    """The root parser with every built-in subcommand, then plugin flags / subcommands.
+
+    Returns the parser and the plugin handler overrides ``main`` consults before ``args.func``."""
     p = argparse.ArgumentParser(prog="arb-engine", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -657,5 +705,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     ka.add_argument("--confirm", action="store_true", help="actually submit (otherwise dry-run)")
     ka.set_defaults(func=cmd_kalshi)
 
+    overrides = load_plugins(sub, dict(sub.choices)) if plugins else {}
+    return p, overrides
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    load_dotenv()
+    p, overrides = build_parser()
     args = p.parse_args(argv)
-    return int(args.func(args) or 0)
+    settings = load_settings()
+    handler = overrides.get(args.cmd) or args.func
+    return _call_handler(handler, args, settings)

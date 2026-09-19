@@ -1,0 +1,16 @@
+usage: arb-engine kalshi [-h] [--ticker TICKER] [--side-action {buy,sell}] [--side {yes,no}]
+                         [--count COUNT] [--price PRICE] [--post-only] [--confirm]
+                         {balance,positions,orders,order}
+
+positional arguments:
+  {balance,positions,orders,order}
+
+options:
+  -h, --help            show this help message and exit
+  --ticker TICKER
+  --side-action {buy,sell}
+  --side {yes,no}
+  --count COUNT
+  --price PRICE         price of the chosen side in dollars, e.g. 0.52
+  --post-only
+  --confirm             actually submit (otherwise dry-run)

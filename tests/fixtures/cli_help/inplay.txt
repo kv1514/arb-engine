@@ -1,0 +1,30 @@
+usage: arb-engine inplay [-h] [--position POSITION] [--steal-edge STEAL_EDGE]
+                         [--target-margin TARGET_MARGIN] [--contracts CONTRACTS] [--gold]
+                         [--interval INTERVAL] [--duration DURATION] [--iterations ITERATIONS]
+                         [--once] [--journal JOURNAL] [--no-espn] [--record DB]
+                         [--bankroll BANKROLL] [--kelly KELLY]
+                         url
+
+positional arguments:
+  url                   Robinhood game event URL
+
+options:
+  -h, --help            show this help message and exit
+  --position POSITION   lot you hold, venue:outcome:price:count[:exchange], e.g.
+                        robinhood:DEN:0.50:100 (repeatable)
+  --steal-edge STEAL_EDGE
+                        all-in must be this far below consensus fair to flag STEAL
+  --target-margin TARGET_MARGIN
+                        extra locked margin required per $1 for LOCK
+  --contracts CONTRACTS
+  --gold
+  --interval INTERVAL
+  --duration DURATION
+  --iterations ITERATIONS
+  --once                evaluate once and print
+  --journal JOURNAL
+  --no-espn             do not pull live game state / model (market consensus only)
+  --record DB           append every tick (game state, sources, actions) to this SQLite file
+  --bankroll BANKROLL   dollars you are willing to deploy; STEAL alerts then say how many
+                        contracts (fractional Kelly, capped by depth)
+  --kelly KELLY         Kelly fraction for sizing (default 0.25)

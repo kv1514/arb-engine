@@ -1,0 +1,6 @@
+usage: arb-engine bridge [-h] [--host HOST] [--port PORT]
+
+options:
+  -h, --help   show this help message and exit
+  --host HOST
+  --port PORT

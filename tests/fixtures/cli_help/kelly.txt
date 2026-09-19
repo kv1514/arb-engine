@@ -1,0 +1,8 @@
+usage: arb-engine kelly [-h] --bankroll BANKROLL --fair FAIR --cost COST [--fraction FRACTION]
+
+options:
+  -h, --help           show this help message and exit
+  --bankroll BANKROLL
+  --fair FAIR          your probability
+  --cost COST          all-in cost per contract (price + fee)
+  --fraction FRACTION
