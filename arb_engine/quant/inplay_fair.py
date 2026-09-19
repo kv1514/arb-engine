@@ -42,10 +42,26 @@ When to trust the model more
 
 ``disagreement`` is the largest absolute gap between any two available sources; the
 watcher prints it when it exceeds 0.05 so a human can decide who is wrong.
+
+Ties
+----
+Every source above quotes P(home) in the *half-tie* convention (a tie counts as half a
+win: Kalshi and Kalshi-routed contracts pay $0.50 each on a tie, nflverse labels ties 0.5,
+ESPN's ``homeWinPercentage`` excludes its separate ``tiePercentage``). ``p_tie`` lets the
+caller split that mass back out: ``win`` holds the pure win probabilities and
+``leg_fair(outcome, tie_payout)`` prices a contract by *its* tie rule (Rothera YES pays $0
+on a tie, its NO leg $1). With ``p_tie=None`` nothing changes and ``fair`` is bit-identical
+to the tie-blind blend.
+
+``pool='logit'`` averages the sources in log-odds instead of probability. It is selectable
+(the replay harness compares the two) but not the default: on week-1 replays the two agree
+within 0.01 wherever the sources agree and the linear pool is what the recorded results in
+docs/MODEL.md were measured with.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
@@ -79,12 +95,27 @@ class BlendedFair:
     sources: dict[str, Optional[float]] = field(default_factory=dict)  # source -> P(home) (None = unavailable)
     weights: dict[str, float] = field(default_factory=dict)            # normalised weights actually used
     live: bool = True
+    p_tie: Optional[float] = None                # P(tie) when known; ``fair`` then counts a tie as half a win
+    win: dict[str, float] = field(default_factory=dict)  # outcome -> P(outright win) = fair - 0.5 * p_tie
 
     def get(self, outcome: str) -> Optional[float]:
         return self.fair.get(outcome)
 
+    def leg_fair(self, outcome: str, tie_payout: float = 0.5) -> Optional[float]:
+        """Fair value of a contract on ``outcome`` that pays ``tie_payout`` per $1 on a tie."""
+        f = self.fair.get(outcome)
+        if f is None:
+            return None
+        if not self.p_tie or float(tie_payout) == 0.5:
+            return f  # the half-tie convention is what ``fair`` already is (bit-identical)
+        return _clamp(self.win.get(outcome, f) + float(tie_payout) * self.p_tie)
+
     def as_dict(self) -> dict[str, Any]:
-        return {"fair": dict(self.fair), "home_p": self.home_p, "disagreement": self.disagreement, "sources": dict(self.sources), "weights": dict(self.weights), "live": self.live}
+        d = {"fair": dict(self.fair), "home_p": self.home_p, "disagreement": self.disagreement, "sources": dict(self.sources), "weights": dict(self.weights), "live": self.live}
+        if self.p_tie is not None:
+            d["p_tie"] = self.p_tie
+            d["win"] = dict(self.win)
+        return d
 
 
 def _clamp(p: float) -> float:
@@ -117,13 +148,19 @@ def blended_fair(
     live: bool = True,
     market_confidence: float = 1.0,
     sport: Optional[str] = None,
+    p_tie: Optional[float] = None,
+    pool: str = "linear",
 ) -> BlendedFair:
     """Weighted blend of the available sources (weights renormalise over what is present).
 
     ``live=False`` (pre-game / final) uses the market alone; when the market is absent the
     model, then ESPN, act as the single source. ``market_confidence`` in (0, 1] scales the
-    market weight (thin book, stale quote) before normalisation.
+    market weight (thin book, stale quote) before normalisation. ``p_tie`` (module docstring)
+    splits the tie mass out into ``win`` without changing ``fair``. ``pool`` is ``"linear"``
+    (default) or ``"logit"``.
     """
+    if pool not in ("linear", "logit"):
+        raise ValueError(f"pool must be 'linear' or 'logit', got {pool!r}")
     w_in = dict(SPORT_WEIGHTS.get(sport or "", DEFAULT_WEIGHTS))
     if weights:
         w_in.update({k: float(v) for k, v in weights.items()})
@@ -150,6 +187,26 @@ def blended_fair(
             raw = {k: 1.0 for k in avail}
             tot = float(len(avail))
         used = {k: v / tot for k, v in raw.items()}
-    home_p = _clamp(sum(avail[k] * used[k] for k in used))
+    if pool == "logit" and len(used) > 1:
+        home_p = _clamp(_sigmoid(sum(_logit(avail[k]) * used[k] for k in used)))
+    else:
+        home_p = _clamp(sum(avail[k] * used[k] for k in used))
     fair = {home_outcome: home_p, away_outcome: 1.0 - home_p}
-    return BlendedFair(fair=fair, home_p=home_p, disagreement=disagreement, sources=sources, weights=used, live=live)
+    tie = None
+    win: dict[str, float] = {}
+    if p_tie is not None and p_tie > 0:
+        tie = min(max(float(p_tie), 0.0), 1.0)
+        win = {o: _clamp(f - 0.5 * tie) for o, f in fair.items()}
+    return BlendedFair(fair=fair, home_p=home_p, disagreement=disagreement, sources=sources, weights=used, live=live, p_tie=tie, win=win)
+
+
+_LOGIT_EPS = 1e-6
+
+
+def _logit(p: float) -> float:
+    q = min(max(float(p), _LOGIT_EPS), 1.0 - _LOGIT_EPS)
+    return math.log(q / (1.0 - q))
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-x))

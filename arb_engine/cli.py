@@ -266,8 +266,12 @@ def _espn_state_fetcher(event_key: str, refresh_summary_every: float = 30.0):
             except Exception:
                 pass
         elif state["cache"] is not None and state["cache"].event_id == gs.event_id:
-            # keep the last enriched fields between summary refreshes
+            # keep the last enriched fields between summary refreshes — except the WP of a
+            # suspect state (the guard nulled it on purpose; see venues/espn.py StateGuard)
+            suspect = bool(getattr(gs, "suspect", False))
             for k in ("espn_home_wp", "espn_wp_series", "vegas_spread_home", "vegas_total", "odds_provider"):
+                if suspect and k in ("espn_home_wp", "espn_wp_series"):
+                    continue
                 if getattr(gs, k, None) in (None, []) and getattr(state["cache"], k, None) not in (None, []):
                     setattr(gs, k, getattr(state["cache"], k))
         state["cache"] = gs

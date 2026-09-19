@@ -1,21 +1,64 @@
+import os
 import unittest
+from dataclasses import dataclass
+from typing import Optional
 
 from arb_engine.matching.matcher import MergedEvent
 from arb_engine.models import EventInfo, OutcomeQuote
 from arb_engine.strategy.alerts import Alerter
-from arb_engine.strategy.inplay import InplayWatcher, Lot, evaluate_inplay
+from arb_engine.strategy.inplay import FeedFreshness, InplayWatcher, Lot, evaluate_inplay, model_home_wp, resolve_spread_home, sportsbook_probs
+from arb_engine.venues.espn import GameState
 
 KEY = "nfl:DEN|KC:2026-09-21"
 KFEE = {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}
 
 
-def _me(k_den=(0.59, 0.61), k_kc=(0.39, 0.41), r_den=(0.60, 0.62), r_kc=(0.38, 0.40)):
+def _me(k_den=(0.59, 0.61), k_kc=(0.39, 0.41), r_den=(0.60, 0.62), r_kc=(0.38, 0.40), r_exchange="rothera", r_meta=None, k_meta=None):
     info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=["DEN", "KC"], labels={"DEN": "Denver", "KC": "Kansas City"}, in_play=True)
     q = lambda v, o, bid, ask, **kw: OutcomeQuote(v, f"{v}-{o}", KEY, o, ask=ask, bid=bid, **kw)  # noqa: E731
+    km = {"ticker": "T", **(k_meta or {})}
+    rm = {"exchange": r_exchange, **(r_meta or {})}
     return MergedEvent(KEY, info, {
-        "kalshi": [q("kalshi", "DEN", *k_den, fee_params=KFEE, meta={"ticker": "T", "side": "yes"}), q("kalshi", "KC", *k_kc, fee_params=KFEE, meta={"ticker": "T", "side": "no"})],
-        "robinhood": [q("robinhood", "DEN", *r_den, fee_params={"exchange": "rothera"}, book_id="rothera"), q("robinhood", "KC", *r_kc, fee_params={"exchange": "rothera"}, book_id="rothera")],
+        "kalshi": [q("kalshi", "DEN", *k_den, fee_params=KFEE, meta={**km, "side": "yes"}), q("kalshi", "KC", *k_kc, fee_params=KFEE, meta={**km, "side": "no"})],
+        "robinhood": [q("robinhood", "DEN", *r_den, fee_params={"exchange": r_exchange}, book_id=r_exchange, meta=dict(rm)), q("robinhood", "KC", *r_kc, fee_params={"exchange": r_exchange}, book_id=r_exchange, meta=dict(rm))],
     })
+
+
+@dataclass
+class GS2(GameState):
+    """GameState plus the fields P02's ESPN hardening adds (stubbed here: this item is
+    tested against the field names, not the parser)."""
+    last_play_id: Optional[str] = None
+    suspect: bool = False
+    review_pending: bool = False
+    espn_tie: Optional[float] = None
+    sportsbook_ml_home: Optional[float] = None
+    sportsbook_ml_away: Optional[float] = None
+    pickcenter_spread: Optional[float] = None
+    overtime_sentinel: bool = False
+
+
+def _gs(cls=GameState, **kw):
+    base = dict(event_id="1", home="KC", away="DEN", home_score=14, away_score=17, status="live", period=3, clock_seconds_remaining_in_period=252, game_seconds_remaining=900 + 252, possession="away", down=2, distance=7, yardline_100=35, home_timeouts=3, away_timeouts=2, espn_home_wp=0.43, vegas_spread_home=-3.0)
+    base.update(kw)
+    return cls(**base)
+
+
+def _stub_model(p):
+    """Replace the WP model with a constant P(KC=home) for the duration of a `with`."""
+    import arb_engine.strategy.inplay as ip
+
+    class _Ctx:
+        def __enter__(self):
+            self.orig = ip.model_home_wp
+            ip.model_home_wp = lambda gs, model=None, **kw: p
+        def __exit__(self, *a):
+            ip.model_home_wp = self.orig
+    return _Ctx()
+
+
+def _side(view, o):
+    return next(s for s in view.sides if s.outcome == o)
 
 
 class GameStateTests(unittest.TestCase):
@@ -215,6 +258,361 @@ class SizingTests(unittest.TestCase):
         den2 = next(s for s in view2.sides if s.outcome == "DEN")
         self.assertTrue(den2.steal)
         self.assertIsNone(den2.suggested_contracts)
+
+
+class GateTests(unittest.TestCase):
+    """Execution gates: the STEAL scenario (Robinhood KC ask 0.30, fair ~0.40, model 0.45
+    agreeing) is a STEAL on a fresh feed and `wait: <reason>` under every gate."""
+
+    def _steal_me(self, **kw):
+        return _me(r_kc=(0.28, 0.30), **kw)
+
+    def test_fresh_feed_is_a_steal_and_bit_identical_to_no_freshness(self):
+        with _stub_model(0.45):
+            plain = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs())
+            fresh = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=FeedFreshness(), now=1000.0)
+        self.assertTrue(_side(plain, "KC").steal and _side(fresh, "KC").steal)
+        self.assertEqual([s.fair for s in plain.sides], [s.fair for s in fresh.sides])
+        self.assertEqual(plain.blend, fresh.blend)
+        self.assertEqual(fresh.gated_reasons, [])
+        self.assertEqual(set(fresh.freshness) >= {"last_state_change_ts", "last_score_change_ts", "mids"}, True)
+
+    def test_feed_stale_when_espn_unchanged_and_a_venue_moves(self):
+        f = FeedFreshness(stale_after_s=15.0)
+        with _stub_model(0.45):
+            first = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0)
+            # 20 s later: identical ESPN state, Kalshi mids moved 0.03 -> the market knows something.
+            second = evaluate_inplay(self._steal_me(k_den=(0.62, 0.64), k_kc=(0.36, 0.38)), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1020.0)
+            # ...and a fresh state change clears it (a mid move alone is not staleness).
+            third = evaluate_inplay(self._steal_me(k_den=(0.65, 0.67), k_kc=(0.33, 0.35)), [], steal_edge=0.03, game_state=_gs(clock_seconds_remaining_in_period=240), freshness=f, now=1030.0)
+        self.assertTrue(_side(first, "KC").steal)
+        kc = _side(second, "KC")
+        self.assertFalse(kc.steal)
+        self.assertTrue(kc.steal_gated)
+        self.assertEqual(kc.gated_reasons, ["feed-stale"])
+        self.assertEqual(second.gated_reasons, ["feed-stale"])
+        gated = [a for a in second.actions if a.startswith("GATED STEAL")]
+        self.assertEqual(len(gated), 1)
+        self.assertIn("wait: feed-stale", gated[0])
+        self.assertFalse(any(a.startswith("STEAL") for a in second.actions))
+        self.assertAlmostEqual(f.mid_moves["kalshi"], 0.03)
+        self.assertTrue(_side(third, "KC").steal, third.actions)
+
+    def test_clock_frozen_after_repeated_identical_polls(self):
+        f = FeedFreshness(stale_after_s=100.0, frozen_polls=2)
+        with _stub_model(0.45):
+            views = [evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0 + 5 * i) for i in range(3)]
+        self.assertTrue(_side(views[0], "KC").steal)
+        self.assertTrue(_side(views[1], "KC").steal)      # one unchanged poll is normal between plays
+        self.assertEqual(_side(views[2], "KC").gated_reasons, ["clock-frozen"])
+        # Halftime / end of period: the clock is legitimately 0 -> no frozen gate.
+        f2 = FeedFreshness(stale_after_s=100.0, frozen_polls=2)
+        with _stub_model(0.45):
+            ht = [evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(period=2, clock_seconds_remaining_in_period=0, game_seconds_remaining=1800), freshness=f2, now=1000.0 + 5 * i) for i in range(4)]
+        self.assertTrue(_side(ht[-1], "KC").steal, ht[-1].actions)
+
+    def test_quote_old_gates_only_venues_that_report_a_time(self):
+        me = self._steal_me()
+        for q in me.quotes_by_venue["robinhood"]:
+            q.ts, q.quote_time = 1000.0, 985.0     # 15 s old at a 10 s poll interval
+        for q in me.quotes_by_venue["kalshi"]:
+            q.ts, q.quote_time = 1000.0, None
+        with _stub_model(0.45):
+            v = evaluate_inplay(me, [], steal_edge=0.03, game_state=_gs(), freshness=FeedFreshness(interval_s=10.0), now=1000.0)
+        kc = _side(v, "KC")
+        self.assertEqual(kc.best_venue, "robinhood")
+        self.assertEqual(kc.gated_reasons, ["quote-old:robinhood"])
+        self.assertTrue(any("wait: quote-old:robinhood" in a for a in v.actions))
+        # Same staleness on Robinhood but Kalshi (no quote_time) is the cheap venue: not gated.
+        me2 = _me(k_kc=(0.28, 0.30))
+        for q in me2.quotes_by_venue["robinhood"]:
+            q.ts, q.quote_time = 1000.0, 985.0
+        with _stub_model(0.45):
+            v2 = evaluate_inplay(me2, [], steal_edge=0.03, game_state=_gs(), freshness=FeedFreshness(interval_s=10.0), now=1000.0)
+        self.assertEqual(_side(v2, "KC").best_venue, "kalshi")
+        self.assertTrue(_side(v2, "KC").steal)
+        self.assertEqual(_side(v2, "KC").gated_reasons, [])
+
+    def test_score_pending_until_last_play_id_advances(self):
+        f = FeedFreshness()
+        with _stub_model(0.45):
+            evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(GS2, last_play_id="p1"), freshness=f, now=1000.0)
+            # KC scores (14 -> 21) but the play id has not moved: ESPN has the score, not the play.
+            scored = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(GS2, home_score=21, last_play_id="p1"), freshness=f, now=1010.0)
+            still = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(GS2, home_score=21, last_play_id="p1"), freshness=f, now=1020.0)
+            posted = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(GS2, home_score=21, last_play_id="p2", clock_seconds_remaining_in_period=200), freshness=f, now=1030.0)
+        self.assertEqual(_side(scored, "KC").gated_reasons, ["score-pending"])
+        self.assertIn("score-pending", _side(still, "KC").gated_reasons)
+        self.assertTrue(_side(posted, "KC").steal, posted.actions)
+        self.assertFalse(f.score_pending)
+
+    def test_score_pending_timer_fallback_without_play_ids(self):
+        f = FeedFreshness(score_hold_s=20.0)
+        with _stub_model(0.45):
+            evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0)
+            scored = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(home_score=21), freshness=f, now=1005.0)
+            held = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(home_score=21, clock_seconds_remaining_in_period=240), freshness=f, now=1015.0)
+            over = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(home_score=21, clock_seconds_remaining_in_period=230), freshness=f, now=1030.0)
+        self.assertEqual(_side(scored, "KC").gated_reasons, ["score-pending"])
+        self.assertEqual(_side(held, "KC").gated_reasons, ["score-pending"])
+        self.assertTrue(_side(over, "KC").steal)
+
+    def test_suspect_and_review_flags_gate(self):
+        with _stub_model(0.45):
+            v = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(GS2, suspect=True, review_pending=True), freshness=FeedFreshness(), now=1000.0)
+        self.assertEqual(v.gated_reasons, ["suspect", "review-pending"])
+        self.assertTrue(any(a.startswith("GATED STEAL: wait: suspect, review-pending") for a in v.actions))
+
+    def test_gated_lock_now(self):
+        # Holding 100 DEN @ 0.50, KC at 0.40 on Robinhood locks $6 — but not on a suspect feed.
+        f = FeedFreshness()
+        v = evaluate_inplay(_me(), [Lot("robinhood", "DEN", 0.50, 100)], game_state=_gs(GS2, suspect=True), freshness=f, now=1000.0)
+        kc = _side(v, "KC")
+        self.assertTrue(kc.lock_available)
+        self.assertTrue(kc.lock_gated)
+        self.assertEqual(kc.gated_reasons, ["suspect"])
+        self.assertTrue(any(a.startswith("GATED LOCK NOW: wait: suspect") for a in v.actions))
+        self.assertFalse(any(a.startswith("LOCK NOW") for a in v.actions))
+        clean = evaluate_inplay(_me(), [Lot("robinhood", "DEN", 0.50, 100)], game_state=_gs(GS2), freshness=f, now=1010.0)
+        self.assertTrue(any(a.startswith("LOCK NOW") for a in clean.actions))
+
+    def test_watcher_journals_gated_actions_as_info_not_alerts(self):
+        me = self._steal_me()
+        f = FeedFreshness(frozen_polls=1)
+        alerter = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), "inplay_gate_test.jsonl"), quiet=True, desktop=False, webhook="")
+        w = InplayWatcher(lambda: me, [], alerter, fetch_state=lambda: _gs(), steal_edge=0.03, freshness=f)
+        with _stub_model(0.45):
+            w.step(now=1000.0)
+            w.step(now=1005.0)
+        alerts = [e for e in w.alerts.events if e["kind"] == "alert"]
+        self.assertEqual([a["title"] for a in alerts], ["STEAL"])
+        self.assertEqual(alerts[0]["steal"]["outcome"], "KC")
+        self.assertEqual(alerts[0]["steal"]["gated"], False)
+        self.assertTrue(any(e["kind"] == "info" and e["msg"].startswith("GATED STEAL: wait: clock-frozen") for e in w.alerts.events))
+
+
+class CdnaTests(unittest.TestCase):
+    def test_cdna_steal_needs_the_delay_haircut(self):
+        # Robinhood/CDNA KC ask 0.37 (all-in 0.39) vs fair ~0.43: +3.8%, above 0.03 but below 0.05.
+        me = _me(r_kc=(0.35, 0.37), r_exchange="cdna")
+        with _stub_model(0.45):
+            v = evaluate_inplay(me, [], steal_edge=0.03, game_state=_gs())
+        kc = _side(v, "KC")
+        self.assertEqual(kc.best_exchange, "cdna")
+        self.assertAlmostEqual(kc.steal_threshold, 0.05)
+        self.assertGreater(kc.steal_edge, 0.03)
+        self.assertLess(kc.steal_edge, 0.05)
+        self.assertFalse(kc.steal)
+        # A bigger gap clears the haircut and the action says so.
+        with _stub_model(0.45):
+            v2 = evaluate_inplay(_me(r_kc=(0.22, 0.24), r_exchange="cdna"), [], steal_edge=0.03, game_state=_gs())
+        self.assertTrue(_side(v2, "KC").steal)
+        self.assertTrue(any("[cdna +2% haircut]" in a for a in v2.actions), v2.actions)
+        # The haircut is a setting.
+        with _stub_model(0.45):
+            v3 = evaluate_inplay(me, [], {"inplay_delay_haircut_cdna": 0.0}, steal_edge=0.03, game_state=_gs())
+        self.assertTrue(_side(v3, "KC").steal)
+
+    def test_cdna_legs_never_lock_now_in_play(self):
+        lots = [Lot("robinhood", "DEN", 0.50, 100)]
+        # KC at 0.40 only on CDNA; Kalshi asks 0.48 (above the 0.46 lock): no LOCK NOW in play.
+        me = _me(k_kc=(0.46, 0.48), r_exchange="cdna")
+        v = evaluate_inplay(me, lots, game_state=_gs())
+        kc = _side(v, "KC")
+        self.assertFalse(kc.lock_available)
+        self.assertEqual(kc.lock_price, 0.46)
+        self.assertFalse(any(a.startswith("LOCK NOW") for a in v.actions))
+        self.assertTrue(any("delayed 3 s - not lockable" in a for a in v.actions), v.actions)
+        # Pre-game the same leg locks normally (the delay only matters against a moving game).
+        pre = evaluate_inplay(me, lots, game_state=_gs(status="pre", possession=None, home_score=0, away_score=0, game_seconds_remaining=3600))
+        self.assertTrue(any(a.startswith("LOCK NOW") and "robinhood" in a for a in pre.actions), pre.actions)
+        # In play with Kalshi lockable, the lock goes to Kalshi and CDNA is a note.
+        v2 = evaluate_inplay(_me(r_exchange="cdna"), lots, game_state=_gs())
+        self.assertTrue(any(a.startswith("LOCK NOW") and "on kalshi" in a for a in v2.actions), v2.actions)
+
+    def test_cdna_quote_age_carries_the_order_delay(self):
+        f = FeedFreshness(interval_s=10.0)
+        q = OutcomeQuote("robinhood", "x", KEY, "KC", ask=0.3, bid=0.28, ts=1000.0, quote_time=992.0, meta={"exchange": "cdna"})
+        self.assertAlmostEqual(f.quote_age(q), 11.0)
+        self.assertEqual(f.quote_reasons(q), ["quote-old:robinhood"])
+        q.meta = {"exchange": "rothera"}
+        self.assertEqual(f.quote_reasons(q), [])
+
+
+class TieAwareFairTests(unittest.TestCase):
+    def test_leg_fair_follows_the_contracts_tie_rule(self):
+        # Robinhood (Rothera, tie pays 0) is the cheap KC venue; Kalshi (tie pays 0.5) for DEN.
+        me = _me(r_kc=(0.36, 0.38), r_meta={"tie_payout": 0.0}, k_meta={"tie_payout": 0.5})
+        v = evaluate_inplay(me, [], game_state=_gs(GS2, espn_tie=0.04))
+        self.assertAlmostEqual(v.blend["p_tie"], 0.04)
+        kc, den = _side(v, "KC"), _side(v, "DEN")
+        self.assertEqual(kc.best_venue, "robinhood")
+        self.assertEqual(den.best_venue, "kalshi")
+        self.assertAlmostEqual(kc.fair, v.blend["win"]["KC"])                 # tie_payout 0: pure win probability
+        self.assertAlmostEqual(kc.fair, v.blend["fair"]["KC"] - 0.02)
+        self.assertAlmostEqual(den.fair, v.blend["fair"]["DEN"])              # tie_payout 0.5: win + 0.5 * tie
+        # Without a tie estimate nothing changes (no p_tie key, fair = blend).
+        v0 = evaluate_inplay(me, [], game_state=_gs(GS2))
+        self.assertNotIn("p_tie", v0.blend)
+        self.assertAlmostEqual(_side(v0, "KC").fair, v0.blend["fair"]["KC"])
+
+    def test_tie_from_the_wp_series_when_espn_tie_is_absent(self):
+        v = evaluate_inplay(_me(r_meta={"tie_payout": 0.0}), [], game_state=_gs(espn_wp_series=[{"play_id": "1", "home_wp": 0.43, "tie": 0.03}]))
+        self.assertAlmostEqual(v.blend["p_tie"], 0.03)
+
+
+class SpreadFallbackTests(unittest.TestCase):
+    def test_chain_order(self):
+        from arb_engine.models.wp import home_win_probability
+        # 1. summary odds
+        self.assertEqual(resolve_spread_home(_gs(GS2, vegas_spread_home=-3.0, pickcenter_spread=-2.5)), (-3.0, "espn-odds"))
+        # 2. pickcenter
+        self.assertEqual(resolve_spread_home(_gs(GS2, vegas_spread_home=None, pickcenter_spread=-2.5)), (-2.5, "pickcenter"))
+        # 3. sportsbook moneylines inverted through the model, cached on the freshness object
+        f = FeedFreshness()
+        s, src = resolve_spread_home(_gs(GS2, vegas_spread_home=None, sportsbook_ml_home=-150, sportsbook_ml_away=130), f, "KC", "DEN")
+        self.assertEqual(src, "sportsbook-ml")
+        p = sportsbook_probs(_gs(GS2, sportsbook_ml_home=-150, sportsbook_ml_away=130), "KC", "DEN")["KC"]
+        self.assertAlmostEqual(home_win_probability(home_score=0, away_score=0, game_seconds_remaining=3600, vegas_spread_home=s), p, delta=0.01)
+        self.assertLess(s, 0)                     # home favourite -> negative home line
+        self.assertEqual((f.spread_home, f.spread_source), (s, "sportsbook-ml"))
+        # 4. the last pre-game blended fair, remembered per event
+        f2 = FeedFreshness()
+        evaluate_inplay(_me(), [], game_state=_gs(GS2, status="pre", vegas_spread_home=None, possession=None, home_score=0, away_score=0, game_seconds_remaining=3600), freshness=f2, now=1000.0)
+        self.assertIsNotNone(f2.pregame_home_p)
+        s2, src2 = resolve_spread_home(_gs(GS2, vegas_spread_home=None), f2, "KC", "DEN")
+        self.assertEqual(src2, "pregame-fair")
+        self.assertAlmostEqual(home_win_probability(home_score=0, away_score=0, game_seconds_remaining=3600, vegas_spread_home=s2), f2.pregame_home_p, delta=0.01)
+        # 5. nothing: None, logged once
+        f3 = FeedFreshness()
+        with self.assertLogs("arb_engine.strategy.inplay", level="INFO") as cm:
+            self.assertEqual(resolve_spread_home(_gs(GS2, vegas_spread_home=None), f3, "KC", "DEN"), (None, None))
+        self.assertEqual(len(cm.output), 1)
+        self.assertEqual(resolve_spread_home(_gs(GS2, vegas_spread_home=None), f3, "KC", "DEN"), (None, None))  # no second log line
+        self.assertTrue(f3.spread_logged)
+
+    def test_live_model_uses_the_resolved_spread(self):
+        from arb_engine.models.wp import home_win_probability
+        v = evaluate_inplay(_me(), [], game_state=_gs(GS2, vegas_spread_home=None, pickcenter_spread=-2.5, espn_home_wp=None), freshness=FeedFreshness(), now=1000.0)
+        self.assertEqual(v.spread_source, "pickcenter")
+        args = dict(home_score=14, away_score=17, game_seconds_remaining=1152, possession="away", down=2, distance=7, yardline_100=35, home_timeouts=3, away_timeouts=2)
+        self.assertAlmostEqual(_side(v, "KC").model_p, home_win_probability(vegas_spread_home=-2.5, **args), places=9)
+
+    def test_sportsbook_probs_anchor_pregame_only(self):
+        pre = dict(status="pre", possession=None, home_score=0, away_score=0, game_seconds_remaining=3600, espn_home_wp=None)
+        without = evaluate_inplay(_me(), [], game_state=_gs(GS2, **pre))
+        with_sb = evaluate_inplay(_me(), [], game_state=_gs(GS2, sportsbook_ml_home=-300, sportsbook_ml_away=250, **pre))
+        self.assertNotAlmostEqual(_side(without, "KC").market_p, _side(with_sb, "KC").market_p, places=3)
+        self.assertGreater(_side(with_sb, "KC").market_p, _side(without, "KC").market_p)   # -300 pulls KC up
+        # Live: the same moneylines change nothing (the fair is bit-identical).
+        live0 = evaluate_inplay(_me(), [], game_state=_gs(GS2))
+        live1 = evaluate_inplay(_me(), [], game_state=_gs(GS2, sportsbook_ml_home=-300, sportsbook_ml_away=250))
+        self.assertEqual([s.fair for s in live0.sides], [s.fair for s in live1.sides])
+        self.assertEqual([s.market_p for s in live0.sides], [s.market_p for s in live1.sides])
+
+
+class ModelForwardingTests(unittest.TestCase):
+    def test_overtime_sentinel_returns_none(self):
+        self.assertIsNone(model_home_wp(_gs(GS2, sport="ncaaf", period=5, overtime_sentinel=True)))
+        self.assertIsNotNone(model_home_wp(_gs(GS2, sport="ncaaf")))
+
+    def test_extra_state_fields_forwarded_only_when_the_model_accepts_them(self):
+        import arb_engine.models.wp as wp
+        seen = {}
+        orig = wp.home_win_probability
+
+        def newer(*, play_class=None, overtime=False, season=None, **kw):
+            seen.update({"play_class": play_class, "overtime": overtime, "season": season})
+            return 0.5
+
+        def older(**kw):
+            seen.update(kw)
+            return 0.5
+
+        @dataclass
+        class GS3(GS2):
+            play_class: Optional[str] = None
+            overtime: bool = False
+            season: Optional[int] = None
+
+        try:
+            wp.home_win_probability = newer
+            self.assertEqual(model_home_wp(_gs(GS3, play_class="try", overtime=True, season=2026)), 0.5)
+            self.assertEqual(seen, {"play_class": "try", "overtime": True, "season": 2026})
+            seen.clear()
+            wp.home_win_probability = older
+            self.assertEqual(model_home_wp(_gs(GS3, play_class="try")), 0.5)
+            self.assertEqual(seen.get("play_class"), "try")   # **kwargs accepts everything
+        finally:
+            wp.home_win_probability = orig
+        # Today's signature: the call must not pass fields it does not know.
+        self.assertIsNotNone(model_home_wp(_gs(GS3, play_class="try", season=2026)))
+
+
+class LineEdgeTests(unittest.TestCase):
+    def _line_me(self, fair_fav, ask_fav):
+        key = "nfl:DEN|KC:2026-09-21:spread:KC-2.5"
+        info = EventInfo(event_key=key, sport="nfl", market_type="spread", outcomes=["KC-2.5", "DEN+2.5"], labels={"KC-2.5": "KC -2.5", "DEN+2.5": "DEN +2.5"}, line=2.5, in_play=False, venues={"_line_fair": {"KC-2.5": fair_fav, "DEN+2.5": 1 - fair_fav}})
+        q = lambda v, o, bid, ask, **kw: OutcomeQuote(v, f"{v}-{o}", key, o, ask=ask, bid=bid, **kw)  # noqa: E731
+        return MergedEvent(key, info, {"kalshi": [q("kalshi", "KC-2.5", ask_fav - 0.02, ask_fav, fee_params=KFEE), q("kalshi", "DEN+2.5", 0.48, 0.50, fee_params=KFEE)]})
+
+    def test_line_fair_needs_twice_the_edge(self):
+        # fair 0.56 vs all-in ~0.518 (0.50 + fee): +4.2% clears 3% but not the 6% line rule.
+        v = evaluate_inplay(self._line_me(0.56, 0.50), [], steal_edge=0.03)
+        fav = _side(v, "KC-2.5")
+        self.assertAlmostEqual(fav.fair, 0.56)
+        self.assertAlmostEqual(fav.steal_threshold, 0.06)
+        self.assertGreater(fav.steal_edge, 0.03)
+        self.assertFalse(fav.steal)
+        self.assertEqual(v.blend["weights"], {"line": 1.0})
+        v2 = evaluate_inplay(self._line_me(0.60, 0.50), [], steal_edge=0.03)
+        self.assertTrue(_side(v2, "KC-2.5").steal)
+        self.assertTrue(any("[line 2x edge]" in a for a in v2.actions))
+
+    def test_moneyline_ignores_line_fair(self):
+        me = _me(r_kc=(0.28, 0.30))
+        me.info.venues["_line_fair"] = {"DEN": 0.9, "KC": 0.1}
+        v = evaluate_inplay(me, [], steal_edge=0.03)
+        self.assertEqual(_side(v, "KC").steal_threshold, 0.03)
+        self.assertTrue(_side(v, "KC").steal)
+
+
+class FeeMultiplierTests(unittest.TestCase):
+    def test_lot_fee_uses_the_series_multiplier(self):
+        full = Lot("kalshi", "DEN", 0.50, 100)
+        half = Lot("kalshi", "DEN", 0.50, 100, fee_params={"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 0.5})
+        self.assertAlmostEqual(full.fee, 1.75)
+        self.assertAlmostEqual(half.fee, 0.88)            # ceil(0.875) at the cent
+        self.assertAlmostEqual(Lot.parse("kalshi:DEN:0.50:100:0.5").fee, 0.88)
+        self.assertEqual(Lot.parse("robinhood:DEN:0.50:100:kalshi").exchange, "kalshi")
+        self.assertAlmostEqual(Lot("kalshi", "DEN", 0.50, 100, fee_params={"fee_type": "quadratic", "fee_multiplier": 0}).fee, 0.0)
+
+    def test_evaluate_prices_lots_from_the_quotes_fee_params(self):
+        me = _me()
+        for q in me.quotes_by_venue["kalshi"]:
+            q.fee_params = {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 0.5}
+        v = evaluate_inplay(me, [Lot("kalshi", "DEN", 0.50, 100)])
+        self.assertAlmostEqual(v.total_cost, 50.88)
+        # An explicit lot fee schedule wins over the quote's.
+        v2 = evaluate_inplay(me, [Lot("kalshi", "DEN", 0.50, 100, fee_params={"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1})])
+        self.assertAlmostEqual(v2.total_cost, 51.75)
+        # Robinhood lots keep the user's exchange (the $52.00 constant elsewhere in this file).
+        self.assertAlmostEqual(evaluate_inplay(me, [Lot("robinhood", "DEN", 0.50, 100)]).total_cost, 52.0)
+
+
+class HedgeKellyInLockTests(unittest.TestCase):
+    def test_lock_alert_shows_the_kelly_hedge(self):
+        v = evaluate_inplay(_me(), [Lot("robinhood", "DEN", 0.50, 100)], bankroll=1000.0)
+        kc = _side(v, "KC")
+        self.assertTrue(kc.lock_available)
+        self.assertIsNotNone(kc.kelly_hedge)
+        self.assertTrue(0 <= kc.kelly_hedge <= 100)
+        lock = next(a for a in v.actions if a.startswith("LOCK NOW"))
+        self.assertIn(f"buy 100 (kelly hedge {kc.kelly_hedge}) x Kansas City", lock)
+        # No bankroll: no hedge sizing, same lock.
+        v0 = evaluate_inplay(_me(), [Lot("robinhood", "DEN", 0.50, 100)])
+        self.assertIsNone(_side(v0, "KC").kelly_hedge)
+        self.assertTrue(any(a.startswith("LOCK NOW: buy 100 x Kansas City") for a in v0.actions))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
+import inspect
 import unittest
 
 from arb_engine.quant.inplay_fair import DEFAULT_WEIGHTS, blended_fair, market_home_probability
+from arb_engine.strategy.inplay import model_home_wp
 
 
 class BlendTests(unittest.TestCase):
@@ -40,6 +42,48 @@ class BlendTests(unittest.TestCase):
         b = blended_fair({"KC": 1.4, "DEN": -0.2}, 1.3, -0.1, "KC", "DEN", live=True)
         self.assertTrue(0.0 <= b.home_p <= 1.0)
         self.assertEqual(set(DEFAULT_WEIGHTS), {"market", "model", "espn"})
+
+
+class PoolAndTieTests(unittest.TestCase):
+    def test_logit_pool_is_selectable_and_close_to_linear_but_not_default(self):
+        self.assertEqual(inspect.signature(blended_fair).parameters["pool"].default, "linear")
+        mk = {"KC": 0.60, "DEN": 0.40}
+        lin = blended_fair(mk, 0.62, 0.58, "KC", "DEN", live=True)
+        lgt = blended_fair(mk, 0.62, 0.58, "KC", "DEN", live=True, pool="logit")
+        self.assertNotEqual(lin.home_p, lgt.home_p)
+        self.assertAlmostEqual(lin.home_p, lgt.home_p, delta=0.01)
+        # Equal inputs: both pools return the input exactly.
+        self.assertAlmostEqual(blended_fair(mk, 0.60, 0.60, "KC", "DEN", live=True, pool="logit").home_p, 0.60, places=9)
+        # Logit pooling is more extreme than linear when the sources agree on the direction.
+        far = blended_fair({"KC": 0.90, "DEN": 0.10}, 0.95, 0.80, "KC", "DEN", live=True)
+        far_l = blended_fair({"KC": 0.90, "DEN": 0.10}, 0.95, 0.80, "KC", "DEN", live=True, pool="logit")
+        self.assertAlmostEqual(far.home_p, far_l.home_p, delta=0.02)
+        with self.assertRaises(ValueError):
+            blended_fair(mk, 0.6, 0.6, "KC", "DEN", pool="geometric")
+
+    def test_p_tie_splits_the_tie_mass_without_changing_fair(self):
+        mk = {"KC": 0.60, "DEN": 0.40}
+        plain = blended_fair(mk, 0.62, 0.58, "KC", "DEN", live=True)
+        tied = blended_fair(mk, 0.62, 0.58, "KC", "DEN", live=True, p_tie=0.04)
+        self.assertEqual(plain.fair, tied.fair)                  # half-tie convention untouched
+        self.assertEqual(plain.as_dict(), {k: v for k, v in tied.as_dict().items() if k not in ("p_tie", "win")})
+        self.assertAlmostEqual(tied.win["KC"], tied.fair["KC"] - 0.02)
+        self.assertAlmostEqual(tied.win["DEN"], tied.fair["DEN"] - 0.02)
+        self.assertEqual(tied.leg_fair("KC", 0.5), tied.fair["KC"])      # bit-identical for the default rule
+        self.assertAlmostEqual(tied.leg_fair("KC", 0.0), tied.fair["KC"] - 0.02)
+        self.assertAlmostEqual(tied.leg_fair("KC", 1.0), tied.fair["KC"] + 0.02)
+        self.assertEqual(plain.leg_fair("KC", 0.0), plain.fair["KC"])   # no tie estimate -> no adjustment
+        self.assertIsNone(plain.p_tie)
+
+    def test_overtime_sentinel_gives_no_model_probability(self):
+        class GS:
+            sport = "ncaaf"; status = "live"; game_seconds_remaining = None; home_score = 21; away_score = 21
+            possession = None; down = None; distance = None; yardline_100 = None; home_timeouts = 1; away_timeouts = 1
+            vegas_spread_home = -3.0; period = 5; overtime_sentinel = True
+        self.assertIsNone(model_home_wp(GS()))
+        GS.overtime_sentinel = False
+        GS.game_seconds_remaining = 0
+        self.assertIsNotNone(model_home_wp(GS()))
 
 
 if __name__ == "__main__":
