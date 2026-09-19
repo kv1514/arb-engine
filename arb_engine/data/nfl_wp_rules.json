@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "_doc": "Dead-ball and boundary corrections layered on the frozen nfl_wp_model.json (see arb_engine/models/wp.py and docs/MODEL.md). Nothing here is fitted: every number is a rulebook spot, a league-wide rate or a provisional constant flagged as such. The model JSON is not retrained by this table.",
+  "neutral_yardline": {
+    "_doc": "yardline_100 of the neutral / kickoff-receiver state (1st & 10) by season. <=2023: touchback at the 25 (75). 2024: dynamic kickoff, touchback at the 30 and most kicks returned to about the 30 (70). 2025+: touchback moved to the 35, returns still land short of it, average start about the 31 (69). Unknown season keeps 75 so callers that do not pass a season get exactly the pre-P05 output.",
+    "default": 75,
+    "by_season": {"2024": 70, "2025": 69},
+    "sources": [
+      "NFL 2024 rulebook change (dynamic kickoff): touchback to the 30-yard line, approved March 2024",
+      "NFL 2025 rulebook change: touchback on a kickoff to the 35-yard line, approved April 2025",
+      "nflverse pbp average drive start after a kickoff: about the 25 through 2023, about the 30 in 2024, about the 31 in 2025 (provisional; re-tabulate with scripts/train_wp_model.py --neutral-start when the 2025 season file is final)"
+    ]
+  },
+  "kickoff": {
+    "_doc": "Kickoff-pending state = mixture of the receiver starting at the era neutral yardline and the kicker recovering an onside kick at its own 45 (yardline_100 = 55). p_onside is 0 unless the kicker trails by 1..max_deficit with fewer than late_gsr seconds left, then p_onside_late_trailing (league-wide onside recovery rate of the 2024-2025 seasons is roughly 6%; provisional).",
+    "p_onside_default": 0.0,
+    "p_onside_late_trailing": 0.06,
+    "onside_max_deficit": 16,
+    "onside_late_gsr": 300,
+    "onside_recovery_yardline_100": 55
+  },
+  "try": {
+    "_doc": "Try state (untimed down after a touchdown) = p_conv * WP(score + points, kickoff pending) + (1 - p_conv) * WP(score, kickoff pending). The kicking team is the scoring team. two_point_margins is the conventional margin chart (scoring team's margin after the TD, before the try) on which coaches go for two; it is applied only with two_point_from_gsr seconds or fewer left, earlier tries are PATs.",
+    "p_pat": 0.94,
+    "p_two_point": 0.48,
+    "two_point_margins": [-21, -18, -16, -13, -10, -5, -2, 1, 4, 5, 12, 19, 20],
+    "two_point_from_gsr": 900,
+    "sources": [
+      "PAT conversion rate 2016-2024 (33-yard kick) about 94%; two-point rate about 48% (nflverse pbp)",
+      "Margin chart: the standard NFL two-point chart (trail by 2, 5, 10, 13, 16, 18, 21; lead by 1, 4, 5, 12, 19, 20)"
+    ]
+  },
+  "kneel_floor": {
+    "_doc": "Provisional kneel-out floor: leader with the ball, 1st down, after the two-minute warning, with game_seconds_remaining <= seconds_per_kneel * (3 - defteam timeouts) -> max(model, floor). Disabled until P03's kneel-class table shows fewer STEAL-qualifying rows at no log-loss cost, or an nflverse tabulation with n >= 200 and a leader win rate >= 0.99.",
+    "enabled": false,
+    "floor": 0.995,
+    "seconds_per_kneel": 40,
+    "two_minute_warning": 120
+  },
+  "spread_inversion": {
+    "_doc": "spread_from_pregame_probability bisects the piecewise-linear interpolant of the cached P(home) table over this ESPN-sign spread range on the neutral pre-game state. step 1.0: the integer grid of the shipped export is monotone while half-point spreads wiggle by about 1.5 points around pick'em (tree artefact); the table is checked for monotonicity and its running-min envelope is what gets inverted.",
+    "lo": -30.0,
+    "hi": 30.0,
+    "step": 1.0,
+    "tolerance": 0.0001
+  },
+  "overtime": {
+    "_doc": "The model is fit on regulation plays; an OT state is scored as a tied-or-not fourth-quarter state with that much clock. The decided shortcut (1.0 / 0.0 at gsr <= 0) never fires in overtime unless the caller says final=True; OT outputs are clamped away from 0 and 1.",
+    "clamp": 0.0001
+  },
+  "timeout_rows": {
+    "_doc": "Policy: a timeout is not a play, so the model scores the post-timeout state (same score, clock, down and distance, with the calling team's timeouts reduced by one). P03's replay labels timeout rows accordingly; this module does not special-case play_class='timeout'."
+  }
+}

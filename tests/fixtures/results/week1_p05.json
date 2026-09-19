@@ -1,0 +1,64 @@
+{
+  "item": "P05",
+  "model": "2026-09-18T22:18:44Z",
+  "rules": 1,
+  "spread_inversion": {
+    "errors_pts": {
+      "-10": -0.005,
+      "-7": -0.009,
+      "-3": 0.001,
+      "-1": -0.011,
+      "0": 0.0,
+      "1": -0.033,
+      "3": -0.012,
+      "7": 0.002
+    },
+    "max_abs_error_pts": 0.033,
+    "table_monotone": true,
+    "grid_points": 61
+  },
+  "neutral_yardline": {
+    "yardline_by_season": {
+      "2023": 75.0,
+      "2024": 70.0,
+      "2025": 69.0
+    },
+    "pregame_delta_at_minus3": {
+      "2023": 0.0,
+      "2024": 3e-05,
+      "2025": -0.000201
+    },
+    "late_one_score_kickoff_pending_delta": {
+      "2023": 0.0,
+      "2024": -0.015624,
+      "2025": -0.018787
+    }
+  },
+  "kickoff_pending_synth": {
+    "rows": 120,
+    "mean_receiver_shift": 0.01023,
+    "mean_abs_shift": 0.01023
+  },
+  "try_synth": {
+    "rows": 116,
+    "two_point_rows": 24,
+    "bracket_violations": 0,
+    "mean_abs_shift_vs_first_and_goal_from_2": 0.142135
+  },
+  "ot": {
+    "rows": 60,
+    "exact_0_or_1": 0,
+    "tie_at_zero": 0.479751
+  },
+  "kneel": {
+    "rows": 24,
+    "lifted_flag_off": 0,
+    "lifted_flag_on": 10,
+    "flag_default": false
+  },
+  "replay_per_class": {
+    "status": "by-hand (needs P03 per-class tables and a cached week)",
+    "old_after_alignment_kickoff_mean_abs": 0.088,
+    "note": "0.088 is the pre-P05 after-alignment kickoff number quoted in the plan; the before-alignment baseline and the post-P05 rerun are recorded here once P03 lands"
+  }
+}
