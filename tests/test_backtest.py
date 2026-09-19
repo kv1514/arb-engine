@@ -477,6 +477,25 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(handle_backtest(build_parser().parse_args([]), out=out.append), 2)
 
 
+def _assert_json_close(tc, got, want, path="$", tol=1e-9):
+    """Structural equality with a float tolerance (keys, order and types must match)."""
+    if isinstance(want, dict):
+        tc.assertIsInstance(got, dict, path)
+        tc.assertEqual(list(got), list(want), path)
+        for k in want:
+            _assert_json_close(tc, got[k], want[k], f"{path}.{k}", tol)
+    elif isinstance(want, list):
+        tc.assertIsInstance(got, list, path)
+        tc.assertEqual(len(got), len(want), path)
+        for i, (g, w) in enumerate(zip(got, want)):
+            _assert_json_close(tc, g, w, f"{path}[{i}]", tol)
+    elif isinstance(want, float) or isinstance(got, float):
+        tc.assertIsNotNone(got, path)
+        tc.assertAlmostEqual(float(got), float(want), delta=tol * max(1.0, abs(float(want))), msg=path)
+    else:
+        tc.assertEqual(got, want, path)
+
+
 class ReplayTrimFixtureTests(unittest.TestCase):
     """The committed cache replays offline and reproduces the committed metrics file byte for byte."""
 
@@ -492,7 +511,9 @@ class ReplayTrimFixtureTests(unittest.TestCase):
                 got = f.read()
             with open(FIXTURES / "results" / "week1_p03.json", encoding="utf-8") as f:
                 want = f.read()
-            self.assertEqual(got, want)
+            # Python 3.12 made sum() of floats compensated, so the last digit of a mean can
+            # differ on 3.10/3.11: compare structurally with a 1e-9 tolerance, not byte for byte.
+            _assert_json_close(self, json.loads(got), json.loads(want))
             rep = json.loads(got)
             self.assertEqual(rep["n_games"], 2)
             self.assertEqual(rep["spread_sources"], {"pickcenter": 1, "pregame_kalshi": 1})
