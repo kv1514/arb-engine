@@ -382,6 +382,29 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_live(args: argparse.Namespace) -> int:
+    """Price every live (and about-to-start) game at once: fair per side, cheapest venue, STEALs."""
+    from .strategy.alerts import Alerter
+    from .strategy.live import LiveSlate, format_tick
+
+    settings = settings_from_env()
+    if args.gold:
+        settings["robinhood_gold"] = True
+    store = None
+    if args.record:
+        from .store import Store
+
+        store = Store(args.record)
+    venues = [v.strip() for v in args.venues.split(",") if v.strip()]
+    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts)
+    if args.once:
+        print(format_tick(slate.tick()))
+        return 0
+    print(f"live slate: {args.sport} every {args.every}s, steal edge {args.steal_edge:.0%}, pre-game window {args.pre_hours}h, venues {','.join(venues)}; journal={args.journal}")
+    slate.run(interval=args.every, duration=args.hours * 3600, max_iterations=args.iterations)
+    return 0
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     """Scan on a schedule and append every event + quote to SQLite (measures arb frequency)."""
     from .store import Store
@@ -562,6 +585,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.add_argument("--live-only", action="store_true")
     gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
     gm.set_defaults(func=cmd_games)
+
+    lv = sub.add_parser("live", help="price every live NFL game at once (model/market/ESPN fair, cheapest venue, STEAL flags)")
+    lv.add_argument("--sport", default="nfl")
+    lv.add_argument("--every", type=float, default=10.0, help="seconds between ticks")
+    lv.add_argument("--hours", type=float, default=8.0)
+    lv.add_argument("--iterations", type=int)
+    lv.add_argument("--once", action="store_true")
+    lv.add_argument("--pre-hours", type=float, default=1.0, help="also show games starting within this many hours")
+    lv.add_argument("--steal-edge", type=float, default=0.03)
+    lv.add_argument("--target-margin", type=float, default=0.0)
+    lv.add_argument("--venues", default="kalshi,polymarket,robinhood")
+    lv.add_argument("--contracts", type=int, default=100)
+    lv.add_argument("--gold", action="store_true")
+    lv.add_argument("--record", metavar="DB", help="append every game tick to this SQLite file")
+    lv.add_argument("--journal", default="out/live.jsonl")
+    lv.set_defaults(func=cmd_live)
 
     rc = sub.add_parser("record", help="scan on a schedule and append every event + quote to SQLite (arb frequency by time-to-kickoff)")
     rc.add_argument("--sport", default="nfl")

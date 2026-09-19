@@ -83,7 +83,13 @@ python -m arb_engine bridge                           # serves the overlay on 12
 python -m arb_engine games                       # this week's NFL games: status, score, situation, spread, model P(home)
 python -m arb_engine inplay "https://robinhood.com/us/en/prediction-markets/nfl/events/<game>/" --position robinhood:DEN:0.50:100 --once
 python -m arb_engine inplay "<game url>" --position robinhood:DEN:0.50:100 --position robinhood:DEN:0.40:100   # keeps watching
+python -m arb_engine live --every 10 --pre-hours 1 --record out/history.db   # the whole slate: every live game, STEAL alerts, ticks recorded
 ```
+
+`live` is the Sunday mode: one venue pull and one ESPN scoreboard call per tick, a summary
+refresh per live game every 30 s, then the same evaluation as `inplay` for every game at
+once (no lots) — fair per side with its three sources, the cheapest venue's all-in, and a
+`STEAL` alert the first time a side sits below fair by `--steal-edge` with the model agreeing.
 
 Every tick pulls the venues' quotes **and** ESPN's live game state (score, clock,
 possession, down & distance, field position, timeouts, ESPN's own win probability, the
@@ -241,7 +247,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 161 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 163 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

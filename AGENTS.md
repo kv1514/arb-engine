@@ -38,7 +38,7 @@ arb_engine/
   matching/    canonical team/player keys, Eastern-date event keys, cross-venue merge
   scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
   execution/   Kalshi order plans + gated executor
-  strategy/    maker runner (maker.py), in-play lock/steal watcher (inplay.py), brokers, alerts + journal
+  strategy/    maker runner (maker.py), in-play lock/steal watcher (inplay.py), slate-wide live scanner (live.py), brokers, alerts + journal
   backtest.py  GameReplayer: replay a finished game play-by-play against every price source; store.py = SQLite recorder (--record)
 extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/)
 tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh
@@ -48,12 +48,13 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (161)
+python -m unittest discover -s tests -t .      # Python tests (163)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing)
 python -m arb_engine rh-event <robinhood event url>
 python -m arb_engine bridge                    # local server the extension uses when running
 python -m arb_engine maker --mode paper        # rest Kalshi orders at arb-creating prices (paper by default)
+python -m arb_engine live --every 10           # every live game at once: fair per side, cheapest venue, STEAL alerts
 python -m arb_engine backtest --week 1         # replay a week: model vs markets, blend fit, STEAL/LOCK simulation
 python -m arb_engine record --every 300        # scheduled scans into SQLite; `stats` summarises arb frequency
 python scripts/capture_fixtures.py             # refresh offline fixtures from the live APIs
