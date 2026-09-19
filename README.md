@@ -261,7 +261,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 178 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 180 Python tests + 2 JS suites (2,195 fee parity
 vectors, background-worker integration incl. totals and category pages) pass; CI runs them on
 Python 3.10–3.13. What the data has said so far:
 
