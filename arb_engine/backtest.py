@@ -23,7 +23,7 @@ from typing import Any, Optional
 from .fees.kalshi import KalshiFees
 from .fees.robinhood import RobinhoodFees
 from .matching.normalize import kalshi_ticker_date
-from .matching.teams import nfl_team_code
+from .matching.teams import nfl_team_code, team_code, team_name, team_table
 from .quant.arbitrage import Leg, evaluate
 from .quant.inplay_fair import blended_fair, market_confidence_from_spread
 from .venues.espn import ESPNClient
@@ -81,29 +81,37 @@ def _scores(pred: list[float], y: int) -> dict[str, float]:
 
 # Kalshi's ticker codes where they differ from the standard NFL abbreviations.
 KALSHI_TICKER_CODES = {"JAX": "JAC"}
+KALSHI_GAME_SERIES = {"nfl": "KXNFLGAME", "ncaaf": "KXNCAAFGAME"}
 
 
 class GameReplayer:
-    def __init__(self, espn: Optional[ESPNClient] = None, history: Optional[HistoryClient] = None, model: Any = None):
-        self.espn = espn or ESPNClient()
+    def __init__(self, espn: Optional[ESPNClient] = None, history: Optional[HistoryClient] = None, model: Any = None, sport: str = "nfl"):
+        self.sport = sport
+        self.espn = espn or ESPNClient(sport=sport)
         self.history = history or HistoryClient()
         self.model = model
 
     def kalshi_tickers(self, home: str, away: str, kickoff) -> tuple[str, str]:
-        """KXNFLGAME-{YYMONDD}{AWAY}{HOME}-{TEAM} using the ET date of kickoff (Kalshi's convention)."""
+        """KX{NFL|NCAAF}GAME-{YYMONDD}{AWAY}{HOME}-{TEAM} using the ET date of kickoff (Kalshi's convention)."""
         from .matching.normalize import et_date
 
         d = et_date(kickoff)
         y, m, dd = d.split("-")
         mon = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][int(m) - 1]
-        home_k, away_k = KALSHI_TICKER_CODES.get(home, home), KALSHI_TICKER_CODES.get(away, away)
+        sport = getattr(self, "sport", "nfl")
+        if sport == "nfl":
+            home_k, away_k = KALSHI_TICKER_CODES.get(home, home), KALSHI_TICKER_CODES.get(away, away)
+        else:
+            table = team_table(sport)
+            home_k, away_k = (table.get(home) or {}).get("kalshi") or home, (table.get(away) or {}).get("kalshi") or away
+        series = KALSHI_GAME_SERIES.get(sport, f"KX{sport.upper()}GAME")
         code = f"{y[2:]}{mon}{dd}{away_k}{home_k}"
-        return f"KXNFLGAME-{code}-{home_k}", f"KXNFLGAME-{code}-{away_k}"
+        return f"{series}-{code}-{home_k}", f"{series}-{code}-{away_k}"
 
     def replay(self, espn_event_id: str, rh_contracts: Optional[dict[str, str]] = None, pm_tokens: Optional[dict[str, str]] = None, pre_minutes: int = 30, post_minutes: int = 10, kalshi_tickers: Optional[dict[str, str]] = None) -> ReplayResult:
         summary = self.espn.summary(espn_event_id)
         plays, meta = espn_timeline(summary)
-        home, away = nfl_team_code(meta["home"]) or meta["home"], nfl_team_code(meta["away"]) or meta["away"]
+        home, away = team_code(self.sport, meta["home"]) or meta["home"], team_code(self.sport, meta["away"]) or meta["away"]
         if not plays:
             raise RuntimeError("no plays with wall-clock timestamps in the ESPN summary")
         kickoff = meta.get("kickoff")
@@ -169,7 +177,7 @@ class GameReplayer:
             for bar in (bh, ba):
                 if bar and bar.ask is not None and bar.bid is not None:
                     k_spread = round(bar.ask - bar.bid, 4) if k_spread is None else min(k_spread, round(bar.ask - bar.bid, 4))
-            b = blended_fair({home: market_p, away: (1 - market_p) if market_p is not None else None} if market_p is not None else None, model_p, p.espn_home_wp, home, away, live=True, market_confidence=market_confidence_from_spread(k_spread))
+            b = blended_fair({home: market_p, away: (1 - market_p) if market_p is not None else None} if market_p is not None else None, model_p, p.espn_home_wp, home, away, live=True, market_confidence=market_confidence_from_spread(k_spread), sport=self.sport)
             # Arbitrage checks at this minute.
             k_margin = x_margin = None
             if bh and ba and bh.ask is not None and ba.ask is not None:
@@ -247,7 +255,7 @@ def _polymarket_event(http: Any, slug: str) -> Optional[dict]:
     return (events or [None])[0]
 
 
-def resolve_polymarket_tokens(http: Any, away: str, home: str, kickoff: Any, away_name: Optional[str] = None, home_name: Optional[str] = None) -> Optional[dict[str, str]]:
+def resolve_polymarket_tokens(http: Any, away: str, home: str, kickoff: Any, away_name: Optional[str] = None, home_name: Optional[str] = None, sport: str = "nfl") -> Optional[dict[str, str]]:
     """Moneyline CLOB token ids for an NFL game from its Gamma event slug
     ``nfl-{away}-{home}-{UTC date}`` (works for closed games; ``/markets?slug=`` does not).
     Falls back to ``/public-search`` with the team names when the codes differ."""
@@ -265,16 +273,20 @@ def resolve_polymarket_tokens(http: Any, away: str, home: str, kickoff: Any, awa
     else:
         ko = datetime.fromtimestamp(float(kickoff), tz=timezone.utc)
     date = ko.astimezone(timezone.utc).strftime("%Y-%m-%d")
-    slug = f"nfl-{POLYMARKET_SLUG_CODES.get(away, away.lower())}-{POLYMARKET_SLUG_CODES.get(home, home.lower())}-{date}"
-    ev = _polymarket_event(http, slug)
+    prefix = "cfb" if sport == "ncaaf" else "nfl"
+    slug = f"{prefix}-{POLYMARKET_SLUG_CODES.get(away, away.lower())}-{POLYMARKET_SLUG_CODES.get(home, home.lower())}-{date}"
+    ev = _polymarket_event(http, slug) if sport == "nfl" else None  # college slugs use Polymarket's own codes: search
     if ev is None and (away_name or home_name):
         try:
-            found = http.get(f"{GAMMA}/public-search", {"q": f"{(away_name or away).split()[-1]} {(home_name or home).split()[-1]}", "limit_per_type": 10})
+            # NFL: nicknames ("Lions Bills"); college: the schools' names ("Syracuse Pittsburgh") —
+            # Polymarket's search does not match "Syracuse Orange Pittsburgh Panthers".
+            q = f"{(away_name or away).split()[-1]} {(home_name or home).split()[-1]}" if sport == "nfl" else f"{team_name(sport, away)} {team_name(sport, home)}"
+            found = http.get(f"{GAMMA}/public-search", {"q": q, "limit_per_type": 10})
         except Exception:
             found = None
         for cand in (found or {}).get("events") or []:
             cs = str(cand.get("slug") or "")
-            if _re.match(r"^nfl-[a-z]+-[a-z]+-" + _re.escape(date) + "$", cs):
+            if _re.match("^" + prefix + r"-[a-z0-9]+-[a-z0-9]+-" + _re.escape(date) + "$", cs):
                 slug = cs
                 ev = _polymarket_event(http, cs) or cand
                 break
@@ -291,7 +303,7 @@ def resolve_polymarket_tokens(http: Any, away: str, home: str, kickoff: Any, awa
                 continue
             if len(outs) != 2 or len(toks) != 2:
                 continue
-            codes = [nfl_team_code(o) for o in outs]
+            codes = [team_code(sport, o) for o in outs]
             if home in codes and away in codes:
                 return {"home": str(toks[codes.index(home)]), "away": str(toks[codes.index(away)])}
     return None
@@ -391,10 +403,10 @@ def fit_blend_weights(results: list[ReplayResult], step: float = 0.05, inplay_on
     }
 
 
-def replay_week(season: int, week: int, replayer: Optional[GameReplayer] = None, http: Any = None, polymarket: bool = True, limit: Optional[int] = None, progress: Any = None) -> tuple[list[ReplayResult], list[dict[str, Any]]]:
+def replay_week(season: int, week: int, replayer: Optional[GameReplayer] = None, http: Any = None, polymarket: bool = True, limit: Optional[int] = None, progress: Any = None, sport: str = "nfl") -> tuple[list[ReplayResult], list[dict[str, Any]]]:
     """Replay every finished game of a week (Kalshi + Polymarket + ESPN + model; Robinhood
     history needs contract ids, which the catalogue only holds for open events)."""
-    rep = replayer or GameReplayer()
+    rep = replayer or GameReplayer(sport=sport)
     http = http or rep.history.http
     games = week_games(rep.espn, season, week)
     if limit:
@@ -405,9 +417,9 @@ def replay_week(season: int, week: int, replayer: Optional[GameReplayer] = None,
         try:
             summary = rep.espn.summary(g["id"])
             _, meta = espn_timeline(summary)
-            home, away = nfl_team_code(meta["home"]) or meta["home"], nfl_team_code(meta["away"]) or meta["away"]
+            home, away = team_code(rep.sport, meta["home"]) or meta["home"], team_code(rep.sport, meta["away"]) or meta["away"]
             names = str(g.get("name") or "").split(" at ")
-            pm = resolve_polymarket_tokens(http, away, home, meta.get("kickoff"), away_name=names[0] if len(names) == 2 else None, home_name=names[1] if len(names) == 2 else None) if polymarket else None
+            pm = resolve_polymarket_tokens(http, away, home, meta.get("kickoff"), away_name=names[0] if len(names) == 2 else None, home_name=names[1] if len(names) == 2 else None, sport=rep.sport) if polymarket else None
             res = rep.replay(g["id"], pm_tokens=pm)
             results.append(res)
             if progress:

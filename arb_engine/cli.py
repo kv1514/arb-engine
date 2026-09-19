@@ -361,7 +361,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     if args.week is not None:
         from .backtest import fit_blend_weights, replay_week, simulate_steal, summarize_many
 
-        results, skipped = replay_week(args.season, args.week, polymarket=not args.no_polymarket, limit=args.limit, progress=print)
+        results, skipped = replay_week(args.season, args.week, polymarket=not args.no_polymarket, limit=args.limit, progress=print, sport=args.sport)
         fit = fit_blend_weights(results) if results else None
         sims = [simulate_steal(results, contracts=args.contracts, source="blend", lock=True, lock_fraction=lf) for lf in (0.0, 0.5, 1.0)] + [simulate_steal(results, contracts=args.contracts, source="blend", lock=False), simulate_steal(results, contracts=args.contracts, source="model", lock=False)] if results else []
         print(summarize_many(results, skipped, fit, sims))
@@ -373,7 +373,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     if not args.espn:
         print("need --espn <event id> or --week N", file=sys.stderr)
         return 2
-    res = GameReplayer().replay(args.espn, rh_contracts=rh, pm_tokens=pm, kalshi_tickers=kt)
+    res = GameReplayer(sport=args.sport).replay(args.espn, rh_contracts=rh, pm_tokens=pm, kalshi_tickers=kt)
     print(summarize(res))
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
@@ -635,6 +635,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     bt.add_argument("--kalshi-away")
     bt.add_argument("--week", type=int, help="replay every finished game of this NFL regular-season week (Kalshi + Polymarket + ESPN + model) and fit the blend weights")
     bt.add_argument("--season", type=int, default=2026)
+    bt.add_argument("--sport", default="nfl", choices=["nfl", "ncaaf"])
     bt.add_argument("--limit", type=int, help="with --week: only the first N games")
     bt.add_argument("--no-polymarket", action="store_true", help="with --week: skip the Polymarket history lookup")
     bt.add_argument("--contracts", type=int, default=10, help="with --week: contracts per simulated STEAL/LOCK entry")

@@ -137,5 +137,40 @@ class LockFractionTests(unittest.TestCase):
         self.assertGreater(patient["by_edge"]["0.05"]["pnl"], greedy["by_edge"]["0.05"]["pnl"])  # home won
 
 
+class CollegeReplayTests(unittest.TestCase):
+    def test_kalshi_tickers_use_the_table_codes(self):
+        from datetime import datetime, timezone
+
+        rep = GameReplayer(espn=ESPNClient(http=FakeHttp({}), sport="ncaaf"), history=None, sport="ncaaf")
+        home, away = rep.kalshi_tickers("SJSU", "FRES", datetime(2026, 9, 20, 3, 0, tzinfo=timezone.utc))  # 03:00Z = Sep 19 ET
+        self.assertEqual((home, away), ("KXNCAAFGAME-26SEP19FRESSJSU-SJSU", "KXNCAAFGAME-26SEP19FRESSJSU-FRES"))
+        home, away = rep.kalshi_tickers("NU", "PSU", datetime(2026, 10, 5, 0, 0, tzinfo=timezone.utc))  # Northwestern = NW on Kalshi
+        self.assertEqual((home, away), ("KXNCAAFGAME-26OCT04PSUNW-NW", "KXNCAAFGAME-26OCT04PSUNW-PSU"))
+
+    def test_polymarket_college_search_by_school_names(self):
+        calls = []
+        ev = {"slug": "cfb-syra-pitt-2026-09-17", "markets": [{"slug": "cfb-syra-pitt-2026-09-17", "sportsMarketType": "moneyline", "outcomes": '["Syracuse", "Pittsburgh"]', "clobTokenIds": '["111", "222"]'}]}
+
+        class Http:
+            def get(self, url, params=None, headers=None):
+                calls.append((url.rsplit("/", 1)[-1], dict(params or {})))
+                if url.endswith("/public-search"):
+                    return {"events": [{"slug": "cfb-pittsburgh-vs-syracuse"}, {"slug": "cfb-pitt-syra-2025-10-18"}, {"slug": "cfb-syra-pitt-2026-09-17"}]}
+                if url.endswith("/events"):
+                    return [ev] if params.get("slug") == "cfb-syra-pitt-2026-09-17" else []
+                raise AssertionError(url)
+
+        toks = resolve_polymarket_tokens(Http(), "SYR", "PITT", "2026-09-17T23:30:00Z", away_name="Syracuse Orange", home_name="Pittsburgh Panthers", sport="ncaaf")
+        self.assertEqual(toks, {"home": "222", "away": "111"})
+        search = next(p for u, p in calls if u == "public-search")
+        self.assertEqual(search["q"], "Syracuse Pittsburgh")            # school names, not nicknames
+        self.assertFalse(any(p.get("slug", "").startswith("nfl-") for u, p in calls))
+
+    def test_week_games_college_uses_fbs_params(self):
+        espn = ESPNClient(http=FakeHttp({"groups=80": load("ncaaf/espn_scoreboard_cfb.json")}), sport="ncaaf")
+        sb = espn.scoreboard_week(2026, 3)
+        self.assertEqual(len(sb["events"]), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

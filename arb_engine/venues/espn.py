@@ -465,7 +465,9 @@ class ESPNClient:
 
     def scoreboard_week(self, season: int, week: int, seasontype: int = 2) -> dict:
         """All games of one regular-season (2) / post-season (3) week, including finals."""
-        return self.http.get(f"{self.base_url}/scoreboard", params={"dates": int(season), "seasontype": int(seasontype), "week": int(week)}, headers={"Accept": "application/json"})
+        params = dict(SPORT_SCOREBOARD_PARAMS.get(self.sport, {}))
+        params.update({"dates": int(season), "seasontype": int(seasontype), "week": int(week)})
+        return self.http.get(f"{self.base_url}/scoreboard", params=params, headers={"Accept": "application/json"})
 
     def summary(self, event_id: str) -> dict:
         return self.http.get(f"{self.base_url}/summary", params={"event": str(event_id)}, headers={"Accept": "application/json"})
