@@ -221,19 +221,23 @@ def fair_value_view(quotes_by_venue: dict[str, list[OutcomeQuote]]) -> dict[str,
     return out
 
 
+UNRESTRICTED = {"all", "*"}
+
+
 def resolve_executable_venues(settings: Optional[dict[str, Any]], explicit: Optional[Iterable[str]] = None) -> Optional[set[str]]:
     """Venues an order can actually be placed on: an explicit set, else the
-    ``executable_venues`` setting (set / list / comma string; ``None`` = unrestricted), else
-    the compliance table (``arb_engine.compliance``, a later item) when it exists, else no
-    restriction."""
+    ``executable_venues`` setting (set / list / comma string; ``"all"`` = unrestricted;
+    ``None`` = unset), else the compliance table (``arb_engine.compliance``) when it exists,
+    else no restriction."""
     if explicit is not None:
         return set(explicit)
     settings = settings or {}
-    if "executable_venues" in settings:
-        v = settings["executable_venues"]
-        if v is None:
+    v = settings.get("executable_venues")
+    if v is not None:  # None = unset (config.load_settings emits every declared key): fall through to the table
+        names = {x.strip().lower() for x in v.split(",") if x.strip()} if isinstance(v, str) else {str(x).strip().lower() for x in v}
+        if names & UNRESTRICTED:  # an explicit "all" / "*" is the only way to say "no restriction"
             return None
-        return {x.strip() for x in v.split(",") if x.strip()} if isinstance(v, str) else set(v)
+        return names
     try:
         from .compliance import executable_venues as _executable_venues  # type: ignore[import-not-found]
     except ImportError:

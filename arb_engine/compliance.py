@@ -27,6 +27,7 @@ from typing import Any, Iterable, Mapping, Optional
 
 RULES_PATH = Path(__file__).parent / "data" / "venue_rules.json"
 SETTING_KEY = "executable_venues"
+UNRESTRICTED = {"all", "*"}  # the explicit way to lift the table (a None / unset value keeps it)
 ENV_KEY = "EXECUTABLE_VENUES"
 STALE_DAYS = 30
 
@@ -86,6 +87,8 @@ def executable_venues(settings: Optional[Mapping[str, Any]] = None, home_state: 
     can only confirm the table, never veto an explicit operator statement.
     """
     override = _csv(_setting(settings, SETTING_KEY, ENV_KEY))
+    if override is not None and set(override) & UNRESTRICTED:  # "all" / "*": every venue with an adapter
+        override = [v for v, r in load_rules().items() if r.get("adapter", True) or not with_adapter_only]
     if override is not None:
         out = set(override)
     else:

@@ -70,9 +70,9 @@ def _adapters():
 
 class ScannerTests(unittest.TestCase):
     def test_scan_merges_three_venues(self):
-        # executable_venues=None: all three venues may be legs (the compliance default keeps
+        # executable_venues="all": all three venues may be legs (the compliance default keeps
         # Polymarket signal-only; see test_scan_default_keeps_polymarket_signal_only).
-        res = scan("nfl", _adapters(), settings={"robinhood_gold": False, "executable_venues": None})
+        res = scan("nfl", _adapters(), settings={"robinhood_gold": False, "executable_venues": "all"})
         self.assertEqual(res.errors, {})
         keys = {e.event_key for e in res.events}
         self.assertIn("nfl:BUF|DET:2026-09-17", keys)
@@ -309,10 +309,12 @@ class SignalOnlyAndSizeTests(unittest.TestCase):
 
     def test_resolve_executable_venues(self):
         self.assertEqual(resolve_executable_venues({}), {"kalshi", "robinhood"})  # the compliance table
-        self.assertIsNone(resolve_executable_venues({"executable_venues": None}))
+        # None = unset (config.load_settings emits every declared key): still the table; "all" lifts it.
+        self.assertEqual(resolve_executable_venues({"executable_venues": None}), {"kalshi", "robinhood"})
+        self.assertIsNone(resolve_executable_venues({"executable_venues": "all"}))
+        self.assertIsNone(resolve_executable_venues({"executable_venues": ["*"]}))
         self.assertEqual(resolve_executable_venues({"executable_venues": "kalshi, robinhood"}), {"kalshi", "robinhood"})
         self.assertEqual(resolve_executable_venues({"executable_venues": ["kalshi"]}), {"kalshi"})
-        self.assertIsNone(resolve_executable_venues({"executable_venues": None}))
         self.assertEqual(resolve_executable_venues({}, explicit=["robinhood"]), {"robinhood"})
         with stub_module("arb_engine.compliance", executable_venues=lambda settings=None, home_state=None: ["kalshi"]):
             self.assertEqual(resolve_executable_venues({}), {"kalshi"})

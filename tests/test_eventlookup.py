@@ -89,7 +89,7 @@ class OrderGridParityTests(unittest.TestCase):
         m = pm_event[0]["markets"][0]                       # O/U 44.5, bestBid 0.46 / bestAsk 0.47
         m["orderPriceMinTickSize"], m["restricted"] = 0.001, False
         an = self._analyzer(pm_event)
-        res = an.analyze_url("https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/", settings={"executable_venues": None})  # None: Polymarket may be a leg (compliance default keeps it signal-only)
+        res = an.analyze_url("https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/", settings={"executable_venues": "all"})  # "all": Polymarket may be a leg (compliance default keeps it signal-only)
         l44 = {l["line"]: l for l in res["analysis"]["lines"]}[44.5]
         over = next(o for o in l44["outcomes"] if o["outcome"] == "over")
         pm = next(v for v in over["venues"] if v["venue"] == "polymarket")

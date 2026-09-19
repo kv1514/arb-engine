@@ -1,9 +1,10 @@
 # Working on arb-engine (for Codex, Grok, Claude and humans)
 
 This repo is a fee-aware arbitrage / fair-value engine for **sports prediction markets**
-(Kalshi, Polymarket, Robinhood's event contracts on Rothera + KalshiEX) plus a Chrome
+(Kalshi, Polymarket, Robinhood's event contracts on Rothera + KalshiEX + CDNA) plus a Chrome
 overlay for robinhood.com. Read `README.md` first, then `docs/VENUES.md` for the verified
-fee schedules and API facts every change must respect.
+fee schedules and API facts every change must respect, and `docs/ARCHITECTURE.md` for the
+data flow.
 
 ## Ground rules
 
@@ -26,29 +27,54 @@ fee schedules and API facts every change must respect.
    they exist for the fee comparison. Rothera (`NFLGAME-…` etc.) is a separate book.
 6. **In-play markets are not arbs.** Cross-venue gaps during a live game are staleness.
    Keep the `live` / `in_play` handling in `arb_engine/scanner.py`.
+7. **Venue eligibility is a table, not a constant.** `compliance.executable_venues()` reads
+   `arb_engine/data/venue_rules.json` (a verified date and a source per row). Polymarket is
+   signal-only by default for a US account: its quotes feed the fair value, never an arb
+   leg, a maker hedge or an overlay STEAL. `EXECUTABLE_VENUES` is the explicit operator
+   override. Every analyzer / scanner call takes the resolved set
+   (`scanner.resolve_executable_venues(settings)`); the bridge, `scan`, `live` and `maker`
+   must agree.
+8. **Shared files are owned by the loaders.** `arb_engine/cli.py` and `arb_engine/config.py`
+   are only touched by the plugin loader and the settings registry themselves. A feature
+   adds flags / subcommands through a module in `arb_engine/cli_plugins/` and declares its
+   settings keys where they are read (`config.declare_setting`). Two work items that both
+   edit `cli.py` or `config.py` are a merge conflict by design; two that add a plugin and
+   declare their own keys are not.
+9. **Replay first; results fixtures are metrics-only.** A change to the WP model, the blend,
+   the gates or the fee models is accepted on the replay harness (`backtest`, `backtest-ticks`,
+   `lines-eval`), not on a live scan. The numbers land in `tests/fixtures/results/*.json`,
+   which are *summaries* (log-loss, Brier, arb minutes, STEAL counts, fee flips) and never
+   raw feeds; every table in `docs/` and `README.md` is re-rendered from those files rather
+   than typed by hand, so a claim in the docs can always be traced to a fixture and the
+   fixture to a replay command. See **Acceptance discipline** below.
 
 ## Layout
 
 ```
 arb_engine/
-  fees/        venue fee models (Kalshi, Robinhood, Polymarket, Polymarket US) — Decimal math
-  quant/       odds & de-vig, arbitrage evaluation, max-buy price, depth sizing, Kelly, fair value
+  config.py    settings registry: declare_setting / setting / KNOWN_SETTINGS / load_settings (see Settings)
+  cli.py       argparse root + built-in subcommands; loads cli_plugins/ (never edited by a feature)
+  cli_plugins/ one module per feature: register(subparsers, existing_parsers) adds flags/subcommands
+  compliance.py venue eligibility table (data/venue_rules.json): executable_venues(), ineligible_reason()
+  fees/        venue fee models (Kalshi, Robinhood Rothera/KalshiEX/CDNA, Polymarket, Polymarket US) — Decimal math
+  quant/       odds & de-vig, arbitrage evaluation (tie-aware), max-buy price, depth sizing, Kelly, fair value, lines
   venues/      adapters: kalshi.py (public + signed), polymarket.py (Gamma/CLOB), robinhood.py (public web/API), espn.py (live game state), history.py (candles/bars/price history + ESPN play timeline)
-  models/      __init__.py = the core dataclasses (was models.py); wp.py = stdlib win-probability inference; data/nfl_wp_model.json
-  matching/    canonical team/player keys (nfl_teams.json; ncaaf/nba/nhl_teams.json via scripts/build_teams.py --sport …), Eastern-date event keys, cross-venue merge
-  scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server
+  models/      __init__.py = the core dataclasses; wp.py = stdlib win-probability inference (tables in data/nfl_wp_model.json + nfl_wp_rules.json)
+  matching/    canonical team/player keys (nfl_teams.json; ncaaf/nba/nhl_teams.json via scripts/build_teams.py --sport …), Eastern-date event keys, cross-venue merge, settlement-rule registry
+  scanner.py   sport-wide scan; eventlookup.py single Robinhood event; bridge.py local HTTP server for the overlay
   execution/   Kalshi order plans + gated executor
-  strategy/    maker runner (maker.py), in-play lock/steal watcher (inplay.py), slate-wide live scanner (live.py), brokers, alerts + journal
-  backtest.py  GameReplayer: replay a finished game play-by-play against every price source; store.py = SQLite recorder (--record)
-extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/)
-tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh
+  strategy/    maker runner (maker.py), in-play lock/steal watcher + execution gates (inplay.py), slate-wide live scanner (live.py), brokers, alerts + journal
+  backtest.py  GameReplayer: replay a finished game play-by-play against every price source; tickreplay.py = recorded-tick replay; store.py = SQLite recorder (--record)
+  data/        venue_rules.json (eligibility), settlement_rules.json, WP model + rules, margin distributions, team tables
+extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/; background.js consumes the bridge's /analyze and /inplay)
+tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh; fixtures/results/*.json = replay summaries
 docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROADMAP.md
 ```
 
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (180)
+python -m unittest discover -s tests -t .      # Python tests (604)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -60,19 +86,133 @@ python -m arb_engine record --every 300        # scheduled scans into SQLite; `s
 python scripts/capture_fixtures.py             # refresh offline fixtures from the live APIs
 ```
 
+## The bridge (`arb_engine/bridge.py`)
+
+`GET /analyze?url=…` and `GET /inplay?url=…` on 127.0.0.1:8765 are what the overlay renders in
+bridge mode. `extension/background.js` (`fromBridge`, `rowsFromReport`) reads
+`analysis.outcomes[].venues[].ineligible` and `analysis.flags` today; `analysis.tie_margin` /
+`tie_payout_total`, `view.gated_reasons`, `view.sides[].gated_reasons` / `steal_gated` /
+`lock_gated` / `steal_threshold` / `best_ineligible` and `view.executable_venues` are served
+beside them for the overlay to render. Rules the bridge keeps (`tests/test_bridge.py` runs the
+handler offline):
+
+* every analyzer call passes the environment settings, the resolved executable venues and
+  `emit_no_side=True`, so Rothera NO legs (`<contract id>#no`, `meta.side="no"`) are priced
+  and Polymarket rows carry `ineligible="not executable"` unless `EXECUTABLE_VENUES` opts in;
+* `/inplay` keeps one `FeedFreshness` per event key across polls (`Handler.freshness`) so the
+  `feed-stale` / `clock-frozen` / `score-pending` gates work between successive requests,
+  and evaluates with `now=time.time()`;
+* JSON keys the extension consumes are never renamed; new fields are added beside them
+  (`with_overlay_fields`, `with_gate_fields` pin the contract).
+
+## Settings
+
+Every settings key the engine reads is declared **once**, in the module that reads it,
+with `config.declare_setting(key, env=..., default=..., cast=..., doc=...)`; the registry
+is `config.KNOWN_SETTINGS` (key -> `SettingSpec`, declaration order). Resolution is always
+
+    explicit settings dict  >  environment variable  >  declared default
+
+via `config.setting(settings, key)` (raises `KeyError` for an undeclared key so a typo
+surfaces in tests), and `config.load_settings()` (alias `settings_from_env`) bakes every
+declared key into the dict handed to each CLI handler and the bridge. Re-declaring a key
+identically is a no-op (module reloads); a *conflicting* re-declaration raises so two work
+items cannot silently fight over one knob. Modules must import when `config.py` predates the
+registry (`try: from .config import declare_setting except ImportError`). Note that
+`load_settings()` emits every declared key, so `executable_venues` is `None` when the env
+var is unset: `scanner.resolve_executable_venues` and `compliance.executable_venues` read
+`None` as *unset* (the table applies) and only the explicit `EXECUTABLE_VENUES=all` (or `*`)
+lifts every restriction.
+
+`tests/test_settings_doc.py` imports every module under `arb_engine` and checks this table
+against `KNOWN_SETTINGS` both ways: zero undocumented, zero undeclared, env vars matching.
+When you declare a key, add its row here.
+
+| Key | Env var | Default | What it does |
+|---|---|---|---|
+| `robinhood_gold` | `ROBINHOOD_GOLD` | `False` | Price Robinhood's commission at the Gold rate ($0.005 per contract instead of $0.01). |
+| `kalshi_rounding` | `KALSHI_FEE_ROUNDING` | `cent` | Kalshi per-order fee rounding: `cent` (up to the cent, conservative) or `centicent`. |
+| `polymarket_us_volume_rebate` | `POLYMARKET_US_VOLUME_REBATE` | `0.0` | Polymarket US taker-fee volume rebate as a fraction (0 = none). |
+| `venue_weights` | — | `None` | `{venue: weight}` override for the consensus fair value; `None` = `quant.fairvalue.DEFAULT_VENUE_WEIGHTS`. Settings dict only. |
+| `odds_api_key` | `ODDS_API_KEY` | `None` | The Odds API key for sportsbook consensus (pre-game only); `None` disables it. |
+| `rothera_fee_model` | `ROBINHOOD_ROTHERA_FEE_MODEL` | `flat_001` | Rothera exchange fee on Robinhood NFL contracts: `flat_001` ($0.01/contract) or `quadratic` (per order `max(round(0.02·P·(1−P)·C, 2), $0.01)`, Rothera schedule 2026-05-20). |
+| `cdna_fee_model` | `CDNA_FEE_MODEL` | `flat_001` | CDNA exchange fee on Robinhood college contracts: `flat_001`, `flat_002` or `weighted_007` (0.07·P·(1−P)·C); unverified until an order ticket is seen. |
+| `rothera_no_leg` | `ROTHERA_NO_LEG` | `True` | `scan()`: emit the NO side of each Rothera game contract as its own leg (the tie-aware hedge). |
+| `line_fair` | `LINE_FAIR` | `False` | Attach `quant.lines` fair values to spread/total events in `scan()` and use them in play (one knob for both). |
+| `tennis_thin_book_spread` | `ARB_TENNIS_THIN_SPREAD` | `0.03` | Tennis `thin-book` flag when abs(yes_ask + no_ask − 1) exceeds this. |
+| `tennis_thin_book_size` | `ARB_TENNIS_THIN_SIZE` | `20.0` | Tennis `thin-book` flag when the top-of-book size is below this many contracts. |
+| `tennis_walkover_p_tour` | `ARB_TENNIS_WALKOVER_P_TOUR` | `None` | Override the tour-tier walkover probability from `settlement_rules.json`. |
+| `tennis_walkover_p_challenger` | `ARB_TENNIS_WALKOVER_P_CHALLENGER` | `None` | Override the challenger-tier walkover probability from `settlement_rules.json`. |
+| `tennis_walkover_p_itf` | `ARB_TENNIS_WALKOVER_P_ITF` | `None` | Override the ITF-tier walkover probability from `settlement_rules.json`. |
+| `history_cache_dir` | `ARB_HISTORY_CACHE_DIR` | `out/cache/history` | Read-through cache for backtest history (Kalshi candles, Polymarket, Robinhood, ESPN). |
+| `backtest_bar_mode` | `ARB_BACKTEST_BAR_MODE` | `before` | Market-bar alignment for the replay headline: `before` or `after` the play. |
+| `executable_venues` | `EXECUTABLE_VENUES` | `None` | Comma list of venues this account can execute on; overrides `data/venue_rules.json` (table default: kalshi, robinhood); `all` lifts every restriction. |
+| `TRADES_CACHE_DIR` | `ARB_TRADES_CACHE_DIR` | `out/cache/trades` | Read-through cache for public trade tapes (event studies). |
+| `TICK_REPLAY_STALE_AFTER_S` | `ARB_TICK_REPLAY_STALE_AFTER_S` | `15.0` | Fallback feed-stale threshold for `backtest-ticks` when the live gates are absent. |
+| `kalshi_gtd_horizon_s` | `KALSHI_GTD_HORIZON_S` | `3600.0` | Seconds a resting Kalshi order may live before the exchange expires it (capped at kickoff). |
+| `wp_kneel_floor_enabled` | `ARB_WP_KNEEL_FLOOR` | `None` | Override `nfl_wp_rules.json` `kneel_floor.enabled` (1/0); unset keeps the table value. |
+| `inplay_stale_after_s` | `INPLAY_STALE_AFTER_S` | `15.0` | Seconds without an ESPN state change (while a venue mid moves ≥ 0.02) before STEAL/LOCK are gated `feed-stale`. |
+| `inplay_delay_haircut_cdna` | `INPLAY_DELAY_HAIRCUT_CDNA` | `0.02` | Extra edge a STEAL on a CDNA-routed Robinhood contract needs, for its 3 s order delay. |
+| `inplay_slate_cap` | `INPLAY_SLATE_CAP` | `None` | Dollars the live slate may deploy per tick across every STEAL (default: the bankroll); stakes scale proportionally. |
+| `maker_hedge_cash` | `MAKER_HEDGE_CASH` | `250.0` | Max dollars of hand-executed hedge legs the maker may leave resting at once (sum of size × hedge ask). |
+| `maker_hedge_venues` | `MAKER_HEDGE_VENUES` | `robinhood` | Comma list of maker hedge venues; naming `polymarket` is the explicit opt-in to a non-executable hedge. |
+
+## CLI plugins (`arb_engine/cli_plugins/`)
+
+`cli.build_parser` imports every public module of the package in name order (`_private`
+modules skipped) and calls its `register(subparsers, existing_parsers)`:
+
+* `subparsers` is the root parser's argparse sub-parser action; `existing_parsers` maps
+  subcommand name -> `ArgumentParser` for every subcommand registered so far (built-ins
+  first, then earlier plugins in name order). Add flags to an existing subcommand through
+  `existing_parsers["scan"].add_argument(...)`, or add a whole subcommand with
+  `subparsers.add_parser(...)` + `set_defaults(func=handler)`.
+* Flag names must be unique (`--<feature>-...`): argparse raises on a duplicate and the CLI
+  reports which plugin did it.
+* Return `None` or `{subcommand: handler}` to override the dispatch of an existing
+  subcommand (wrap the built-in: `cli.cmd_scan` etc.). Handlers take `(args, settings)` with
+  `settings = config.load_settings()`; a one-argument `handler(args)` is also accepted. The
+  last plugin in name order wins an override.
+* Settings keys a plugin needs are declared where they are read, never in `cli.py`.
+* A plugin that fails to import or register is reported on stderr and skipped, so one broken
+  feature cannot take down `scan`; guard cross-item imports (`try/except ImportError`) and
+  keep flag defaults inert. With no plugins present the CLI is byte-for-byte what it was
+  (`tests/test_cli_registry.py` pins every built-in `--help` in `tests/fixtures/cli_help`).
+
+## Acceptance discipline: replay first
+
+* A model, blend, gate or fee change is judged on replays of finished games
+  (`backtest --week N`, `backtest-ticks` on recorded ticks, `lines-eval`, the eligibility and
+  fee-flip reports), with placebos and the alignment controls the harness provides — never
+  on a handful of live scans.
+* The replay writes a **metrics-only** summary to `tests/fixtures/results/<name>_<item>.json`
+  (per-source log-loss / Brier, arb minutes, STEAL ladders, gate counts, fee flips, sample
+  sizes). No raw feeds, quotes or play-by-play go in there; the offline inputs live under
+  `tests/fixtures/{espn,nflverse,ticks,trades,history}`.
+* Every table in `README.md` / `docs/*.md` is rendered from a results fixture; cite the
+  fixture name next to the table. Change the fixture, re-render the table; never edit a
+  number in the docs by hand. A test that loads the fixture and re-checks its headline
+  numbers against the code (`tests/test_fees.py` -> `fee_flip_p10.json`, `tests/test_scanner.py`
+  -> `arb_fixture_p09.json`, `tests/test_eligibility_impact.py`, `tests/test_feedparity.py`,
+  `tests/test_wp_model.py`) is the acceptance test for the item.
+* Refresh the test count in **Commands** whenever you add tests (`python -m unittest discover
+  -s tests -t . 2>&1 | tail -3`).
+
 ## Conventions
 
 - Prices are dollars per $1-payout contract (`0.52`), never cents, in Python and JS.
 - `OutcomeQuote.ask` is always "what you pay to buy this outcome" — adapters fold NO-side
-  quotes into the other outcome.
+  quotes into the other outcome (a Rothera NO leg keeps `meta.side="no"` and
+  `meta.no_of=<team>` so tie payouts and same-book de-dupe stay correct).
 - Event keys: `nfl:<CODE>|<CODE>:<YYYY-MM-DD ET>`, `tennis:<surname>|<surname>:<date>`,
   lines append `:spread:<FAV>-<line>` / `:total:<line>` (half-point lines; match on the
   numeric line, never on venue ticker suffixes — Kalshi uses ⌈line⌉, Rothera ⌊line⌋).
 - Money math in `Decimal` (Python) / `BigInt` (JS). Do not introduce float rounding into fees.
 - Keep functions small and tested; fixtures are trimmed live responses in `tests/fixtures`.
+  Tests never touch the network: adapters take a `FakeHttp` / `SequencedFakeHttp`
+  (`tests/helpers.py`), the bridge handler is driven without a socket.
 
 ## Good next tasks
 
-See `docs/ROADMAP.md`. Highest value: spreads/totals line matching, Polymarket CLOB order
-placement (py-clob-client), a websocket feed for Kalshi/Polymarket, and sportsbook
-de-vigged consensus via The Odds API.
+See `docs/ROADMAP.md`. Highest value: Polymarket CLOB order placement (py-clob-client), a
+websocket feed for Kalshi/Polymarket, and sportsbook de-vigged consensus via The Odds API.

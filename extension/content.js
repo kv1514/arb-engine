@@ -44,9 +44,14 @@
   }
 
   function venueName(v) {
-    if (v.venue === "robinhood") return "Robinhood" + (v.exchange ? " · " + v.exchange : "");
-    return v.venue === "polymarket" ? "Polymarket" : v.venue.charAt(0).toUpperCase() + v.venue.slice(1);
+    // A NO-side row is the OTHER contract's NO (Rothera pays $1 on a tie for it): label it so it
+    // is never mistaken for the YES contract on this page.
+    const side = v.side === "no" ? " · NO" : "";
+    if (v.venue === "robinhood") return "Robinhood" + (v.exchange ? " · " + v.exchange : "") + side;
+    return (v.venue === "polymarket" ? "Polymarket" : v.venue.charAt(0).toUpperCase() + v.venue.slice(1)) + side;
   }
+  // The contract quoted on this page: Robinhood's YES side (NO rows are the other contract).
+  function hereOf(venues) { return (venues || []).find((v) => v.venue === "robinhood" && v.side !== "no") || null; }
 
   function render(res) {
     const body = ensurePanel().querySelector(".arbe-body");
@@ -68,7 +73,7 @@
       for (const v of row.venues) {
         const tag = (v.mirror ? ` <span class="arbe-tag" title="Robinhood resells this exchange's order book; same prices, higher fees">= ${esc(v.mirror)} book</span>` : "") + (v.ineligible ? ` <span class="arbe-tag arbe-signal" title="${esc(v.ineligible)}: priced into the fair value, never an arb leg (US accounts cannot trade there)">signal only</span>` : "");
         const link = v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(venueName(v))}</a>` : esc(venueName(v));
-        html += `<tr class="${v.venue === "robinhood" ? "arbe-here" : ""}${v.ineligible ? " arbe-ineligible" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${v.askSize == null ? "–" : Math.floor(v.askSize)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
+        html += `<tr class="${v.venue === "robinhood" && v.side !== "no" ? "arbe-here" : ""}${v.ineligible ? " arbe-ineligible" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${v.askSize == null ? "–" : Math.floor(v.askSize)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
       }
       html += `</tbody></table></div>`;
     }
@@ -104,7 +109,7 @@
       const m = l.arb ? l.arb.margin : null;
       const cls = l.arb && l.arb.isArb ? (l.fillable ? "arbe-good" : "arbe-thin") : "";
       l.rows.forEach((row, i) => {
-        const here = row.venues.find((v) => v.venue === "robinhood");
+        const here = hereOf(row.venues);
         const hedgeRow = l.rows.find((r) => r !== row);
         const hedge = hedgeRow ? hedgeRow.venues.find((v) => v.allIn != null && !v.mirror) : null;
         html += `<tr class="${cls}">${i === 0 ? `<td rowspan="2"><b>${esc(l.title)}</b>${l.arb && l.arb.isArb ? `<div class="arbe-small">${l.fillable ? "fillable " + (l.sizedContracts || "?") + " ct" : "thin"}</div>` : ""}</td>` : ""}<td>${esc(row.label)}</td><td>${fmtP(here ? here.ask : null)}</td><td>${fmtP(here ? here.allIn : null)}</td><td><b>${fmtP(here ? here.maxBuyTaker : null)}</b></td><td>${hedge ? esc(hedgeRow.label) + " @ " + fmtP(hedge.allIn) + " " + esc(hedge.venue) : "–"}</td>${i === 0 ? `<td rowspan="2" class="${m != null && m > 0 ? "arbe-good" : "arbe-bad"}">${fmtPct(m, true)}</td>` : ""}</tr>`;
@@ -125,7 +130,7 @@
       const l = a.lines.find((x) => { const yes = x.rows[0]; return yes && text.indexOf(String(x.line)) >= 0 && (x.marketType === "total" || text.indexOf(yes.label.split(" ")[0].toLowerCase()) >= 0); });
       let badge = tab.querySelector(".arbe-badge");
       if (!l) { if (badge) badge.remove(); return; }
-      const here = l.rows[0].venues.find((v) => v.venue === "robinhood");
+      const here = hereOf(l.rows[0].venues);
       if (!badge) { badge = document.createElement("span"); badge.className = "arbe-badge"; tab.appendChild(badge); }
       const good = l.arb && l.arb.isArb && l.fillable;
       badge.className = "arbe-badge " + (good ? "arbe-good" : "arbe-bad");
@@ -141,7 +146,7 @@
       const row = a.rows.find((r) => text.toLowerCase().indexOf(String(r.label).toLowerCase()) >= 0);
       let badge = tab.querySelector(".arbe-badge");
       if (!row) { if (badge) badge.remove(); return; }
-      const here = row.venues.find((v) => v.venue === "robinhood");
+      const here = hereOf(row.venues);
       if (!badge) { badge = document.createElement("span"); badge.className = "arbe-badge"; tab.appendChild(badge); }
       const edge = row.edge;
       badge.className = "arbe-badge " + (edge != null && edge > 0 ? "arbe-good" : "arbe-bad");

@@ -41,7 +41,7 @@ async function bridgeAvailable() {
 
 // Convert the Python engine's EventReport into the shape content.js renders.
 function rowsFromReport(a) {
-  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ineligible: v.ineligible || null, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
+  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ineligible: v.ineligible || null, side: v.side || null, tiePayout: v.tie_payout == null ? null : v.tie_payout, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
 }
 function arbFromReport(a) {
   return a.arb ? { grossSum: a.arb.gross_sum, margin: a.arb.margin, profit: a.arb.profit, contracts: a.arb.contracts, isArb: a.arb.is_arb, legs: (a.arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, fee: l.fee })) } : null;
@@ -468,7 +468,7 @@ async function analyzeMany(urls, max) {
         results[u] = {
           ok: true, name: r.event && r.event.name, source: a.source, fetchedAt: a.fetchedAt,
           arb: a.arb ? { isArb: !!a.arb.isArb, margin: a.arb.margin } : null,
-          rows: (a.rows || []).map((row) => { const here = (row.venues || []).find((v) => v.venue === "robinhood") || null; return { outcome: row.outcome, label: row.label, fair: row.fair, edge: row.edge, best: row.best, here: here ? { ask: here.ask, allIn: here.allIn, maxBuyTaker: here.maxBuyTaker, maxBuyMaker: here.maxBuyMaker } : null }; }),
+          rows: (a.rows || []).map((row) => { const here = (row.venues || []).find((v) => v.venue === "robinhood" && v.side !== "no") || null;  // the YES contract on this page return { outcome: row.outcome, label: row.label, fair: row.fair, edge: row.edge, best: row.best, here: here ? { ask: here.ask, allIn: here.allIn, maxBuyTaker: here.maxBuyTaker, maxBuyMaker: here.maxBuyMaker } : null }; }),
         };
       } catch (e) { results[u] = { ok: false, error: e.message || String(e) }; }
     }
