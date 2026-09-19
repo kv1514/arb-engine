@@ -57,6 +57,22 @@
   eq(Math.round((fair.A + fair.B) * 1e9) / 1e9, 1, "fair sums to 1");
   eq(fair.A > 0.32 && fair.A < 0.34, true, "fair A range");
 
+  // 5. Category-page helpers.
+  eq(A.categoryPath("/us/en/prediction-markets/nfl/"), "nfl", "category public path");
+  eq(A.categoryPath("/prediction-markets/tennis"), "tennis", "category app path");
+  eq(A.categoryPath("/us/en/prediction-markets/nfl/events/x-vs-y-sep-20-2026/"), null, "event page is not a category");
+  eq(A.categoryPath("/"), null, "root is not a category");
+  eq(A.categoryGameHref("/us/en/prediction-markets/pro-football/events/september-20-philadelphia-vs-tennessee-sep-20-2026/").kind, "game", "game href");
+  eq(A.categoryGameHref("/us/en/prediction-markets/pro-football/events/september-20-philadelphia-vs-tennessee-spread-sep-20-2026/").kind, "spread", "spread href");
+  eq(A.categoryGameHref("/us/en/prediction-markets/pro-football/events/cincinnati-vs-houston-1st-half-total-sep-20-2026/").kind, "total", "1st-half total href");
+  eq(A.categoryGameHref("/us/en/prediction-markets/pro-football/events/september-20-minnesota-vs-chicago-totals-sep-20-2026/").kind, "total", "totals href");
+  eq(A.categoryGameHref("/us/en/prediction-markets/pro-football/events/maxx-crosbys-next-team-feb-26-2026/").kind, "other", "prop href");
+  eq(A.categoryGameHref("/us/en/prediction-markets/nfl/"), null, "category href is not an event");
+  eq(A.contractCode("PHI - 77¢").code, "PHI", "contract code");
+  eq(A.contractCode("PHI - 77¢").cents, 77, "contract cents");
+  eq(A.contractCode("Sep 20 @ 10:00 AM294k"), null, "card title is not a contract");
+  eq(A.contractCode("PHI - 77¢fair 75.0¢ · max 72.0¢"), null, "already badged text does not re-match");
+
   print((failures ? "FAILED " + failures + "/" : "ok ") + checks + " checks");
   if (failures) throw new Error("arb-core tests failed");
 })();

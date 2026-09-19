@@ -197,6 +197,9 @@ Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADI
    With the bridge running, game pages also get a **LIVE strip**: score/clock/situation,
    model vs market vs ESPN fair per side, and LOCK/STEAL hints for the lots you enter in
    the popup. If "Load unpacked" fails, see [docs/EXTENSION.md](docs/EXTENSION.md).
+   On a **category page** (`…/prediction-markets/nfl/`) every game card's price buttons
+   ("PHI - 77¢") get a badge with the consensus fair value and the max price to pay here
+   (first 16 games; `ARB +x%` when one exists) and the panel summarises the page.
 4. Optional but recommended: run `python -m arb_engine bridge` — the extension detects it and
    lets the Python engine do the modelling (popup → "Local engine bridge").
 

@@ -98,6 +98,27 @@
   const d = await analyze(url);
   eq(d.analysis.source, "direct", "bridge unavailable -> direct still works when not reachable");
 
+  // --- category page: analyzeMany --------------------------------------------------------
+  stored.bridge = "off"; cache.clear();
+  const before = calls.length;
+  const many = await analyzeMany([url, url, "https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/"], 16);
+  eq(many.ok, true, "many ok");
+  eq(Object.keys(many.results).length, 2, "many dedupes urls");
+  eq(many.truncated, false, "many not truncated");
+  const mr = many.results[url];
+  eq(mr.ok, true, "many game ok");
+  eq(mr.rows.length, 2, "many rows");
+  eq(mr.rows.find((x) => x.outcome === "PHI").here.ask, 0.77, "many here ask");
+  eq(typeof mr.rows.find((x) => x.outcome === "PHI").here.maxBuyTaker, "number", "many max buy");
+  eq(mr.arb.isArb, false, "many arb flag");
+  eq(many.results["https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/"].ok, false, "many skips line pages");
+  const again = await analyzeMany([url], 16);
+  eq(calls.length > before, true, "many fetched");
+  const afterFirst = calls.length;
+  await analyzeMany([url], 16);
+  eq(calls.length, afterFirst, "many result cached per url");
+  eq((await analyzeMany([url, "https://robinhood.com/x/", "https://robinhood.com/y/"], 1)).truncated, true, "many truncates at max");
+
   print((failures ? "FAILED " + failures + "/" : "ok ") + checks + " checks");
   if (failures) throw new Error("background tests failed");
 })();

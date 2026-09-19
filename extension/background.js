@@ -335,7 +335,8 @@ function polymarketQuotes(m, outcomeKeys) {
 }
 
 // ---- analysis ----------------------------------------------------------------------------
-async function analyze(url) {
+async function analyze(url, opts) {
+  opts = opts || {};
   await ensureTeams();
   const cfg = await settings();
   if (cfg.bridge !== "off" && (await bridgeAvailable())) {
@@ -343,7 +344,7 @@ async function analyze(url) {
       const res = await getJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}`);
       const out = fromBridge(res, cfg);
       // In-play view (game state, model vs market, LOCK/STEAL) for game-winner pages.
-      if (out && out.ok && out.analysis && !out.analysis.lines) {
+      if (opts.inplay !== false && out && out.ok && out.analysis && !out.analysis.lines) {
         try {
           const pos = String(cfg.positions || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x) => "&position=" + encodeURIComponent(x)).join("");
           const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}`);
@@ -430,9 +431,40 @@ async function analyze(url) {
   return { ok: true, event: { id: ev.id, name: ev.name, sport, url }, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors, fetchedAt: Date.now(), venues: Object.keys(byVenue), source: "direct" } };
 }
 
+// Category pages: analyse many event URLs (moneylines) with a small concurrency and return a
+// trimmed per-URL summary for the card badges. Results are cached briefly per URL.
+const MANY_CONCURRENCY = 3;
+async function analyzeMany(urls, max) {
+  const unique = Array.from(new Set(urls || []));
+  const list = unique.slice(0, max || 16);
+  const results = {};
+  let i = 0;
+  async function worker() {
+    while (i < list.length) {
+      const u = list[i++];
+      try {
+        const r = await cached("many:" + u, 20_000, () => analyze(u, { inplay: false }));
+        if (!r || !r.ok || !r.analysis || r.analysis.lines) { results[u] = { ok: false, error: (r && r.error) || "no analysis" }; continue; }
+        const a = r.analysis;
+        results[u] = {
+          ok: true, name: r.event && r.event.name, source: a.source, fetchedAt: a.fetchedAt,
+          arb: a.arb ? { isArb: !!a.arb.isArb, margin: a.arb.margin } : null,
+          rows: (a.rows || []).map((row) => { const here = (row.venues || []).find((v) => v.venue === "robinhood") || null; return { outcome: row.outcome, label: row.label, fair: row.fair, edge: row.edge, best: row.best, here: here ? { ask: here.ask, allIn: here.allIn, maxBuyTaker: here.maxBuyTaker, maxBuyMaker: here.maxBuyMaker } : null }; }),
+        };
+      } catch (e) { results[u] = { ok: false, error: e.message || String(e) }; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MANY_CONCURRENCY, list.length) }, worker));
+  return { ok: true, results, fetchedAt: Date.now(), truncated: unique.length > list.length };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "analyze") {
     analyze(msg.url).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message || String(e) }));
+    return true;
+  }
+  if (msg && msg.type === "analyzeMany") {
+    analyzeMany(msg.urls, msg.max).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message || String(e) }));
     return true;
   }
   if (msg && msg.type === "settings") { settings().then(sendResponse); return true; }

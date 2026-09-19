@@ -244,5 +244,25 @@
     return out;
   }
 
-  root.ArbCore = { feeKalshi, feeRobinhood, feePolymarket, feePolymarketUS, feeFn, evaluate, maxPrice, bestLegPerOutcome, consensusFair, loadTeams, nflTeamCode, personKey, normalizePerson, parseSymbol, polymarketNflSlugs, addDays };
+  // --- category pages (one card per event) -------------------------------------------------
+  // "/us/en/prediction-markets/nfl/" or "/prediction-markets/nfl" -> "nfl"; event pages -> null.
+  function categoryPath(pathname) {
+    const m = /^(?:\/us\/en)?\/prediction-markets\/([^/?#]+)\/?$/.exec(pathname || "");
+    return m ? m[1] : null;
+  }
+  // Classify an event href by its slug: game (moneyline), spread, total (incl. 1st-half), other.
+  function categoryGameHref(href) {
+    const m = /\/events\/([^/?#]+)/.exec(href || "");
+    if (!m) return null;
+    const slug = m[1];
+    const kind = /spread/.test(slug) ? "spread" : /total|points/.test(slug) ? "total" : /-vs-/.test(slug) ? "game" : "other";
+    return { slug, kind };
+  }
+  // Contract button text on a card: "PHI - 77¢" -> { code: "PHI", cents: 77 }.
+  function contractCode(text) {
+    const m = /^\s*([A-Z]{2,4})\s*-\s*(\d{1,2})¢\s*$/.exec(text || "");
+    return m ? { code: m[1], cents: Number(m[2]) } : null;
+  }
+
+  root.ArbCore = { feeKalshi, feeRobinhood, feePolymarket, feePolymarketUS, feeFn, evaluate, maxPrice, bestLegPerOutcome, consensusFair, loadTeams, nflTeamCode, personKey, normalizePerson, parseSymbol, polymarketNflSlugs, addDays, categoryPath, categoryGameHref, contractCode };
 })(typeof globalThis !== "undefined" ? globalThis : this);

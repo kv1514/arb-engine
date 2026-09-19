@@ -115,3 +115,15 @@ bridge.
 The logged-in event page also lists the game's Spread and Totals rows and props on one page;
 the overlay analyses the market the URL's slug names (the game winner) — open the Spread /
 Totals event pages for line-by-line analysis.
+
+### Category pages
+
+`robinhood.com/us/en/prediction-markets/<category>/` (and the app route without `/us/en`)
+list one card per event with a price button per contract (`PHI - 77¢`). The content script
+collects the moneyline cards (slugs with `-vs-` and no `spread`/`totals`/`points`), sends up
+to 16 event URLs to the worker (`analyzeMany`, concurrency 3, per-URL cache 20 s) and
+appends a badge to each price button: `fair 75.0¢ · max 72.0¢` (green when the edge vs
+consensus is positive) plus `ARB +x%` when the cheapest legs across venues sum below $1
+after fees. Spread/total cards are skipped (open the game for the line table). The panel
+shows the count analysed and the best edge. Rescans every `max(refresh, 20)` seconds.
+

@@ -13,6 +13,7 @@
   let lastUrl = null, timer = null, refreshSeconds = 15, collapsed = false, lastAnalysis = null;
 
   const fmtP = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "¢");
+  const fmtC = (x) => (x == null ? "–" : Math.round(x * 100) + "¢");  // whole cents for the small card badges
   const fmtPct = (x, signed) => (x == null ? "–" : (signed && x > 0 ? "+" : "") + (x * 100).toFixed(1) + "%");
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -148,8 +149,70 @@
     });
   }
 
+  // --- category pages: badge every game card ("PHI - 77¢") with fair / max-buy --------------
+  const CATEGORY_RE = /^(?:\/us\/en)?\/prediction-markets\/([^/?#]+)\/?$/;
+  const CONTRACT_RE = /^\s*([A-Z]{2,4})\s*-\s*(\d{1,2})¢\s*$/;
+  const CATEGORY_MAX = 16;
+  let lastCategory = null, lastCategoryAt = 0, categoryBusy = false;
+  function categoryLinks() {
+    const groups = new Map();  // href -> [contract links]
+    document.querySelectorAll('a[href*="/events/"]').forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      const slug = (/\/events\/([^/?#]+)/.exec(href) || [])[1];
+      if (!slug || /spread|total|points/.test(slug) || !/-vs-/.test(slug)) return;   // moneyline cards only
+      if (!CONTRACT_RE.test(a.textContent || "")) return;                              // the two contract buttons
+      if (!groups.has(href)) groups.set(href, []);
+      groups.get(href).push(a);
+    });
+    return groups;
+  }
+  function decorateCategory(groups, res) {
+    let arbs = 0, badged = 0, best = null;
+    for (const [href, links] of groups) {
+      const url = location.origin + href;
+      const r = res.results[url];
+      links.forEach((a) => {
+        let badge = a.querySelector(".arbe-badge");
+        const m = CONTRACT_RE.exec(a.textContent.replace(badge ? badge.textContent : "", "") || "");
+        if (!r || !r.ok || !m) { if (badge) badge.remove(); return; }
+        const code = m[1];
+        const row = r.rows.find((x) => String(x.outcome).toUpperCase() === code || String(x.label || "").toUpperCase().startsWith(code));
+        if (!row) { if (badge) badge.remove(); return; }
+        if (!badge) { badge = document.createElement("span"); badge.className = "arbe-badge arbe-cat-badge"; a.classList.add("arbe-cat-host"); a.appendChild(badge); }
+        const good = row.edge != null && row.edge > 0;
+        badge.className = "arbe-badge arbe-cat-badge " + (good ? "arbe-good" : "arbe-bad") + (r.arb && r.arb.isArb ? " arbe-arbflag" : "");
+        badge.textContent = `fair ${fmtC(row.fair)} · max ${fmtC(row.here ? row.here.maxBuyTaker : null)}` + (r.arb && r.arb.isArb ? ` · ARB ${fmtPct(r.arb.margin, true)}` : "");
+        badge.title = `Arb Engine: consensus fair ${fmtP(row.fair)} · all-in here ${fmtP(row.here ? row.here.allIn : null)} · max price here that still locks the margin vs the cheapest hedge (${row.best || "–"})`;
+        badged++;
+        if (best == null || (row.edge != null && row.edge > best.edge)) best = { edge: row.edge, label: row.label, name: r.name };
+      });
+      if (r && r.ok && r.arb && r.arb.isArb) arbs++;
+    }
+    const body = ensurePanel().querySelector(".arbe-body");
+    body.innerHTML = `<div class="arbe-arb ${arbs ? "arbe-good" : "arbe-muted"}"><b>${groups.size} game${groups.size === 1 ? "" : "s"}</b> on this page, ${Object.keys(res.results).length} analysed${res.truncated ? " (first " + CATEGORY_MAX + ")" : ""}, <b>${arbs}</b> with a fee-adjusted arb</div>` +
+      (best && best.edge != null ? `<div class="arbe-small">best edge: ${esc(best.label)} in ${esc(best.name || "")} ${fmtPct(best.edge, true)} vs consensus</div>` : "") +
+      `<div class="arbe-muted arbe-small">Badges under each price: consensus fair value · max price to pay here that still locks the target margin after hedging elsewhere. Open a game for venues, depth and the in-play view.</div>`;
+  }
+  function runCategory(force) {
+    if (categoryBusy) return;
+    if (!force && Date.now() - lastCategoryAt < Math.max(refreshSeconds, 20) * 1000) return;
+    const groups = categoryLinks();
+    if (!groups.size) return;
+    const urls = Array.from(groups.keys()).slice(0, CATEGORY_MAX).map((h) => location.origin + h);
+    categoryBusy = true;
+    setStatus("scanning " + urls.length + " games…", "");
+    chrome.runtime.sendMessage({ type: "analyzeMany", urls, max: CATEGORY_MAX }, (res) => {
+      categoryBusy = false; lastCategoryAt = Date.now();
+      if (chrome.runtime.lastError || !res || !res.ok) { setStatus("error", "arbe-bad"); render({ ok: false, error: (chrome.runtime.lastError && chrome.runtime.lastError.message) || (res && res.error) || "no response" }); return; }
+      lastCategory = res;
+      setStatus(new Date().toLocaleTimeString() + " · category", "arbe-good");
+      decorateCategory(groups, res);
+    });
+  }
+
   function run(force) {
     const url = eventUrl();
+    if (!url && CATEGORY_RE.test(location.pathname)) { runCategory(force); return; }
     if (!url) { if (document.getElementById(PANEL_ID)) ensurePanel().querySelector(".arbe-body").innerHTML = `<div class="arbe-muted">Open a game / match page to see fair value and max-buy prices.</div>`; return; }
     if (!force && url === lastUrl && lastAnalysis && Date.now() - lastAnalysis.fetchedAt < refreshSeconds * 1000) return;
     lastUrl = url;
