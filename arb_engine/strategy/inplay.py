@@ -79,6 +79,7 @@ class SideView:
     lock_price: Optional[float] = None
     lock_available: bool = False
     lock_profit_if_now: Optional[float] = None
+    hold_ev: Optional[float] = None  # expected profit of holding as-is at the blended fair (sum fair*held - cost)
 
 
 @dataclass
@@ -222,7 +223,12 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                 sv.lock_available = True
                 buy_cost = best[1].ask * need + float(best[2].fee(best[1].ask, need))
                 sv.lock_profit_if_now = max_held - (total_cost + buy_cost)
-                actions.append(f"LOCK NOW: buy {need:g} x {sv.label} on {best[1].venue} at ≤ {lock:.2f} (ask {best[1].ask:.2f}) → guaranteed ≥ ${sv.lock_profit_if_now:.2f} on ${total_cost + buy_cost:.2f}")
+                hold_ev = sum((fair.get(o) or 0.0) * held[o] for o in info.outcomes) - total_cost if all(fair.get(o) is not None for o in info.outcomes) else None
+                sv.hold_ev = hold_ev
+                # Week-1 replay: locking at break-even gave the model's edge back (docs/MODEL.md),
+                # so show what holding is worth next to the guarantee and let the human choose.
+                vs = f"; holding is worth ${hold_ev:.2f} at fair" + (" — lock" if hold_ev <= sv.lock_profit_if_now else " — holding has more EV") if hold_ev is not None else ""
+                actions.append(f"LOCK NOW: buy {need:g} x {sv.label} on {best[1].venue} at ≤ {lock:.2f} (ask {best[1].ask:.2f}) → guaranteed ≥ ${sv.lock_profit_if_now:.2f} on ${total_cost + buy_cost:.2f}{vs}")
             elif lock is not None:
                 actions.append(f"wait: {sv.label} locks a profit at ≤ {lock:.2f} on {best[1].venue} (ask now {best[1].ask:.2f})")
             else:

@@ -2,7 +2,7 @@
 
 import unittest
 
-from arb_engine.backtest import GameReplayer, ReplayResult, ReplayRow, fit_blend_weights, pooled_metrics, resolve_polymarket_tokens, week_games
+from arb_engine.backtest import GameReplayer, ReplayResult, ReplayRow, fit_blend_weights, pooled_metrics, resolve_polymarket_tokens, simulate_steal, summarize_sim, week_games
 from arb_engine.quant.inplay_fair import market_confidence_from_spread
 from arb_engine.venues.espn import ESPNClient
 
@@ -88,6 +88,53 @@ class PooledTests(unittest.TestCase):
         self.assertEqual(market_confidence_from_spread(0.04), 1.0)
         self.assertAlmostEqual(market_confidence_from_spread(0.08), 0.65)
         self.assertEqual(market_confidence_from_spread(0.30), 0.3)
+
+
+class SimTests(unittest.TestCase):
+    def test_steal_then_lock_and_hold(self):
+        # Game A (home wins): fair 0.70 vs home ask 0.55 -> steal home; later away ask 0.30 locks the pair.
+        a = _result(True, [
+            _row(blend_p=0.70, kalshi_home_ask=0.55, kalshi_away_ask=0.48),
+            _row(blend_p=0.85, kalshi_home_ask=0.84, kalshi_away_ask=0.30),
+            _row(period=4, clock=0, blend_p=0.99, kalshi_home_ask=0.99, kalshi_away_ask=0.02),  # decided: ignored
+        ])
+        # Game B (away wins): steal home at 0.60 on fair 0.75, never a lock -> loses the stake.
+        b = _result(False, [_row(blend_p=0.75, kalshi_home_ask=0.60, kalshi_away_ask=0.42), _row(blend_p=0.50, kalshi_home_ask=0.50, kalshi_away_ask=0.52)])
+        sim = simulate_steal([a, b], edges=(0.05, 0.30), contracts=10, lock=True)
+        e = sim["by_edge"]["0.05"]
+        self.assertEqual((e["games_traded"], e["steals"], e["locks"]), (2, 2, 1))
+        kinds = [(t["game"], t["side"], t["kind"]) for t in e["trades"]]
+        self.assertEqual(kinds[0][1:], ("home", "steal"))
+        self.assertIn(("", "away", "lock"), kinds)
+        ga = next(g for g in e["games"] if g["locked"])
+        self.assertGreater(ga["pnl"], 0)          # 0.55 + 0.30 + fees < 1.00
+        gb = next(g for g in e["games"] if not g["locked"])
+        self.assertLess(gb["pnl"], 0)
+        self.assertAlmostEqual(gb["pnl"], -gb["cost"], places=6)
+        self.assertEqual(sim["by_edge"]["0.3"]["games_traded"], 0)  # edge too big: nothing trades
+        text = summarize_sim(sim)
+        self.assertIn("STEAL/LOCK", text)
+        self.assertIn("0.05", text)
+
+    def test_no_lock_holds_to_settlement(self):
+        a = _result(True, [_row(blend_p=0.70, kalshi_home_ask=0.55, kalshi_away_ask=0.48), _row(blend_p=0.85, kalshi_home_ask=0.84, kalshi_away_ask=0.30)])
+        sim = simulate_steal([a], edges=(0.05,), contracts=10, lock=False)
+        e = sim["by_edge"]["0.05"]
+        self.assertEqual((e["steals"], e["locks"]), (1, 0))
+        self.assertAlmostEqual(e["games"][0]["payout"], 10.0)
+        self.assertGreater(e["pnl"], 4.0)  # bought at ~0.55 + fee, paid 1.00
+
+
+class LockFractionTests(unittest.TestCase):
+    def test_lock_fraction_skips_low_value_locks(self):
+        # Steal home at 0.55 (fair 0.70). Later the away ask is 0.40: pair costs ~0.985 incl. fees -> tiny
+        # guarantee, while fair for home is still 0.60 -> holding is worth far more.
+        a = _result(True, [_row(blend_p=0.70, kalshi_home_ask=0.55, kalshi_away_ask=0.48), _row(blend_p=0.60, kalshi_home_ask=0.58, kalshi_away_ask=0.40)])
+        greedy = simulate_steal([a], edges=(0.05,), contracts=10, lock=True, lock_fraction=0.0)
+        patient = simulate_steal([a], edges=(0.05,), contracts=10, lock=True, lock_fraction=1.0)
+        self.assertEqual(greedy["by_edge"]["0.05"]["locks"], 1)
+        self.assertEqual(patient["by_edge"]["0.05"]["locks"], 0)
+        self.assertGreater(patient["by_edge"]["0.05"]["pnl"], greedy["by_edge"]["0.05"]["pnl"])  # home won
 
 
 if __name__ == "__main__":

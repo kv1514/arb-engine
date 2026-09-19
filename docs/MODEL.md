@@ -213,3 +213,21 @@ for open events); Polymarket history is trades, so a quiet minute repeats a stal
 model saw 2025 during configuration selection (above) but 2026 is fully out of sample.
 Rerun `--week N` as weeks finish; the last line of the output reports the refit.
 
+### Does the edge survive fees? (`simulate_steal`)
+
+The replay also runs the watcher's rules against Kalshi's candle-close asks (the bar after
+each play, so the market has seen it; 10 contracts; taker fees; one STEAL per game):
+
+| rule (fair = blend) | edge 0.03 | 0.05 | 0.08 |
+|---|---|---|---|
+| hold to settlement | +16.1% | +3.5% | +9.0% |
+| hold (fair = model) | +24.5% | +17.2% | +15.2% |
+| lock at break-even | −6.7% | −6.8% | −1.1% |
+| lock only if guaranteed ≥ hold EV | −6.9% | −14.9% | −22.1% |
+
+ROI is P&L over dollars staked (≈ $70–140 per configuration). Locks fire mostly after the
+position has gone against the entry, and a break-even lock converts a +EV hold into a
+few cents; higher lock thresholds just leave more losers unhedged. The lesson for the
+watcher is to treat LOCK as a risk decision, not free money — its alert now shows the
+hold EV beside the guarantee. Sample: 16 games; do not size on this.
+

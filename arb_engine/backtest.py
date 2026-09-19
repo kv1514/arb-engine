@@ -51,6 +51,8 @@ class ReplayRow:
     cross_arb_margin: Optional[float]
     text: str = ""
     kalshi_spread: Optional[float] = None  # ask - bid of the Kalshi candle used (book width)
+    kalshi_home_ask: Optional[float] = None  # executable prices at the candle close after the play
+    kalshi_away_ask: Optional[float] = None
 
 
 @dataclass
@@ -182,7 +184,7 @@ class GameReplayer:
                 if x_margin > 0:
                     x_arb_minutes.add(int(p.ts // 60))
                     best_x = max(best_x or -1, x_margin)
-            rows.append(ReplayRow(ts=p.ts, period=p.period, clock=p.clock_seconds, home_score=p.home_score, away_score=p.away_score, possession=p.possession, model_p=model_p, espn_p=p.espn_home_wp, kalshi_p=kalshi_p, robinhood_p=robinhood_p, polymarket_p=polymarket_p, market_p=market_p, blend_p=b.home_p, disagreement=b.disagreement, kalshi_arb_margin=k_margin, cross_arb_margin=x_margin, text=p.text, kalshi_spread=k_spread))
+            rows.append(ReplayRow(ts=p.ts, period=p.period, clock=p.clock_seconds, home_score=p.home_score, away_score=p.away_score, possession=p.possession, model_p=model_p, espn_p=p.espn_home_wp, kalshi_p=kalshi_p, robinhood_p=robinhood_p, polymarket_p=polymarket_p, market_p=market_p, blend_p=b.home_p, disagreement=b.disagreement, kalshi_arb_margin=k_margin, cross_arb_margin=x_margin, text=p.text, kalshi_spread=k_spread, kalshi_home_ask=bh.ask if bh else None, kalshi_away_ask=ba.ask if ba else None))
             for k, v in (("model", model_p), ("espn", p.espn_home_wp), ("kalshi", kalshi_p), ("robinhood", robinhood_p), ("polymarket", polymarket_p), ("market", market_p), ("blend", b.home_p)):
                 if v is not None:
                     preds[k].append(v)
@@ -417,7 +419,89 @@ def replay_week(season: int, week: int, replayer: Optional[GameReplayer] = None,
     return results, skipped
 
 
-def summarize_many(results: list[ReplayResult], skipped: list[dict[str, Any]], fit: Optional[dict[str, Any]] = None) -> str:
+# ---------------------------------------------------------------------------------------------
+# Strategy simulation on the replay: the watcher's STEAL / LOCK rules against Kalshi's asks.
+
+
+@dataclass
+class SimTrade:
+    game: str
+    side: str
+    kind: str  # steal | lock
+    period: int
+    clock: Optional[int]
+    ask: float
+    all_in: float
+    fair: float
+    contracts: int
+
+
+def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02, 0.04, 0.06, 0.10), contracts: int = 10, lock: bool = True, source: str = "blend", target_margin: float = 0.0, fee_model: Any = None, lock_fraction: float = 0.0) -> dict[str, Any]:
+    """Replay the in-play rules against Kalshi's candle-close asks (the bar *after* each play,
+    so the market has already seen it). One STEAL entry per game: buy ``contracts`` of a side
+    when ``fair - all_in >= edge``; then LOCK the other side when its all-in leaves
+    ``target_margin`` on the pair **and** the guaranteed profit is at least ``lock_fraction``
+    of the expected profit of holding (``fair_held * N - cost``); otherwise hold to
+    settlement. Kalshi taker fees on every buy, none at settlement. Depth is unknown
+    (candles), so keep ``contracts`` small."""
+    kfee = fee_model or KalshiFees.from_series({"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1})
+    out: dict[str, Any] = {"contracts": contracts, "source": source, "lock": lock, "target_margin": target_margin, "lock_fraction": lock_fraction, "by_edge": {}}
+    for edge in edges:
+        trades: list[SimTrade] = []
+        games = []
+        for res in results:
+            y = res.home_won
+            pos: dict[str, Optional[tuple[float, int]]] = {"home": None, "away": None}  # (cost incl. fees, contracts)
+            for r in res.rows:
+                if not (r.period and (r.period < 4 or (r.clock or 0) > 0)):
+                    continue
+                fair_home = r.blend_p if source == "blend" else (r.model_p if source == "model" else r.market_p)
+                if fair_home is None:
+                    continue
+                for side, ask, fair in (("home", r.kalshi_home_ask, fair_home), ("away", r.kalshi_away_ask, 1.0 - fair_home)):
+                    if ask is None or not (0 < ask < 1):
+                        continue
+                    other = "away" if side == "home" else "home"
+                    fee = float(kfee.fee(ask, contracts, "taker"))
+                    all_in = ask + fee / contracts
+                    if pos[side] is None and pos[other] is None and fair - all_in >= edge:
+                        pos[side] = (all_in * contracts, contracts)
+                        trades.append(SimTrade(res.final, side, "steal", r.period, r.clock, ask, round(all_in, 4), round(fair, 4), contracts))
+                    elif lock and pos[side] is None and pos[other] is not None and pos[other][0] + all_in * contracts <= contracts * (1.0 - target_margin):
+                        guaranteed = contracts - pos[other][0] - all_in * contracts
+                        ev_hold = (1.0 - fair) * contracts - pos[other][0]  # fair of the held side = 1 - fair(this side)
+                        if guaranteed < lock_fraction * ev_hold:
+                            continue
+                        pos[side] = (all_in * contracts, contracts)
+                        trades.append(SimTrade(res.final, side, "lock", r.period, r.clock, ask, round(all_in, 4), round(fair, 4), contracts))
+            if pos["home"] or pos["away"]:
+                cost = sum(p[0] for p in pos.values() if p)
+                payout = float(contracts) if ((pos["home"] and y) or (pos["away"] and not y)) else 0.0
+                games.append({"game": res.final, "cost": round(cost, 2), "payout": payout, "pnl": round(payout - cost, 2), "locked": bool(pos["home"] and pos["away"])})
+        cost = sum(g["cost"] for g in games)
+        pnl = sum(g["pnl"] for g in games)
+        out["by_edge"][str(edge)] = {
+            "edge": edge, "games_traded": len(games), "steals": sum(1 for t in trades if t.kind == "steal"), "locks": sum(1 for t in trades if t.kind == "lock"),
+            "wins": sum(1 for g in games if g["pnl"] > 0), "losses": sum(1 for g in games if g["pnl"] < 0),
+            "cost": round(cost, 2), "pnl": round(pnl, 2), "roi": round(pnl / cost, 4) if cost else None,
+            "games": games, "trades": [asdict(t) for t in trades],
+        }
+    return out
+
+
+def summarize_sim(sim: dict[str, Any]) -> str:
+    lock_desc = f"lock when guaranteed ≥ {sim.get('lock_fraction', 0):.0%} of hold EV" if sim["lock"] else "no lock (hold to settlement)"
+    lines = [f"STEAL/LOCK simulation on Kalshi asks ({sim['contracts']} contracts per entry, fair = {sim['source']}, {lock_desc}, taker fees):"]
+    lines.append("  edge   games  steals  locks  wins  losses      cost       pnl     roi")
+    for k, v in sim["by_edge"].items():
+        roi = f"{v['roi']*100:+.1f}%" if v["roi"] is not None else "  -  "
+        lines.append(f"  {v['edge']:<6.2f} {v['games_traded']:>5} {v['steals']:>7} {v['locks']:>6} {v['wins']:>5} {v['losses']:>7}  {v['cost']:>9.2f} {v['pnl']:>9.2f}  {roi:>7}")
+    return "\n".join(lines)
+
+
+
+
+def summarize_many(results: list[ReplayResult], skipped: list[dict[str, Any]], fit: Optional[dict[str, Any]] = None, sims: Optional[list[dict[str, Any]]] = None) -> str:
     lines = [f"{len(results)} games replayed, {sum(r.n_plays for r in results)} plays" + (f", {len(skipped)} skipped" if skipped else "")]
     for res in results:
         lines.append(f"  {res.final:<22} {res.n_plays:>4} plays  model {_fmt(res.metrics['model'].get('log_loss'))}  espn {_fmt(res.metrics['espn'].get('log_loss'))}  kalshi {_fmt(res.metrics['kalshi'].get('log_loss'))}  poly {_fmt(res.metrics['polymarket'].get('log_loss'))}  blend {_fmt(res.metrics['blend'].get('log_loss'))}  kalshi-arb-min {res.arb_minutes['kalshi_book_minutes']}")
@@ -432,6 +516,8 @@ def summarize_many(results: list[ReplayResult], skipped: list[dict[str, Any]], f
     if fit and fit.get("n"):
         b, c, co = fit["best"], fit["current"], fit["corners"]
         lines.append(f"blend weights (in play, {fit['n']} plays with all three sources): best market {b['market']} / model {b['model']} / espn {b['espn']} -> {b['log_loss']}; current {c['market']} / {c['model']} / {c['espn']} -> {c['log_loss']}; market-only {co['market']}, model-only {co['model']}, espn-only {co['espn']}")
+    for sim in sims or []:
+        lines.append(summarize_sim(sim))
     for s in skipped:
         lines.append(f"  skipped {s['name']}: {s['error']}")
     return "\n".join(lines)

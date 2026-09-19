@@ -358,14 +358,15 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         pm = {k: v for k, v in (("home", args.pm_home), ("away", args.pm_away)) if v}
     kt = {"home": args.kalshi_home, "away": args.kalshi_away} if args.kalshi_home and args.kalshi_away else None
     if args.week is not None:
-        from .backtest import fit_blend_weights, replay_week, summarize_many
+        from .backtest import fit_blend_weights, replay_week, simulate_steal, summarize_many
 
         results, skipped = replay_week(args.season, args.week, polymarket=not args.no_polymarket, limit=args.limit, progress=print)
         fit = fit_blend_weights(results) if results else None
-        print(summarize_many(results, skipped, fit))
+        sims = [simulate_steal(results, contracts=args.contracts, source="blend", lock=True, lock_fraction=lf) for lf in (0.0, 0.5, 1.0)] + [simulate_steal(results, contracts=args.contracts, source="blend", lock=False), simulate_steal(results, contracts=args.contracts, source="model", lock=False)] if results else []
+        print(summarize_many(results, skipped, fit, sims))
         if args.json:
             with open(args.json, "w", encoding="utf-8") as f:
-                json.dump({"season": args.season, "week": args.week, "fit": fit, "skipped": skipped, "games": [asdict(r) for r in results]}, f, indent=1, default=str)
+                json.dump({"season": args.season, "week": args.week, "fit": fit, "simulations": sims, "skipped": skipped, "games": [asdict(r) for r in results]}, f, indent=1, default=str)
             print(f"wrote {args.json}")
         return 0
     if not args.espn:
@@ -519,6 +520,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     bt.add_argument("--season", type=int, default=2026)
     bt.add_argument("--limit", type=int, help="with --week: only the first N games")
     bt.add_argument("--no-polymarket", action="store_true", help="with --week: skip the Polymarket history lookup")
+    bt.add_argument("--contracts", type=int, default=10, help="with --week: contracts per simulated STEAL/LOCK entry")
     bt.add_argument("--json", help="write the full replay to this file")
     bt.set_defaults(func=cmd_backtest)
 

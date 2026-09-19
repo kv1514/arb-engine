@@ -133,6 +133,15 @@ agree, and it is the edge the in-play watcher is built to take. It is also one w
 with `--week N` as the season goes and the fit line at the bottom of the output says
 whether the weights should move.
 
+The same run simulates the watcher's rules against Kalshi's asks (10 contracts, taker
+fees, entry on the candle *after* the play): one STEAL entry per game when
+`fair − all-in ≥ edge`, then either hold to settlement or LOCK the other side. Week 1:
+holding paid (+3.5% to +16% on ~$80 staked with the blend at edges 0.03–0.08; +15% to
++24% with the model), while every lock variant lost (−5% to −23%) because a break-even
+lock hands the edge back and mostly fires when the position has already gone bad. The
+watcher's `LOCK NOW` line therefore also prints what holding is worth at fair. Sixteen
+games is not a track record; treat this as the first data point, not a result.
+
 `backtest` walks the game's ESPN play-by-play (wall-clock stamped), scores the WP model on
 each play's pre-snap state and looks up what Kalshi (1-min candles, bid/ask), Robinhood
 (5-min bars, trade prices) and Polymarket (1-min price history) were quoting at that moment;
@@ -227,7 +236,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 157 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 160 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone
