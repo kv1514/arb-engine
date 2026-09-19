@@ -64,6 +64,11 @@ quotes with none missing.
 In-play: the NFL win-probability model is used as an approximation (same clock, different OT,
 pace and variance; spreads above ±17 are outside its training range), so the college blend
 keeps the market as the anchor (`SPORT_WEIGHTS["ncaaf"]` = market 0.50 / model 0.35 / ESPN 0.15)
-until a college replay says otherwise. Spreads/totals on Polymarket are not ingested yet for
-college (Kalshi's are).
+until a college replay says otherwise. College spreads/totals: Kalshi `KXNCAAFSPREAD`/`KXNCAAFTOTAL` (≈1,000 open markets
+each, same ⌈line⌉ ticker suffix as the NFL) and Robinhood's CDNA line events
+(`EVENT_TYPE_SPREAD` / `EVENT_TYPE_TOTALS`, ~45 contracts per game named "Oregon -93.5 points" /
+"Over 44.5 points", one contract per line, favourite named on the contract) are ingested;
+a scan on 2026-09-18 produced 8,689 line events, 2,990 of them on both Kalshi and CDNA, with
+three thin positive-margin spreads and nothing fillable. Polymarket's college lines are not
+ingested yet.
 

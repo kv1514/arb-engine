@@ -16,10 +16,11 @@ from .helpers import FakeHttp, load
 
 
 def _adapters():
+    lines = load("ncaaf/kalshi_markets_ncaaf_lines.json")
     kal = FakeHttp({
         "series_ticker=KXNCAAFGAME&": load("ncaaf/kalshi_markets_ncaaf.json"),
-        "series_ticker=KXNCAAFSPREAD&": {"markets": []},
-        "series_ticker=KXNCAAFTOTAL&": {"markets": []},
+        "series_ticker=KXNCAAFSPREAD&": {"markets": lines["spreads"]},
+        "series_ticker=KXNCAAFTOTAL&": {"markets": lines["totals"]},
         "/series/KXNCAAFGAME": load("ncaaf/kalshi_series_kxncaafgame.json"),
         "/series/": {"series": {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}},
     })
@@ -89,6 +90,38 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(vill.venues, ["robinhood"])
         self.assertEqual(vill.outcomes[0].venues[0].exchange, "kalshi")
         self.assertFalse(any(e.margin and e.margin > 0 for e in res.events))
+
+
+class LineTests(unittest.TestCase):
+    """CDNA lists one contract per line ("Fresno State -23.5 points", "Over 57.5 points");
+    Kalshi's KXNCAAFSPREAD/TOTAL use the same ceil(line) suffix convention as the NFL."""
+
+    def test_cdna_lines_merge_with_kalshi(self):
+        res = scan("ncaaf", _adapters(), settings={}, market_types={"spread", "total"})
+        by_key = {e.event_key: e for e in res.events}
+        sp = by_key.get("ncaaf:FRES|SJSU:2026-09-19:spread:FRES-23.5")
+        self.assertIsNotNone(sp, sorted(k for k in by_key if "spread" in k)[:6])
+        self.assertEqual(sorted(sp.venues), ["kalshi", "robinhood"])
+        self.assertEqual(sp.line, 23.5)
+        yes = next(o for o in sp.outcomes if o.outcome == "FRES-23.5")
+        self.assertEqual(yes.label, "Fresno State -23.5")
+        rh = next(v for v in yes.venues if v.venue == "robinhood")
+        self.assertEqual(rh.exchange, "cdna")
+        self.assertIsNotNone(rh.ask)
+        kal = next(v for v in yes.venues if v.venue == "kalshi")
+        self.assertIsNotNone(kal.ask)
+        no = next(o for o in sp.outcomes if o.outcome == "SJSU+23.5")
+        self.assertEqual(no.label, "San José State +23.5")
+        # The other side's contract ("San Jose State -23.5 points") is its own line, favourite SJSU.
+        self.assertIn("ncaaf:FRES|SJSU:2026-09-19:spread:SJSU-23.5", by_key)
+        tot = by_key.get("ncaaf:FRES|SJSU:2026-09-19:total:57.5")
+        self.assertIsNotNone(tot, sorted(k for k in by_key if "total" in k)[:6])
+        self.assertEqual(sorted(tot.venues), ["kalshi", "robinhood"])
+        over = next(o for o in tot.outcomes if o.outcome == "over")
+        self.assertEqual({v.venue for v in over.venues}, {"kalshi", "robinhood"})
+        under = next(o for o in tot.outcomes if o.outcome == "under")
+        self.assertEqual({v.venue for v in under.venues}, {"kalshi", "robinhood"})
+        self.assertEqual(tot.tie_rule, "no_push")  # half-point line cannot push
 
 
 class ESPNCollegeTests(unittest.TestCase):

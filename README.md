@@ -251,7 +251,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 169 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 173 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

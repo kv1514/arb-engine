@@ -29,7 +29,7 @@ from typing import Any, Iterable, Optional
 from ..fees.robinhood import exchange_from_symbol_or_enum
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
 from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
-from ..matching.teams import nfl_team_city, nfl_team_code, team_code
+from ..matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
 from .http import HttpClient
 
 WEB = "https://robinhood.com"
@@ -59,7 +59,11 @@ SPORT_SYMBOL_PREFIXES: dict[str, tuple[str, ...]] = {
 # One binary contract per line; each contract is its own two-outcome event.
 LINE_SYMBOL_PREFIXES: dict[str, dict[str, str]] = {
     "nfl": {"NFLSPREAD-": "spread", "KXNFLSPREAD-": "spread", "NFLTOTAL-": "total", "KXNFLTOTAL-": "total"},
+    "ncaaf": {"KXNCAAFSPREAD-": "spread", "KXNCAAFTOTAL-": "total"},
 }
+# CDNA (college) lines share the winner symbol family; the event type tells them apart.
+CDNA_LINE_EVENT_TYPES = {"EVENT_TYPE_SPREAD": "spread", "EVENT_TYPE_TOTALS": "total"}
+CDNA_PREFIX = "NX.F.OPT."
 
 
 def _f(x: Any) -> Optional[float]:
@@ -246,8 +250,12 @@ class RobinhoodAdapter:
         fams = LINE_SYMBOL_PREFIXES.get(sport, {})
         out: list[dict] = []
         for ev in events:
+            cdna_type = CDNA_LINE_EVENT_TYPES.get(str(ev.get("eventType") or ""))
             for c in (ev.get("eventContracts") or {}).values():
                 sym = c.get("symbol", "")
+                if cdna_type and sym.startswith(CDNA_PREFIX):
+                    out.append({"event": ev, "contract": c, "market_type": cdna_type})
+                    continue
                 for prefix, mtype in fams.items():
                     if sym.startswith(prefix):
                         out.append({"event": ev, "contract": c, "market_type": mtype})
@@ -305,39 +313,63 @@ class RobinhoodAdapter:
 
     def ingest_lines(self, snap: VenueSnapshot, sport: str, category: str, items: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:
         """Spread/total contracts (Rothera ``NFLSPREAD-…``/``NFLTOTAL-…`` or Kalshi-routed)."""
+        team_sport = sport in ("nfl", "ncaaf")
         for item in items:
             ev, c, mtype = item["event"], item["contract"], item["market_type"]
             sym = c.get("symbol", "")
             line = _f(c.get("floorStrikeValue"))
-            pair = ticker_pair(sym.rsplit("-", 1)[0])
-            if line is None or not pair:
+            is_cdna = sym.startswith(CDNA_PREFIX)
+            pair = None if is_cdna else ticker_pair(sym.rsplit("-", 1)[0])
+            if line is None or (not pair and not is_cdna):
                 continue
             st = states.get(ev.get("id"), {})
             start = parse_iso(st.get("gameStart")) or _event_day_from_timeline(ev.get("timeline"))
             date = et_date(start)
             if date is None:
                 from ..matching.normalize import kalshi_ticker_date
-                date = kalshi_ticker_date(sym)
+                date = kalshi_ticker_date(sym) or _cdna_symbol_date(sym)
             exch = exchange_from_symbol_or_enum(sym, c.get("exchange"))
             slug = (ev.get("urlSlugs") or [ev.get("id")])[0]
             url = f"{WEB}/us/en/prediction-markets/{category}/events/{slug}/"
-            if mtype == "spread":
+            if is_cdna:
+                # "Portland State vs Oregon: Spread" + contract "Oregon -93.5 points" / "Over 44.5 points"
+                game_codes = _cdna_game_codes(sport, ev.get("name"))
+                if not game_codes:
+                    continue
+                if mtype == "spread":
+                    fav = _cdna_spread_team(sport, c.get("displayShortName") or c.get("displayLongName") or "")
+                    dog = next((x for x in game_codes if x != fav), None) if fav in game_codes else None
+                    if not fav or not dog:
+                        continue
+                    key = spread_event_key(sport, [fav, dog], date, fav, line)
+                    yes_key, no_key = spread_outcomes(fav, dog, line)
+                    labels = {yes_key: f"{team_name(sport, fav)} -{fmt_line(line)}", no_key: f"{team_name(sport, dog)} +{fmt_line(line)}"}
+                    outcomes = [yes_key, no_key]
+                else:
+                    if not re.match(r"^\s*over\b", str(c.get("displayShortName") or c.get("displayLongName") or ""), re.I):
+                        continue  # each line is listed once as "Over X"; the NO side is the under
+                    key = total_event_key(sport, list(game_codes), date, line)
+                    yes_key, no_key = "over", "under"
+                    labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
+                    outcomes = ["over", "under"]
+                pair = "".join(game_codes)
+            elif mtype == "spread":
                 team_raw = strip_digits(sym.rsplit("-", 1)[-1])
                 other_raw = split_pair(pair, team_raw)
-                fav = nfl_team_code(team_raw) if sport == "nfl" else team_raw
-                dog = (nfl_team_code(other_raw) if sport == "nfl" else other_raw) if other_raw else None
+                fav = team_code(sport, team_raw) if team_sport else team_raw
+                dog = (team_code(sport, other_raw) if team_sport else other_raw) if other_raw else None
                 if not fav or not dog:
                     continue
                 key = spread_event_key(sport, [fav, dog], date, fav, line)
                 yes_key, no_key = spread_outcomes(fav, dog, line)
-                labels = {yes_key: f"{nfl_team_city(fav) if sport == 'nfl' else fav} -{fmt_line(line)}", no_key: f"{nfl_team_city(dog) if sport == 'nfl' else dog} +{fmt_line(line)}"}
+                labels = {yes_key: f"{team_name(sport, fav) if team_sport else fav} -{fmt_line(line)}", no_key: f"{team_name(sport, dog) if team_sport else dog} +{fmt_line(line)}"}
                 outcomes = [yes_key, no_key]
             else:
                 codes: list[str] = []
                 for cut in range(2, len(pair) - 1):
                     a, b = pair[:cut], pair[cut:]
-                    if sport == "nfl" and nfl_team_code(a) and nfl_team_code(b):
-                        codes = [nfl_team_code(a), nfl_team_code(b)]  # type: ignore[list-item]
+                    if team_sport and team_code(sport, a) and team_code(sport, b):
+                        codes = [team_code(sport, a), team_code(sport, b)]  # type: ignore[list-item]
                         break
                 if not codes:
                     continue
@@ -361,6 +393,22 @@ def _pair_title(pair: str, sport: str) -> str:
         if sport not in ("nfl", "ncaaf") or (team_code(sport, a) and team_code(sport, b)):
             return f"{a} @ {b}"
     return pair
+
+
+def _cdna_game_codes(sport: str, event_name: Any) -> Optional[tuple[str, str]]:
+    """'Portland State vs Oregon: Spread' -> ('PRST', 'ORE') (away, home)."""
+    name = re.sub(r":.*$", "", str(event_name or "")).strip()
+    parts = [x.strip() for x in re.split(r"\s+vs\.?\s+", name, maxsplit=1)]
+    if len(parts) != 2:
+        return None
+    a, b = team_code(sport, parts[0]), team_code(sport, parts[1])
+    return (a, b) if a and b and a != b else None
+
+
+def _cdna_spread_team(sport: str, contract_name: str) -> Optional[str]:
+    """'Oregon -93.5 points' -> 'ORE' (the favourite named on the contract)."""
+    m = re.match(r"^\s*(.+?)\s+[-+]\d", contract_name or "")
+    return team_code(sport, m.group(1)) if m else None
 
 
 def _cdna_symbol_date(symbol: str) -> Optional[str]:

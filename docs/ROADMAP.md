@@ -30,8 +30,9 @@ Ordered by expected value for the NFL/tennis focus.
    coverage on Polymarket via tag ids; player-name canonicalisation with a small alias file.
 8. ~~NCAAF~~ — done 2026-09-18: `data/ncaaf_teams.json` (761 programs from ESPN + venue codes,
    `scripts/build_ncaaf_teams.py`), `scan/live/games --sport ncaaf` across Kalshi, Polymarket
-   (`cfb`) and Robinhood's CDNA-routed college games. Still open: NBA/NHL tables the same way
-   (`KXNBAGAME`/`KXNHLGAME`, Robinhood `nba`/`nhl`), Polymarket college spreads/totals.
+   (`cfb`) and Robinhood's CDNA-routed college games. College spreads/totals from Kalshi
+   and Robinhood/CDNA are in (8,689 line events on 2026-09-18). Still open: NBA/NHL tables the
+   same way (`KXNBAGAME`/`KXNHLGAME`, Robinhood `nba`/`nhl`), Polymarket college spreads/totals.
 9. ~~History & backtest~~ — done 2026-09-18: `scan --record out/history.db` / `inplay --record`
    persist every event, quote and in-play tick to SQLite (`arb_engine/store.py`);
    `python -m arb_engine backtest --espn <id> …` replays a finished game play-by-play
