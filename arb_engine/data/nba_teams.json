@@ -1,0 +1,316 @@
+{
+"ATL": {
+"aliases": [
+"Atlanta",
+"Atlanta Hawks",
+"Hawks"
+],
+"espn_id": "1",
+"name": "Atlanta",
+"nick": "Hawks"
+},
+"BKN": {
+"aliases": [
+"Brooklyn",
+"Brooklyn Nets",
+"Nets",
+"BRK"
+],
+"espn_id": "17",
+"name": "Brooklyn",
+"nick": "Nets"
+},
+"BOS": {
+"aliases": [
+"Boston",
+"Boston Celtics",
+"Celtics"
+],
+"espn_id": "2",
+"kalshi": "BOS",
+"name": "Boston",
+"nick": "Celtics"
+},
+"CHA": {
+"aliases": [
+"Charlotte",
+"Charlotte Hornets",
+"Hornets"
+],
+"espn_id": "30",
+"name": "Charlotte",
+"nick": "Hornets"
+},
+"CHI": {
+"aliases": [
+"Bulls",
+"Chicago",
+"Chicago Bulls"
+],
+"espn_id": "4",
+"name": "Chicago",
+"nick": "Bulls"
+},
+"CLE": {
+"aliases": [
+"Cavaliers",
+"Cleveland",
+"Cleveland Cavaliers"
+],
+"espn_id": "5",
+"name": "Cleveland",
+"nick": "Cavaliers"
+},
+"DAL": {
+"aliases": [
+"Dallas",
+"Dallas Mavericks",
+"Mavericks"
+],
+"espn_id": "6",
+"name": "Dallas",
+"nick": "Mavericks"
+},
+"DEN": {
+"aliases": [
+"Denver",
+"Denver Nuggets",
+"Nuggets"
+],
+"espn_id": "7",
+"name": "Denver",
+"nick": "Nuggets"
+},
+"DET": {
+"aliases": [
+"Detroit",
+"Detroit Pistons",
+"Pistons"
+],
+"espn_id": "8",
+"kalshi": "DET",
+"name": "Detroit",
+"nick": "Pistons"
+},
+"GS": {
+"aliases": [
+"Golden State",
+"Golden State Warriors",
+"Warriors",
+"GSW"
+],
+"espn_id": "9",
+"name": "Golden State",
+"nick": "Warriors"
+},
+"HOU": {
+"aliases": [
+"Houston",
+"Houston Rockets",
+"Rockets"
+],
+"espn_id": "10",
+"name": "Houston",
+"nick": "Rockets"
+},
+"IND": {
+"aliases": [
+"Indiana",
+"Indiana Pacers",
+"Pacers"
+],
+"espn_id": "11",
+"name": "Indiana",
+"nick": "Pacers"
+},
+"LAC": {
+"aliases": [
+"Clippers",
+"LA",
+"LA Clippers",
+"Los Angeles Clippers"
+],
+"espn_id": "12",
+"name": "LA",
+"nick": "Clippers"
+},
+"LAL": {
+"aliases": [
+"Lakers",
+"Los Angeles",
+"Los Angeles Lakers",
+"LA Lakers"
+],
+"espn_id": "13",
+"name": "Los Angeles",
+"nick": "Lakers"
+},
+"MEM": {
+"aliases": [
+"Grizzlies",
+"Memphis",
+"Memphis Grizzlies"
+],
+"espn_id": "29",
+"name": "Memphis",
+"nick": "Grizzlies"
+},
+"MIA": {
+"aliases": [
+"Heat",
+"Miami",
+"Miami Heat"
+],
+"espn_id": "14",
+"name": "Miami",
+"nick": "Heat"
+},
+"MIL": {
+"aliases": [
+"Bucks",
+"Milwaukee",
+"Milwaukee Bucks"
+],
+"espn_id": "15",
+"name": "Milwaukee",
+"nick": "Bucks"
+},
+"MIN": {
+"aliases": [
+"Minnesota",
+"Minnesota Timberwolves",
+"Timberwolves"
+],
+"espn_id": "16",
+"name": "Minnesota",
+"nick": "Timberwolves"
+},
+"NO": {
+"aliases": [
+"New Orleans",
+"New Orleans Pelicans",
+"Pelicans",
+"NOP"
+],
+"espn_id": "3",
+"name": "New Orleans",
+"nick": "Pelicans"
+},
+"NY": {
+"aliases": [
+"Knicks",
+"New York",
+"New York Knicks",
+"NYK"
+],
+"espn_id": "18",
+"name": "New York",
+"nick": "Knicks"
+},
+"OKC": {
+"aliases": [
+"Oklahoma City",
+"Oklahoma City Thunder",
+"Thunder"
+],
+"espn_id": "25",
+"kalshi": "OKC",
+"name": "Oklahoma City",
+"nick": "Thunder"
+},
+"ORL": {
+"aliases": [
+"Magic",
+"Orlando",
+"Orlando Magic"
+],
+"espn_id": "19",
+"name": "Orlando",
+"nick": "Magic"
+},
+"PHI": {
+"aliases": [
+"76ers",
+"Philadelphia",
+"Philadelphia 76ers"
+],
+"espn_id": "20",
+"kalshi": "PHI",
+"name": "Philadelphia",
+"nick": "76ers"
+},
+"PHX": {
+"aliases": [
+"Phoenix",
+"Phoenix Suns",
+"Suns",
+"PHO"
+],
+"espn_id": "21",
+"name": "Phoenix",
+"nick": "Suns"
+},
+"POR": {
+"aliases": [
+"Portland",
+"Portland Trail Blazers",
+"Trail Blazers"
+],
+"espn_id": "22",
+"name": "Portland",
+"nick": "Trail Blazers"
+},
+"SA": {
+"aliases": [
+"San Antonio",
+"San Antonio Spurs",
+"Spurs",
+"SAS"
+],
+"espn_id": "24",
+"name": "San Antonio",
+"nick": "Spurs"
+},
+"SAC": {
+"aliases": [
+"Kings",
+"Sacramento",
+"Sacramento Kings"
+],
+"espn_id": "23",
+"name": "Sacramento",
+"nick": "Kings"
+},
+"TOR": {
+"aliases": [
+"Raptors",
+"Toronto",
+"Toronto Raptors"
+],
+"espn_id": "28",
+"name": "Toronto",
+"nick": "Raptors"
+},
+"UTAH": {
+"aliases": [
+"Jazz",
+"Utah",
+"Utah Jazz",
+"UTA"
+],
+"espn_id": "26",
+"name": "Utah",
+"nick": "Jazz"
+},
+"WSH": {
+"aliases": [
+"Washington",
+"Washington Wizards",
+"Wizards",
+"WAS"
+],
+"espn_id": "27",
+"name": "Washington",
+"nick": "Wizards"
+}
+}

@@ -35,7 +35,8 @@ Ordered by expected value for the NFL/tennis focus.
    (`cfb`) and Robinhood's CDNA-routed college games. College spreads/totals from Kalshi
    and Robinhood/CDNA are in (8,689 line events on 2026-09-18). Polymarket college lines too. Two college
    weeks replayed (185 games): blend best, NFL model ≈ ESPN, weights unchanged (docs/MODEL.md).
-   Still open: NBA/NHL tables the same way (`KXNBAGAME`/`KXNHLGAME`, Robinhood `nba`/`nhl`).
+   NBA/NHL tables done the same way
+   (`scripts/build_teams.py`, 2026-09-18; live NHL preseason scan merges Kalshi × Polymarket).
 9. ~~History & backtest~~ — done 2026-09-18: `scan --record out/history.db` / `inplay --record`
    persist every event, quote and in-play tick to SQLite (`arb_engine/store.py`);
    `python -m arb_engine backtest --espn <id> …` replays a finished game play-by-play

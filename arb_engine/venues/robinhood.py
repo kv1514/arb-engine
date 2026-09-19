@@ -30,7 +30,7 @@ from ..fees.robinhood import exchange_from_symbol_or_enum
 from .kalshi import TENNIS_SETTLEMENT as KALSHI_TENNIS_SETTLEMENT
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
 from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
-from ..matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
+from ..matching.teams import TEAM_SPORTS, nfl_team_city, nfl_team_code, team_code, team_name
 from .http import HttpClient
 
 WEB = "https://robinhood.com"
@@ -272,7 +272,7 @@ class RobinhoodAdapter:
             names = [clean_label(c.get("displayLongName") or c.get("displayShortName") or "") for c in contracts]
             progress = str(st.get("eventProgress") or "").strip()
             in_play = _in_play_from_progress(progress, st.get("eventStatus"))
-            if sport in ("nfl", "ncaaf"):
+            if sport in TEAM_SPORTS:
                 codes = [team_code(sport, c.get("displayShortName")) or team_code(sport, c.get("displayLongName")) or team_code(sport, c.get("symbol", "").rsplit("-", 1)[-1]) for c in contracts]
                 if any(c is None for c in codes) or codes[0] == codes[1]:
                     continue
@@ -318,7 +318,7 @@ class RobinhoodAdapter:
 
     def ingest_lines(self, snap: VenueSnapshot, sport: str, category: str, items: list[dict], quotes: dict[str, dict], states: dict[str, dict]) -> None:
         """Spread/total contracts (Rothera ``NFLSPREAD-…``/``NFLTOTAL-…`` or Kalshi-routed)."""
-        team_sport = sport in ("nfl", "ncaaf")
+        team_sport = sport in TEAM_SPORTS
         for item in items:
             ev, c, mtype = item["event"], item["contract"], item["market_type"]
             sym = c.get("symbol", "")
@@ -395,7 +395,7 @@ def _pair_title(pair: str, sport: str) -> str:
     """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
     for cut in range(2, len(pair) - 1):
         a, b = pair[:cut], pair[cut:]
-        if sport not in ("nfl", "ncaaf") or (team_code(sport, a) and team_code(sport, b)):
+        if sport not in TEAM_SPORTS or (team_code(sport, a) and team_code(sport, b)):
             return f"{a} @ {b}"
     return pair
 

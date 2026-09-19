@@ -104,6 +104,8 @@ def model_home_wp(gs: Any, model: Any = None) -> Optional[float]:
     """P(home wins) from our WP model on an ESPN GameState-like object (None if no state)."""
     if gs is None or getattr(gs, "game_seconds_remaining", None) is None:
         return None
+    if getattr(gs, "sport", "nfl") not in ("nfl", "ncaaf"):
+        return None  # the WP model is football-only; other sports blend market + ESPN
     try:
         from ..models.wp import home_win_probability
     except Exception:

@@ -43,7 +43,9 @@ def nfl_team_city(code: Optional[str]) -> str:
     return info["city"] if info else (code or "")
 
 
-# ---- other team sports: data/<sport>_teams.json (ncaaf built by scripts/build_ncaaf_teams.py) ----
+# ---- other team sports: data/<sport>_teams.json (built by scripts/build_teams.py --sport …) ----
+
+TEAM_SPORTS = ("nfl", "ncaaf", "nba", "nhl")  # sports with a canonical team-code table
 
 _TABLES: dict[str, dict] = {}
 _SPORT_INDEX: dict[str, dict[str, str]] = {}
@@ -70,12 +72,14 @@ def team_table(sport: str) -> dict:
 
 def _sport_index(sport: str) -> dict[str, str]:
     if sport not in _SPORT_INDEX:
-        idx: dict[str, str] = {}
+        owners: dict[str, set[str]] = {}
         for code, info in sorted(team_table(sport).items()):
             for a in [code, info.get("name") or ""] + list(info.get("aliases") or []):
                 if a:
-                    idx.setdefault(_norm_team(a), code)
-        _SPORT_INDEX[sport] = idx
+                    owners.setdefault(_norm_team(a), set()).add(code)
+        # An alias shared by two teams ("Los Angeles" = Lakers and Clippers) resolves to nothing
+        # rather than to whichever sorts first.
+        _SPORT_INDEX[sport] = {k: next(iter(v)) for k, v in owners.items() if len(v) == 1}
     return _SPORT_INDEX[sport]
 
 

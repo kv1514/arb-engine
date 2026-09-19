@@ -17,7 +17,7 @@ from typing import Any, Optional
 from .fees.registry import fee_model_for
 from .fees.robinhood import exchange_from_symbol_or_enum
 from .matching.normalize import fmt_line, kalshi_ticker_date, person_key, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, ticker_pair, total_event_key
-from .matching.teams import nfl_team_city, nfl_team_code, team_code
+from .matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
 from .models import EventInfo, OutcomeQuote
 from .quant.arbitrage import Leg, best_leg_per_outcome, evaluate, max_price_for_leg
 from .quant.fairvalue import consensus_fair_value
@@ -129,22 +129,28 @@ class EventAnalyzer:
         pair = "".join(kcodes[i] for i in order)
         return [{"family": "CFBGAME", "date": date, "pair": pair, "side": kcodes[i], "teams": [kcodes[j] for j in order], "kalshi_ticker": f"KXNCAAFGAME-{y[2:]}{mon}{d}{pair}-{kcodes[i]}", "routed": "cdna"} for i in range(len(contracts_raw))]
 
+    POLYMARKET_SLUG_PREFIX = {"ncaaf": "cfb", "nba": "nba", "nhl": "nhl"}
+
     def polymarket_cfb(self, names: list[str], outcomes: list[str], date: str) -> Optional[dict]:
-        """College moneyline on Polymarket: search by the two team names, keep the event whose
-        slug is cfb-…-{date} (UTC date of kickoff may be the ET date or the day after), then read
-        the moneyline market by slug."""
+        return self.polymarket_team_game("ncaaf", names, outcomes, date)
+
+    def polymarket_team_game(self, sport: str, names: list[str], outcomes: list[str], date: str) -> Optional[dict]:
+        """Moneyline on Polymarket for a table sport: search by the two team names, keep the
+        event whose slug is {prefix}-…-{date} (UTC date may be the ET date or the day after),
+        then read the moneyline market by slug."""
         from datetime import datetime, timedelta
 
+        prefix = self.POLYMARKET_SLUG_PREFIX.get(sport, sport)
         d0 = datetime.strptime(date, "%Y-%m-%d")
         dates = {(d0 + timedelta(days=k)).strftime("%Y-%m-%d") for k in (0, 1)}
-        q = " ".join(names)
+        q = " ".join(team_name(sport, o) for o in outcomes)
         try:
             found = self.pm.http.get(f"{GAMMA}/public-search", {"q": q, "limit_per_type": 10})
         except Exception:
             return None
         for cand in (found or {}).get("events") or []:
             slug = str(cand.get("slug") or "")
-            m = re.match(r"^cfb-[a-z0-9]+-[a-z0-9]+-(\d{4}-\d{2}-\d{2})$", slug)
+            m = re.match("^" + re.escape(prefix) + r"-[a-z0-9]+-[a-z0-9]+-(\d{4}-\d{2}-\d{2})$", slug)
             if not m or m.group(1) not in dates:
                 continue
             try:
@@ -153,7 +159,7 @@ class EventAnalyzer:
                 ms = None
             for mk in ms or []:
                 outs = _jl(mk.get("outcomes"))
-                if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code("ncaaf", o) for o in outs} == set(outcomes):
+                if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code(sport, o) for o in outs} == set(outcomes):
                     return mk
             if not ms:  # closed/odd markets: read the event itself
                 try:
@@ -162,7 +168,7 @@ class EventAnalyzer:
                     evs = None
                 for mk in ((evs or [{}])[0].get("markets") or []):
                     outs = _jl(mk.get("outcomes"))
-                    if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code("ncaaf", o) for o in outs} == set(outcomes):
+                    if mk.get("sportsMarketType") == "moneyline" and len(outs) == 2 and {team_code(sport, o) for o in outs} == set(outcomes):
                         return mk
         return None
 
@@ -217,12 +223,13 @@ class EventAnalyzer:
         family = parsed[0]["family"]  # type: ignore[index]
         is_nfl = family == "NFLGAME"
         is_ncaaf = family in ("NCAAFGAME", "CFBGAME")
+        table_sport = {"NCAAFGAME": "ncaaf", "CFBGAME": "ncaaf", "NBAGAME": "nba", "NHLGAME": "nhl"}.get(family)
         is_tennis = bool(re.search(r"(ATP|WTA|ITF)", family) and "MATCH" in family)
-        sport = "nfl" if is_nfl else "ncaaf" if is_ncaaf else "tennis" if is_tennis else "other"
+        sport = "nfl" if is_nfl else table_sport if table_sport else "tennis" if is_tennis else "other"
         if is_nfl:
             outcomes = [nfl_team_code(c.get("displayShortName")) or nfl_team_code(n) or p["side"] for c, n, p in zip(contracts_raw, names, parsed)]  # type: ignore[index]
-        elif is_ncaaf:
-            outcomes = [team_code("ncaaf", c.get("displayShortName")) or team_code("ncaaf", n) or team_code("ncaaf", p["side"]) or p["side"] for c, n, p in zip(contracts_raw, names, parsed)]  # type: ignore[index]
+        elif table_sport:
+            outcomes = [team_code(table_sport, c.get("displayShortName")) or team_code(table_sport, n) or team_code(table_sport, p["side"]) or p["side"] for c, n, p in zip(contracts_raw, names, parsed)]  # type: ignore[index]
         else:
             outcomes = person_keys(names)
         labels = dict(zip(outcomes, names))
@@ -258,8 +265,8 @@ class EventAnalyzer:
         pm_market = None
         if is_nfl and parsed[0]["teams"] and parsed[0]["date"]:  # type: ignore[index]
             pm_market = self.polymarket_nfl(parsed[0]["teams"], parsed[0]["date"])  # type: ignore[index]
-        elif is_ncaaf and parsed[0]["date"]:  # type: ignore[index]
-            pm_market = self.polymarket_cfb(names, outcomes, parsed[0]["date"])  # type: ignore[index]
+        elif table_sport and parsed[0]["date"]:  # type: ignore[index]
+            pm_market = self.polymarket_team_game(table_sport, names, outcomes, parsed[0]["date"])  # type: ignore[index]
         elif is_tennis:
             pm_market = self.polymarket_tennis(names)
         if pm_market:
@@ -269,7 +276,7 @@ class EventAnalyzer:
             pq: list[OutcomeQuote] = []
             tokens = _jl(pm_market.get("clobTokenIds"))
             for i, label in enumerate(outs):
-                key = (nfl_team_code(label) if is_nfl else team_code("ncaaf", label) if is_ncaaf else person_key(label)) or ""
+                key = (nfl_team_code(label) if is_nfl else team_code(table_sport, label) if table_sport else person_key(label)) or ""
                 if key not in outcomes:
                     continue
                 bid, ask = sides[i]

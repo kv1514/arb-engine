@@ -37,8 +37,9 @@ book (taker) or as a resting order (maker, lower fees on Kalshi, none on Polymar
 
 ## What is in the box
 
-Sports: NFL (moneylines, spreads, totals) and **college football** (`--sport ncaaf`: Kalshi ×
-Polymarket × Robinhood/CDNA, 761 programs; see [docs/SPORTS.md](docs/SPORTS.md)); tennis for fee routing.
+Sports: NFL (moneylines, spreads, totals), **college football** (`--sport ncaaf`: Kalshi ×
+Polymarket × Robinhood/CDNA, 761 programs), NHL and NBA (`--sport nhl|nba`, team tables ready
+for the season) — see [docs/SPORTS.md](docs/SPORTS.md); tennis with per-venue settlement rules.
 
 | Piece | What it does |
 |---|---|
@@ -252,7 +253,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-18)
 
-Live data verified for all three venues; 174 Python tests + 2 JS suites (2,160 fee parity
+Live data verified for all three venues; 178 Python tests + 2 JS suites (2,160 fee parity
 vectors, background-worker integration incl. a totals page) pass. NFL moneylines are
 efficient to within fees; on Tuesday night the ~1,000 spread/total lines held 16 fillable,
 depth-checked arbs (Rothera far-tail overs vs Kalshi unders, ≈1% on capital) that were gone

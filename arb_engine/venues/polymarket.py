@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 from ..models import VENUE_POLYMARKET, Book, EventInfo, Level, OutcomeQuote, VenueSnapshot
 from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, spread_event_key, spread_outcomes, tennis_event_key, total_event_key, team_event_key
-from ..matching.teams import nfl_team_city, nfl_team_code, team_code
+from ..matching.teams import TEAM_SPORTS, nfl_team_city, nfl_team_code, team_code
 from .http import HttpClient
 
 GAMMA = "https://gamma-api.polymarket.com"
@@ -157,7 +157,7 @@ class PolymarketAdapter:
             mt = m.get("sportsMarketType")
             if m.get("closed") or not m.get("active", True):
                 continue
-            if mt in ("spreads", "totals") and sport in ("nfl", "ncaaf"):
+            if mt in ("spreads", "totals") and sport in TEAM_SPORTS:
                 self._ingest_line_market(snap, sport, ev, m, "spread" if mt == "spreads" else "total")
                 continue
             if mt != "moneyline":
@@ -169,7 +169,7 @@ class PolymarketAdapter:
                 continue
             start = parse_iso(m.get("gameStartTime"))  # ev.startDate is the listing date, not kickoff
             date = et_date(start)
-            if sport in ("nfl", "ncaaf"):
+            if sport in TEAM_SPORTS:
                 codes = [team_code(sport, o) for o in outcomes]
                 slug = ev.get("slug", "")
                 if any(c is None for c in codes) and sport == "nfl":

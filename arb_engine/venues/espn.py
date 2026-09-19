@@ -36,7 +36,10 @@ BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
 SPORT_BASE_URL = {
     "nfl": BASE_URL,
     "ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football",
+    "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba",
+    "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl",
 }
+FOOTBALL = ("nfl", "ncaaf")  # sports the win-probability model and the situation parser apply to
 SPORT_SCOREBOARD_PARAMS = {"ncaaf": {"groups": 80, "limit": 300}}  # FBS only; the default page is 25 games
 
 REGULATION_PERIODS = 4

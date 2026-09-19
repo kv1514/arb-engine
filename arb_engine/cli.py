@@ -584,11 +584,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     gm.add_argument("--date", default=None, help="YYYY-MM-DD (default: current week)")
     gm.add_argument("--live-only", action="store_true")
     gm.add_argument("--enrich", action="store_true", help="also pull each game's summary (ESPN win probability)")
-    gm.add_argument("--sport", default="nfl", choices=["nfl", "ncaaf"])
+    gm.add_argument("--sport", default="nfl", choices=["nfl", "ncaaf", "nba", "nhl"])
     gm.set_defaults(func=cmd_games)
 
     lv = sub.add_parser("live", help="price every live NFL game at once (model/market/ESPN fair, cheapest venue, STEAL flags)")
-    lv.add_argument("--sport", default="nfl")
+    lv.add_argument("--sport", default="nfl", choices=["nfl", "ncaaf", "nba", "nhl"])
     lv.add_argument("--every", type=float, default=10.0, help="seconds between ticks")
     lv.add_argument("--hours", type=float, default=8.0)
     lv.add_argument("--iterations", type=int)

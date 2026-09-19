@@ -61,6 +61,20 @@ multiplier) can be scanned with `--sport`. Team alias tables exist only for the 
 the other leagues match on the venue's own short codes, which works when both venues use the
 same codes.
 
+### NBA and NHL (tables added 2026-09-18)
+
+`arb_engine/data/nba_teams.json` (30) and `nhl_teams.json` (32) are built by
+`scripts/build_teams.py --sport nba|nhl` from ESPN's team lists plus Kalshi ticker codes learned
+from open `KXNBAGAME` / `KXNHLGAME` markets and a manual alias list (Kalshi says "Vegas",
+"Utah", "Los Angeles"; ESPN says VGK, UTAH, LA/LAL/LAC). Canonical codes are ESPN's; an alias
+two teams share resolves to nothing. `scan / games / live --sport nhl|nba` work through the same
+adapters (Kalshi, Polymarket tags `nhl`/`nba`, Robinhood categories `nhl`/`nba`) and ESPN's
+`hockey/nhl` / `basketball/nba` scoreboards; the win-probability model is football-only, so the
+in-play blend for these sports is market + ESPN. First live NHL scan (preseason, 2026-09-18):
+906 events (176 moneylines, 704 totals, 26 spreads) on Kalshi × Polymarket, keys matching
+ESPN's (`nhl:MTL|TOR:2026-09-19`); NBA has six Kalshi markets for opening night so far.
+
+
 ## College football (`--sport ncaaf`, added 2026-09-18)
 
 | Venue | Where | Codes / names | Notes |

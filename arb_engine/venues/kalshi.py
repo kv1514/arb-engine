@@ -35,7 +35,7 @@ from ..matching.normalize import (
     ticker_pair,
     total_event_key,
 )
-from ..matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
+from ..matching.teams import TEAM_SPORTS, nfl_team_city, nfl_team_code, team_code, team_name
 from .http import HttpClient
 
 ENV_REST_BASE = {
@@ -43,7 +43,6 @@ ENV_REST_BASE = {
     "demo": "https://demo-api.kalshi.co/trade-api/v2",
 }
 
-TEAM_SPORTS = ("nfl", "ncaaf")  # sports with a canonical team-code table
 
 # Kalshi tennis rule text (rules_primary/secondary on every KX{ATP,WTA}MATCH market, 2026-09-18):
 # "If X wins the match after a ball has been played, then Yes"; no ball played (injury, walkover,
@@ -324,7 +323,7 @@ class KalshiAdapter:
             # for college games (26SEP19PURUCLA carries 2026-09-20T06:00Z for a 03:00Z kick).
             date = kalshi_ticker_date(event_ticker) or et_date(start)
             labels = {m["ticker"]: re.sub(r"\s*\((?:b\.|born)[^)]*\)", "", (m.get("yes_sub_title") or m.get("title", "")).replace(" wins", "")).strip() for m in ms}
-            if sport in ("nfl", "ncaaf"):
+            if sport in TEAM_SPORTS:
                 codes = {m["ticker"]: (team_code(sport, m["ticker"].rsplit("-", 1)[-1]) or team_code(sport, labels[m["ticker"]])) for m in ms}
                 if any(c is None for c in codes.values()):
                     continue

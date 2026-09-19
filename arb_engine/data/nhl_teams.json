@@ -1,0 +1,364 @@
+{
+"ANA": {
+"aliases": [
+"Anaheim",
+"Anaheim Ducks",
+"Ducks"
+],
+"espn_id": "25",
+"kalshi": "ANA",
+"name": "Anaheim",
+"nick": "Ducks"
+},
+"BOS": {
+"aliases": [
+"Boston",
+"Boston Bruins",
+"Bruins"
+],
+"espn_id": "1",
+"kalshi": "BOS",
+"name": "Boston",
+"nick": "Bruins"
+},
+"BUF": {
+"aliases": [
+"Buffalo",
+"Buffalo Sabres",
+"Sabres"
+],
+"espn_id": "2",
+"kalshi": "BUF",
+"name": "Buffalo",
+"nick": "Sabres"
+},
+"CAR": {
+"aliases": [
+"Carolina",
+"Carolina Hurricanes",
+"Hurricanes"
+],
+"espn_id": "7",
+"kalshi": "CAR",
+"name": "Carolina",
+"nick": "Hurricanes"
+},
+"CBJ": {
+"aliases": [
+"Blue Jackets",
+"Columbus",
+"Columbus Blue Jackets"
+],
+"espn_id": "29",
+"kalshi": "CBJ",
+"name": "Columbus",
+"nick": "Blue Jackets"
+},
+"CGY": {
+"aliases": [
+"Calgary",
+"Calgary Flames",
+"Flames"
+],
+"espn_id": "3",
+"kalshi": "CGY",
+"name": "Calgary",
+"nick": "Flames"
+},
+"CHI": {
+"aliases": [
+"Blackhawks",
+"Chicago",
+"Chicago Blackhawks"
+],
+"espn_id": "4",
+"kalshi": "CHI",
+"name": "Chicago",
+"nick": "Blackhawks"
+},
+"COL": {
+"aliases": [
+"Avalanche",
+"Colorado",
+"Colorado Avalanche"
+],
+"espn_id": "17",
+"kalshi": "COL",
+"name": "Colorado",
+"nick": "Avalanche"
+},
+"DAL": {
+"aliases": [
+"Dallas",
+"Dallas Stars",
+"Stars"
+],
+"espn_id": "9",
+"kalshi": "DAL",
+"name": "Dallas",
+"nick": "Stars"
+},
+"DET": {
+"aliases": [
+"Detroit",
+"Detroit Red Wings",
+"Red Wings"
+],
+"espn_id": "5",
+"kalshi": "DET",
+"name": "Detroit",
+"nick": "Red Wings"
+},
+"EDM": {
+"aliases": [
+"Edmonton",
+"Edmonton Oilers",
+"Oilers"
+],
+"espn_id": "6",
+"kalshi": "EDM",
+"name": "Edmonton",
+"nick": "Oilers"
+},
+"FLA": {
+"aliases": [
+"Florida",
+"Florida Panthers",
+"Panthers"
+],
+"espn_id": "26",
+"kalshi": "FLA",
+"name": "Florida",
+"nick": "Panthers"
+},
+"LA": {
+"aliases": [
+"Kings",
+"Los Angeles",
+"Los Angeles Kings",
+"LAK"
+],
+"espn_id": "8",
+"kalshi": "LA",
+"name": "Los Angeles",
+"nick": "Kings"
+},
+"MIN": {
+"aliases": [
+"Minnesota",
+"Minnesota Wild",
+"Wild"
+],
+"espn_id": "30",
+"kalshi": "MIN",
+"name": "Minnesota",
+"nick": "Wild"
+},
+"MTL": {
+"aliases": [
+"Canadiens",
+"Montreal",
+"Montreal Canadiens",
+"Montr\u00e9al",
+"MON"
+],
+"espn_id": "10",
+"kalshi": "MTL",
+"name": "Montreal",
+"nick": "Canadiens"
+},
+"NJ": {
+"aliases": [
+"Devils",
+"New Jersey",
+"New Jersey Devils",
+"NJD"
+],
+"espn_id": "11",
+"kalshi": "NJ",
+"name": "New Jersey",
+"nick": "Devils"
+},
+"NSH": {
+"aliases": [
+"Nashville",
+"Nashville Predators",
+"Predators"
+],
+"espn_id": "27",
+"kalshi": "NSH",
+"name": "Nashville",
+"nick": "Predators"
+},
+"NYI": {
+"aliases": [
+"Islanders",
+"New York",
+"New York Islanders",
+"NY Islanders"
+],
+"espn_id": "12",
+"kalshi": "NYI",
+"name": "New York",
+"nick": "Islanders"
+},
+"NYR": {
+"aliases": [
+"New York",
+"New York Rangers",
+"Rangers",
+"NY Rangers"
+],
+"espn_id": "13",
+"kalshi": "NYR",
+"name": "New York",
+"nick": "Rangers"
+},
+"OTT": {
+"aliases": [
+"Ottawa",
+"Ottawa Senators",
+"Senators"
+],
+"espn_id": "14",
+"kalshi": "OTT",
+"name": "Ottawa",
+"nick": "Senators"
+},
+"PHI": {
+"aliases": [
+"Flyers",
+"Philadelphia",
+"Philadelphia Flyers"
+],
+"espn_id": "15",
+"kalshi": "PHI",
+"name": "Philadelphia",
+"nick": "Flyers"
+},
+"PIT": {
+"aliases": [
+"Penguins",
+"Pittsburgh",
+"Pittsburgh Penguins"
+],
+"espn_id": "16",
+"kalshi": "PIT",
+"name": "Pittsburgh",
+"nick": "Penguins"
+},
+"SEA": {
+"aliases": [
+"Kraken",
+"Seattle",
+"Seattle Kraken"
+],
+"espn_id": "124292",
+"kalshi": "SEA",
+"name": "Seattle",
+"nick": "Kraken"
+},
+"SJ": {
+"aliases": [
+"San Jose",
+"San Jose Sharks",
+"Sharks",
+"SJS"
+],
+"espn_id": "18",
+"kalshi": "SJ",
+"name": "San Jose",
+"nick": "Sharks"
+},
+"STL": {
+"aliases": [
+"Blues",
+"St. Louis",
+"St. Louis Blues"
+],
+"espn_id": "19",
+"kalshi": "STL",
+"name": "St. Louis",
+"nick": "Blues"
+},
+"TB": {
+"aliases": [
+"Lightning",
+"Tampa Bay",
+"Tampa Bay Lightning",
+"TBL"
+],
+"espn_id": "20",
+"kalshi": "TB",
+"name": "Tampa Bay",
+"nick": "Lightning"
+},
+"TOR": {
+"aliases": [
+"Maple Leafs",
+"Toronto",
+"Toronto Maple Leafs"
+],
+"espn_id": "21",
+"name": "Toronto",
+"nick": "Maple Leafs"
+},
+"UTAH": {
+"aliases": [
+"Mammoth",
+"Utah",
+"Utah Mammoth",
+"UTA"
+],
+"espn_id": "129764",
+"kalshi": "UTA",
+"name": "Utah",
+"nick": "Mammoth"
+},
+"VAN": {
+"aliases": [
+"Canucks",
+"Vancouver",
+"Vancouver Canucks"
+],
+"espn_id": "22",
+"kalshi": "VAN",
+"name": "Vancouver",
+"nick": "Canucks"
+},
+"VGK": {
+"aliases": [
+"Golden Knights",
+"Vegas",
+"Vegas Golden Knights",
+"Las Vegas"
+],
+"espn_id": "37",
+"kalshi": "VGK",
+"name": "Vegas",
+"nick": "Golden Knights"
+},
+"WPG": {
+"aliases": [
+"Jets",
+"Winnipeg",
+"Winnipeg Jets"
+],
+"espn_id": "28",
+"kalshi": "WPG",
+"name": "Winnipeg",
+"nick": "Jets"
+},
+"WSH": {
+"aliases": [
+"Capitals",
+"Washington",
+"Washington Capitals",
+"WAS"
+],
+"espn_id": "23",
+"kalshi": "WSH",
+"name": "Washington",
+"nick": "Capitals"
+}
+}
