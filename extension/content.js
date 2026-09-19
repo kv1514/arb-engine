@@ -10,7 +10,7 @@
   "use strict";
   const PANEL_ID = "arbe-panel";
   const EVENT_RE = /\/prediction-markets\/[^/]+\/events\/[^/]+\/?/;
-  let lastUrl = null, timer = null, refreshSeconds = 15, collapsed = false, lastAnalysis = null;
+  let lastUrl = null, timer = null, refreshSeconds = 1, collapsed = false, lastAnalysis = null, inflight = false;
 
   const fmtP = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "¢");
   const fmtC = (x) => (x == null ? "–" : Math.round(x * 100) + "¢");  // whole cents for the small card badges
@@ -60,19 +60,20 @@
     if (a.arb) {
       const cls = a.arb.isArb ? "arbe-good" : "arbe-bad";
       const legs = a.arb.legs.map((l) => `${esc(l.label || l.outcome)} @ ${fmtP(l.price)} on ${esc(l.venue)}`).join(" + ");
-      html += `<div class="arbe-arb ${cls}"><b>${a.arb.isArb ? "ARB" : "No arb"}</b> — cheapest legs sum to ${(a.arb.grossSum * 100).toFixed(1)}¢; fee-adjusted margin <b>${fmtPct(a.arb.margin, true)}</b> per $1 (${a.arb.contracts} contracts: ${a.arb.profit >= 0 ? "+" : ""}$${a.arb.profit.toFixed(2)})<div class="arbe-muted">${legs}</div></div>`;
+      const sized = a.arb.isArb && a.arb.sizedContracts ? `<div class="arbe-good"><b>Buy ${a.arb.sizedContracts} contracts</b> (what the books hold at these prices): ${(a.arb.sizedLegs || []).map((l) => `${l.contracts} × ${esc(l.label)} @ ${fmtP(l.price)} on ${esc(l.venue)}`).join(" + ")} → locked ${a.arb.sizedProfit >= 0 ? "+" : ""}$${Number(a.arb.sizedProfit).toFixed(2)} after fees</div>` : (a.arb.isArb ? `<div class="arbe-muted arbe-small">arb, but no depth at these prices (top-of-book size 0)</div>` : "");
+      html += `<div class="arbe-arb ${cls}"><b>${a.arb.isArb ? "ARB" : "No arb"}</b> — cheapest legs sum to ${(a.arb.grossSum * 100).toFixed(1)}¢; fee-adjusted margin <b>${fmtPct(a.arb.margin, true)}</b> per $1 (${a.arb.contracts} contracts: ${a.arb.profit >= 0 ? "+" : ""}$${a.arb.profit.toFixed(2)})<div class="arbe-muted">${legs}</div>${sized}</div>`;
     }
     for (const row of a.rows) {
-      html += `<div class="arbe-row"><div class="arbe-rowhead"><span class="arbe-outcome">${esc(row.label)}</span><span>fair <b>${fmtP(row.fair)}</b></span><span class="${row.edge > 0 ? "arbe-good" : "arbe-bad"}">edge ${fmtPct(row.edge, true)} @ ${esc(row.best || "–")}</span></div><table class="arbe-table"><thead><tr><th>venue</th><th>ask</th><th>bid</th><th>fee/ct</th><th>all-in</th><th>max buy (take)</th><th>max buy (rest)</th></tr></thead><tbody>`;
+      html += `<div class="arbe-row"><div class="arbe-rowhead"><span class="arbe-outcome">${esc(row.label)}</span><span>fair <b>${fmtP(row.fair)}</b></span><span class="${row.edge > 0 ? "arbe-good" : "arbe-bad"}">edge ${fmtPct(row.edge, true)} @ ${esc(row.best || "–")}</span></div><table class="arbe-table"><thead><tr><th>venue</th><th>ask</th><th>size</th><th>bid</th><th>fee/ct</th><th>all-in</th><th>max buy (take)</th><th>max buy (rest)</th></tr></thead><tbody>`;
       for (const v of row.venues) {
         const tag = v.mirror ? ` <span class="arbe-tag" title="Robinhood resells this exchange's order book; same prices, higher fees">= ${esc(v.mirror)} book</span>` : "";
         const link = v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(venueName(v))}</a>` : esc(venueName(v));
-        html += `<tr class="${v.venue === "robinhood" ? "arbe-here" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
+        html += `<tr class="${v.venue === "robinhood" ? "arbe-here" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${v.askSize == null ? "–" : Math.floor(v.askSize)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
       }
       html += `</tbody></table></div>`;
     }
     if (a.errors && a.errors.length) html += `<div class="arbe-muted arbe-small">${a.errors.map(esc).join("<br>")}</div>`;
-    html += `<div class="arbe-muted arbe-small">Size ${a.contracts} contracts · target margin ${fmtPct(a.targetMargin)} · fees: Robinhood commission (Gold ${a.gold ? "on" : "off"}) + $0.01/ct exchange; Kalshi 7% taker / 1.75% maker × p(1−p); Polymarket 5% taker × p(1−p). Max buy = highest price on this venue that still locks the margin after hedging the other side at its cheapest current ask. Informational only — verify before trading.</div>`;
+    html += `<div class="arbe-muted arbe-small">Reference size ${a.contracts} contracts · target margin ${fmtPct(a.targetMargin)} · size = contracts offered at that ask · fees: Robinhood commission (Gold ${a.gold ? "on" : "off"}) + $0.01/ct exchange; Kalshi 7% taker / 1.75% maker × p(1−p); Polymarket 5% taker × p(1−p). Max buy = highest price on this venue that still locks the margin after hedging the other side at its cheapest current ask. Informational only — verify before trading.</div>`;
     body.innerHTML = html;
     decorateTabs(a);
   }
@@ -84,7 +85,7 @@
     for (const sv of v.sides || []) {
       const held = sv.held ? ` · held ${sv.held} @ ${fmtP(sv.avg_all_in)}` : "";
       const lock = sv.need ? ` · <b class="${sv.lock_available ? "arbe-good" : ""}">LOCK ≤ ${fmtP(sv.lock_price)}</b>${sv.lock_available ? " NOW" : ""}` : "";
-      const steal = sv.steal ? ` · <b class="arbe-good">STEAL +${fmtPct(sv.steal_edge)}</b>` : "";
+      const steal = sv.steal ? ` · <b class="arbe-good">STEAL +${fmtPct(sv.steal_edge)}${sv.suggested_contracts ? ` → buy ${sv.suggested_contracts} ct` : ""}</b>` : "";
       html += `<div class="arbe-small">${esc(sv.label)}: fair ${fmtP(sv.fair)} (mkt ${fmtP(sv.market_p)} / model ${fmtP(sv.model_p)}${sv.espn_p != null ? " / espn " + fmtP(sv.espn_p) : ""}) · best ${esc(sv.best_venue || "–")} all-in ${fmtP(sv.best_all_in)}${held}${lock}${steal}</div>`;
     }
     for (const act of (v.actions || []).filter((x) => /^(LOCK NOW|STEAL|FLAT)/.test(x))) html += `<div class="arbe-good arbe-small">→ ${esc(act)}</div>`;
@@ -215,9 +216,12 @@
     if (!url && CATEGORY_RE.test(location.pathname)) { runCategory(force); return; }
     if (!url) { if (document.getElementById(PANEL_ID)) ensurePanel().querySelector(".arbe-body").innerHTML = `<div class="arbe-muted">Open a game / match page to see fair value and max-buy prices.</div>`; return; }
     if (!force && url === lastUrl && lastAnalysis && Date.now() - lastAnalysis.fetchedAt < refreshSeconds * 1000) return;
+    if (inflight) return;  // never queue a second request behind a slow one
     lastUrl = url;
-    setStatus("loading…", "");
+    inflight = true;
+    if (!lastAnalysis) setStatus("loading…", "");
     chrome.runtime.sendMessage({ type: "analyze", url }, (res) => {
+      inflight = false;
       if (chrome.runtime.lastError) { setStatus("error", "arbe-bad"); render({ ok: false, error: chrome.runtime.lastError.message }); return; }
       if (!res) { setStatus("no response", "arbe-bad"); return; }
       setStatus(res.ok ? new Date().toLocaleTimeString() + (res.analysis && res.analysis.source === "bridge" ? " · engine" : "") : "error", res.ok ? "arbe-good" : "arbe-bad");
@@ -227,10 +231,10 @@
 
   function start() {
     ensurePanel();
-    chrome.runtime.sendMessage({ type: "settings" }, (s) => { if (s && s.refreshSeconds) refreshSeconds = Math.max(5, Number(s.refreshSeconds)); });
+    chrome.runtime.sendMessage({ type: "settings" }, (s) => { if (s && s.refreshSeconds) refreshSeconds = Math.max(1, Number(s.refreshSeconds)); });
     run(true);
     if (timer) clearInterval(timer);
-    timer = setInterval(() => run(false), 2000);  // cheap tick; actual refresh gated by refreshSeconds
+    timer = setInterval(() => run(false), 500);  // cheap tick; actual refresh gated by refreshSeconds (1 s = live) and by inflight
     // SPA navigations: watch the URL and re-run.
     let href = location.href;
     setInterval(() => { if (location.href !== href) { href = location.href; lastAnalysis = null; run(true); } }, 500);

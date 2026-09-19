@@ -80,6 +80,11 @@ class SideView:
     lock_available: bool = False
     lock_profit_if_now: Optional[float] = None
     hold_ev: Optional[float] = None  # expected profit of holding as-is at the blended fair (sum fair*held - cost)
+    # Sizing for a directional buy of this side at the best all-in (only meaningful on a STEAL):
+    depth_contracts: Optional[float] = None    # contracts on offer at the best ask (top of book)
+    kelly_contracts: Optional[int] = None      # fractional-Kelly stake on the configured bankroll, in contracts
+    suggested_contracts: Optional[int] = None  # min(kelly, depth): what to actually buy now
+    kelly_stake: Optional[float] = None        # dollars, fees included
 
 
 @dataclass
@@ -154,8 +159,9 @@ def _best_spread(quotes_by_venue: Any) -> Optional[float]:
     return best
 
 
-def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None) -> InplayView:
+def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25) -> InplayView:
     settings = settings or {}
+    from ..quant.sizing import kelly_stake as _kelly
     info = me.info
     # Two-way markets only: the lock buys *the* other side and the blend renormalises two
     # probabilities. A three-way (soccer 1X2) event would get a "guaranteed" lock that leaves
@@ -210,6 +216,17 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
         if live and model_edge is not None:
             agree = model_edge >= steal_edge
         sv = SideView(outcome=o, label=info.labels.get(o, o), held=held[o], cost=cost[o], avg_all_in=(cost[o] / held[o]) if held[o] else None, fair=fv, best_venue=best[1].venue if best else None, best_ask=best[1].ask if best else None, best_all_in=best[0] if best else None, steal_edge=edge, steal=bool(edge is not None and edge >= steal_edge and agree), market_p=market_probs.get(o), model_p=model_probs.get(o), espn_p=espn_probs.get(o))
+        # How much to buy if this is a STEAL: fractional Kelly on the bankroll (fees are already
+        # inside all_in), capped by what is actually offered at that price. Pure arbs are sized
+        # by depth elsewhere (size_from_books); this is the directional case.
+        if best is not None:
+            sv.depth_contracts = best[1].ask_size
+            if sv.steal and bankroll and fv is not None:
+                ks = _kelly(bankroll, fv, best[0], fraction=kelly_fraction)
+                sv.kelly_stake = round(ks["stake"], 2)
+                sv.kelly_contracts = ks["contracts"]
+                depth = int(sv.depth_contracts) if sv.depth_contracts is not None else None
+                sv.suggested_contracts = min(ks["contracts"], depth) if depth is not None else ks["contracts"]
         # Lock: how many of this side are needed to equalise payouts, and the max price for them.
         need = max_held - held[o]
         if need > 0 and best is not None:
@@ -237,7 +254,13 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                 actions.append(f"no lock possible for {sv.label} at current holdings (avg cost too high)")
         if sv.steal:
             src = f" [market {sv.market_p:.2f} / model {sv.model_p:.2f}]" if sv.model_p is not None and sv.market_p is not None else ""
-            actions.append(f"STEAL: {sv.label} all-in {sv.best_all_in:.3f} on {sv.best_venue} vs fair {sv.fair:.3f} (+{sv.steal_edge:.1%}){src}")
+            size = ""
+            if sv.suggested_contracts:
+                offered = f", {int(sv.depth_contracts)} offered" if sv.depth_contracts is not None else ""
+                size = f" → buy {sv.suggested_contracts} contracts ({kelly_fraction:g}×Kelly ${sv.kelly_stake:.2f} of ${bankroll:,.0f}{offered})"
+            elif sv.suggested_contracts == 0:
+                size = " → size 0 at this bankroll/depth"
+            actions.append(f"STEAL: {sv.label} all-in {sv.best_all_in:.3f} on {sv.best_venue} vs fair {sv.fair:.3f} (+{sv.steal_edge:.1%}){src}{size}")
         elif live and market_edge is not None and market_edge >= steal_edge and not agree:
             actions.append(f"market says {sv.label} is cheap (+{market_edge:.1%}) but the model does not ({model_probs[o]:.2f} vs all-in {best[0]:.3f}) — likely a stale quote, not a steal")
         sides.append(sv)
@@ -258,9 +281,10 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
 class InplayWatcher:
     """Poll one event and alert on STEAL / LOCK changes. ``fetch`` returns a MergedEvent."""
 
-    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, store: Any = None):
+    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, store: Any = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25):
         self.fetch = fetch
         self.store = store  # optional arb_engine.store.Store
+        self.bankroll, self.kelly_fraction = bankroll, kelly_fraction
         self.fetch_state = fetch_state  # () -> GameState | None (ESPN); optional
         self.model = model
         self.blend_weights = blend_weights
@@ -278,7 +302,7 @@ class InplayWatcher:
                 gs = self.fetch_state()
             except Exception as e:
                 self.alerts.info(f"game state unavailable: {e!r}")
-        view = evaluate_inplay(self.fetch(), self.lots, self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, blend_weights=self.blend_weights)
+        view = evaluate_inplay(self.fetch(), self.lots, self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, blend_weights=self.blend_weights, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction)
         if view.game_line:
             self.alerts.info(f"{view.game_line}  |  {view.fair_line or ''}", event=view.event_key, game_state=view.game_state, blend=view.blend)
         if self.store is not None:

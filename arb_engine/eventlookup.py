@@ -60,6 +60,8 @@ class EventAnalyzer:
         self.kalshi = kalshi or KalshiClient(env="prod")
         self.pm = polymarket or PolymarketAdapter()
         self._series_cache: dict[str, dict] = {}
+        self._page_cache: dict[str, tuple[float, str, dict]] = {}  # slug -> (fetched_at, category, page props)
+        self.page_ttl = 60.0              # the event page only changes when contracts are (de)listed; quotes are refreshed live
         self.last_event = None            # MergedEvent from the last game-winner analyze_url
         self.last_url: Optional[str] = None
         self.last_analyzed_at: float = 0.0
@@ -83,6 +85,23 @@ class EventAnalyzer:
         return None, None
 
     # ---- lookups ------------------------------------------------------------------------
+    def _page(self, slug: str, category: Optional[str]):
+        """Event page props for a slug, cached ``page_ttl`` seconds (the overlay polls every
+        second; the 1-3 MB page only changes when contracts are listed or delisted, and quotes
+        come from the quotes API on every call anyway). Returns ``(category, pp)``; with a
+        category given returns ``pp`` only."""
+        hit = self._page_cache.get(slug)
+        if hit and time.time() - hit[0] < self.page_ttl:
+            return hit[2] if category else (hit[1], hit[2])
+        if category:
+            pp = self.rh.event_page(category, slug)
+            self._page_cache[slug] = (time.time(), category, pp)
+            return pp
+        cat, pp = self.resolve_public_event(slug)
+        if pp is not None:
+            self._page_cache[slug] = (time.time(), cat or "", pp)
+        return cat, pp
+
     def _series(self, ticker: str) -> dict:
         s = ticker.split("-")[0]
         if s not in self._series_cache:
@@ -195,7 +214,7 @@ class EventAnalyzer:
         m = re.search(r"/prediction-markets/([^/]+)/events/([^/?#]+)", url)
         if m:
             category, slug = m.group(1), m.group(2)
-            pp = self.rh.event_page(category, slug)
+            pp = self._page(slug, category)
         else:
             # Logged-in trading route: robinhood.com/events/<slug>?contract=<id> (client-rendered,
             # no category in the URL). The public page for the same slug carries the event data.
@@ -203,7 +222,7 @@ class EventAnalyzer:
             if not m:
                 return {"ok": False, "error": "not a Robinhood prediction-market event URL"}
             slug = m.group(1)
-            category, pp = self.resolve_public_event(slug)
+            category, pp = self._page(slug, None)
             if pp is None:
                 return {"ok": False, "error": f"could not find a public event page for slug {slug!r}"}
         ev = pp.get("event") or {}

@@ -2,6 +2,7 @@
 
     GET /health
     GET /analyze?url=<robinhood event url>[&contracts=100&target_margin=0&gold=0]
+    GET /inplay?url=…[&position=venue:outcome:price:count&bankroll=1000&kelly=0.25&steal_edge=0.03]
     GET /inplay?url=<robinhood event url>[&position=venue:outcome:price:count]...
                 [&target_margin=0&max_age=10]  in-play view: lock/steal actions, game state, blended fair
                                           (reuses the venue scan /analyze just did for the same
@@ -104,7 +105,8 @@ class Handler(BaseHTTPRequestHandler):
                         gs = self._espn(me.event_key)
                     except Exception:
                         gs = None
-                view = evaluate_inplay(me, lots, settings, steal_edge=float(qs.get("steal_edge", 0.03)), target_margin=float(qs.get("target_margin", 0)), game_state=gs)
+                bankroll = float(qs.get("bankroll", 0) or 0) or None
+                view = evaluate_inplay(me, lots, settings, steal_edge=float(qs.get("steal_edge", 0.03)), target_margin=float(qs.get("target_margin", 0)), game_state=gs, bankroll=bankroll, kelly_fraction=float(qs.get("kelly", 0.25) or 0.25))
                 self._send(200, {"ok": True, "view": asdict(view)})
             elif u.path == "/kalshi/markets":
                 data = self.kalshi.get("/markets", {k: v for k, v in qs.items() if k in ("event_ticker", "series_ticker", "status", "limit")})

@@ -50,3 +50,18 @@ exchange fee = **$52.00**. The game swings, Chiefs trade 60¢ and Broncos 40¢.
 `python -m arb_engine inplay <robinhood game url> --position robinhood:DEN:0.50:100` watches
 exactly this and alerts on LOCK NOW / STEAL. See `docs/VENUES.md` for sources and dates of
 every fee number above.
+
+## How many contracts?
+
+Two different answers for two different trades:
+
+* **A locked arb** has no variance, so Kelly does not apply — size is whatever both books hold
+  at the prices that still clear the margin. The engine walks the order books
+  (`quant.arbitrage.size_from_books`) and reports the profit-maximising count; the overlay shows it
+  as `Buy N contracts` with each leg's count. If the count is 0 the "arb" is a 1-contract ghost.
+* **A directional STEAL** (one side below fair, no lock yet) is a bet. With a bankroll `B` and
+  fee-inclusive cost `k` per contract at fair probability `q`, the Kelly fraction is
+  `f* = (q − k) / (1 − k)`; the engine uses ¼ of it by default (`--kelly`, popup), so the stake is
+  `B · f* / 4` and the contract count is that divided by `k`, then capped by the contracts offered
+  at that ask. Fees are already inside `k`, so the edge the sizing sees is the edge after fees.
+

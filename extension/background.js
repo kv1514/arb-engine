@@ -14,7 +14,7 @@ const RH_API = "https://api.robinhood.com";
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
 const GAMMA = "https://gamma-api.polymarket.com";
 const BRIDGE = "http://127.0.0.1:8765";
-const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 15, venues: { kalshi: true, polymarket: true }, showBadges: true, bridge: "auto", positions: "" };
+const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 1, venues: { kalshi: true, polymarket: true }, showBadges: true, bridge: "auto", positions: "", bankroll: 0, kelly: 0.25 };
 
 // Kalshi's production API answers 403 to any browser Origin other than kalshi.com. Strip the
 // Origin header on our own requests to it (allowed by declarativeNetRequestWithHostAccess).
@@ -53,6 +53,7 @@ function fromBridge(res, cfg) {
   }
   const rows = rowsFromReport(a);
   const arb = arbFromReport(a);
+  if (arb && a.sized_arb) { arb.sizedContracts = a.sized_arb.contracts; arb.sizedProfit = a.sized_arb.profit; arb.sizedLegs = (a.sized_arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, contracts: l.contracts })); }
   return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: a.venues || [], source: "bridge" } };
 }
 
@@ -349,7 +350,8 @@ async function analyze(url, opts) {
       if (opts.inplay !== false && out && out.ok && out.analysis && !out.analysis.lines) {
         try {
           const pos = String(cfg.positions || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x) => "&position=" + encodeURIComponent(x)).join("");
-          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}`);
+          const sizing = cfg.bankroll > 0 ? `&bankroll=${Number(cfg.bankroll)}&kelly=${Number(cfg.kelly) || 0.25}` : "";
+          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}${sizing}`);
           if (ip && ip.ok) out.analysis.inplay = ip.view;
         } catch (e) { /* optional */ }
       }

@@ -192,5 +192,30 @@ class InplayTests(unittest.TestCase):
         self.assertEqual(alerts[0]["title"], "LOCK NOW")
 
 
+class SizingTests(unittest.TestCase):
+    def test_steal_sizes_by_fractional_kelly_capped_by_depth(self):
+        # Robinhood asks 0.50 for DEN with 180 on offer; consensus fair ~0.58 -> STEAL pre-game.
+        me = _me(k_den=(0.59, 0.61), k_kc=(0.39, 0.41), r_den=(0.49, 0.50), r_kc=(0.48, 0.52))
+        me.info.in_play = False
+        for q in me.quotes_by_venue["robinhood"]:
+            if q.outcome == "DEN":
+                q.ask_size = 180
+        view = evaluate_inplay(me, [], {}, steal_edge=0.03, bankroll=1000.0, kelly_fraction=0.25)
+        den = next(s for s in view.sides if s.outcome == "DEN")
+        self.assertTrue(den.steal)
+        self.assertEqual(den.depth_contracts, 180)
+        all_in = den.best_all_in
+        f = 0.25 * (den.fair - all_in) / (1 - all_in)
+        self.assertAlmostEqual(den.kelly_stake, round(1000 * f, 2), places=2)
+        self.assertEqual(den.kelly_contracts, int((1000 * f) // all_in))
+        self.assertEqual(den.suggested_contracts, min(den.kelly_contracts, 180))
+        self.assertTrue(any("→ buy " in a and "Kelly" in a for a in view.actions), view.actions)
+        # No bankroll: no sizing, same STEAL.
+        view2 = evaluate_inplay(me, [], {}, steal_edge=0.03)
+        den2 = next(s for s in view2.sides if s.outcome == "DEN")
+        self.assertTrue(den2.steal)
+        self.assertIsNone(den2.suggested_contracts)
+
+
 if __name__ == "__main__":
     unittest.main()

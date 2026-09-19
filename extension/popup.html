@@ -6,7 +6,9 @@
   <label><input type="checkbox" id="gold"> Robinhood Gold (5% commission constant instead of 10%)</label>
   <label>Reference size (contracts) <input type="number" id="contracts" min="1" step="1"></label>
   <label>Target locked margin per $1 <input type="number" id="targetMargin" min="0" max="0.5" step="0.005"></label>
-  <label>Refresh every (seconds) <input type="number" id="refreshSeconds" min="5" step="1"></label>
+  <label>Refresh every (seconds, 1 = live) <input type="number" id="refreshSeconds" min="1" step="1"></label>
+  <label>Bankroll for sizing ($, 0 = off) <input type="number" id="bankroll" min="0" step="10"></label>
+  <label>Kelly fraction <select id="kelly"><option value="0.25">¼ Kelly (default)</option><option value="0.5">½ Kelly</option><option value="1">full Kelly</option><option value="0.1">1/10 Kelly</option></select></label>
   <label>Kalshi fee rounding <select id="kalshiRounding"><option value="cent">cent (conservative)</option><option value="centicent">centicent</option></select></label>
   <label>Local engine bridge <select id="bridge"><option value="auto">auto (use if running)</option><option value="on">required</option><option value="off">never</option></select></label>
   <label><input type="checkbox" id="venue_kalshi"> Compare with Kalshi</label>

@@ -30,7 +30,7 @@ class SlateTick:
 
 
 class LiveSlate:
-    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100):
+    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25):
         self.adapters = list(adapters)
         self.feed = feed or ESPNFeed(ESPNClient(sport=sport))
         self.settings = settings or {}
@@ -43,6 +43,7 @@ class LiveSlate:
         self.model = model
         self.refresh_summary_every = refresh_summary_every
         self.contracts = contracts
+        self.bankroll, self.kelly_fraction = bankroll, kelly_fraction
         self._enriched: dict[str, tuple[float, GameState]] = {}   # event_id -> (when, enriched state)
         self._seen_steal: set[str] = set()
 
@@ -105,7 +106,7 @@ class LiveSlate:
                 continue
             gs = self.state_for(g, now)
             try:
-                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model)
+                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction)
             except Exception as e:
                 errors.append(f"{g.away} @ {g.home}: {e!r}")
                 continue
@@ -148,7 +149,7 @@ def format_view(v: InplayView) -> str:
         head = "LIVE " + head
     parts = [head]
     for sv in v.sides:
-        parts.append(f"    {sv.label:<16} fair {_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}]  best {sv.best_venue or '-':<10} ask {_p(sv.best_ask)} all-in {_p(sv.best_all_in)}  edge {'' if sv.steal_edge is None else f'{sv.steal_edge*100:+.1f}%'}{'  STEAL' if sv.steal else ''}")
+        parts.append(f"    {sv.label:<16} fair {_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}]  best {sv.best_venue or '-':<10} ask {_p(sv.best_ask)} all-in {_p(sv.best_all_in)}  edge {'' if sv.steal_edge is None else f'{sv.steal_edge*100:+.1f}%'}{'  STEAL' if sv.steal else ''}{f' → {sv.suggested_contracts} ct' if sv.suggested_contracts else ''}")
     for a in v.actions:
         if a.startswith("STEAL"):
             parts.append(f"    -> {a}")

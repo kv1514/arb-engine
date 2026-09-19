@@ -216,6 +216,14 @@ Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADI
    (first 16 games; `ARB +x%` when one exists) and the panel summarises the page.
 4. Optional but recommended: run `python -m arb_engine bridge` — the extension detects it and
    lets the Python engine do the modelling (popup → "Local engine bridge").
+5. It refreshes itself: every second by default (popup → "Refresh every"), never with two
+   requests in flight; the engine re-pulls only the quotes each second and caches the page.
+6. **How much to buy** is on the panel: for an arb, the number of contracts the books actually
+   hold at those prices and the locked profit after fees for each leg; for a STEAL, enter your
+   bankroll in the popup and the alert says how many contracts (fractional Kelly on the fee-inclusive
+   edge, capped by what is offered at that ask). Every price shown is all-in — commission plus
+   exchange fee here, taker fees on Kalshi/Polymarket — and a "size" column shows what is
+   offered at each ask.
 
 Kalshi's API blocks browser origins; in direct mode the extension removes the `Origin`
 header on its own requests with a `declarativeNetRequest` rule. If Kalshi rows show an

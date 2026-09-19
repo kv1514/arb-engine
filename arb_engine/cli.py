@@ -304,7 +304,7 @@ def cmd_inplay(args: argparse.Namespace) -> int:
         from .store import Store
 
         store = Store(args.record)
-    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin, fetch_state=fetch_state, store=store)
+    w = InplayWatcher(fetch, lots, Alerter(journal_path=args.journal), settings, steal_edge=args.steal_edge, target_margin=args.target_margin, fetch_state=fetch_state, store=store, bankroll=args.bankroll, kelly_fraction=args.kelly)
     if args.iterations == 1 or args.once:
         view = w.step()
         print(f"{view.title}  live={view.live}  cost=${view.total_cost:.2f}  payout_if={ {k: round(v, 1) for k, v in view.payout_if.items()} }" + (f"  locked P&L=${view.locked_pnl:.2f}" if view.balanced else ""))
@@ -396,7 +396,7 @@ def cmd_live(args: argparse.Namespace) -> int:
 
         store = Store(args.record)
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
-    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts)
+    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts, bankroll=args.bankroll, kelly_fraction=args.kelly)
     if args.once:
         print(format_tick(slate.tick()))
         return 0
@@ -578,6 +578,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ip.add_argument("--journal", default="out/inplay_journal.jsonl")
     ip.add_argument("--no-espn", action="store_true", help="do not pull live game state / model (market consensus only)")
     ip.add_argument("--record", metavar="DB", help="append every tick (game state, sources, actions) to this SQLite file")
+    ip.add_argument("--bankroll", type=float, help="dollars you are willing to deploy; STEAL alerts then say how many contracts (fractional Kelly, capped by depth)")
+    ip.add_argument("--kelly", type=float, default=0.25, help="Kelly fraction for sizing (default 0.25)")
     ip.set_defaults(func=cmd_inplay)
 
     gm = sub.add_parser("games", help="this week's NFL games from ESPN: status, score, situation, spread, model P(home)")
@@ -600,6 +602,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     lv.add_argument("--contracts", type=int, default=100)
     lv.add_argument("--gold", action="store_true")
     lv.add_argument("--record", metavar="DB", help="append every game tick to this SQLite file")
+    lv.add_argument("--bankroll", type=float, help="dollars to deploy; STEAL alerts then include a contract count (fractional Kelly, capped by depth)")
+    lv.add_argument("--kelly", type=float, default=0.25)
     lv.add_argument("--journal", default="out/live.jsonl")
     lv.set_defaults(func=cmd_live)
 

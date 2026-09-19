@@ -144,3 +144,19 @@ the Python engine resolves the teams through its 761-program table and the panel
 and category-page badges work exactly as for the NFL; in direct mode the panel says so instead
 of showing nothing. CDNA quotes are priced with the $0.01/contract exchange fee (assumed).
 
+## Refresh rate and sizing
+
+The content script ticks every 500 ms and re-analyses when the last result is older than the
+popup's "Refresh every" setting (default 1 s); a new request is never started while one is in
+flight, so a slow venue only delays the next update. At 1 s the bridge re-pulls the Robinhood
+quotes API, two Kalshi markets, one Polymarket market and the ESPN scoreboard each tick (the
+ESPN summary every 30 s; the 1-3 MB Robinhood event page is cached for 60 s). That is ~5
+requests/s per open tab — keep one game page open at a time to stay under Kalshi's ~10 req/s.
+
+Sizing: the panel's ARB line shows `Buy N contracts` — the depth-limited size from
+`size_from_books` (top-of-book sizes on Robinhood and Kalshi; Polymarket sizes when the book was
+fetched) — with the per-leg contract counts and the locked profit after fees. STEAL alerts include
+`→ buy N contracts` when a bankroll is set in the popup: fractional Kelly (default ¼) on the
+fee-inclusive edge `(fair − all-in) / (1 − all-in)`, capped by the contracts offered at that ask.
+Nothing is placed; the counts are what the engine would do at those exact prices.
+

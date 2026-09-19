@@ -68,5 +68,20 @@ class TotalsPageTests(unittest.TestCase):
         self.assertEqual(a["lines"][0]["start_time"], "2026-09-20T17:00:00+00:00")
 
 
+
+
+class PageCacheTests(unittest.TestCase):
+    def test_event_page_is_cached_between_polls(self):
+        an = _analyzer_for_totals()
+        calls = []
+        real = an.rh.event_page
+        an.rh.event_page = lambda category, slug: (calls.append(slug), real(category, slug))[1]
+        url = "https://robinhood.com/us/en/prediction-markets/nfl/events/september-20-carolina-vs-atlanta-totals-sep-20-2026/"
+        an.analyze_url(url, settings={})
+        an.analyze_url(url, settings={})
+        self.assertEqual(len(calls), 1)      # one page fetch for two polls
+        an.page_ttl = 0.0
+        an.analyze_url(url, settings={})
+        self.assertEqual(len(calls), 2)      # expired -> refetched
 if __name__ == "__main__":
     unittest.main()

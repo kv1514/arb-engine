@@ -93,6 +93,15 @@
   eq(b65.rows[0].venues[0].allIn != null, true, "bridge line rows mapped");
   eq(b65.arb.isArb, true, "bridge line arb mapped");
 
+  // --- sizing settings reach the bridge's /inplay ---------------------------------------------
+  stored.bankroll = 500; stored.kelly = 0.5; cache.clear();
+  await analyze(url);
+  eq(calls.some((u) => u.includes("/inplay?") && u.includes("bankroll=500") && u.includes("kelly=0.5")), true, "bankroll + kelly passed to /inplay");
+  stored.bankroll = 0; cache.clear();
+  const nBefore = calls.length;
+  await analyze(url);
+  eq(calls.slice(nBefore).some((u) => u.includes("bankroll=")), false, "no bankroll -> no sizing params");
+
   // --- bridge required but down --------------------------------------------------------
   stored.bridge = "on"; globalThis.__bridgeOnline = false; bridgeUp = null; bridgeChecked = 0; cache.clear();
   const d = await analyze(url);
