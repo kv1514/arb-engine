@@ -1,0 +1,166 @@
+NE 10-13 SEA           plays=179  kalshi=440  pm=450  model=0.9565 kalshi_before=1.0521 kalshi_after=1.0412 spread=-3.0[pickcenter]
+SF 27-7 LAR            plays=169  kalshi=404  pm=436  model=0.4732 kalshi_before=0.5273 kalshi_after=0.5167 spread=-3.5[pickcenter]
+TB 27-33 CIN           plays=176  kalshi=451  pm=452  model=0.1526 kalshi_before=0.1652 kalshi_after=0.1604 spread=-3.5[pickcenter]
+NO 30-31 DET           plays=224  kalshi=514  pm=529  model=0.2036 kalshi_before=0.1995 kalshi_after=0.2028 spread=-7.0[pickcenter]
+NYJ 23-10 TEN          plays=174  kalshi=444  pm=444  model=0.2767 kalshi_before=0.2671 kalshi_after=0.2612 spread=-1.5[pickcenter]
+BAL 41-23 IND          plays=175  kalshi=458  pm=460  model=0.1227 kalshi_before=0.1526 kalshi_after=0.1494 spread=3.0[pickcenter]
+ATL 13-20 PIT          plays=189  kalshi=462  pm=463  model=0.239 kalshi_before=0.2438 kalshi_after=0.2424 spread=-6.5[pickcenter]
+CHI 59-37 CAR          plays=198  kalshi=509  pm=510  model=0.3227 kalshi_before=0.341 kalshi_after=0.3373 spread=3.0[pickcenter]
+CLE 10-34 JAX          plays=158  kalshi=406  pm=410  model=0.0385 kalshi_before=0.0372 kalshi_after=0.0357 spread=-8.5[pickcenter]
+BUF 36-31 HOU          plays=188  kalshi=478  pm=478  model=0.4991 kalshi_before=0.5605 kalshi_after=0.5494 spread=1.5[pickcenter]
+MIA 13-27 LV           plays=178  kalshi=434  pm=446  model=0.1596 kalshi_before=0.148 kalshi_after=0.1458 spread=-3.0[pickcenter]
+GB 22-39 MIN           plays=188  kalshi=462  pm=476  model=1.1272 kalshi_before=1.2651 kalshi_after=1.2698 spread=-2.5[pickcenter]
+WAS 22-24 PHI          plays=180  kalshi=446  pm=460  model=0.243 kalshi_before=0.2393 kalshi_after=0.238 spread=-6.0[pickcenter]
+ARI 26-14 LAC          plays=184  kalshi=426  pm=440  model=0.8263 kalshi_before=0.9171 kalshi_after=0.9042 spread=-8.5[pickcenter]
+DAL 20-28 NYG          plays=173  kalshi=441  pm=456  model=0.4112 kalshi_before=0.4318 kalshi_after=0.4254 spread=3.0[pickcenter]
+DEN 10-31 KC           plays=171  kalshi=426  pm=440  model=0.2603 kalshi_before=0.3039 kalshi_after=0.2987 spread=-2.5[pickcenter]
+16 games replayed, 2904 plays
+  NE 10-13 SEA            179 plays  model 0.9565  espn 0.8213  kalshi 1.0521-1.0412  poly 1.0423  blend 0.9564  spread -3.0 [pickcenter]  kalshi-arb-min 0
+  SF 27-7 LAR             169 plays  model 0.4732  espn 0.5215  kalshi 0.5273-0.5167  poly 0.5281  blend 0.5006  spread -3.5 [pickcenter]  kalshi-arb-min 0
+  TB 27-33 CIN            176 plays  model 0.1526  espn 0.1747  kalshi 0.1652-0.1604  poly 0.1677  blend 0.1596  spread -3.5 [pickcenter]  kalshi-arb-min 0
+  NO 30-31 DET            224 plays  model 0.2036  espn 0.1963  kalshi 0.1995-0.2028  poly 0.2000  blend 0.2001  spread -7.0 [pickcenter]  kalshi-arb-min 0
+  NYJ 23-10 TEN           174 plays  model 0.2767  espn 0.2949  kalshi 0.2671-0.2612  poly 0.2675  blend 0.2763  spread -1.5 [pickcenter]  kalshi-arb-min 0
+  BAL 41-23 IND           175 plays  model 0.1227  espn 0.1517  kalshi 0.1526-0.1494  poly 0.1506  blend 0.1353  spread 3.0 [pickcenter]  kalshi-arb-min 0
+  ATL 13-20 PIT           189 plays  model 0.2390  espn 0.2934  kalshi 0.2438-0.2424  poly 0.2407  blend 0.2473  spread -6.5 [pickcenter]  kalshi-arb-min 0
+  CHI 59-37 CAR           198 plays  model 0.3227  espn 0.3268  kalshi 0.3410-0.3373  poly 0.3427  blend 0.3275  spread 3.0 [pickcenter]  kalshi-arb-min 0
+  CLE 10-34 JAX           158 plays  model 0.0385  espn 0.0496  kalshi 0.0372-0.0357  poly 0.0333  blend 0.0390  spread -8.5 [pickcenter]  kalshi-arb-min 0
+  BUF 36-31 HOU           188 plays  model 0.4991  espn 0.5271  kalshi 0.5605-0.5494  poly 0.5562  blend 0.5181  spread 1.5 [pickcenter]  kalshi-arb-min 0
+  MIA 13-27 LV            178 plays  model 0.1596  espn 0.1678  kalshi 0.1480-0.1458  poly 0.1495  blend 0.1573  spread -3.0 [pickcenter]  kalshi-arb-min 0
+  GB 22-39 MIN            188 plays  model 1.1272  espn 1.2254  kalshi 1.2651-1.2698  poly 1.2575  blend 1.1747  spread -2.5 [pickcenter]  kalshi-arb-min 0
+  WAS 22-24 PHI           180 plays  model 0.2430  espn 0.3022  kalshi 0.2393-0.2380  poly 0.2377  blend 0.2494  spread -6.0 [pickcenter]  kalshi-arb-min 0
+  ARI 26-14 LAC           184 plays  model 0.8263  espn 0.8147  kalshi 0.9171-0.9042  poly 0.9259  blend 0.8494  spread -8.5 [pickcenter]  kalshi-arb-min 0
+  DAL 20-28 NYG           173 plays  model 0.4112  espn 0.4010  kalshi 0.4318-0.4254  poly 0.4335  blend 0.4149  spread 3.0 [pickcenter]  kalshi-arb-min 0
+  DEN 10-31 KC            171 plays  model 0.2603  espn 0.2601  kalshi 0.3039-0.2987  poly 0.3021  blend 0.2724  spread -2.5 [pickcenter]  kalshi-arb-min 0
+pooled — all plays:
+  source            games     n   log-loss   brier
+  model                16   2904   0.3974   0.1310
+  espn                 16   2904   0.4109   0.1359
+  kalshi               16   2890   0.4311   0.1431
+  robinhood             0      0     -        -   
+  polymarket           16   2893   0.4297   0.1429
+  market               16   2893   0.4301   0.1429
+  blend                16   2904   0.4077   0.1346
+  model_after          16   2904   0.3937   0.1296
+  kalshi_before        16   2890   0.4311   0.1431
+  kalshi_after         16   2890   0.4267   0.1415
+  blend_after          16   2904   0.4054   0.1337
+  kalshi ≤4¢ book      16   2571   0.4834   0.1609
+  model (same plays)   16   2571   0.4448   0.1465
+  kalshi >4¢ book       0      0     -        -   
+pooled — in play only (score can still change):
+  source            games     n   log-loss   brier
+  model                16   2888   0.3993   0.1316
+  espn                 16   2888   0.4132   0.1367
+  kalshi               16   2874   0.4332   0.1438
+  robinhood             0      0     -        -   
+  polymarket           16   2877   0.4318   0.1436
+  market               16   2877   0.4322   0.1436
+  blend                16   2888   0.4097   0.1352
+  model_after          16   2888   0.3956   0.1302
+  kalshi_before        16   2874   0.4332   0.1438
+  kalshi_after         16   2874   0.4290   0.1423
+  blend_after          16   2888   0.4074   0.1344
+  kalshi ≤4¢ book      16   2568   0.4837   0.1610
+  model (same plays)   16   2568   0.4450   0.1466
+  kalshi >4¢ book       0      0     -        -   
+pooled — in play, scrimmage plays only (headline):
+  source            games     n   log-loss   brier
+  model                16   2263   0.4060   0.1336
+  espn                 16   2263   0.4205   0.1391
+  kalshi               16   2261   0.4425   0.1472
+  robinhood             0      0     -        -   
+  polymarket           16   2263   0.4415   0.1471
+  market               16   2263   0.4417   0.1471
+  blend                16   2263   0.4173   0.1378
+  model_after          16   2263   0.4022   0.1323
+  kalshi_before        16   2261   0.4425   0.1472
+  kalshi_after         16   2260   0.4382   0.1456
+  blend_after          16   2263   0.4146   0.1368
+  kalshi ≤4¢ book      16   2048   0.4875   0.1625
+  model (same plays)   16   2048   0.4478   0.1475
+  kalshi >4¢ book       0      0     -        -   
+model-vs-market (in-play scrimmage): model 0.4060 vs Kalshi 0.4382-0.4425 (before / after the play); the truth is inside that range
+blend weights (linear pool, in play, 2263 plays with all three sources): best market 0.0 / model 1.0 / espn 0.0 -> 0.406; current 0.3 / 0.55 / 0.15 -> 0.4173; market-only 0.4417, model-only 0.406, espn-only 0.4205
+  blend_minus_model                mean +0.0114  90% [+0.0061, +0.0169]  games 16  games needed 10
+  model_minus_kalshi_before        mean -0.0362  90% [-0.0547, -0.0179]  games 16  games needed 10
+  model_minus_kalshi_after         mean -0.0314  90% [-0.0491, -0.0140]  games 16  games needed 12
+  model_after_minus_kalshi_after   mean -0.0353  90% [-0.0532, -0.0176]  games 16  games needed 10
+  espn_minus_model                 mean +0.0147  90% [-0.0053, +0.0320]  games 16  games needed 71
+  best_grid_minus_current          mean -0.0114  90% [-0.0169, -0.0061]  games 16  games needed 10
+per-slice (in play; cells under 50 rows show n only):
+  slice      n           model    model_after           espn  kalshi_before   kalshi_after          blend    blend_after
+  q1         630         0.5537         0.5499         0.5799         0.5713         0.5676         0.5612         0.5592
+  q2         834         0.4914         0.4903         0.5024         0.5355         0.5335         0.5048         0.5041
+  q3         673         0.3776         0.3742         0.4003         0.4357         0.4315         0.3960         0.3939
+  q4_early   413         0.2292         0.2197         0.2271         0.2495         0.2397         0.2331         0.2269
+  q4_late    314         0.1297         0.1257         0.1246         0.1345         0.1299         0.1278         0.1251
+  ot          24           -              -              -              -              -              -              -   
+per-play-class (in play, synthetic rows included):
+  class                  n           model    model_after           espn  kalshi_before   kalshi_after          blend    blend_after
+  end_period              50         0.4021         0.4042         0.4468         0.4720         0.4742         0.4248         0.4276
+  kickoff                171         0.3934         0.3844         0.4089         0.4220         0.4192         0.4032         0.3979
+  kickoff_pending_synth    93         0.3396         0.3376           -            0.4013         0.3755         0.3589         0.3534
+  kneel                   35           -              -              -              -              -              -              -   
+  scrimmage             2263         0.4060         0.4022         0.4205         0.4425         0.4382         0.4173         0.4146
+  timeout                369         0.3922         0.3911         0.3984         0.4081         0.4028         0.3960         0.3970
+  try_synth               93         0.3447         0.3503           -            0.4013         0.3755         0.3622         0.3618
+class               n   |model-kalshi_before|   STEAL-qualifying rows at 3% / 5% / 8%
+  end_period            50               0.0576   12 / 6 / 4
+  kickoff              171               0.0281   5 / 1 / 1
+  kickoff_pending_synth    93               0.0549   29 / 13 / 5
+  kneel                 35               0.0165   1 / 0 / 0
+  scrimmage           2263               0.0301   159 / 35 / 7
+  timeout              369               0.0607   97 / 63 / 32
+  try_synth             93               0.0532   28 / 11 / 6
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=pre_before):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      16      16      0     6      10      67.93     -7.93   -11.7%  [-2.09, +1.36]
+  0.05      15      15      0     9       6      72.81     17.19   +23.6%  [-0.51, +2.78]
+  0.08      14      14      0     8       6      68.76     11.24   +16.4%  [-1.20, +2.63]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      16      16      0     6      10      66.89     -6.89   -10.3%  [-2.01, +1.27]
+  0.05      14      14      0     6       8      58.40      1.60    +2.7%  [-1.86, +2.09]
+  0.08      10      10      0     5       5      33.20     16.80   +50.6%  [-0.43, +3.80]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=pre_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      16      16      0     9       7      75.43     14.57   +19.3%  [-0.79, +2.50]
+  0.05      15      15      0     7       8      68.51      1.49    +2.2%  [-1.73, +2.05]
+  0.08      13      13      0     9       4      62.65     27.35   +43.7%  [+0.15, +3.78]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=shift):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      16      16      0     6      10      58.47      1.53    +2.6%  [-1.61, +1.93]
+  0.05      15      15      0     9       6      64.40     25.60   +39.8%  [-0.01, +3.57]
+  0.08      13      13      0     9       4      57.83     32.17   +55.6%  [+0.37, +4.22]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=post_after, placebo=shuffle):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      16      16      0     8       8      66.89     13.11   +19.6%  [-1.24, +2.88]
+  0.05      14      14      0     3      11      58.40    -28.40   -48.6%  [-3.68, -0.11]
+  0.08      10      10      0     4       6      33.20      6.80   +20.5%  [-2.13, +3.86]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 0% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      16      16     13    12       3     136.47     -6.47    -4.7%  [-1.10, +0.17]
+  0.04      15      15     12    12       3     128.11     -8.11    -6.3%  [-1.35, +0.14]
+  0.06      12      12      8     8       4      91.91    -11.91   -13.0%  [-2.08, -0.11]
+  0.10       6       6      3     3       3      33.18     -3.18    -9.6%  [-2.60, +0.99]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 50% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      16      16     13    13       3     134.17     -4.17    -3.1%  [-0.97, +0.35]
+  0.04      15      15     12    12       3     125.13     -5.13    -4.1%  [-1.20, +0.38]
+  0.06      12      12      8     8       4      88.72     -8.72    -9.8%  [-1.87, +0.24]
+  0.10       6       6      3     3       3      33.18     -3.18    -9.6%  [-2.60, +0.99]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 100% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      16      16     11    11       5     112.90     -2.90    -2.6%  [-1.15, +0.70]
+  0.04      15      15     10    10       5     108.93     -8.93    -8.2%  [-1.52, +0.35]
+  0.06      12      12      8     8       4      87.60     -7.60    -8.7%  [-1.81, +0.37]
+  0.10       6       6      3     3       3      26.85      3.15   +11.7%  [-2.20, +2.88]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = model, no lock (hold to settlement), taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      16      16      0     7       9      66.11      3.89    +5.9%  [-1.69, +2.04]
+  0.04      16      16      0     7       9      64.88      5.12    +7.9%  [-1.39, +1.95]
+  0.06      15      15      0     7       8      59.87     10.13   +16.9%  [-1.17, +2.70]
+  0.10      14      14      0     7       7      54.96     15.04   +27.4%  [-0.94, +2.95]
+cache: 15 hits, 98 misses (out/cache/replay)
+wrote out/week1_nfl_after.json
+ARB_HTTP_TRANSPORT=curl python3 -m arb_engine backtest --week 1 --season 2026  12.24s user 2.11s system 35% cpu 40.507 total

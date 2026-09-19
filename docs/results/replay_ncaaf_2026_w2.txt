@@ -1,0 +1,310 @@
+FAMU 7-77 MIA          plays=171  kalshi=428  pm=0    model=0.0 kalshi_before=0.0101 kalshi_after=0.0101 spread=-59.5[pickcenter]
+MIZ 38-21 KU           plays=190  kalshi=535  pm=0    model=0.2767 kalshi_before=0.2854 kalshi_after=0.2824 spread=4.0[pickcenter]
+VILL 13-59 LOU         plays=174  kalshi=462  pm=478  model=0.0012 kalshi_before=0.0142 kalshi_after=0.0142 spread=-39.5[pickcenter]
+NORF 3-59 UVA          plays=172  kalshi=398  pm=450  model=0.0002 kalshi_before=0.0101 kalshi_after=0.0101 spread=-47.5[pickcenter]
+RICH 0-73 NCSU         plays=160  kalshi=0    pm=628  model=0.001 kalshi_before=None kalshi_after=None spread=-33.5[pickcenter]
+RUTG 21-28 BC          plays=166  kalshi=534  pm=540  model=0.1587 kalshi_before=0.1908 kalshi_after=0.1894 spread=-3.0[pickcenter]
+OSU 23-24 TEX          plays=188  kalshi=514  pm=0    model=1.9808 kalshi_before=1.5676 kalshi_after=1.5666 spread=-2.5[pickcenter]
+WKU 20-70 UGA          plays=181  kalshi=419  pm=496  model=0.0002 kalshi_before=0.0101 kalshi_after=0.0101 spread=-40.5[pickcenter]
+RICE 0-52 ND           plays=156  kalshi=389  pm=438  model=0.0001 kalshi_before=0.0101 kalshi_after=0.0101 spread=-44.5[pickcenter]
+HOW 0-55 IU            plays=153  kalshi=359  pm=420  model=0.0001 kalshi_before=0.0101 kalshi_after=0.0101 spread=-57.5[pickcenter]
+ORE 31-39 OKST         plays=195  kalshi=516  pm=530  model=1.9043 kalshi_before=1.2545 kalshi_after=1.2339 spread=24.5[pickcenter]
+LT 14-45 LSU           plays=186  kalshi=486  pm=500  model=0.0055 kalshi_before=0.0151 kalshi_after=0.0153 spread=-34.5[pickcenter]
+CLT 9-41 MISS          plays=164  kalshi=388  pm=0    model=0.0004 kalshi_before=0.0101 kalshi_after=0.0101 spread=-44.5[pickcenter]
+ASU 20-48 TA&M         plays=168  kalshi=496  pm=502  model=0.0592 kalshi_before=0.1277 kalshi_after=0.1255 spread=-15.5[pickcenter]
+OU 10-17 MICH          plays=167  kalshi=510  pm=524  model=0.6169 kalshi_before=0.5856 kalshi_after=0.5817 spread=5.5[pickcenter]
+ALA 45-17 UK           plays=175  kalshi=524  pm=524  model=0.2312 kalshi_before=0.3201 kalshi_after=0.3158 spread=9.5[pickcenter]
+TTU 35-24 ORST         plays=196  kalshi=545  pm=560  model=0.0602 kalshi_before=0.1598 kalshi_after=0.1584 spread=25.5[pickcenter]
+UL 30-49 USC           plays=163  kalshi=433  pm=0    model=0.0062 kalshi_before=0.0247 kalshi_after=0.0245 spread=-30.5[pickcenter]
+ARIZ 17-28 BYU         plays=175  kalshi=496  pm=496  model=0.3087 kalshi_before=0.3524 kalshi_after=0.3478 spread=-6.5[pickcenter]
+PSU 27-9 TEM           plays=149  kalshi=446  pm=464  model=0.0333 kalshi_before=0.0508 kalshi_after=0.051 spread=24.5[pickcenter]
+UCD 10-56 SMU          plays=161  kalshi=397  pm=476  model=0.0013 kalshi_before=0.019 kalshi_after=0.0175 spread=-32.5[pickcenter]
+TENN 45-24 GT          plays=187  kalshi=549  pm=558  model=0.0517 kalshi_before=0.0906 kalshi_after=0.0899 spread=12.5[pickcenter]
+USU 14-16 WASH         plays=177  kalshi=462  pm=486  model=0.0343 kalshi_before=0.0729 kalshi_after=0.0734 spread=-28.5[pickcenter]
+ARK 10-43 UTAH         plays=179  kalshi=477  pm=0    model=0.0362 kalshi_before=0.0806 kalshi_after=0.0798 spread=-13.5[pickcenter]
+ISU 13-16 IOWA         plays=160  kalshi=485  pm=0    model=0.3096 kalshi_before=0.3714 kalshi_after=0.3683 spread=-14.0[pickcenter]
+SOU 6-77 HOU           plays=146  kalshi=332  pm=0    model=0.0001 kalshi_before=0.0101 kalshi_after=0.0101 spread=-51.5[pickcenter]
+WSU 7-34 KSU           plays=156  kalshi=528  pm=552  model=0.0315 kalshi_before=0.0604 kalshi_after=0.0608 spread=-17.5[pickcenter]
+ETSU 3-35 UNC          plays=162  kalshi=447  pm=590  model=0.0019 kalshi_before=0.0109 kalshi_after=0.0108 spread=-36.5[pickcenter]
+ODU 21-44 VT           plays=182  kalshi=466  pm=518  model=0.014 kalshi_before=0.0324 kalshi_after=0.0316 spread=-17.5[pickcenter]
+WAKE 38-36 PUR         plays=198  kalshi=524  pm=524  model=0.3152 kalshi_before=0.4454 kalshi_after=0.4419 spread=2.5[pickcenter]
+USF 28-24 ARMY         plays=151  kalshi=456  pm=466  model=1.2572 kalshi_before=1.1918 kalshi_after=1.1661 spread=-3.0[pickcenter]
+APP 27-24 ECU          plays=207  kalshi=514  pm=0    model=0.568 kalshi_before=0.5015 kalshi_after=0.4959 spread=-6.5[pickcenter]
+WOF 15-36 KENT         plays=169  kalshi=449  pm=478  model=0.2552 kalshi_before=0.2753 kalshi_after=0.272 spread=-10.0[pickcenter]
+WAG 3-87 JMU           plays=183  kalshi=446  pm=522  model=0.0002 kalshi_before=0.0101 kalshi_after=0.0101 spread=-46.5[pickcenter]
+GWEB 23-24 LIB         plays=202  kalshi=469  pm=508  model=0.1538 kalshi_before=0.3022 kalshi_after=0.3016 spread=-28.5[pickcenter]
+UTM 7-52 WVU           plays=171  kalshi=368  pm=0    model=0.0003 kalshi_before=0.0101 kalshi_after=0.0101 spread=-41.5[pickcenter]
+COLG 10-13 CMU         plays=172  kalshi=428  pm=444  model=0.2987 kalshi_before=0.4144 kalshi_after=0.4212 spread=-18.5[pickcenter]
+HC 7-45 M-OH           plays=131  kalshi=310  pm=418  model=0.0019 kalshi_before=0.0155 kalshi_after=0.0149 spread=-30.5[pickcenter]
+STBK 17-41 BALL        plays=181  kalshi=428  pm=478  model=0.0429 kalshi_before=0.0844 kalshi_after=0.0821 spread=-13.5[pickcenter]
+MSST 38-13 MINN        plays=180  kalshi=494  pm=504  model=0.1316 kalshi_before=0.1578 kalshi_after=0.1501 spread=1.5[pickcenter]
+WEB 21-52 COLO         plays=203  kalshi=457  pm=532  model=0.0006 kalshi_before=0.0104 kalshi_after=0.0104 spread=-38.5[pickcenter]
+UCF 7-12 PITT          plays=171  kalshi=587  pm=594  model=0.1714 kalshi_before=0.1821 kalshi_after=0.1802 spread=-7.5[pickcenter]
+CAL 21-18 SYR          plays=198  kalshi=549  pm=550  model=1.1591 kalshi_before=1.0716 kalshi_after=1.0721 spread=-4.0[pickcenter]
+DUKE 31-27 ILL         plays=171  kalshi=501  pm=508  model=1.0522 kalshi_before=1.0285 kalshi_after=1.0246 spread=-6.0[pickcenter]
+EMU 7-35 MSU           plays=170  kalshi=420  pm=464  model=0.0242 kalshi_before=0.048 kalshi_after=0.0491 spread=-17.5[pickcenter]
+MD 38-14 CONN          plays=171  kalshi=447  pm=472  model=0.1052 kalshi_before=0.17 kalshi_after=0.168 spread=11.5[pickcenter]
+UTSA 31-26 TXST        plays=206  kalshi=549  pm=566  model=0.8403 kalshi_before=0.8594 kalshi_after=0.8566 spread=-1.5[pickcenter]
+ULM 20-26 UAB          plays=167  kalshi=415  pm=0    model=0.5729 kalshi_before=0.5242 kalshi_after=0.5274 spread=-9.5[pickcenter]
+RMU 10-45 AKR          plays=158  kalshi=446  pm=486  model=0.0068 kalshi_before=0.0349 kalshi_after=0.0354 spread=-26.5[pickcenter]
+CCSU 10-63 TOL         plays=179  kalshi=220  pm=0    model=0.0019 kalshi_before=0.0136 kalshi_after=0.0123 spread=-36.5[pickcenter]
+SHU 10-37 MASS         plays=155  kalshi=353  pm=0    model=0.0055 kalshi_before=0.022 kalshi_after=0.0225 spread=-23.5[pickcenter]
+UNLV 6-44 UNT          plays=191  kalshi=492  pm=502  model=0.1809 kalshi_before=0.2189 kalshi_after=0.2188 spread=3.0[pickcenter]
+UNCO 13-21 WYO         plays=166  kalshi=522  pm=542  model=0.1706 kalshi_before=0.318 kalshi_after=0.3148 spread=-23.5[pickcenter]
+MERC 7-70 UNM          plays=170  kalshi=0    pm=490  model=0.0008 kalshi_before=None kalshi_after=None spread=-42.5[pickcenter]
+ALST 17-34 TROY        plays=184  kalshi=432  pm=514  model=0.0118 kalshi_before=0.0452 kalshi_after=0.0446 spread=-23.5[pickcenter]
+DEL 26-35 VAN          plays=183  kalshi=482  pm=496  model=0.03 kalshi_before=0.0564 kalshi_after=0.0553 spread=-20.5[pickcenter]
+CAM 3-52 FLA           plays=163  kalshi=417  pm=492  model=0.0001 kalshi_before=0.0101 kalshi_after=0.0101 spread=-51.5[pickcenter]
+MEM 20-38 BOIS         plays=173  kalshi=0    pm=506  model=0.3697 kalshi_before=None kalshi_after=None spread=-9.5[pickcenter]
+BUF 20-33 FIU          plays=191  kalshi=469  pm=488  model=0.051 kalshi_before=0.0573 kalshi_after=0.0553 spread=-8.5[pickcenter]
+JXST 27-29 OHIO        plays=193  kalshi=540  pm=546  model=1.4396 kalshi_before=1.2546 kalshi_after=1.2586 spread=-1.5[pickcenter]
+MONM 14-49 WMU         plays=186  kalshi=437  pm=498  model=0.0035 kalshi_before=0.0205 kalshi_after=0.0204 spread=-29.5[pickcenter]
+TOW 9-45 SC            plays=185  kalshi=404  pm=616  model=0.0009 kalshi_before=0.0101 kalshi_after=0.0101 spread=-44.5[pickcenter]
+WCU 10-62 CIN          plays=174  kalshi=377  pm=464  model=0.002 kalshi_before=0.0124 kalshi_after=0.0124 spread=-36.5[pickcenter]
+BGSU 7-56 NEB          plays=148  kalshi=403  pm=482  model=0.0029 kalshi_before=0.016 kalshi_after=0.017 spread=-30.5[pickcenter]
+SUU 24-58 CSU          plays=186  kalshi=412  pm=508  model=0.0155 kalshi_before=0.037 kalshi_after=0.0367 spread=-19.5[pickcenter]
+TLSA 23-17 SHSU        plays=179  kalshi=461  pm=486  model=0.2002 kalshi_before=0.3097 kalshi_after=0.3102 spread=12.5[pickcenter]
+ILST 28-24 NIU         plays=182  kalshi=424  pm=436  model=0.2741 kalshi_before=0.2967 kalshi_after=0.2963 spread=2.5[pickcenter]
+USA 24-28 TULN         plays=163  kalshi=464  pm=476  model=0.4266 kalshi_before=0.4317 kalshi_after=0.434 spread=-9.5[pickcenter]
+WES 7-52 ARST          plays=167  kalshi=0    pm=0    model=0.0036 kalshi_before=None kalshi_after=None spread=-31.5[pickcenter]
+GAST 31-17 KENN        plays=169  kalshi=425  pm=466  model=0.448 kalshi_before=0.4684 kalshi_after=0.4564 spread=-7.5[pickcenter]
+MTSU 26-28 MRSH        plays=186  kalshi=0    pm=486  model=0.3076 kalshi_before=None kalshi_after=None spread=-11.5[pickcenter]
+LIN 14-48 MOST         plays=172  kalshi=379  pm=472  model=0.0161 kalshi_before=0.0676 kalshi_after=0.0703 spread=-16.5[pickcenter]
+SDSU 10-28 UCLA        plays=165  kalshi=442  pm=454  model=0.1324 kalshi_before=0.1678 kalshi_after=0.1662 spread=-13.5[pickcenter]
+WIU 9-36 WIS           plays=160  kalshi=392  pm=454  model=0.0006 kalshi_before=0.0101 kalshi_after=0.0101 spread=-43.5[pickcenter]
+NAVY 30-38 FAU         plays=181  kalshi=512  pm=546  model=0.3255 kalshi_before=0.351 kalshi_after=0.3446 spread=4.5[pickcenter]
+FOR 7-45 CCU           plays=173  kalshi=399  pm=482  model=0.0023 kalshi_before=0.0132 kalshi_after=0.0134 spread=-36.5[pickcenter]
+GRAM 7-63 TCU          plays=166  kalshi=396  pm=0    model=0.0005 kalshi_before=0.0101 kalshi_after=0.0101 spread=-44.5[pickcenter]
+PV 3-44 BAY            plays=192  kalshi=410  pm=0    model=0.001 kalshi_before=0.0101 kalshi_after=0.0101 spread=-37.5[pickcenter]
+USM 8-43 AUB           plays=188  kalshi=435  pm=0    model=0.0014 kalshi_before=0.0133 kalshi_after=0.013 spread=-32.5[pickcenter]
+CP 20-30 SJSU          plays=187  kalshi=423  pm=0    model=0.0675 kalshi_before=0.135 kalshi_after=0.1353 spread=-21.5[pickcenter]
+TXSO 10-51 UTEP        plays=166  kalshi=471  pm=0    model=0.0122 kalshi_before=0.0646 kalshi_after=0.0636 spread=-27.5[pickcenter]
+GASO 7-22 CLEM         plays=202  kalshi=502  pm=0    model=0.0254 kalshi_before=0.0597 kalshi_after=0.0599 spread=-20.5[pickcenter]
+NDSU 38-32 AF          plays=179  kalshi=488  pm=0    model=0.1367 kalshi_before=0.157 kalshi_after=0.1504 spread=1.5[pickcenter]
+SAC 3-49 FRES          plays=169  kalshi=443  pm=0    model=0.0242 kalshi_before=0.0643 kalshi_after=0.066 spread=-17.5[pickcenter]
+MTST 20-7 NEV          plays=176  kalshi=480  pm=0    model=0.1049 kalshi_before=0.1137 kalshi_after=0.1106 spread=4.5[pickcenter]
+NMSU 19-29 HAW         plays=192  kalshi=0    pm=490  model=0.1545 kalshi_before=None kalshi_after=None spread=-7.5[pickcenter]
+86 games replayed, 15060 plays
+  FAMU 7-77 MIA           171 plays  model 0.0000  espn 0.0010  kalshi 0.0101-0.0101  poly   -     blend 0.0028  spread -59.5 [pickcenter]  kalshi-arb-min 0
+  MIZ 38-21 KU            190 plays  model 0.2767  espn 0.3276  kalshi 0.2854-0.2824  poly   -     blend 0.2861  spread 4.0 [pickcenter]  kalshi-arb-min 0
+  VILL 13-59 LOU          174 plays  model 0.0012  espn 0.0057  kalshi 0.0142-0.0142  poly 0.0094  blend 0.0048  spread -39.5 [pickcenter]  kalshi-arb-min 0
+  NORF 3-59 UVA           172 plays  model 0.0002  espn 0.0012  kalshi 0.0101-0.0101  poly 0.0035  blend 0.0017  spread -47.5 [pickcenter]  kalshi-arb-min 0
+  RICH 0-73 NCSU          160 plays  model 0.0010  espn 0.0058  kalshi   -   -  -     poly 0.0040  blend 0.0026  spread -33.5 [pickcenter]  kalshi-arb-min 0
+  RUTG 21-28 BC           166 plays  model 0.1587  espn 0.1554  kalshi 0.1908-0.1894  poly 0.1915  blend 0.1674  spread -3.0 [pickcenter]  kalshi-arb-min 0
+  OSU 23-24 TEX           188 plays  model 1.9808  espn 1.8077  kalshi 1.5676-1.5666  poly   -     blend 1.7865  spread -2.5 [pickcenter]  kalshi-arb-min 0
+  WKU 20-70 UGA           181 plays  model 0.0002  espn 0.0013  kalshi 0.0101-0.0101  poly 0.0011  blend 0.0009  spread -40.5 [pickcenter]  kalshi-arb-min 0
+  RICE 0-52 ND            156 plays  model 0.0001  espn 0.0012  kalshi 0.0101-0.0101  poly 0.0012  blend 0.0012  spread -44.5 [pickcenter]  kalshi-arb-min 0
+  HOW 0-55 IU             153 plays  model 0.0001  espn 0.0010  kalshi 0.0101-0.0101  poly 0.0005  blend 0.0009  spread -57.5 [pickcenter]  kalshi-arb-min 0
+  ORE 31-39 OKST          195 plays  model 1.9043  espn 1.3348  kalshi 1.2545-1.2339  poly 1.2729  blend 1.5535  spread 24.5 [pickcenter]  kalshi-arb-min 0
+  LT 14-45 LSU            186 plays  model 0.0055  espn 0.0132  kalshi 0.0151-0.0153  poly 0.0110  blend 0.0088  spread -34.5 [pickcenter]  kalshi-arb-min 0
+  CLT 9-41 MISS           164 plays  model 0.0004  espn 0.0033  kalshi 0.0101-0.0101  poly   -     blend 0.0018  spread -44.5 [pickcenter]  kalshi-arb-min 0
+  ASU 20-48 TA&M          168 plays  model 0.0592  espn 0.0872  kalshi 0.1277-0.1255  poly 0.1237  blend 0.0827  spread -15.5 [pickcenter]  kalshi-arb-min 0
+  OU 10-17 MICH           167 plays  model 0.6169  espn 0.5376  kalshi 0.5856-0.5817  poly 0.5879  blend 0.5942  spread 5.5 [pickcenter]  kalshi-arb-min 0
+  ALA 45-17 UK            175 plays  model 0.2312  espn 0.2283  kalshi 0.3201-0.3158  poly 0.3141  blend 0.2551  spread 9.5 [pickcenter]  kalshi-arb-min 0
+  TTU 35-24 ORST          196 plays  model 0.0602  espn 0.1143  kalshi 0.1598-0.1584  poly 0.1575  blend 0.0956  spread 25.5 [pickcenter]  kalshi-arb-min 0
+  UL 30-49 USC            163 plays  model 0.0062  espn 0.0144  kalshi 0.0247-0.0245  poly   -     blend 0.0125  spread -30.5 [pickcenter]  kalshi-arb-min 0
+  ARIZ 17-28 BYU          175 plays  model 0.3087  espn 0.2795  kalshi 0.3524-0.3478  poly 0.3440  blend 0.3152  spread -6.5 [pickcenter]  kalshi-arb-min 0
+  PSU 27-9 TEM            149 plays  model 0.0333  espn 0.0536  kalshi 0.0508-0.0510  poly 0.0465  blend 0.0403  spread 24.5 [pickcenter]  kalshi-arb-min 0
+  UCD 10-56 SMU           161 plays  model 0.0013  espn 0.0067  kalshi 0.0190-0.0175  poly 0.0118  blend 0.0051  spread -32.5 [pickcenter]  kalshi-arb-min 0
+  TENN 45-24 GT           187 plays  model 0.0517  espn 0.1099  kalshi 0.0906-0.0899  poly 0.0912  blend 0.0716  spread 12.5 [pickcenter]  kalshi-arb-min 0
+  USU 14-16 WASH          177 plays  model 0.0343  espn 0.0829  kalshi 0.0729-0.0734  poly 0.0724  blend 0.0526  spread -28.5 [pickcenter]  kalshi-arb-min 0
+  ARK 10-43 UTAH          179 plays  model 0.0362  espn 0.0675  kalshi 0.0806-0.0798  poly   -     blend 0.0520  spread -13.5 [pickcenter]  kalshi-arb-min 0
+  ISU 13-16 IOWA          160 plays  model 0.3096  espn 0.3276  kalshi 0.3714-0.3683  poly   -     blend 0.3292  spread -14.0 [pickcenter]  kalshi-arb-min 0
+  SOU 6-77 HOU            146 plays  model 0.0001  espn 0.0012  kalshi 0.0101-0.0101  poly   -     blend 0.0008  spread -51.5 [pickcenter]  kalshi-arb-min 0
+  WSU 7-34 KSU            156 plays  model 0.0315  espn 0.0495  kalshi 0.0604-0.0608  poly 0.0511  blend 0.0399  spread -17.5 [pickcenter]  kalshi-arb-min 0
+  ETSU 3-35 UNC           162 plays  model 0.0019  espn 0.0051  kalshi 0.0109-0.0108  poly 0.0025  blend 0.0032  spread -36.5 [pickcenter]  kalshi-arb-min 0
+  ODU 21-44 VT            182 plays  model 0.0140  espn 0.0198  kalshi 0.0324-0.0316  poly 0.0234  blend 0.0177  spread -17.5 [pickcenter]  kalshi-arb-min 0
+  WAKE 38-36 PUR          198 plays  model 0.3152  espn 0.4068  kalshi 0.4454-0.4419  poly 0.4467  blend 0.3905  spread 2.5 [pickcenter]  kalshi-arb-min 0
+  USF 28-24 ARMY          151 plays  model 1.2572  espn 1.5667  kalshi 1.1918-1.1661  poly 1.1992  blend 1.1773  spread -3.0 [pickcenter]  kalshi-arb-min 0
+  APP 27-24 ECU           207 plays  model 0.5680  espn 0.4794  kalshi 0.5015-0.4959  poly   -     blend 0.5318  spread -6.5 [pickcenter]  kalshi-arb-min 0
+  WOF 15-36 KENT          169 plays  model 0.2552  espn 0.3611  kalshi 0.2753-0.2720  poly 0.2642  blend 0.2727  spread -10.0 [pickcenter]  kalshi-arb-min 0
+  WAG 3-87 JMU            183 plays  model 0.0002  espn 0.0017  kalshi 0.0101-0.0101  poly 0.0056  blend 0.0023  spread -46.5 [pickcenter]  kalshi-arb-min 0
+  GWEB 23-24 LIB          202 plays  model 0.1538  espn 0.3078  kalshi 0.3022-0.3016  poly 0.2878  blend 0.2135  spread -28.5 [pickcenter]  kalshi-arb-min 0
+  UTM 7-52 WVU            171 plays  model 0.0003  espn 0.0043  kalshi 0.0101-0.0101  poly   -     blend 0.0016  spread -41.5 [pickcenter]  kalshi-arb-min 0
+  COLG 10-13 CMU          172 plays  model 0.2987  espn 0.5258  kalshi 0.4144-0.4212  poly 0.4161  blend 0.3611  spread -18.5 [pickcenter]  kalshi-arb-min 0
+  HC 7-45 M-OH            131 plays  model 0.0019  espn 0.0138  kalshi 0.0155-0.0149  poly 0.0813  blend 0.0250  spread -30.5 [pickcenter]  kalshi-arb-min 0
+  STBK 17-41 BALL         181 plays  model 0.0429  espn 0.0488  kalshi 0.0844-0.0821  poly 0.0690  blend 0.0512  spread -13.5 [pickcenter]  kalshi-arb-min 0
+  MSST 38-13 MINN         180 plays  model 0.1316  espn 0.1010  kalshi 0.1578-0.1501  poly 0.1607  blend 0.1347  spread 1.5 [pickcenter]  kalshi-arb-min 0
+  WEB 21-52 COLO          203 plays  model 0.0006  espn 0.0038  kalshi 0.0104-0.0104  poly 0.1663  blend 0.0354  spread -38.5 [pickcenter]  kalshi-arb-min 0
+  UCF 7-12 PITT           171 plays  model 0.1714  espn 0.1460  kalshi 0.1821-0.1802  poly 0.1774  blend 0.1697  spread -7.5 [pickcenter]  kalshi-arb-min 0
+  CAL 21-18 SYR           198 plays  model 1.1591  espn 1.5668  kalshi 1.0716-1.0721  poly 1.0997  blend 1.1786  spread -4.0 [pickcenter]  kalshi-arb-min 0
+  DUKE 31-27 ILL          171 plays  model 1.0522  espn 0.9140  kalshi 1.0285-1.0246  poly 1.0350  blend 1.0212  spread -6.0 [pickcenter]  kalshi-arb-min 0
+  EMU 7-35 MSU            170 plays  model 0.0242  espn 0.0394  kalshi 0.0480-0.0491  poly 0.0410  blend 0.0314  spread -17.5 [pickcenter]  kalshi-arb-min 0
+  MD 38-14 CONN           171 plays  model 0.1052  espn 0.1705  kalshi 0.1700-0.1680  poly 0.1488  blend 0.1271  spread 11.5 [pickcenter]  kalshi-arb-min 0
+  UTSA 31-26 TXST         206 plays  model 0.8403  espn 0.7316  kalshi 0.8594-0.8566  poly 0.8645  blend 0.8208  spread -1.5 [pickcenter]  kalshi-arb-min 0
+  ULM 20-26 UAB           167 plays  model 0.5729  espn 0.4805  kalshi 0.5242-0.5274  poly   -     blend 0.5425  spread -9.5 [pickcenter]  kalshi-arb-min 0
+  RMU 10-45 AKR           158 plays  model 0.0068  espn 0.0257  kalshi 0.0349-0.0354  poly 0.0288  blend 0.0162  spread -26.5 [pickcenter]  kalshi-arb-min 0
+  CCSU 10-63 TOL          179 plays  model 0.0019  espn 0.0052  kalshi 0.0136-0.0123  poly   -     blend 0.0032  spread -36.5 [pickcenter]  kalshi-arb-min 0
+  SHU 10-37 MASS          155 plays  model 0.0055  espn 0.0078  kalshi 0.0220-0.0225  poly   -     blend 0.0077  spread -23.5 [pickcenter]  kalshi-arb-min 0
+  UNLV 6-44 UNT           191 plays  model 0.1809  espn 0.2624  kalshi 0.2189-0.2188  poly 0.2016  blend 0.1983  spread 3.0 [pickcenter]  kalshi-arb-min 0
+  UNCO 13-21 WYO          166 plays  model 0.1706  espn 0.3341  kalshi 0.3180-0.3148  poly 0.3197  blend 0.2322  spread -23.5 [pickcenter]  kalshi-arb-min 0
+  MERC 7-70 UNM           170 plays  model 0.0008  espn 0.0032  kalshi   -   -  -     poly 0.0771  blend 0.0226  spread -42.5 [pickcenter]  kalshi-arb-min 0
+  ALST 17-34 TROY         184 plays  model 0.0118  espn 0.0227  kalshi 0.0452-0.0446  poly 0.0361  blend 0.0199  spread -23.5 [pickcenter]  kalshi-arb-min 0
+  DEL 26-35 VAN           183 plays  model 0.0300  espn 0.0934  kalshi 0.0564-0.0553  poly 0.0548  blend 0.0466  spread -20.5 [pickcenter]  kalshi-arb-min 0
+  CAM 3-52 FLA            163 plays  model 0.0001  espn 0.0023  kalshi 0.0101-0.0101  poly 0.0057  blend 0.0023  spread -51.5 [pickcenter]  kalshi-arb-min 0
+  MEM 20-38 BOIS          173 plays  model 0.3697  espn 0.3680  kalshi   -   -  -     poly 0.3778  blend 0.3693  spread -9.5 [pickcenter]  kalshi-arb-min 0
+  BUF 20-33 FIU           191 plays  model 0.0510  espn 0.1319  kalshi 0.0573-0.0553  poly 0.0555  blend 0.0632  spread -8.5 [pickcenter]  kalshi-arb-min 0
+  JXST 27-29 OHIO         193 plays  model 1.4396  espn 1.1178  kalshi 1.2546-1.2586  poly 1.2419  blend 1.1899  spread -1.5 [pickcenter]  kalshi-arb-min 0
+  MONM 14-49 WMU          186 plays  model 0.0035  espn 0.0134  kalshi 0.0205-0.0204  poly 0.0132  blend 0.0079  spread -29.5 [pickcenter]  kalshi-arb-min 0
+  TOW 9-45 SC             185 plays  model 0.0009  espn 0.0023  kalshi 0.0101-0.0101  poly 0.0410  blend 0.0096  spread -44.5 [pickcenter]  kalshi-arb-min 0
+  WCU 10-62 CIN           174 plays  model 0.0020  espn 0.0132  kalshi 0.0124-0.0124  poly 0.0144  blend 0.0070  spread -36.5 [pickcenter]  kalshi-arb-min 0
+  BGSU 7-56 NEB           148 plays  model 0.0029  espn 0.0066  kalshi 0.0160-0.0170  poly 0.0108  blend 0.0058  spread -30.5 [pickcenter]  kalshi-arb-min 0
+  SUU 24-58 CSU           186 plays  model 0.0155  espn 0.0417  kalshi 0.0370-0.0367  poly 0.0294  blend 0.0230  spread -19.5 [pickcenter]  kalshi-arb-min 0
+  TLSA 23-17 SHSU         179 plays  model 0.2002  espn 0.3339  kalshi 0.3097-0.3102  poly 0.3152  blend 0.2510  spread 12.5 [pickcenter]  kalshi-arb-min 0
+  ILST 28-24 NIU          182 plays  model 0.2741  espn 0.3019  kalshi 0.2967-0.2963  poly 0.3026  blend 0.2840  spread 2.5 [pickcenter]  kalshi-arb-min 0
+  USA 24-28 TULN          163 plays  model 0.4266  espn 0.3952  kalshi 0.4317-0.4340  poly 0.4301  blend 0.4218  spread -9.5 [pickcenter]  kalshi-arb-min 0
+  WES 7-52 ARST           167 plays  model 0.0036  espn 0.0371  kalshi   -   -  -     poly   -     blend 0.0106  spread -31.5 [pickcenter]  kalshi-arb-min 0
+  GAST 31-17 KENN         169 plays  model 0.4480  espn 0.4179  kalshi 0.4684-0.4564  poly 0.4347  blend 0.4379  spread -7.5 [pickcenter]  kalshi-arb-min 0
+  MTSU 26-28 MRSH         186 plays  model 0.3076  espn 0.5182  kalshi   -   -  -     poly 0.3255  blend 0.3401  spread -11.5 [pickcenter]  kalshi-arb-min 0
+  LIN 14-48 MOST          172 plays  model 0.0161  espn 0.0215  kalshi 0.0676-0.0703  poly 0.0507  blend 0.0264  spread -16.5 [pickcenter]  kalshi-arb-min 0
+  SDSU 10-28 UCLA         165 plays  model 0.1324  espn 0.2782  kalshi 0.1678-0.1662  poly 0.1634  blend 0.1622  spread -13.5 [pickcenter]  kalshi-arb-min 0
+  WIU 9-36 WIS            160 plays  model 0.0006  espn 0.0026  kalshi 0.0101-0.0101  poly 0.0318  blend 0.0055  spread -43.5 [pickcenter]  kalshi-arb-min 0
+  NAVY 30-38 FAU          181 plays  model 0.3255  espn 0.4593  kalshi 0.3510-0.3446  poly 0.3301  blend 0.3446  spread 4.5 [pickcenter]  kalshi-arb-min 0
+  FOR 7-45 CCU            173 plays  model 0.0023  espn 0.0133  kalshi 0.0132-0.0134  poly 0.0158  blend 0.0076  spread -36.5 [pickcenter]  kalshi-arb-min 0
+  GRAM 7-63 TCU           166 plays  model 0.0005  espn 0.0022  kalshi 0.0101-0.0101  poly   -     blend 0.0017  spread -44.5 [pickcenter]  kalshi-arb-min 0
+  PV 3-44 BAY             192 plays  model 0.0010  espn 0.0051  kalshi 0.0101-0.0101  poly   -     blend 0.0023  spread -37.5 [pickcenter]  kalshi-arb-min 0
+  USM 8-43 AUB            188 plays  model 0.0014  espn 0.0230  kalshi 0.0133-0.0130  poly   -     blend 0.0071  spread -32.5 [pickcenter]  kalshi-arb-min 0
+  CP 20-30 SJSU           187 plays  model 0.0675  espn 0.1092  kalshi 0.1350-0.1353  poly   -     blend 0.0933  spread -21.5 [pickcenter]  kalshi-arb-min 0
+  TXSO 10-51 UTEP         166 plays  model 0.0122  espn 0.0525  kalshi 0.0646-0.0636  poly   -     blend 0.0276  spread -27.5 [pickcenter]  kalshi-arb-min 0
+  GASO 7-22 CLEM          202 plays  model 0.0254  espn 0.0536  kalshi 0.0597-0.0599  poly   -     blend 0.0397  spread -20.5 [pickcenter]  kalshi-arb-min 0
+  NDSU 38-32 AF           179 plays  model 0.1367  espn 0.1079  kalshi 0.1570-0.1504  poly   -     blend 0.1376  spread 1.5 [pickcenter]  kalshi-arb-min 0
+  SAC 3-49 FRES           169 plays  model 0.0242  espn 0.0458  kalshi 0.0643-0.0660  poly   -     blend 0.0313  spread -17.5 [pickcenter]  kalshi-arb-min 0
+  MTST 20-7 NEV           176 plays  model 0.1049  espn 0.2006  kalshi 0.1137-0.1106  poly   -     blend 0.1198  spread 4.5 [pickcenter]  kalshi-arb-min 0
+  NMSU 19-29 HAW          192 plays  model 0.1545  espn 0.1375  kalshi   -   -  -     poly 0.1990  blend 0.1646  spread -7.5 [pickcenter]  kalshi-arb-min 0
+pooled — all plays:
+  source            games     n   log-loss   brier
+  model                86  15000   0.2153   0.0681
+  espn                 86  15050   0.2338   0.0727
+  kalshi               80  10919   0.2896   0.0929
+  robinhood             0      0     -        -   
+  polymarket           63  11021   0.2437   0.0773
+  market               85  13855   0.2448   0.0771
+  blend                86  15060   0.2173   0.0688
+  model_after          86  14998   0.2142   0.0676
+  kalshi_before        80  10919   0.2896   0.0929
+  kalshi_after         80  10886   0.2882   0.0925
+  blend_after          86  15060   0.2164   0.0685
+  kalshi ≤4¢ book      66   8338   0.3744   0.1210
+  model (same plays)   66   8279   0.3690   0.1178
+  kalshi >4¢ book       9     27   0.5399   0.1854
+pooled — in play only (score can still change):
+  source            games     n   log-loss   brier
+  model                86  14914   0.2166   0.0685
+  espn                 86  14963   0.2351   0.0731
+  kalshi               80  10872   0.2907   0.0932
+  robinhood             0      0     -        -   
+  polymarket           63  10957   0.2450   0.0777
+  market               85  13779   0.2461   0.0775
+  blend                86  14972   0.2186   0.0692
+  model_after          86  14912   0.2154   0.0680
+  kalshi_before        80  10872   0.2907   0.0932
+  kalshi_after         80  10841   0.2893   0.0928
+  blend_after          86  14972   0.2176   0.0689
+  kalshi ≤4¢ book      66   8335   0.3744   0.1210
+  model (same plays)   66   8277   0.3691   0.1178
+  kalshi >4¢ book       9     27   0.5399   0.1854
+pooled — in play, scrimmage plays only (headline):
+  source            games     n   log-loss   brier
+  model                86  12771   0.2156   0.0684
+  espn                 86  12768   0.2345   0.0730
+  kalshi               80   9269   0.2907   0.0930
+  robinhood             0      0     -        -   
+  polymarket           63   9321   0.2450   0.0776
+  market               85  11740   0.2461   0.0773
+  blend                86  12771   0.2179   0.0689
+  model_after          86  12771   0.2159   0.0680
+  kalshi_before        80   9269   0.2907   0.0930
+  kalshi_after         80   9243   0.2892   0.0925
+  blend_after          86  12771   0.2170   0.0686
+  kalshi ≤4¢ book      66   7164   0.3718   0.1198
+  model (same plays)   66   7164   0.3648   0.1167
+  kalshi >4¢ book       8     21   0.4881   0.1616
+model-vs-market (in-play scrimmage): model 0.2156 vs Kalshi 0.2892-0.2907 (before / after the play); the truth is inside that range
+blend weights (linear pool, in play, 11739 plays with all three sources): best market 0.1 / model 0.9 / espn 0.0 -> 0.2341; current 0.3 / 0.55 / 0.15 -> 0.2369; market-only 0.2462, model-only 0.2345, espn-only 0.2545
+  blend_minus_model                mean +0.0025  90% [-0.0077, +0.0102]  games 86  games needed 2342
+  model_minus_kalshi_before        mean -0.0096  90% [-0.0248, +0.0110]  games 80  games needed 642
+  model_minus_kalshi_after         mean -0.0078  90% [-0.0236, +0.0134]  games 80  games needed 1027
+  model_after_minus_kalshi_after   mean -0.0073  90% [-0.0225, +0.0137]  games 80  games needed 1162
+  espn_minus_model                 mean +0.0187  90% [-0.0020, +0.0377]  games 86  games needed 204
+  best_grid_minus_current          mean -0.0030  90% [-0.0087, +0.0041]  games 85  games needed 835
+per-slice (in play; cells under 50 rows show n only):
+  slice      n           model    model_after           espn  kalshi_before   kalshi_after          blend    blend_after
+  q1        3560         0.2456         0.2446         0.2720         0.2753         0.2732         0.2509         0.2502
+  q2        4335         0.2221         0.2255         0.2399         0.2731         0.2737         0.2231         0.2233
+  q3        3488         0.2057         0.2070         0.2238         0.3192         0.3216         0.2102         0.2110
+  q4_early  2117         0.1998         0.1966         0.2051         0.3454         0.3459         0.2001         0.1991
+  q4_late   1414         0.1783         0.1598         0.1764         0.2379         0.2212         0.1547         0.1449
+  ot          58           -              -            0.8924         0.6838         0.6687         0.6327         0.6301
+per-play-class (in play, synthetic rows included):
+  class                  n           model    model_after           espn  kalshi_before   kalshi_after          blend    blend_after
+  end_period             264         0.2346         0.2237         0.2914         0.3163         0.3152         0.2364         0.2342
+  kickoff                940         0.2066         0.2087         0.2188         0.2767         0.2791         0.2079         0.2094
+  kickoff_pending_synth   587         0.1813         0.1811           -            0.2601         0.2501         0.1831         0.1824
+  kneel                   87         0.1310         0.1184         0.1100         0.1898         0.1974         0.1212         0.1145
+  ot                      48           -              -              -              -              -              -              -   
+  scrimmage            12771         0.2156         0.2159         0.2345         0.2907         0.2892         0.2179         0.2170
+  timeout                853         0.2449         0.2207         0.2360         0.2741         0.2692         0.2195         0.2158
+  try                      9           -              -              -              -              -              -              -   
+  try_synth              587         0.1854         0.1869           -            0.2601         0.2501         0.1859         0.1865
+class               n   |model-kalshi_before|   STEAL-qualifying rows at 3% / 5% / 8%
+  end_period           264               0.0462   27 / 15 / 6
+  kickoff              940               0.0351   75 / 41 / 18
+  kickoff_pending_synth   587               0.0472   93 / 48 / 25
+  kneel                 87               0.0218   5 / 1 / 0
+  ot                    48                 -      0 / 0 / 0
+  scrimmage          12771               0.0367   1038 / 530 / 234
+  timeout              853               0.0574   122 / 90 / 58
+  try                    9               0.0585   3 / 1 / 0
+  try_synth            587               0.0458   88 / 49 / 25
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=pre_before):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      51      51      0    30      21     308.51     -8.51    -2.8%  [-1.04, +0.67]
+  0.05      39      39      0    26      13     232.28     27.72   +11.9%  [-0.32, +1.74]
+  0.08      32      32      0    17      15     142.90     27.10   +19.0%  [-0.29, +2.01]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      49      49      0    31      18     299.58     10.42    +3.5%  [-0.64, +1.03]
+  0.05      40      40      0    26      14     242.71     17.29    +7.1%  [-0.63, +1.28]
+  0.08      30      30      0    17      13     161.07      8.93    +5.5%  [-0.86, +1.67]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=pre_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      52      52      0    36      16     325.29     34.71   +10.7%  [-0.02, +1.43]
+  0.05      44      44      0    27      17     262.24      7.76    +3.0%  [-0.82, +1.14]
+  0.08      34      34      0    20      14     185.22     14.78    +8.0%  [-0.74, +1.64]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=shift):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      55      55      0    35      20     332.15     17.85    +5.4%  [-0.47, +1.14]
+  0.05      44      44      0    28      16     251.72     28.28   +11.2%  [-0.39, +1.54]
+  0.08      36      36      0    24      12     191.37     48.63   +25.4%  [+0.20, +2.38]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, no lock (hold to settlement), taker fees, pairing=post_after, placebo=shuffle):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.03      49      49      0    23      26     299.58    -69.58   -23.2%  [-2.45, -0.34]
+  0.05      40      40      0    19      21     242.71    -52.71   -21.7%  [-2.69, -0.08]
+  0.08      30      30      0    14      16     161.07    -21.07   -13.1%  [-2.15, +0.76]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 0% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      59      59     51    51       8     513.82     -3.82    -0.7%  [-0.40, +0.22]
+  0.04      46      46     38    38       8     397.08    -17.08    -4.3%  [-0.93, +0.07]
+  0.06      37      37     29    29       8     301.72    -11.72    -3.9%  [-0.85, +0.13]
+  0.10      25      25     23    23       2     216.35     13.65    +6.3%  [+0.39, +0.72]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 50% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      59      59     51    51       8     503.09      6.91    +1.4%  [-0.23, +0.41]
+  0.04      46      46     38    38       8     381.86     -1.86    -0.5%  [-0.60, +0.45]
+  0.06      37      37     29    29       8     292.64     -2.64    -0.9%  [-0.65, +0.44]
+  0.10      25      25     23    23       2     209.56     20.44    +9.8%  [+0.55, +1.20]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = blend, lock when guaranteed ≥ 100% of hold EV, taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      59      59     42    47      12     470.06     -0.06    -0.0%  [-0.56, +0.54]
+  0.04      46      46     33    36      10     349.37     10.63    +3.0%  [-0.45, +0.93]
+  0.06      37      37     26    28       9     272.84      7.16    +2.6%  [-0.42, +0.82]
+  0.10      25      25     21    22       3     195.99     24.01   +12.2%  [+0.32, +1.59]
+STEAL/LOCK simulation on Kalshi asks (10 contracts per entry, fair = model, no lock (hold to settlement), taker fees, pairing=post_after):
+  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%
+  0.02      58      58      0    45      13     423.04     26.96    +6.4%  [-0.21, +1.11]
+  0.04      54      54      0    39      15     390.99     -0.99    -0.2%  [-0.85, +0.74]
+  0.06      45      45      0    35      10     323.54     26.46    +8.2%  [-0.34, +1.64]
+  0.10      35      35      0    23      12     230.75     -0.75    -0.3%  [-1.21, +1.12]
+cache: 85 hits, 527 misses (out/cache/replay)
+wrote out/week2_ncaaf_after.json
+ARB_HTTP_TRANSPORT=curl python3 -m arb_engine backtest --week 2 --season 2026  86.72s user 9.64s system 40% cpu 3:56.40 total
