@@ -101,7 +101,7 @@ class LineTests(unittest.TestCase):
         by_key = {e.event_key: e for e in res.events}
         sp = by_key.get("ncaaf:FRES|SJSU:2026-09-19:spread:FRES-23.5")
         self.assertIsNotNone(sp, sorted(k for k in by_key if "spread" in k)[:6])
-        self.assertEqual(sorted(sp.venues), ["kalshi", "robinhood"])
+        self.assertEqual(sorted(sp.venues), ["kalshi", "polymarket", "robinhood"])
         self.assertEqual(sp.line, 23.5)
         yes = next(o for o in sp.outcomes if o.outcome == "FRES-23.5")
         self.assertEqual(yes.label, "Fresno State -23.5")
@@ -116,11 +116,13 @@ class LineTests(unittest.TestCase):
         self.assertIn("ncaaf:FRES|SJSU:2026-09-19:spread:SJSU-23.5", by_key)
         tot = by_key.get("ncaaf:FRES|SJSU:2026-09-19:total:57.5")
         self.assertIsNotNone(tot, sorted(k for k in by_key if "total" in k)[:6])
-        self.assertEqual(sorted(tot.venues), ["kalshi", "robinhood"])
+        self.assertEqual(sorted(tot.venues), ["kalshi", "polymarket", "robinhood"])
         over = next(o for o in tot.outcomes if o.outcome == "over")
-        self.assertEqual({v.venue for v in over.venues}, {"kalshi", "robinhood"})
+        self.assertEqual({v.venue for v in over.venues}, {"kalshi", "polymarket", "robinhood"})
         under = next(o for o in tot.outcomes if o.outcome == "under")
-        self.assertEqual({v.venue for v in under.venues}, {"kalshi", "robinhood"})
+        self.assertEqual({v.venue for v in under.venues}, {"kalshi", "polymarket", "robinhood"})
+        pm_over = next(v for v in over.venues if v.venue == "polymarket")
+        self.assertIsNotNone(pm_over.ask)
         self.assertEqual(tot.tie_rule, "no_push")  # half-point line cannot push
 
 

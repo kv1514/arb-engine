@@ -57,6 +57,28 @@ def parse_clob_book(book: dict) -> Book:
     return Book(asks=asks, bids=bids)
 
 
+def _event_game_codes(sport: str, ev: dict, slug_parts: list[str]) -> list:
+    """[away, home] canonical codes for a game event: NFL from the slug, otherwise from the
+    moneyline market's outcomes (full team names). Cached on the event dict."""
+    cached = ev.get("_game_codes")
+    if cached is not None:
+        return list(cached)
+    codes: list = [None, None]
+    if sport == "nfl" and len(slug_parts) >= 3:
+        codes = [nfl_team_code(slug_parts[1]), nfl_team_code(slug_parts[2])]
+    if None in codes:
+        for m in ev.get("markets") or []:
+            if (m.get("sportsMarketType") or "") == "moneyline":
+                outs = _jl(m.get("outcomes"))
+                if len(outs) == 2:
+                    c = [team_code(sport, o) for o in outs]
+                    if None not in c:
+                        codes = c
+                        break
+    ev["_game_codes"] = codes
+    return list(codes)
+
+
 class PolymarketAdapter:
     venue = VENUE_POLYMARKET
 
@@ -130,7 +152,7 @@ class PolymarketAdapter:
             mt = m.get("sportsMarketType")
             if m.get("closed") or not m.get("active", True):
                 continue
-            if mt in ("spreads", "totals") and sport == "nfl":
+            if mt in ("spreads", "totals") and sport in ("nfl", "ncaaf"):
                 self._ingest_line_market(snap, sport, ev, m, "spread" if mt == "spreads" else "total")
                 continue
             if mt != "moneyline":
@@ -190,11 +212,13 @@ class PolymarketAdapter:
         start = parse_iso(m.get("gameStartTime"))
         date = et_date(start)
         url = f"https://polymarket.com/event/{ev.get('slug')}"
-        # Event slug is away-home; needed to name totals and to sanity-check codes.
+        # Event slug is away-home; needed to name totals and to sanity-check codes. NFL slugs use
+        # the standard codes; college slugs use Polymarket's own (frest, sjst), so take the
+        # teams from the event's moneyline outcomes instead.
         slug_parts = str(ev.get("slug", "")).split("-")
-        game_codes = [nfl_team_code(slug_parts[1]), nfl_team_code(slug_parts[2])] if len(slug_parts) >= 3 else [None, None]
+        game_codes = _event_game_codes(sport, ev, slug_parts)
         if mtype == "spread":
-            codes = [nfl_team_code(o) for o in outcomes]
+            codes = [team_code(sport, o) for o in outcomes]
             if any(c is None for c in codes):
                 return
             if line < 0:
@@ -214,7 +238,7 @@ class PolymarketAdapter:
             keys = ["over" if outcomes[0].lower().startswith("over") else "under", "under" if outcomes[0].lower().startswith("over") else "over"]
             labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
             out_keys = ["over", "under"]
-        info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=out_keys, labels=labels, start_time=start, line=abs(line) if mtype == "spread" else line, tie_rule=push_rule_for_line(abs(line)), venues={self.venue: {"event_id": ev.get("id"), "market_id": m.get("id"), "slug": m.get("slug"), "url": url}, "_teams": {"title": f"{slug_parts[1].upper()} @ {slug_parts[2].upper()}" if len(slug_parts) >= 3 else ""}})
+        info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=out_keys, labels=labels, start_time=start, line=abs(line) if mtype == "spread" else line, tie_rule=push_rule_for_line(abs(line)), venues={self.venue: {"event_id": ev.get("id"), "market_id": m.get("id"), "slug": m.get("slug"), "url": url}, "_teams": {"title": f"{game_codes[0]} @ {game_codes[1]}" if None not in game_codes else ""}})
         snap.events.setdefault(key, info)
         fee_params = {"feeSchedule": m.get("feeSchedule"), "feesEnabled": m.get("feesEnabled", True), "feeType": m.get("feeType")}
         bb, ba = _f(m.get("bestBid")), _f(m.get("bestAsk"))

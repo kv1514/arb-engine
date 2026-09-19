@@ -72,6 +72,58 @@
 "volume24hr": 50,
 "liquidityNum": 116964.9322,
 "negRisk": false
+},
+{
+"id": "4703668",
+"slug": "cfb-frest-sjst-2026-09-19-spread-away-23pt5",
+"question": "Spread: Fresno State (-23.5)",
+"outcomes": "[\"Fresno State\", \"San Jose State\"]",
+"outcomePrices": "[\"0.13\", \"0.87\"]",
+"clobTokenIds": "[\"57995879458297172599745121865018099601677398760098878405566780854773802663586\", \"39807498566251445670795232125247824827827564845609612881983658740443235218261\"]",
+"sportsMarketType": "spreads",
+"closed": false,
+"active": true,
+"gameStartTime": "2026-09-20 03:00:00+00",
+"bestBid": 0.11,
+"bestAsk": 0.15,
+"feeSchedule": {
+"exponent": 1,
+"rate": 0,
+"takerOnly": true,
+"rebateRate": 0
+},
+"feesEnabled": true,
+"feeType": "zero_fees",
+"conditionId": "0xa054bf44265aa7bbf1383d6bf9dd21c127f6df13cc790bd4999a1f2b7f3f542f",
+"orderPriceMinTickSize": 0.01,
+"orderMinSize": 5,
+"line": -23.5
+},
+{
+"id": "4703829",
+"slug": "cfb-frest-sjst-2026-09-19-total-57pt5",
+"question": "Fresno State vs. San Jose State: O/U 57.5",
+"outcomes": "[\"Over\", \"Under\"]",
+"outcomePrices": "[\"0.3\", \"0.7\"]",
+"clobTokenIds": "[\"52391734769890546224525660517602682100527838577912025481109702554155045451764\", \"74887802625989897947469100407885450275117782485800833664251954086149182559773\"]",
+"sportsMarketType": "totals",
+"closed": false,
+"active": true,
+"gameStartTime": "2026-09-20 03:00:00+00",
+"bestBid": 0.26,
+"bestAsk": 0.34,
+"feeSchedule": {
+"exponent": 1,
+"rate": 0,
+"takerOnly": true,
+"rebateRate": 0
+},
+"feesEnabled": true,
+"feeType": "zero_fees",
+"conditionId": "0x260d4336fdbc5d8fb0da257fa98f3f3e19171ad0ad1526fdf49ac491eea6e637",
+"orderPriceMinTickSize": 0.01,
+"orderMinSize": 5,
+"line": 57.5
 }
 ]
 }

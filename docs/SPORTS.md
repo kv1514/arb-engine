@@ -69,6 +69,6 @@ each, same ⌈line⌉ ticker suffix as the NFL) and Robinhood's CDNA line events
 (`EVENT_TYPE_SPREAD` / `EVENT_TYPE_TOTALS`, ~45 contracts per game named "Oregon -93.5 points" /
 "Over 44.5 points", one contract per line, favourite named on the contract) are ingested;
 a scan on 2026-09-18 produced 8,689 line events, 2,990 of them on both Kalshi and CDNA, with
-three thin positive-margin spreads and nothing fillable. Polymarket's college lines are not
-ingested yet.
+three thin positive-margin spreads and nothing fillable. Polymarket's college spreads/totals are ingested too (teams taken
+from the event's moneyline outcomes because the slug codes are Polymarket's own).
 

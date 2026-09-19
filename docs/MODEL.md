@@ -231,29 +231,29 @@ few cents; higher lock thresholds just leave more losers unhedged. The lesson fo
 watcher is to treat LOCK as a risk decision, not free money — its alert now shows the
 hold EV beside the guarantee. Sample: 16 games; do not size on this.
 
-## College football (2026 week 2, 86 games)
+## College football (2026 weeks 1–2, 185 games)
 
-`python -m arb_engine backtest --sport ncaaf --week 2` replays every FBS final of the week
+`python -m arb_engine backtest --sport ncaaf --week N` replays every FBS final of a week
 (Kalshi `KXNCAAFGAME` candles, Polymarket `cfb` history, ESPN college play-by-play) with the
 **NFL** model scoring college states — no college training, no college-specific features.
 
-| source | plays (in play) | log-loss | Brier |
-|---|---|---|---|
-| blend 0.30 / 0.55 / 0.15 | 14,916 | 0.220 | 0.069 |
-| model (NFL-trained) | 14,916 | 0.221 | 0.070 |
-| ESPN college win probability | 14,912 | 0.233 | 0.073 |
-| Polymarket last trade | 10,739 | 0.237 | 0.075 |
-| market consensus | 13,691 | 0.244 | 0.077 |
-| Kalshi mid | 10,785 | 0.287 | 0.092 |
-| Kalshi, book ≤ 4¢ | 8,203 | 0.372 | 0.120 |
-| model, same plays | 8,203 | 0.381 | 0.122 |
+| source (all plays) | week 1: 99 games, 17,278 plays | week 2: 86 games, 15,060 plays |
+|---|---|---|
+| blend 0.30 / 0.55 / 0.15 | **0.152** | **0.220** |
+| model (NFL-trained) | 0.161 | 0.229 |
+| ESPN college win probability | 0.160 | 0.234 |
+| Polymarket last trade (63 / 62 games) | 0.164 | 0.238 |
+| market consensus | 0.179 | 0.244 |
+| Kalshi mid | 0.213 | 0.288 |
+| Kalshi, book ≤ 4¢ (same plays: model) | 0.315 (0.339) | 0.374 (0.397) |
 
-The NFL model transfers: it beats ESPN's own college number and the market consensus, and on
-the plays where Kalshi's book was tight it is a wash (0.381 vs 0.372). The weight grid is flat
-near the NFL default (market 0.30 / model 0.55 / ESPN 0.15 → 0.2377; a market-anchored
-0.50 / 0.35 / 0.15 → 0.2389; best 0.30 / 0.70 / 0.00 → 0.2369), so college uses the same
-weights. STEAL hold-to-settlement with the model as fair was +2.6 % to +4.7 % across edges
-0.02–0.10 (59 entries at 0.02: 45 wins / 14 losses, +$15.8 on $434 staked); lock variants
-were mixed. Caveats as for the NFL: one week, candle-close asks, no depth, no Robinhood
-(CDNA) history yet.
+Log-loss on P(home). The NFL model transfers to college about as well as ESPN's own college
+number and better than the market consensus, and the blend of the three is the best source in
+both weeks. On the plays where Kalshi's book was tight the market is slightly better than the
+model (the reverse of the NFL), which is why college keeps the market in the blend. The weight
+grid is flat around the NFL default (week 1 best 0.30 / 0.50 / 0.20 → 0.1755 vs 0.1756; week 2
+best 0.30 / 0.70 / 0.00 → 0.2369 vs 0.2377), so college uses the same weights. STEAL
+hold-to-settlement with the model as fair: week 2 +2.6 % to +4.7 % across edges, week 1
+−0.3 % to +2.8 % — small, not a strategy on its own. Caveats as for the NFL: candle-close
+asks, no depth, no Robinhood (CDNA) history yet.
 
