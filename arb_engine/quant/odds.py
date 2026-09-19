@@ -7,8 +7,9 @@ an overround (vig) that has to be removed before their probabilities are compara
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from math import log, exp
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 
 def american_to_decimal(american: float) -> float:
@@ -102,7 +103,132 @@ def devig_shin(implied: Sequence[float], tol: float = 1e-12, max_iter: int = 200
     return [p / s for p in out]
 
 
+def devig_additive(implied: Sequence[float]) -> list[float]:
+    """Subtract the overround equally from every outcome. Simple and common in the
+    literature, but it can push a long shot below zero; such cells are floored at a hair
+    above 0 and the vector renormalised (the caller sees the disagreement via ``devig_range``)."""
+    ps = [float(p) for p in implied]
+    n = len(ps)
+    if n == 0:
+        raise ValueError("implied probabilities required")
+    adj = (sum(ps) - 1.0) / n
+    out = [max(1e-9, p - adj) for p in ps]
+    s = sum(out)
+    return [p / s for p in out]
+
+
+def shin_z_two_way(q1: float, q2: float) -> Optional[float]:
+    """Closed-form Shin insider share for two outcomes: with ``B = q1 + q2`` and ``d = q1 - q2``,
+    ``z = (B - 1)(B - d^2) / (B (1 - d^2))``. Derived by eliminating the square roots in
+    ``sum_i p_i(z) = 1``; ``devig_shin`` bisects the same equation for any n and the two agree
+    to 1e-9 (``tests/test_odds.py``). None when there is no overround or |d| >= 1."""
+    B, d = float(q1) + float(q2), float(q1) - float(q2)
+    if B <= 1.0 or abs(d) >= 1.0:
+        return None
+    z = (B - 1.0) * (B - d * d) / (B * (1.0 - d * d))
+    return z if 0.0 <= z < 1.0 else None
+
+
+def devig_shin_closed(implied: Sequence[float]) -> list[float]:
+    """Shin de-vig using the closed-form ``z`` for n == 2, bisection otherwise."""
+    qs = [float(p) for p in implied]
+    if len(qs) != 2:
+        return devig_shin(qs)
+    z = shin_z_two_way(qs[0], qs[1])
+    if z is None:
+        return devig_shin(qs)
+    B = sum(qs)
+    out = [(((z * z + 4.0 * (1.0 - z) * q * q / B) ** 0.5) - z) / (2.0 * (1.0 - z)) for q in qs]
+    s = sum(out)
+    return [p / s for p in out]
+
+
+DEVIG_METHODS = {
+    "multiplicative": devig_multiplicative,
+    "power": devig_power,
+    "additive": devig_additive,
+    "shin": devig_shin_closed,
+}
+
+
+def devig(implied: Sequence[float], method: str = "power") -> list[float]:
+    """De-vig by name: multiplicative | power | additive | shin | auto."""
+    if method == "auto":
+        return devig_auto(implied)
+    try:
+        fn = DEVIG_METHODS[method]
+    except KeyError:
+        raise ValueError(f"unknown de-vig method {method!r}; choose from {sorted(DEVIG_METHODS)} or 'auto'") from None
+    return fn(implied)
+
+
+def devig_auto(implied: Sequence[float]) -> list[float]:
+    """Shin when its insider share is well defined (the method that best explains the
+    favourite-longshot bias in sportsbook closes), else power, else multiplicative. An
+    under-round or degenerate vector always falls back to multiplicative."""
+    ps = [float(p) for p in implied]
+    if len(ps) < 2 or any(p <= 0 or p >= 1 for p in ps) or sum(ps) <= 1.0:
+        return devig_multiplicative(ps)
+    if len(ps) == 2 and shin_z_two_way(ps[0], ps[1]) is not None:
+        return devig_shin_closed(ps)
+    if len(ps) > 2:
+        return devig_shin(ps)
+    return devig_power(ps)
+
+
+def devig_range(implied: Sequence[float], methods: Sequence[str] = ("multiplicative", "power", "additive", "shin")) -> dict[str, Any]:
+    """Every method's fair vector plus the per-outcome min/max across them: the spread of
+    the de-vig disagreement, widest on heavy favourites, is a real uncertainty a consumer
+    should carry (``consensus_fair_value`` treats it like a bid/ask spread)."""
+    by: dict[str, list[float]] = {m: devig(implied, m) for m in methods}
+    n = len(list(implied))
+    return {
+        "by_method": by,
+        "fair_min": [min(by[m][i] for m in methods) for i in range(n)],
+        "fair_max": [max(by[m][i] for m in methods) for i in range(n)],
+        "overround": overround(implied),
+    }
+
+
+@dataclass(frozen=True)
+class SportsbookProbs:
+    """De-vigged two-way sportsbook probabilities with the cross-method disagreement."""
+
+    home: float
+    away: float
+    fair_min: float          # min over methods of P(home)
+    fair_max: float          # max over methods of P(home)
+    method: str
+    overround: float
+    by_method: dict[str, float] = field(default_factory=dict)  # method -> P(home)
+
+    @property
+    def range(self) -> float:
+        return self.fair_max - self.fair_min
+
+    def as_mapping(self, home: str, away: str) -> dict[str, dict[str, float]]:
+        """Shape ``consensus_fair_value(sportsbook_probs=...)`` accepts, range attached."""
+        return {
+            home: {"fair": self.home, "fair_min": self.fair_min, "fair_max": self.fair_max},
+            away: {"fair": self.away, "fair_min": 1.0 - self.fair_max, "fair_max": 1.0 - self.fair_min},
+        }
+
+
+def sportsbook_probs_from_moneylines(home_ml: float, away_ml: float, method: str = "power") -> SportsbookProbs:
+    """American moneylines (e.g. ``-245`` / ``+200``) -> de-vigged P(home)/P(away) by ``method``,
+    with ``fair_min``/``fair_max`` for P(home) across all four methods."""
+    implied = [implied_from_decimal(american_to_decimal(home_ml)), implied_from_decimal(american_to_decimal(away_ml))]
+    rng = devig_range(implied)
+    chosen = devig(implied, method)
+    return SportsbookProbs(
+        home=chosen[0], away=chosen[1], fair_min=rng["fair_min"][0], fair_max=rng["fair_max"][0],
+        method=method, overround=rng["overround"], by_method={m: v[0] for m, v in rng["by_method"].items()},
+    )
+
+
 __all__ = [
     "american_to_decimal", "decimal_to_american", "implied_from_decimal", "decimal_from_prob",
-    "overround", "devig_multiplicative", "devig_power", "devig_shin", "log", "exp",
+    "overround", "devig_multiplicative", "devig_power", "devig_shin", "devig_additive", "devig_shin_closed",
+    "shin_z_two_way", "devig", "devig_auto", "devig_range", "DEVIG_METHODS", "SportsbookProbs",
+    "sportsbook_probs_from_moneylines", "log", "exp",
 ]

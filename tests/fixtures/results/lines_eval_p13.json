@@ -1,0 +1,138 @@
+{
+ "alignments": [
+  "kalshi_before",
+  "kalshi"
+ ],
+ "devig": {
+  "abs_gap_vs_close_mean": 1.05,
+  "n": 16,
+  "n_heavy": 3,
+  "range_heavy_max": 0.0193,
+  "range_heavy_mean": 0.0181
+ },
+ "games_scored": 16,
+ "games_skipped": 0,
+ "item": "P13",
+ "paired": true,
+ "scoring": "kalshi market line: ceil(close) - 0.5 for spread and total, truth and every predictor alike; no pushes",
+ "season": 2026,
+ "sigma": {
+  "margin": 12.6968,
+  "tie_mass": 0.003622,
+  "total": 13.2174
+ },
+ "table": {
+  "spread/inplay": {
+   "empirical": {
+    "brier": null,
+    "log_loss": null,
+    "n": 0
+   },
+   "kalshi": {
+    "brier": 0.2158,
+    "log_loss": 0.6219,
+    "n": 2500
+   },
+   "kalshi_before": {
+    "brier": 0.2182,
+    "log_loss": 0.6281,
+    "n": 2500
+   },
+   "normal": {
+    "brier": 0.215,
+    "log_loss": 0.6162,
+    "n": 2500
+   }
+  },
+  "spread/pre": {
+   "empirical": {
+    "brier": 0.2521,
+    "log_loss": 0.6974,
+    "n": 14
+   },
+   "kalshi": {
+    "brier": 0.2477,
+    "log_loss": 0.6885,
+    "n": 14
+   },
+   "kalshi_before": {
+    "brier": 0.2477,
+    "log_loss": 0.6885,
+    "n": 14
+   },
+   "normal": {
+    "brier": 0.2453,
+    "log_loss": 0.6837,
+    "n": 14
+   }
+  },
+  "total/inplay": {
+   "empirical": {
+    "brier": null,
+    "log_loss": null,
+    "n": 0
+   },
+   "kalshi": {
+    "brier": 0.2209,
+    "log_loss": 0.6362,
+    "n": 2399
+   },
+   "kalshi_before": {
+    "brier": 0.2221,
+    "log_loss": 0.6406,
+    "n": 2399
+   },
+   "normal": {
+    "brier": 0.2234,
+    "log_loss": 0.6399,
+    "n": 2399
+   }
+  },
+  "total/pre": {
+   "empirical": {
+    "brier": null,
+    "log_loss": null,
+    "n": 0
+   },
+   "kalshi": {
+    "brier": 0.2526,
+    "log_loss": 0.6984,
+    "n": 15
+   },
+   "kalshi_before": {
+    "brier": 0.2526,
+    "log_loss": 0.6984,
+    "n": 15
+   },
+   "normal": {
+    "brier": 0.25,
+    "log_loss": 0.6931,
+    "n": 15
+   }
+  }
+ },
+ "tables": {
+  "excluded_incomplete_seasons": [
+   2026
+  ],
+  "rows_used": 2761,
+  "seasons": [
+   2016,
+   2025
+  ],
+  "sha256": "61e956fd76124fc7c7c97f85dc4f34c0ffbee9fd13121a7fd8a528673a4d05af",
+  "sigma_ref_max_season": 2025,
+  "sigma_ref_min_season": 2016,
+  "sigma_seasons": [
+   1999,
+   2025
+  ]
+ },
+ "unpaired_rows": {
+  "spread/inplay": 388,
+  "spread/pre": 2,
+  "total/inplay": 489,
+  "total/pre": 1
+ },
+ "week": 1
+}
