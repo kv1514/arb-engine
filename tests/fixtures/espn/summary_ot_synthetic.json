@@ -1,0 +1,464 @@
+{
+ "_note": "Synthetic, hand-built from the DET@BUF summary schema: an NFL playoff-format overtime (format.overtime.clock 900) tied 27-27 with 7:21 left in period 5, a provisional (negative) lastPlay id, no homeTimeouts/awayTimeouts in the situation, and drives carrying the timeout texts the fallback counts.",
+ "format": {
+  "regulation": {
+   "periods": 4,
+   "displayName": "Quarter",
+   "slug": "quarter",
+   "clock": 900.0
+  },
+  "overtime": {
+   "periods": 1,
+   "displayName": "sudden-death",
+   "slug": "sudden-death",
+   "clock": 900.0
+  }
+ },
+ "header": {
+  "id": "401872932",
+  "season": {
+   "year": 2026,
+   "current": true,
+   "type": 3
+  },
+  "week": 1,
+  "competitions": [
+   {
+    "id": "401872932",
+    "date": "2026-09-18T00:15Z",
+    "neutralSite": false,
+    "status": {
+     "type": {
+      "id": "2",
+      "name": "STATUS_IN_PROGRESS",
+      "state": "in",
+      "completed": false,
+      "description": "In Progress",
+      "detail": "7:21 - OT",
+      "shortDetail": "7:21 - OT"
+     },
+     "period": 5,
+     "displayClock": "7:21"
+    },
+    "competitors": [
+     {
+      "id": "2",
+      "homeAway": "home",
+      "score": "27",
+      "team": {
+       "id": "2",
+       "abbreviation": "BUF",
+       "displayName": "Buffalo Bills"
+      }
+     },
+     {
+      "id": "8",
+      "homeAway": "away",
+      "score": "27",
+      "team": {
+       "id": "8",
+       "abbreviation": "DET",
+       "displayName": "Detroit Lions"
+      },
+      "possession": true
+     }
+    ],
+    "situation": {
+     "lastPlay": {
+      "id": "-4018729325001",
+      "type": {
+       "id": "24",
+       "text": "Pass Reception"
+      },
+      "text": "(Shotgun) J.Goff pass short left to A.St. Brown to BUF 38 for 9 yards (T.Johnson).",
+      "team": {
+       "id": "8"
+      },
+      "probability": {
+       "tiePercentage": 0.04,
+       "homeWinPercentage": 0.47,
+       "awayWinPercentage": 0.49,
+       "secondsLeft": 441
+      }
+     },
+     "down": 2,
+     "distance": 1,
+     "yardLine": 38,
+     "downDistanceText": "2nd & 1 at BUF 38",
+     "possessionText": "BUF 38",
+     "isRedZone": false,
+     "possession": "8"
+    }
+   }
+  ]
+ },
+ "pickcenter": [
+  {
+   "details": "BUF -5.5",
+   "overUnder": 54.5,
+   "spread": -5.5,
+   "provider": {
+    "id": "100",
+    "name": "Draft Kings"
+   },
+   "homeTeamOdds": {
+    "favorite": true,
+    "underdog": false,
+    "moneyLine": -245,
+    "teamId": "2"
+   },
+   "awayTeamOdds": {
+    "favorite": false,
+    "underdog": true,
+    "moneyLine": 200,
+    "teamId": "8"
+   },
+   "pointSpread": {
+    "home": {
+     "open": {
+      "line": "-3",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "-5.5",
+      "odds": "-105"
+     }
+    },
+    "away": {
+     "open": {
+      "line": "+3",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "+5.5",
+      "odds": "-115"
+     }
+    }
+   },
+   "moneyline": {
+    "home": {
+     "open": {
+      "odds": "-162"
+     },
+     "close": {
+      "odds": "-245"
+     }
+    },
+    "away": {
+     "open": {
+      "odds": "+136"
+     },
+     "close": {
+      "odds": "+200"
+     }
+    }
+   },
+   "total": {
+    "over": {
+     "open": {
+      "line": "o52.5",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "o54.5",
+      "odds": "-118"
+     }
+    },
+    "under": {
+     "open": {
+      "line": "u52.5",
+      "odds": "-110"
+     },
+     "close": {
+      "line": "u54.5",
+      "odds": "-102"
+     }
+    }
+   }
+  }
+ ],
+ "winprobability": [
+  {
+   "homeWinPercentage": 0.668,
+   "tiePercentage": 0.0,
+   "playId": "4018729321"
+  },
+  {
+   "homeWinPercentage": 0.52,
+   "tiePercentage": 0.0,
+   "playId": "4018729324530"
+  },
+  {
+   "homeWinPercentage": 0.47,
+   "tiePercentage": 0.04,
+   "playId": "4018729325000"
+  }
+ ],
+ "drives": {
+  "previous": [
+   {
+    "id": "40187293201",
+    "team": {
+     "id": "8",
+     "abbreviation": "DET"
+    },
+    "result": "PUNT",
+    "isScore": false,
+    "plays": [
+     {
+      "id": "4018729321",
+      "text": "T.Bass kicks 65 yards from BUF 35 to end zone, Touchback.",
+      "awayScore": 0,
+      "homeScore": 0,
+      "period": {
+       "number": 1
+      },
+      "clock": {
+       "displayValue": "15:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T00:20:00Z",
+      "type": {
+       "id": "53",
+       "text": "Kickoff"
+      },
+      "start": {
+       "down": 0,
+       "distance": 0,
+       "yardLine": 35,
+       "team": {
+        "id": "2"
+       }
+      },
+      "end": {
+       "down": 1,
+       "distance": 10,
+       "yardLine": 75,
+       "team": {
+        "id": "8"
+       }
+      }
+     },
+     {
+      "id": "4018729322",
+      "text": "Timeout #1 by DET at 14:20.",
+      "awayScore": 0,
+      "homeScore": 0,
+      "period": {
+       "number": 1
+      },
+      "clock": {
+       "displayValue": "14:20"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T00:21:00Z",
+      "type": {
+       "id": "21",
+       "text": "Timeout"
+      }
+     },
+     {
+      "id": "4018729323",
+      "text": "Timeout #1 by BUF at 01:02.",
+      "awayScore": 10,
+      "homeScore": 14,
+      "period": {
+       "number": 2
+      },
+      "clock": {
+       "displayValue": "1:02"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T01:20:00Z",
+      "type": {
+       "id": "21",
+       "text": "Timeout"
+      }
+     },
+     {
+      "id": "4018729324",
+      "text": "END HALF",
+      "awayScore": 10,
+      "homeScore": 14,
+      "period": {
+       "number": 2
+      },
+      "clock": {
+       "displayValue": "0:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T01:25:00Z",
+      "type": {
+       "id": "65",
+       "text": "End of Half"
+      }
+     }
+    ]
+   },
+   {
+    "id": "40187293202",
+    "team": {
+     "id": "2",
+     "abbreviation": "BUF"
+    },
+    "result": "FG",
+    "isScore": true,
+    "plays": [
+     {
+      "id": "4018729324400",
+      "text": "Timeout #1 by BUF at 03:10.",
+      "awayScore": 27,
+      "homeScore": 24,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "3:10"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:05:00Z",
+      "type": {
+       "id": "21",
+       "text": "Timeout"
+      }
+     },
+     {
+      "id": "4018729324500",
+      "text": "T.Bass 41 yard field goal is GOOD, Center-R.Ferguson, Holder-S.Martin.",
+      "awayScore": 27,
+      "homeScore": 27,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "0:03"
+      },
+      "scoringPlay": true,
+      "wallclock": "2026-09-18T03:14:00Z",
+      "type": {
+       "id": "59",
+       "text": "Field Goal Good"
+      }
+     },
+     {
+      "id": "4018729324530",
+      "text": "END QUARTER 4",
+      "awayScore": 27,
+      "homeScore": 27,
+      "period": {
+       "number": 4
+      },
+      "clock": {
+       "displayValue": "0:00"
+      },
+      "scoringPlay": false,
+      "wallclock": "2026-09-18T03:15:00Z",
+      "type": {
+       "id": "2",
+       "text": "End Period"
+      }
+     }
+    ]
+   }
+  ],
+  "current": {
+   "id": "40187293203",
+   "team": {
+    "id": "8",
+    "abbreviation": "DET"
+   },
+   "result": "",
+   "isScore": false,
+   "plays": [
+    {
+     "id": "4018729324900",
+     "text": "T.Bass kicks 63 yards from BUF 35 to DET 2. J.Williams to DET 27 for 25 yards (T.Bernard).",
+     "awayScore": 27,
+     "homeScore": 27,
+     "period": {
+      "number": 5
+     },
+     "clock": {
+      "displayValue": "10:00"
+     },
+     "scoringPlay": false,
+     "wallclock": "2026-09-18T03:22:00Z",
+     "type": {
+      "id": "53",
+      "text": "Kickoff"
+     },
+     "start": {
+      "down": 0,
+      "distance": 0,
+      "yardLine": 35,
+      "team": {
+       "id": "2"
+      }
+     },
+     "end": {
+      "down": 1,
+      "distance": 10,
+      "yardLine": 27,
+      "team": {
+       "id": "8"
+      }
+     }
+    },
+    {
+     "id": "4018729324950",
+     "text": "Timeout #1 by DET at 08:00.",
+     "awayScore": 27,
+     "homeScore": 27,
+     "period": {
+      "number": 5
+     },
+     "clock": {
+      "displayValue": "8:00"
+     },
+     "scoringPlay": false,
+     "wallclock": "2026-09-18T03:24:00Z",
+     "type": {
+      "id": "21",
+      "text": "Timeout"
+     }
+    },
+    {
+     "id": "4018729325000",
+     "text": "(Shotgun) J.Goff pass short left to A.St. Brown to BUF 38 for 9 yards (T.Johnson).",
+     "awayScore": 27,
+     "homeScore": 27,
+     "period": {
+      "number": 5
+     },
+     "clock": {
+      "displayValue": "7:21"
+     },
+     "scoringPlay": false,
+     "wallclock": "2026-09-18T03:25:00Z",
+     "type": {
+      "id": "24",
+      "text": "Pass Reception"
+     },
+     "start": {
+      "down": 1,
+      "distance": 10,
+      "yardLine": 53,
+      "team": {
+       "id": "8"
+      }
+     },
+     "end": {
+      "down": 2,
+      "distance": 1,
+      "yardLine": 62,
+      "yardsToEndzone": 38,
+      "possessionText": "BUF 38",
+      "team": {
+       "id": "8"
+      }
+     }
+    }
+   ]
+  }
+ }
+}

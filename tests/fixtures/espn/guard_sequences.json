@@ -1,0 +1,909 @@
+{
+ "_note": "StateGuard golden sequences. Every poll patches the DET@BUF scoreboard event 401872932 (live: Q3 12:34, BUF 21 DET 17, DET ball 2nd & 4 at the BUF 34, lastPlay 40187293230 with home WP 0.61) and 'expect' lists the GameState fields the guard must report after that poll. Keys: t (seconds), poll (optional poll id), home_score, away_score, clock, period, status ('live' | 'final'), possession (team id), down, last_play {id, text, wp, tie, type_id}.",
+ "base": {
+  "event_id": "401872932",
+  "period": 3,
+  "clock": "12:34",
+  "home_score": 21,
+  "away_score": 17,
+  "situation": {
+   "lastPlay": {
+    "id": "40187293230",
+    "type": {
+     "id": "5",
+     "text": "Rush"
+    },
+    "text": "J.Gibbs right tackle to BUF 34 for 6 yards (C.Bishop).",
+    "team": {
+     "id": "8"
+    },
+    "probability": {
+     "tiePercentage": 0.0,
+     "homeWinPercentage": 0.61,
+     "awayWinPercentage": 0.39,
+     "secondsLeft": 0
+    }
+   },
+   "down": 2,
+   "yardLine": 34,
+   "distance": 4,
+   "downDistanceText": "2nd & 4 at BUF 34",
+   "shortDownDistanceText": "2nd & 4",
+   "possessionText": "BUF 34",
+   "isRedZone": false,
+   "homeTimeouts": 3,
+   "awayTimeouts": 2,
+   "possession": "8"
+  }
+ },
+ "sequences": {
+  "score_before_lastplay": {
+   "doc": "A touchdown lands on the scoreboard before lastPlay advances: ESPN's WP row still belongs to the old play, so it is nulled and the state is suspect until the id moves. The frozen clock after the score then flags a review window until the kickoff.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "suspect": false,
+      "espn_home_wp": 0.61,
+      "state_changed_ts": 0,
+      "review_pending": false,
+      "last_play_id": "40187293230",
+      "play_class": "scrimmage"
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 28,
+     "expect": {
+      "home_score": 28,
+      "espn_home_wp": null,
+      "suspect": true,
+      "state_changed_ts": 10
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 28,
+     "expect": {
+      "home_score": 28,
+      "espn_home_wp": null,
+      "suspect": true,
+      "review_pending": false
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Bates extra point is GOOD, Center-R.Ferguson, Holder-J.Bates.",
+      "wp": 0.81
+     },
+     "expect": {
+      "espn_home_wp": 0.81,
+      "suspect": false,
+      "play_class": "try",
+      "review_pending": true
+     }
+    },
+    {
+     "t": 40,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "J.Bates kicks 65 yards from DET 35 to end zone, Touchback.",
+      "wp": 0.8
+     },
+     "expect": {
+      "espn_home_wp": 0.8,
+      "suspect": false,
+      "play_class": "kickoff",
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "score_decrease_held_then_accepted": {
+   "doc": "An unexplained score decrease is held for one poll (the confirmed 21-17 is returned, suspect) and accepted on the next distinct poll so a real correction never sticks.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true,
+      "last_play_id": "40187293230",
+      "state_changed_ts": 0
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": true,
+      "state_changed_ts": 20
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293232",
+      "text": "(Shotgun) J.Allen pass incomplete short right.",
+      "wp": 0.53
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": false,
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "score_decrease_reversed_accepted": {
+   "doc": "A decrease whose last play says REVERSED is the truth and is accepted at once.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "The previous play was REVERSED. J.Goff pass incomplete short right.",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": false,
+      "state_changed_ts": 10
+     }
+    }
+   ]
+  },
+  "score_decrease_type74_accepted": {
+   "doc": "NFL play type 74 marks a reversal even when the text does not say so.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "Ruling on the field changed.",
+      "wp": 0.55,
+      "type_id": "74"
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": false,
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "score_decrease_glitch_corrected": {
+   "doc": "A one-poll glitch (14 then back to 21) never reaches callers: held, then the restored score is accepted clean.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 21,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.62
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": false,
+      "state_changed_ts": 0
+     }
+    }
+   ]
+  },
+  "review_text_after_td": {
+   "doc": "Review text after a score sets review_pending; the next distinct play id clears it.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "home_score": 28,
+      "suspect": false,
+      "review_pending": false,
+      "play_class": "scrimmage"
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "The previous play is under review.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": true
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293233",
+      "text": "J.Bates extra point is GOOD, Center-R.Ferguson, Holder-J.Bates.",
+      "wp": 0.81
+     },
+     "expect": {
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "frozen_clock_after_score": {
+   "doc": "No review text, but the clock does not move for two polls after a score: review_pending until a new play id.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": true
+     }
+    },
+    {
+     "t": 40,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "J.Bates kicks 65 yards from DET 35 to end zone, Touchback.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "review_expires_after_120s": {
+   "doc": "A review window with no new play id clears itself after 120 s.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "The previous play is under review.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": true
+     }
+    },
+    {
+     "t": 100,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "The previous play is under review.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": true
+     }
+    },
+    {
+     "t": 145,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293232",
+      "text": "The previous play is under review.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    }
+   ]
+  },
+  "final_then_live_within_300s": {
+   "doc": "ESPN posts a final that flips back to live: inside the soft window the flip is accepted clean.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "status": "live",
+      "final_soft": false
+     }
+    },
+    {
+     "t": 10,
+     "status": "final",
+     "clock": "0:00",
+     "period": 4,
+     "expect": {
+      "status": "final",
+      "final_soft": true,
+      "game_seconds_remaining": 0
+     }
+    },
+    {
+     "t": 20,
+     "status": "live",
+     "clock": "0:05",
+     "period": 4,
+     "expect": {
+      "status": "live",
+      "suspect": false,
+      "final_soft": false,
+      "game_seconds_remaining": 5,
+      "state_changed_ts": 20
+     }
+    }
+   ]
+  },
+  "final_then_live_after_300s": {
+   "doc": "After the soft window a final -> live flip is still accepted (the feed is the truth) but marked suspect.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "status": "live"
+     }
+    },
+    {
+     "t": 10,
+     "status": "final",
+     "clock": "0:00",
+     "period": 4,
+     "expect": {
+      "status": "final",
+      "final_soft": true
+     }
+    },
+    {
+     "t": 200,
+     "status": "final",
+     "clock": "0:00",
+     "period": 4,
+     "expect": {
+      "final_soft": true
+     }
+    },
+    {
+     "t": 400,
+     "status": "final",
+     "clock": "0:00",
+     "period": 4,
+     "expect": {
+      "final_soft": false
+     }
+    },
+    {
+     "t": 410,
+     "status": "live",
+     "clock": "0:05",
+     "period": 4,
+     "expect": {
+      "status": "live",
+      "suspect": true
+     }
+    }
+   ]
+  },
+  "score_increase_never_held": {
+   "doc": "Increases pass straight through with the new WP.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "away_score": 17
+     }
+    },
+    {
+     "t": 10,
+     "away_score": 24,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Goff pass deep left to A.St. Brown for 40 yards, TOUCHDOWN.",
+      "wp": 0.4
+     },
+     "expect": {
+      "away_score": 24,
+      "suspect": false,
+      "espn_home_wp": 0.4,
+      "state_changed_ts": 10
+     }
+    }
+   ]
+  },
+  "state_changed_ts_tracks_every_field": {
+   "doc": "state_changed_ts moves on clock, possession and down changes, not on identical polls.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "state_changed_ts": 0
+     }
+    },
+    {
+     "t": 10,
+     "expect": {
+      "state_changed_ts": 0
+     }
+    },
+    {
+     "t": 20,
+     "clock": "12:01",
+     "expect": {
+      "state_changed_ts": 20
+     }
+    },
+    {
+     "t": 30,
+     "clock": "12:01",
+     "possession": "2",
+     "down": 1,
+     "expect": {
+      "state_changed_ts": 30,
+      "possession": "home"
+     }
+    },
+    {
+     "t": 40,
+     "clock": "12:01",
+     "possession": "2",
+     "down": 1,
+     "expect": {
+      "state_changed_ts": 30
+     }
+    }
+   ]
+  },
+  "same_poll_id_is_one_hold": {
+   "doc": "A scoreboard poll and its enrichment share a poll id: the hold is counted once, the decrease is accepted on the next scoreboard poll.",
+   "polls": [
+    {
+     "t": 0,
+     "poll": 1,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "poll": 2,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 11,
+     "poll": 2,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 20,
+     "poll": 3,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": true
+     }
+    }
+   ]
+  },
+  "moving_clock_after_score_is_not_a_review": {
+   "doc": "Only a clock frozen for two consecutive polls counts: a clock that keeps moving after a score never opens a review window.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 28,
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 28,
+     "clock": "12:20",
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false,
+      "state_changed_ts": 20
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 28,
+     "clock": "12:20",
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 40,
+     "home_score": 28,
+     "clock": "12:10",
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 50,
+     "home_score": 28,
+     "clock": "12:10",
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 60,
+     "home_score": 28,
+     "clock": "12:10",
+     "last_play": {
+      "id": "40187293231",
+      "text": "(Shotgun) J.Allen pass deep right to K.Coleman for 32 yards, TOUCHDOWN.",
+      "wp": 0.8
+     },
+     "expect": {
+      "review_pending": true
+     }
+    }
+   ]
+  },
+  "review_text_without_recent_event_ignored": {
+   "doc": "Review wording with no score or possession change in the last 120 s (a spot review, a measurement) is not a settlement risk.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "review_pending": false
+     }
+    },
+    {
+     "t": 10,
+     "clock": "12:20",
+     "last_play": {
+      "id": "40187293231",
+      "text": "The previous play is under review.",
+      "wp": 0.61
+     },
+     "expect": {
+      "review_pending": false,
+      "suspect": false
+     }
+    }
+   ]
+  },
+  "decrease_first_seen_on_repeated_poll_is_held": {
+   "doc": "A decrease first seen on a repeated poll id (the summary enrich right after the scoreboard poll) is held without spending the distinct-poll budget: the next scoreboard poll is the one extra poll, the one after that accepts.",
+   "polls": [
+    {
+     "t": 0,
+     "poll": 1,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 1,
+     "poll": 1,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true,
+      "state_changed_ts": 0
+     }
+    },
+    {
+     "t": 10,
+     "poll": 2,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 11,
+     "poll": 2,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 20,
+     "poll": 3,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": true,
+      "state_changed_ts": 20
+     }
+    }
+   ]
+  },
+  "enrich_glitch_never_leaks": {
+   "doc": "A one-tick summary glitch (enrich says 14 while the scoreboard keeps saying 21) is held on the repeated poll and the next scoreboard poll is clean.",
+   "polls": [
+    {
+     "t": 0,
+     "poll": 1,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 1,
+     "poll": 1,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 10,
+     "poll": 2,
+     "expect": {
+      "home_score": 21,
+      "suspect": false,
+      "state_changed_ts": 0
+     }
+    }
+   ]
+  },
+  "second_decrease_after_accepted_is_held": {
+   "doc": "Each accepted decrease resets the hold budget: 21 -> 14 (held, accepted) then 14 -> 7 with a new plain-text play is held again before it is accepted.",
+   "polls": [
+    {
+     "t": 0,
+     "expect": {
+      "home_score": 21
+     }
+    },
+    {
+     "t": 10,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 21,
+      "suspect": true
+     }
+    },
+    {
+     "t": 20,
+     "home_score": 14,
+     "last_play": {
+      "id": "40187293231",
+      "text": "J.Cook right guard to DET 35 for 1 yard (M.Rodriguez; T.Williams).",
+      "wp": 0.55
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": true
+     }
+    },
+    {
+     "t": 30,
+     "home_score": 7,
+     "last_play": {
+      "id": "40187293232",
+      "text": "(Shotgun) J.Allen pass incomplete short right.",
+      "wp": 0.4
+     },
+     "expect": {
+      "home_score": 14,
+      "suspect": true,
+      "last_play_id": "40187293231"
+     }
+    },
+    {
+     "t": 40,
+     "home_score": 7,
+     "last_play": {
+      "id": "40187293232",
+      "text": "(Shotgun) J.Allen pass incomplete short right.",
+      "wp": 0.4
+     },
+     "expect": {
+      "home_score": 7,
+      "suspect": true,
+      "state_changed_ts": 40
+     }
+    }
+   ]
+  }
+ }
+}
