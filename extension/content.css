@@ -33,4 +33,5 @@
 a.arbe-cat-host { position: relative !important; padding-bottom: 12px !important; }
 .arbe-cat-badge { position: absolute; left: 2px; right: 2px; bottom: 1px; margin: 0; padding: 0; border: none !important; background: transparent; font-size: 9px; line-height: 11px; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .arbe-arbflag { font-weight: 800; }
-
+.arbe-ineligible td { opacity: 0.55; }
+.arbe-tag.arbe-signal { border-color: #8a6d3b; color: #d9b36b; }

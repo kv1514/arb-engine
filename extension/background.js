@@ -14,7 +14,9 @@ const RH_API = "https://api.robinhood.com";
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
 const GAMMA = "https://gamma-api.polymarket.com";
 const BRIDGE = "http://127.0.0.1:8765";
-const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 1, venues: { kalshi: true, polymarket: true }, showBadges: true, bridge: "auto", positions: "", bankroll: 0, kelly: 0.25 };
+// executable.polymarket: Polymarket (non-US) is not executable for US accounts (arb_engine/data/venue_rules.json),
+// so it is signal-only — priced into the fair value, never an arb leg — unless the user opts in here.
+const DEFAULTS = { gold: false, contracts: 100, targetMargin: 0, kalshiRounding: "cent", refreshSeconds: 1, venues: { kalshi: true, polymarket: true }, executable: { polymarket: false }, showBadges: true, bridge: "auto", positions: "", bankroll: 0, kelly: 0.25 };
 
 // Kalshi's production API answers 403 to any browser Origin other than kalshi.com. Strip the
 // Origin header on our own requests to it (allowed by declarativeNetRequestWithHostAccess).
@@ -39,7 +41,7 @@ async function bridgeAvailable() {
 
 // Convert the Python engine's EventReport into the shape content.js renders.
 function rowsFromReport(a) {
-  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
+  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ineligible: v.ineligible || null, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
 }
 function arbFromReport(a) {
   return a.arb ? { grossSum: a.arb.gross_sum, margin: a.arb.margin, profit: a.arb.profit, contracts: a.arb.contracts, isArb: a.arb.is_arb, legs: (a.arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, fee: l.fee })) } : null;
@@ -168,11 +170,18 @@ async function polymarketGame(teams, date) {
 }
 const LINE_FAMILIES = { NFLSPREAD: "spread", NFLTOTAL: "total" };
 function fmtLine(x) { return String(Number(x)); }
+function executableVenue(venue, cfg) {
+  if (venue === "polymarket") return !!(cfg.executable && cfg.executable.polymarket);
+  return true;
+}
 function analyzeTwoOutcome(byVenue, outcomes, labels, cfg) {
   const fair = ArbCore.consensusFair(byVenue, outcomes);
-  const quotesByOutcome = {};
-  outcomes.forEach((o) => { quotesByOutcome[o] = Object.values(byVenue).flat().filter((q) => q.outcome === o); });
-  const legs = ArbCore.bestLegPerOutcome(quotesByOutcome, cfg.contracts);
+  const quotesByOutcome = {}, legQuotes = {};
+  outcomes.forEach((o) => {
+    quotesByOutcome[o] = Object.values(byVenue).flat().filter((q) => q.outcome === o);
+    legQuotes[o] = quotesByOutcome[o].filter((q) => executableVenue(q.venue, cfg));  // signal-only venues never become legs
+  });
+  const legs = ArbCore.bestLegPerOutcome(legQuotes, cfg.contracts);
   const complete = legs.length === outcomes.length;
   const arb = complete ? ArbCore.evaluate(legs, cfg.contracts) : null;
   const rows = outcomes.map((o) => {
@@ -180,9 +189,10 @@ function analyzeTwoOutcome(byVenue, outcomes, labels, cfg) {
     const hedgeable = complete && others.length === outcomes.length - 1;
     const venues = quotesByOutcome[o].map((q) => {
       const feePc = q.ask != null ? q.fee(q.ask, cfg.contracts, "taker") / cfg.contracts : null;
-      return { venue: q.venue, exchange: q.exchange || null, mirror: q.mirror || null, ask: q.ask, bid: q.bid, askSize: q.askSize == null ? null : q.askSize, feePerContract: feePc, allIn: q.ask != null ? q.ask + feePc : null, maxBuyTaker: hedgeable ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "taker") : null, maxBuyMaker: hedgeable ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "maker") : null, url: q.url || null, feeNote: q.feeNote || "", contractId: q.contractId || null };
+      const eligible = executableVenue(q.venue, cfg);
+      return { venue: q.venue, exchange: q.exchange || null, mirror: q.mirror || null, ineligible: eligible ? null : "not executable", ask: q.ask, bid: q.bid, askSize: q.askSize == null ? null : q.askSize, feePerContract: feePc, allIn: q.ask != null ? q.ask + feePc : null, maxBuyTaker: hedgeable && eligible ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "taker") : null, maxBuyMaker: hedgeable && eligible ? ArbCore.maxPrice(others, q.fee, cfg.contracts, cfg.targetMargin, "maker") : null, url: q.url || null, feeNote: q.feeNote || "", contractId: q.contractId || null };
     }).sort((a, b) => (a.allIn == null) - (b.allIn == null) || a.allIn - b.allIn);
-    const best = venues.find((v) => v.allIn != null && !v.mirror) || null;
+    const best = venues.find((v) => v.allIn != null && !v.mirror && !v.ineligible) || null;
     return { outcome: o, label: labels[o], fair: fair[o], venues, best: best ? best.venue : null, bestAllIn: best ? best.allIn : null, edge: best && fair[o] != null ? fair[o] - best.allIn : null };
   });
   // Fillable = every arb leg has at least 1 contract at the quoted size (unknown size = unlimited).

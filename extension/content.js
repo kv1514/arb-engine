@@ -66,9 +66,9 @@
     for (const row of a.rows) {
       html += `<div class="arbe-row"><div class="arbe-rowhead"><span class="arbe-outcome">${esc(row.label)}</span><span>fair <b>${fmtP(row.fair)}</b></span><span class="${row.edge > 0 ? "arbe-good" : "arbe-bad"}">edge ${fmtPct(row.edge, true)} @ ${esc(row.best || "–")}</span></div><table class="arbe-table"><thead><tr><th>venue</th><th>ask</th><th>size</th><th>bid</th><th>fee/ct</th><th>all-in</th><th>max buy (take)</th><th>max buy (rest)</th></tr></thead><tbody>`;
       for (const v of row.venues) {
-        const tag = v.mirror ? ` <span class="arbe-tag" title="Robinhood resells this exchange's order book; same prices, higher fees">= ${esc(v.mirror)} book</span>` : "";
+        const tag = (v.mirror ? ` <span class="arbe-tag" title="Robinhood resells this exchange's order book; same prices, higher fees">= ${esc(v.mirror)} book</span>` : "") + (v.ineligible ? ` <span class="arbe-tag arbe-signal" title="${esc(v.ineligible)}: priced into the fair value, never an arb leg (US accounts cannot trade there)">signal only</span>` : "");
         const link = v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(venueName(v))}</a>` : esc(venueName(v));
-        html += `<tr class="${v.venue === "robinhood" ? "arbe-here" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${v.askSize == null ? "–" : Math.floor(v.askSize)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
+        html += `<tr class="${v.venue === "robinhood" ? "arbe-here" : ""}${v.ineligible ? " arbe-ineligible" : ""}"><td title="${esc(v.feeNote)}">${link}${tag}</td><td>${fmtP(v.ask)}</td><td>${v.askSize == null ? "–" : Math.floor(v.askSize)}</td><td>${fmtP(v.bid)}</td><td>${fmtP(v.feePerContract)}</td><td><b>${fmtP(v.allIn)}</b></td><td>${fmtP(v.maxBuyTaker)}</td><td>${fmtP(v.maxBuyMaker)}</td></tr>`;
       }
       html += `</tbody></table></div>`;
     }
