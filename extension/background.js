@@ -468,7 +468,7 @@ async function analyzeMany(urls, max) {
         results[u] = {
           ok: true, name: r.event && r.event.name, source: a.source, fetchedAt: a.fetchedAt,
           arb: a.arb ? { isArb: !!a.arb.isArb, margin: a.arb.margin } : null,
-          rows: (a.rows || []).map((row) => { const here = (row.venues || []).find((v) => v.venue === "robinhood" && v.side !== "no") || null;  // the YES contract on this page return { outcome: row.outcome, label: row.label, fair: row.fair, edge: row.edge, best: row.best, here: here ? { ask: here.ask, allIn: here.allIn, maxBuyTaker: here.maxBuyTaker, maxBuyMaker: here.maxBuyMaker } : null }; }),
+          rows: (a.rows || []).map((row) => { const here = (row.venues || []).find((v) => v.venue === "robinhood" && v.side !== "no") || null; /* the YES contract on this page */ return { outcome: row.outcome, label: row.label, fair: row.fair, edge: row.edge, best: row.best, here: here ? { ask: here.ask, allIn: here.allIn, maxBuyTaker: here.maxBuyTaker, maxBuyMaker: here.maxBuyMaker } : null }; }),
         };
       } catch (e) { results[u] = { ok: false, error: e.message || String(e) }; }
     }
