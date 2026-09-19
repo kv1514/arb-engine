@@ -31,6 +31,14 @@ unzipped folder (Chrome does not load `.zip` files via Load unpacked).
 After editing any file under `extension/`, click the circular **reload** arrow on the
 extension card (or remove and load again).
 
+## "not a Robinhood prediction-market event URL" (or any error the CLI does not show)
+
+The bridge loads the engine once at start. If the panel shows an error that
+`python3 -m arb_engine rh-event <same url>` does not, the bridge process is older than the code —
+stop it (Ctrl-C) and start it again, then press ↻ in the panel. `curl http://127.0.0.1:8765/health`
+tells you it is up; `curl 'http://127.0.0.1:8765/analyze?url=<url>'` shows exactly what the
+overlay receives.
+
 ## Chrome error strings and what they mean
 
 | Chrome says | Meaning | Fix |
