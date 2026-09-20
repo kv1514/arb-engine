@@ -164,12 +164,13 @@ def fixture_sources() -> dict[str, tuple[list[dict[str, Any]], list[Any]]]:
     """{sport: (snapshot rows, merged events)} from the committed offline fixtures."""
     from arb_engine.matching.matcher import merge_snapshots
     from arb_engine.scanner import scan
+    from tests.helpers import FIXTURE_NOW
     from tests.test_ncaaf import _adapters as ncaaf_adapters
     from tests.test_scanner import _adapters as nfl_adapters
 
     out = {}
     for sport, mk in (("nfl", nfl_adapters), ("ncaaf", ncaaf_adapters)):
-        res = scan(sport, mk(), settings={})
+        res = scan(sport, mk(), settings={}, now=FIXTURE_NOW)
         snaps = [a.fetch(sport) for a in mk()]
         merged = [me for me in merge_snapshots(snaps).values() if len(me.quotes_by_venue) >= 2]
         out[sport] = (rows_from_reports(res.events, ts=res.fetched_at), merged)

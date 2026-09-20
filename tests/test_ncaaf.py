@@ -12,7 +12,7 @@ from arb_engine.venues import KalshiAdapter, PolymarketAdapter, RobinhoodAdapter
 from arb_engine.venues.espn import ESPNClient, ESPNFeed
 from arb_engine.venues.kalshi import KalshiClient
 
-from .helpers import FakeHttp, load
+from .helpers import FIXTURE_NOW, FakeHttp, load
 
 
 def _adapters():
@@ -66,7 +66,7 @@ class TeamCodeTests(unittest.TestCase):
 
 class ScanTests(unittest.TestCase):
     def test_three_venues_merge_on_one_key(self):
-        res = scan("ncaaf", _adapters(), settings={}, market_types={"moneyline"})
+        res = scan("ncaaf", _adapters(), now=FIXTURE_NOW, settings={}, market_types={"moneyline"})
         by_key = {e.event_key: e for e in res.events}
         self.assertIn("ncaaf:PUR|UCLA:2026-09-19", by_key)
         self.assertIn("ncaaf:FRES|SJSU:2026-09-19", by_key)
@@ -97,7 +97,7 @@ class LineTests(unittest.TestCase):
     Kalshi's KXNCAAFSPREAD/TOTAL use the same ceil(line) suffix convention as the NFL."""
 
     def test_cdna_lines_merge_with_kalshi(self):
-        res = scan("ncaaf", _adapters(), settings={}, market_types={"spread", "total"})
+        res = scan("ncaaf", _adapters(), now=FIXTURE_NOW, settings={}, market_types={"spread", "total"})
         by_key = {e.event_key: e for e in res.events}
         sp = by_key.get("ncaaf:FRES|SJSU:2026-09-19:spread:FRES-23.5")
         self.assertIsNotNone(sp, sorted(k for k in by_key if "spread" in k)[:6])

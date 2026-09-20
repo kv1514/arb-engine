@@ -83,8 +83,8 @@ maker's hedges to Robinhood:
 <!-- results:eligibility_p11 -->
 | fixture scan | snapshots | arbs before | with a non-executable leg | arbs after | maker watches before | hedge not executable | share | hedge venues before | hedge venues after |
 |---|---|---|---|---|---|---|---|---|---|
-| ncaaf | 53 | 1 | 1 | 0 | 10 | 7 | 70.0% | polymarket 7, robinhood 3 | robinhood 10 |
-| nfl | 1 | 0 | 0 | 0 | 8 | 5 | 62.5% | polymarket 5, robinhood 3 | robinhood 8 |
+| ncaaf | 54 | 1 | 1 | 0 | 10 | 7 | 70.0% | polymarket 7, robinhood 3 | robinhood 10 |
+| nfl | 5 | 0 | 0 | 0 | 8 | 5 | 62.5% | polymarket 5, robinhood 3 | robinhood 8 |
 <!-- /results:eligibility_p11 -->
 
 <!-- results:eligibility_p11_summary -->

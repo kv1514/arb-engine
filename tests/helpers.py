@@ -109,3 +109,8 @@ class SequencedFakeHttp:
 
     def delete(self, url: str, headers: dict | None = None) -> Any:
         return self._next("DELETE", url, headers, False)
+
+
+# The wall clock every fixture-based scan() uses: 2026-09-16T12:00Z, before every recorded
+# kickoff, so a fixture game never flips to "live" as real time passes (it did on 2026-09-20).
+FIXTURE_NOW = 1789560000.0

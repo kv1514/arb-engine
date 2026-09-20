@@ -20,7 +20,7 @@
     },
     "share_after_of_before": 0.0,
     "share_before_non_executable": 1.0,
-    "snapshots": 53
+    "snapshots": 54
    },
    "maker_hedges": {
     "by_hedge_venue_after": {
@@ -53,7 +53,7 @@
     "non_executable_legs_by_venue": {},
     "share_after_of_before": null,
     "share_before_non_executable": null,
-    "snapshots": 1
+    "snapshots": 5
    },
    "maker_hedges": {
     "by_hedge_venue_after": {

@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from arb_engine.fees.robinhood import CDNA_FEE_MODELS, ROTHERA_FEE_MODELS  # noqa: E402
 from arb_engine.scanner import ScanResult, scan  # noqa: E402
+from tests.helpers import FIXTURE_NOW  # noqa: E402
 
 RESULTS = ROOT / "tests" / "fixtures" / "results" / "fee_flip_p10.json"
 BASELINE = {"rothera_fee_model": "flat_001", "cdna_fee_model": "flat_001"}
@@ -56,8 +57,8 @@ def _sign(m: float | None) -> int:
 def compare(sport: str, settings: dict[str, Any], exchange: str) -> dict[str, Any]:
     """Baseline (flat_001 everywhere) vs ``settings`` on one fixture scan."""
     adapters = _fixture_adapters(sport)
-    base = scan(sport, adapters(), settings=dict(BASELINE))
-    alt = scan(sport, adapters(), settings={**BASELINE, **settings})
+    base = scan(sport, adapters(), settings=dict(BASELINE), now=FIXTURE_NOW)
+    alt = scan(sport, adapters(), settings={**BASELINE, **settings}, now=FIXTURE_NOW)
     base_rows, alt_rows = _rows(base), _rows(alt)
     assert set(base_rows) == set(alt_rows), "fee model must not add or drop rows"
     moved = [k for k in base_rows if base_rows[k][1] != alt_rows[k][1]]

@@ -9,6 +9,7 @@ from arb_engine.strategy.alerts import Alerter
 from arb_engine.strategy.inplay import evaluate_inplay
 from arb_engine.venues.espn import GameState
 
+from .helpers import FIXTURE_NOW
 from .test_inplay import _me
 from .test_scanner import _adapters
 
@@ -44,7 +45,7 @@ class StoreTests(unittest.TestCase):
             os.unlink(self.path)
 
     def test_record_scan_and_stats(self):
-        res = scan("nfl", _adapters(), settings={})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
         st = Store(self.path)
         n = st.record_scan(res)
         self.assertGreater(n, len(res.events))

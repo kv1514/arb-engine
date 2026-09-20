@@ -13,7 +13,7 @@ from arb_engine.venues.kalshi import KalshiAdapter, KalshiClient
 from arb_engine.venues.polymarket import PolymarketAdapter
 from arb_engine.venues.robinhood import RobinhoodAdapter
 
-from .helpers import FakeHttp, load
+from .helpers import FIXTURE_NOW, FakeHttp, load
 
 
 @contextlib.contextmanager
@@ -72,7 +72,7 @@ class ScannerTests(unittest.TestCase):
     def test_scan_merges_three_venues(self):
         # executable_venues="all": all three venues may be legs (the compliance default keeps
         # Polymarket signal-only; see test_scan_default_keeps_polymarket_signal_only).
-        res = scan("nfl", _adapters(), settings={"robinhood_gold": False, "executable_venues": "all"})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"robinhood_gold": False, "executable_venues": "all"})
         self.assertEqual(res.errors, {})
         keys = {e.event_key for e in res.events}
         self.assertIn("nfl:BUF|DET:2026-09-17", keys)
@@ -101,14 +101,14 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(res.arbs(), [])
 
     def test_scan_default_keeps_polymarket_signal_only(self):
-        res = scan("nfl", _adapters(), settings={"robinhood_gold": False})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"robinhood_gold": False})
         ev = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17")
         self.assertIn("signal-only:polymarket", ev.flags)
         self.assertNotIn("polymarket", {l["venue"] for l in ev.arb["legs"]})
         self.assertEqual(ev.venues, ["kalshi", "polymarket", "robinhood"])  # the row stays for the fair value
 
     def test_spread_and_total_merge_across_three_venues(self):
-        res = scan("nfl", _adapters(), settings={})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
         sp = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17:spread:BUF-1.5")
         self.assertEqual(sp.venues, ["kalshi", "polymarket", "robinhood"])
         self.assertEqual((sp.market_type, sp.line, sp.tie_rule), ("spread", 1.5, "no_push"))
@@ -122,7 +122,7 @@ class ScannerTests(unittest.TestCase):
         kal = next(v for v in under.venues if v.venue == "kalshi")
         self.assertEqual(kal.ask, 0.38)  # NO side of the over market
         # Market-type filter.
-        only_ml = scan("nfl", _adapters(), settings={}, market_types={"moneyline"})
+        only_ml = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={}, market_types={"moneyline"})
         self.assertTrue(all(e.market_type == "moneyline" for e in only_ml.events))
         self.assertEqual(len(only_ml.events), 2)
 
@@ -210,7 +210,7 @@ class TieAwareTests(unittest.TestCase):
         self.assertFalse(any(f.startswith("tie-rule-mismatch") for f in rep.flags))
         self.assertAlmostEqual(rep.tie_margin, rep.margin)
         # Fixture scan: every Kalshi x Rothera pair reports a tie margin.
-        res = scan("nfl", _adapters(), settings={})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
         ev = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17")
         self.assertIsNotNone(ev.tie_margin)
         pairs = [p for p in cross_book_pairs(_merged_nfl()["nfl:BUF|DET:2026-09-17"], {}) if {l["book"] for l in p["legs"]} == {"kalshi", "rothera"}]
@@ -223,11 +223,11 @@ class TieAwareTests(unittest.TestCase):
                 self.assertAlmostEqual(p["tie_margin"], p["margin"] - 0.5)  # YES + YES loses half the stake
 
     def test_scan_emits_no_legs_by_setting(self):
-        res = scan("nfl", _adapters(), settings={})
+        res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
         ev = next(e for e in res.events if e.event_key == "nfl:BUF|DET:2026-09-17")
         ids = {v.market_id for o in ev.outcomes for v in o.venues if v.venue == "robinhood"}
         self.assertEqual(sum(1 for i in ids if i.endswith("#no")), 2)
-        res_off = scan("nfl", _adapters(), settings={"rothera_no_leg": False})
+        res_off = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"rothera_no_leg": False})
         ev = next(e for e in res_off.events if e.event_key == "nfl:BUF|DET:2026-09-17")
         ids = {v.market_id for o in ev.outcomes for v in o.venues if v.venue == "robinhood"}
         self.assertFalse(any(i.endswith("#no") for i in ids))
@@ -237,8 +237,8 @@ class TieAwareTests(unittest.TestCase):
         # consensus_fair_value keeps the last quote per (venue, outcome); the NO legs sit on the
         # other team's outcome and would overwrite the YES quotes, so fair/edge must come from
         # the YES-side view whether or not the NO legs are emitted.
-        on = {e.event_key: e for e in scan("nfl", _adapters(), settings={"rothera_no_leg": True}).events}
-        off = {e.event_key: e for e in scan("nfl", _adapters(), settings={"rothera_no_leg": False}).events}
+        on = {e.event_key: e for e in scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"rothera_no_leg": True}).events}
+        off = {e.event_key: e for e in scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"rothera_no_leg": False}).events}
         self.assertEqual(set(on), set(off))
         checked = 0
         for key, ev in on.items():
@@ -399,10 +399,10 @@ class RegistryGateTests(unittest.TestCase):
             return {"fair": {"over": 0.5, "under": 0.5}, "ml_spread_gap": True}
 
         with stub_module("arb_engine.quant.lines", line_fair_for_event=line_fair_for_event):
-            off = scan("nfl", _adapters(), settings={})
+            off = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
             self.assertEqual(calls, [])
             self.assertTrue(all(e.line_fair is None for e in off.events))
-            res = scan("nfl", _adapters(), settings={"line_fair": True})
+            res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"line_fair": True})
         tot = next(e for e in res.events if e.market_type == "total")
         self.assertEqual(tot.line_fair["fair"], {"over": 0.5, "under": 0.5})
         self.assertIn("ml-spread-gap", tot.flags)
@@ -410,7 +410,7 @@ class RegistryGateTests(unittest.TestCase):
         self.assertEqual(set(ml_args[1]), {"BUF", "DET"})      # the same game's moneyline consensus
         self.assertEqual(ml_args[3], 49.5)
         with stub_module("arb_engine.quant.lines"):
-            res = scan("nfl", _adapters(), settings={"line_fair": True})
+            res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={"line_fair": True})
         self.assertTrue(all(e.line_fair is None for e in res.events))
 
 
@@ -426,7 +426,7 @@ class FixtureMetricsTests(unittest.TestCase):
     @classmethod
     def _metrics(cls, sport, adapters):
         merged = merge_snapshots([a.fetch(sport) if a.venue != "robinhood" else a.fetch(sport, emit_no_side=True) for a in adapters])
-        res = scan(sport, adapters, settings={}, market_types={"moneyline"})
+        res = scan(sport, adapters, now=FIXTURE_NOW, settings={}, market_types={"moneyline"})
         reports = {e.event_key: e for e in res.events}
         pairs = [p for me in merged.values() if me.info.market_type == "moneyline" for p in cross_book_pairs(me, {})]
         kr = [p for p in pairs if {l["book"] for l in p["legs"]} == {"kalshi", "rothera"}]

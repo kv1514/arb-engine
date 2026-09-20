@@ -473,7 +473,7 @@ def attach_line_fair(reports: list[EventReport], selected: list[MergedEvent], se
             r.flags.append("ml-spread-gap")
 
 
-def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0, market_types: Optional[set[str]] = None, depth_for_candidates: bool = False, candidate_margin: float = -0.01, executable_venues: Optional[Iterable[str]] = None, emit_no_side: Optional[bool] = None) -> ScanResult:
+def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0, market_types: Optional[set[str]] = None, depth_for_candidates: bool = False, candidate_margin: float = -0.01, executable_venues: Optional[Iterable[str]] = None, emit_no_side: Optional[bool] = None, now: Optional[float] = None) -> ScanResult:
     """Two passes when ``depth_for_candidates``: top-of-book for everything, then real order
     books only for events whose margin is above ``candidate_margin`` (keeps Kalshi's
     rate limit happy: dozens of book requests instead of hundreds).
@@ -494,7 +494,7 @@ def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]]
             errors[snap.venue] = snap.errors
     merged = merge_snapshots(snapshots)
     reports: list[EventReport] = []
-    now = time.time()
+    now = time.time() if now is None else float(now)  # tests and fixture scripts pin the clock so pre-game stays pre-game
     selected: list[MergedEvent] = []
     for me in merged.values():
         if market_types and me.info.market_type not in market_types:
