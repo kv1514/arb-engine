@@ -605,10 +605,16 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertIn("-m arb_engine bridge --port 8765", Path(logs, "bridge-2026-09-20.log").read_text())
         self.assertTrue(os.path.exists(os.path.join(logs, "preflight-2026-09-20.log")))
         # the maker crashes on purpose: the supervisor logs the exit and restarts after the backoff
-        deadline = time.time() + 6
-        while time.time() < deadline and Path(logs, "maker-2026-09-20.log").read_text().count("starting maker") < 2:
+        deadline = time.time() + 20  # CI runners are slow: the 10 s restart backoff plus scheduling slack
+        def _maker_log() -> str:  # the supervisor creates the log asynchronously; missing = nothing yet
+            try:
+                return Path(logs, "maker-2026-09-20.log").read_text()
+            except FileNotFoundError:
+                return ""
+
+        while time.time() < deadline and _maker_log().count("starting maker") < 2:
             time.sleep(0.2)
-        mk = Path(logs, "maker-2026-09-20.log").read_text()
+        mk = _maker_log()
         self.assertGreaterEqual(mk.count("starting maker"), 2)
         self.assertIn("exited rc=1; restart in 1s", mk)
         self.assertIn("--mode paper --size 10", mk)
