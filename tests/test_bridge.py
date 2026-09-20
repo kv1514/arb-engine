@@ -1,7 +1,9 @@
 """Bridge tests without a socket: ``recent_event`` reuse, and the request handler run
 against fixture adapters (``Handler.do_GET`` on a stub request) for the JSON the overlay
 reads — Rothera NO-side rows, tie margin, Polymarket signal-only by default, execution
-gates and the per-event feed-freshness memory across successive ``/inplay`` calls."""
+gates and the per-event feed-freshness memory across successive ``/inplay`` calls — plus
+the 1 s-polling contract: ``timings`` on every response, the ESPN 2 s cache and ``?fresh=1``
+bypass, never a 500, and the ``/health`` reachability / request-log shape."""
 
 import io
 import json
@@ -11,7 +13,7 @@ from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import quote
 
-from arb_engine.bridge import DEFAULT_INPLAY_MAX_AGE, Handler, executable_venues_for, recent_event, with_gate_fields, with_overlay_fields
+from arb_engine.bridge import DEFAULT_INPLAY_MAX_AGE, ESPN_TTL, BridgeStats, Handler, executable_venues_for, recent_event, with_gate_fields, with_overlay_fields
 from arb_engine.eventlookup import EventAnalyzer
 from arb_engine.venues.espn import GameState
 from arb_engine.venues.kalshi import KalshiClient
@@ -41,11 +43,29 @@ def _gs(**kw) -> GameState:
     return GameState(**base)
 
 
-def _bridge():
-    """The real handler with per-test state: its own analyzer, ESPN fetchers and poll memory."""
-    cls = type("_BridgeCase", (Handler,), {"espn_fetchers": {}, "freshness": {}})
+class FakeClock:
+    """A callable clock the handler class and the analyzer share (never bound: it is an object)."""
+
+    def __init__(self, t: float = 1_000_000.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, dt: float) -> float:
+        self.t += dt
+        return self.t
+
+
+def _bridge(clock: FakeClock | None = None):
+    """The real handler with per-test state: its own analyzer, ESPN fetchers, poll memory,
+    ESPN cache and request log, all on one mocked clock."""
+    clock = clock or FakeClock()
+    cls = type("_BridgeCase", (Handler,), {"clock": clock})
     cls.analyzer, transports = _analyzer_for_game()
+    cls.analyzer.clock = clock
     cls.kalshi = cls.analyzer.kalshi
+    cls.reset_state()
     return cls, transports
 
 
@@ -75,14 +95,25 @@ def _clean_env(case: unittest.TestCase) -> None:
 
 class RecentEventTests(unittest.TestCase):
     def test_reuses_fresh_analysis_for_the_same_url(self):
+        # In play a quote must never be served older than ~2 s, so the reuse window is 2 s.
+        self.assertEqual(DEFAULT_INPLAY_MAX_AGE, 2.0)
         me = object()
         an = SimpleNamespace(last_event=me, last_url=URL, last_analyzed_at=1000.0)
-        self.assertIs(recent_event(an, URL, now=1005.0), me)
+        self.assertIs(recent_event(an, URL, now=1001.5), me)
         self.assertIs(recent_event(an, URL, max_age=DEFAULT_INPLAY_MAX_AGE, now=1000.0 + DEFAULT_INPLAY_MAX_AGE), me)
         self.assertIsNone(recent_event(an, URL, now=1000.0 + DEFAULT_INPLAY_MAX_AGE + 0.01))
+        self.assertIs(recent_event(an, URL, max_age=10, now=1005.0), me)
         self.assertIsNone(recent_event(an, URL + "x", now=1001.0))
         self.assertIsNone(recent_event(SimpleNamespace(last_event=None, last_url=URL, last_analyzed_at=1000.0), URL, now=1001.0))
         self.assertIsNone(recent_event(SimpleNamespace(), URL, now=1001.0))
+
+    def test_one_slot_per_url_so_two_tabs_do_not_evict_each_other(self):
+        a, b = object(), object()
+        an = SimpleNamespace(last_event=b, last_url=URL + "b", last_analyzed_at=1001.0, recent_events={URL: (a, 1000.0), URL + "b": (b, 1001.0)})
+        self.assertIs(recent_event(an, URL, now=1001.5), a)
+        self.assertIs(recent_event(an, URL + "b", now=1001.5), b)
+        self.assertIsNone(recent_event(an, URL, now=1002.5))
+        self.assertIsNone(recent_event(an, URL + "c", now=1001.5))
 
     def test_analyze_url_stamps_url_and_time(self):
         an, (rh, kal, pm) = _analyzer_for_game()
@@ -158,9 +189,124 @@ class AnalyzeRouteTests(unittest.TestCase):
 
     def test_health_and_unknown_route(self):
         cls, _ = _bridge()
-        self.assertEqual(_get(cls, "/health"), (200, {"ok": True, "service": "arb-engine bridge"}))
+        st, body = _get(cls, "/health")
+        self.assertEqual((st, body["ok"], body["service"]), (200, True, "arb-engine bridge"))
+        self.assertEqual(body["executable_venues"], ["kalshi", "robinhood"])
         st, body = _get(cls, "/nope")
-        self.assertEqual((st, body["ok"]), (404, False))
+        self.assertEqual((st, body["ok"], body["where"]), (404, False, "/nope"))
+
+    def test_health_shape_after_requests(self):
+        clock = FakeClock()
+        cls, _ = _bridge(clock)
+        _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        clock.advance(0.5)
+        _get(cls, "/analyze?url=https://example.com/x")
+        clock.advance(0.5)
+        _, h = _get(cls, "/health")
+        self.assertTrue(h["ok"])
+        self.assertEqual(sorted(h["venues"]), ["espn", "kalshi", "polymarket", "robinhood"])
+        for v in ("robinhood", "kalshi", "polymarket"):
+            row = h["venues"][v]
+            self.assertTrue(row["reachable"], (v, row))
+            self.assertAlmostEqual(row["last_ok_age_s"], 1.0)
+            self.assertEqual(sorted(row["cache"]), ["hit_rate", "hits", "misses", "stale"])
+            self.assertEqual(row["cache"]["misses"], 1)
+        # Polymarket answered (reachable) but had no CLOB book in the fixture: that is its last error.
+        self.assertIn("book sizes unavailable", h["venues"]["polymarket"]["last_error"])
+        self.assertIsNone(h["venues"]["kalshi"]["last_error"])
+        espn = h["venues"]["espn"]
+        self.assertEqual((espn["reachable"], espn["last_ok_age_s"], espn["last_error"]), (False, None, None))
+        req = h["requests"]
+        self.assertEqual((req["total"], req["errors"], req["window_s"]), (2, 1, 10.0))
+        self.assertGreater(req["per_s"], 0)
+        self.assertEqual([r["route"] for r in req["last"]], ["/analyze", "/analyze"])
+        self.assertEqual([r["ok"] for r in req["last"]], [True, False])
+        self.assertIn("not a Robinhood", req["last"][1]["error"])
+        for k in ("t", "route", "ok", "seconds", "error"):
+            self.assertIn(k, req["last"][0])
+        self.assertAlmostEqual(h["uptime_s"], 1.0)
+        caches = h["caches"]
+        self.assertEqual((caches["quotes_ttl_s"], caches["quotes_max_age_s"], caches["page_ttl_s"], caches["espn_ttl_s"]), (1.0, 2.0, 60.0, ESPN_TTL))
+        self.assertEqual(caches["quotes"]["misses"], 3)   # rh quotes, kalshi batch, pm market
+        self.assertEqual(caches["quotes"]["errors"], 1)   # the pm books fetch failed (remembered for the TTL, not a miss)
+        self.assertIn("venue_timeout_s", caches)
+        self.assertIn("timings", h)
+
+    def test_health_reports_a_gamma_outage_as_unreachable_not_unlisted(self):
+        clock = FakeClock()
+        cls, (_, _, pm) = _bridge(clock)
+        _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        pm.routes = {"polymarket": lambda: (_ for _ in ()).throw(RuntimeError("gamma 503"))}
+        clock.advance(2.5)
+        _, res = _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        self.assertTrue(res["ok"])
+        self.assertEqual(_rows(res["analysis"], "polymarket"), [])
+        self.assertIn("polymarket: gamma 503", res["analysis"]["errors"])
+        _, h = _get(cls, "/health")
+        p = h["venues"]["polymarket"]
+        self.assertEqual((p["reachable"], p["last_error"], p["last_ok_age_s"]), (False, "polymarket: gamma 503", 2.5))
+        self.assertTrue(h["venues"]["kalshi"]["reachable"])
+
+    def test_analyze_carries_timings_and_venue_status(self):
+        cls, _ = _bridge()
+        _, res = _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        self.assertTrue(res["ok"])
+        t = res["timings"]
+        self.assertEqual(sorted(t), ["kalshi", "polymarket", "robinhood", "total"])
+        self.assertTrue(all(isinstance(v, float) and v >= 0 for v in t.values()), t)
+        self.assertGreaterEqual(t["total"], max(t["robinhood"], t["kalshi"], t["polymarket"]))
+        vs = res["venue_status"]
+        self.assertEqual(sorted(vs), ["kalshi", "polymarket", "robinhood"])
+        # The pm book fetch failed in the fixture: the status is the Gamma payload's, the error says why.
+        self.assertEqual({v: vs[v]["cache"] for v in vs}, {"robinhood": "miss", "kalshi": "miss", "polymarket": "miss"})
+        self.assertTrue(all(vs[v]["ok"] for v in vs), vs)
+        self.assertIn("book sizes unavailable", vs["polymarket"]["error"])
+        self.assertIsNone(vs["kalshi"]["error"])
+        # Warm: the same second is served from the analyzer's caches without a venue call.
+        _, res2 = _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        self.assertEqual({v: res2["venue_status"][v]["cache"] for v in vs}, {"robinhood": "hit", "kalshi": "hit", "polymarket": "hit"})
+        self.assertEqual(res2["analysis"]["outcomes"], res["analysis"]["outcomes"])
+
+    def test_fresh_bypasses_the_analyzer_caches(self):
+        cls, (rh, kal, pm) = _bridge()
+        _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        n = (len(rh.calls), len(kal.calls), len(pm.calls))
+        _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        self.assertEqual((len(rh.calls), len(kal.calls), len(pm.calls)), n)  # cached
+        _, res = _get(cls, f"/analyze?url={quote(URL, safe='')}&fresh=1")
+        self.assertTrue(res["ok"])
+        self.assertGreater(len(rh.calls), n[0])
+        self.assertGreater(len(kal.calls), n[1])
+        self.assertGreater(len(pm.calls), n[2])
+        self.assertEqual(res["venue_status"]["robinhood"]["cache"], "miss")
+
+    def test_a_raising_handler_answers_200_with_where_and_logs_one_line(self):
+        cls, _ = _bridge()
+
+        def boom(*a, **k):
+            raise RuntimeError("venue exploded")
+
+        cls.analyzer.analyze_url = boom
+        with mock.patch("sys.stderr", new=io.StringIO()) as err:
+            st, res = _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        self.assertEqual(st, 200)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "venue exploded")
+        self.assertTrue(res["where"].startswith("/analyze RuntimeError at test_bridge.py:"), res["where"])
+        self.assertIn("total", res["timings"])
+        lines = [l for l in err.getvalue().splitlines() if l.startswith("bridge: error")]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("venue exploded", lines[0])
+        with mock.patch("sys.stderr", new=io.StringIO()):
+            st, res = _get(cls, f"/inplay?url={quote(URL, safe='')}")
+            self.assertEqual((st, res["ok"], res["error"]), (200, False, "venue exploded"))
+            cls.kalshi.market = boom
+            st, res = _get(cls, "/kalshi/market/KXNFLGAME-26SEP20PHITEN-PHI")
+            self.assertEqual((st, res["ok"]), (200, False))
+            self.assertIn("RuntimeError", res["where"])
+        _, h = _get(cls, "/health")
+        self.assertEqual(h["requests"]["errors"], 3)
+        self.assertEqual(h["requests"]["last"][-1]["error"], "RuntimeError: venue exploded")
 
     def test_robinhood_no_side_rows_and_tie_margin(self):
         cls, _ = _bridge()
@@ -270,12 +416,14 @@ class InplayRouteTests(unittest.TestCase):
             self.assertIn(k, view)
 
     def test_freshness_persists_across_calls_and_gates_a_pending_score(self):
-        cls, (rh, kal, pm) = _bridge()
+        clock = FakeClock()
+        cls, (rh, kal, pm) = _bridge(clock)
         states = [_gs(), _gs(home_score=21)]  # PHI scores between the two polls; the play id has not advanced
         cls.espn_fetchers[EVENT_KEY] = lambda: states.pop(0)
-        path = f"/inplay?url={quote(URL, safe='')}&steal_edge=0.03"
+        path = f"/inplay?url={quote(URL, safe='')}&steal_edge=0.03&max_age=5"
         _, first = _get(cls, path)
         n_calls = (len(rh.calls), len(kal.calls), len(pm.calls))
+        clock.advance(ESPN_TTL)  # the ESPN state cache expires; the venue scan is still within max_age
         _, second = _get(cls, path)
         self.assertTrue(first["ok"] and second["ok"], (first, second))
         self.assertTrue(second["view"]["live"])
@@ -306,6 +454,71 @@ class InplayRouteTests(unittest.TestCase):
         self.assertTrue(res["ok"], res)
         self.assertIsNone(res["view"]["game_state"])
         self.assertEqual(res["view"]["gated_reasons"], [])
+        self.assertEqual(res["espn_error"], "espn: espn down")
+        self.assertIn("espn", res["timings"])
+        _, h = _get(cls, "/health")
+        self.assertEqual((h["venues"]["espn"]["reachable"], h["venues"]["espn"]["last_error"]), (False, "espn down"))
+
+    def test_espn_state_is_cached_two_seconds_per_event_and_fresh_bypasses(self):
+        clock = FakeClock()
+        cls, (rh, kal, pm) = _bridge(clock)
+        calls = []
+        cls.espn_fetchers[EVENT_KEY] = lambda: (calls.append(clock()), _gs())[1]
+        path = f"/inplay?url={quote(URL, safe='')}"
+        _, first = _get(cls, path)
+        self.assertEqual(sorted(first["timings"]), ["espn", "kalshi", "polymarket", "robinhood", "total"])  # cold: scan + espn
+        self.assertIsNone(first["espn_error"])
+        clock.advance(0.9)
+        _, second = _get(cls, path)
+        self.assertEqual(len(calls), 1)                       # ESPN hit
+        self.assertEqual(sorted(second["timings"]), ["espn", "total"])  # the venue scan was reused (recent_event)
+        self.assertEqual(second["view"]["freshness"]["polls"], 2)
+        clock.advance(ESPN_TTL)
+        _get(cls, path)
+        self.assertEqual(len(calls), 2)                       # expired
+        _get(cls, path + "&fresh=1")
+        self.assertEqual(len(calls), 3)                       # bypassed
+        _, h = _get(cls, "/health")
+        self.assertEqual(h["venues"]["espn"]["cache"], {"hits": 1, "misses": 3, "stale": 0, "hit_rate": 0.25})
+        self.assertTrue(h["venues"]["espn"]["reachable"])
+        self.assertEqual(h["caches"]["espn"]["entries"], 1)
+
+    def test_inplay_reuses_the_scan_within_two_seconds_then_rescans(self):
+        clock = FakeClock()
+        cls, (rh, kal, pm) = _bridge(clock)
+        cls.espn_fetchers[EVENT_KEY] = _gs
+        _get(cls, f"/analyze?url={quote(URL, safe='')}")
+        n = (len(rh.calls), len(kal.calls), len(pm.calls))
+        clock.advance(1.5)
+        _, ip = _get(cls, f"/inplay?url={quote(URL, safe='')}")
+        self.assertTrue(ip["ok"])
+        self.assertEqual((len(rh.calls), len(kal.calls), len(pm.calls)), n)   # /analyze's scan served it
+        self.assertNotIn("robinhood", ip["timings"])
+        clock.advance(1.0)   # 2.5 s after the scan: too old for play, re-scan (the 1 s caches expired too)
+        _, ip = _get(cls, f"/inplay?url={quote(URL, safe='')}")
+        self.assertTrue(ip["ok"])
+        self.assertGreater(len(rh.calls), n[0])
+        self.assertIn("robinhood", ip["timings"])
+        self.assertEqual(ip["venue_status"]["kalshi"]["cache"], "miss")
+
+
+class BridgeStatsTests(unittest.TestCase):
+    def test_reachability_and_rates(self):
+        clock = FakeClock(100.0)
+        st = BridgeStats(clock)
+        st.record("/analyze", True, 0.3, venue_status={"kalshi": {"ok": True, "cache": "miss", "error": None}, "robinhood": {"ok": True, "cache": "hit", "error": None}, "polymarket": {"ok": False, "cache": None, "error": "polymarket: timed out after 2s"}})
+        clock.advance(5.0)
+        st.record("/analyze", True, 0.01, venue_status={"kalshi": {"ok": True, "cache": "hit", "error": None}, "polymarket": {"ok": True, "cache": "miss", "error": None}})
+        snap = st.snapshot()
+        k, r, p = snap["venues"]["kalshi"], snap["venues"]["robinhood"], snap["venues"]["polymarket"]
+        self.assertEqual((k["reachable"], k["last_ok_age_s"], k["cache"]), (True, 5.0, {"hits": 1, "misses": 1, "stale": 0, "hit_rate": 0.5}))
+        self.assertEqual((r["reachable"], r["last_ok_age_s"]), (False, None))   # only ever served from cache: unknown
+        self.assertEqual((p["reachable"], p["last_ok_age_s"], p["last_error"], p["last_error_age_s"]), (True, 0.0, "polymarket: timed out after 2s", 5.0))
+        self.assertEqual(snap["requests"]["total"], 2)
+        self.assertEqual(snap["requests"]["per_s"], 0.4)   # 2 requests over a 5 s uptime
+        self.assertEqual(snap["uptime_s"], 5.0)
+        clock.advance(20.0)
+        self.assertEqual(st.snapshot()["requests"]["per_s"], 0.0)   # nothing in the last 10 s
 
 
 if __name__ == "__main__":

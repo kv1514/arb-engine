@@ -298,9 +298,9 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-19)
 
-Live data verified for all three venues; **613 Python tests** and the JS suites
+Live data verified for all three venues; **685 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
-**72 background-worker checks** incl. totals, category pages and signal-only rows) pass;
+**159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results
 table in the docs equal to its committed fixture. What the data has said so far:
 
