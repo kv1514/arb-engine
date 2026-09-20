@@ -1,6 +1,6 @@
 #arbe-panel { position: fixed; right: 16px; bottom: 16px; width: 520px; max-height: 70vh; overflow: auto; z-index: 2147483000; background: #111418; color: #e6e6e6; border: 1px solid #2c333b; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5); font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 #arbe-panel.arbe-collapsed { width: 180px; max-height: 40px; overflow: hidden; }
-#arbe-panel.arbe-collapsed .arbe-status { display: none; }
+#arbe-panel.arbe-collapsed .arbe-status, #arbe-panel.arbe-collapsed .arbe-fresh { display: none; }
 #arbe-panel .arbe-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #181c22; border-bottom: 1px solid #2c333b; position: sticky; top: 0; }
 #arbe-panel .arbe-title { font-weight: 700; color: #7fe0a0; }
 #arbe-panel .arbe-status { margin-left: auto; color: #9aa4ad; }
@@ -35,3 +35,17 @@ a.arbe-cat-host { position: relative !important; padding-bottom: 12px !important
 .arbe-arbflag { font-weight: 800; }
 .arbe-ineligible td { opacity: 0.55; }
 .arbe-tag.arbe-signal { border-color: #8a6d3b; color: #d9b36b; }
+/* freshness line under the header: ticks every 500 ms on its own (text only), amber after 3 s,
+   red after 10 s; the tables below are only re-rendered when their HTML actually changed. */
+#arbe-panel .arbe-head { flex-wrap: wrap; }
+#arbe-panel .arbe-fresh { flex-basis: 100%; margin-top: 2px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#arbe-panel .arbe-fresh:empty { display: none; }
+#arbe-panel .arbe-amber { color: #e0b355; }
+#arbe-panel .arbe-sec:empty { display: none; }
+#arbe-panel .arbe-tag.arbe-age { color: #8fa3b5; }
+#arbe-panel .arbe-play { margin-top: 3px; font-style: italic; }
+#arbe-panel .arbe-gated { border-left: 3px solid #c9a227; }
+/* a value that moved since the last render: one-shot highlight, no JS timers */
+#arbe-panel .arbe-v { display: inline-block; border-radius: 3px; padding: 0 1px; }
+#arbe-panel .arbe-flash { animation: arbe-flash 1.2s ease-out 1; }
+@keyframes arbe-flash { 0% { background: #3d5a2f; color: #fff; } 100% { background: transparent; } }

@@ -3,6 +3,7 @@
 <body>
   <h1>Arb Engine</h1>
   <p class="muted">Overlay settings. Fees follow each venue's published schedule (see docs/VENUES.md).</p>
+  <div id="health" class="health muted">bridge: checking…</div>
   <label><input type="checkbox" id="gold"> Robinhood Gold (5% commission constant instead of 10%)</label>
   <label>Reference size (contracts) <input type="number" id="contracts" min="1" step="1"></label>
   <label>Target locked margin per $1 <input type="number" id="targetMargin" min="0" max="0.5" step="0.005"></label>
@@ -16,6 +17,7 @@
   <label><input type="checkbox" id="exec_polymarket"> I can trade on Polymarket (else it is signal-only: priced in, never an arb leg — US accounts cannot use polymarket.com)</label>
   <label>Open lots for the in-play strip (one per line: venue:outcome:price:count, e.g. robinhood:DEN:0.50:100)<textarea id="positions" rows="3" style="width:100%;display:block;margin-top:4px;background:#1e242b;color:#eee;border:1px solid #333b44;border-radius:4px"></textarea></label>
   <button id="save">Save</button> <span id="status" class="muted"></span>
+  <div id="errors" class="errors"></div>
   <p class="muted small">Informational only. Nothing here places orders.</p>
   <script src="popup.js"></script>
 </body></html>

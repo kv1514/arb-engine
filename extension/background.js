@@ -31,17 +31,72 @@ async function installKalshiOriginRule() {
 chrome.runtime.onInstalled.addListener(installKalshiOriginRule);
 chrome.runtime.onStartup.addListener(installKalshiOriginRule);
 
-let bridgeUp = null, bridgeChecked = 0;
-async function bridgeAvailable() {
-  if (Date.now() - bridgeChecked < 30_000 && bridgeUp !== null) return bridgeUp;
-  bridgeChecked = Date.now();
-  try { const r = await fetch(`${BRIDGE}/health`, { credentials: "omit" }); bridgeUp = r.ok; } catch (e) { bridgeUp = false; }
-  return bridgeUp;
+// ---- bridge availability: a small state machine (pure transitions, no DOM, jsc-testable) -----
+// The overlay polls every second, so a dead bridge must not cost a failed connect per tick and a
+// bridge that comes back must be noticed without a reload. Rules:
+//   * a /health answer marks the bridge UP and is trusted for BRIDGE_HEALTH_TTL_MS;
+//   * BRIDGE_FAIL_LIMIT consecutive /analyze transport failures (fetch rejecting; an HTTP
+//     status such as bridge.py's 500 {ok:false,error} is an answer) or one failed /health mark it DOWN;
+//   * while DOWN, /health is re-probed with exponential backoff 2 s -> 30 s and nothing else
+//     touches the bridge; the first answering /health switches back (auto mode) immediately.
+// bridgeState.mode is what the content script and the popup show ("bridge" / "direct").
+const BRIDGE_FAIL_LIMIT = 3, BRIDGE_BACKOFF_MIN_MS = 2_000, BRIDGE_BACKOFF_MAX_MS = 30_000, BRIDGE_HEALTH_TTL_MS = 30_000;
+function newBridgeState() { return { up: null, failures: 0, backoffMs: 0, nextProbeAt: 0, lastOkAt: 0, lastError: null, mode: "direct", service: null, executableVenues: null }; }
+let bridgeState = newBridgeState();
+function bridgeNoteSuccess(st, now, health) {
+  st.up = true; st.failures = 0; st.backoffMs = 0; st.lastOkAt = now; st.lastError = null; st.nextProbeAt = now + BRIDGE_HEALTH_TTL_MS; st.mode = "bridge";
+  if (health && typeof health === "object") { if (health.service) st.service = String(health.service); if (Array.isArray(health.executable_venues)) st.executableVenues = health.executable_venues.map(String); }
+  return st;
+}
+// `hard` = the probe itself failed (or the caller decided): go DOWN at once; otherwise count
+// towards BRIDGE_FAIL_LIMIT so one slow /analyze does not flip the mode.
+function bridgeNoteFailure(st, now, err, hard) {
+  st.failures += 1; st.lastError = err ? String(err.message || err) : "bridge error";
+  if (hard || st.failures >= BRIDGE_FAIL_LIMIT) {
+    st.up = false; st.mode = "direct";
+    st.backoffMs = st.backoffMs ? Math.min(BRIDGE_BACKOFF_MAX_MS, st.backoffMs * 2) : BRIDGE_BACKOFF_MIN_MS;
+    st.nextProbeAt = now + st.backoffMs;
+  }
+  return st;
+}
+function bridgeShouldProbe(st, now) { return st.up === null || now >= st.nextProbeAt; }
+// What the UI needs to say which mode is live and when the next retry is due.
+function bridgeStatus(st, now) {
+  return { up: st.up, mode: st.mode, failures: st.failures, backoffMs: st.backoffMs, retryInMs: st.up === false ? Math.max(0, st.nextProbeAt - now) : 0, lastOkAt: st.lastOkAt || null, lastError: st.lastError, service: st.service, executableVenues: st.executableVenues };
+}
+let bridgeProbe = null;
+async function bridgeAvailable(now, force) {
+  now = now == null ? Date.now() : now;
+  if (!force && !bridgeShouldProbe(bridgeState, now)) return !!bridgeState.up;
+  if (bridgeProbe) return bridgeProbe;  // one in-flight probe, however many ticks ask
+  bridgeProbe = (async () => {
+    try {
+      const r = await fetch(`${BRIDGE}/health`, { credentials: "omit" });
+      if (!r.ok) throw new Error(`HTTP ${r.status} /health`);
+      let body = null;
+      try { body = await r.json(); } catch (e) { /* an older bridge answers plain text */ }
+      bridgeNoteSuccess(bridgeState, now, body);
+    } catch (e) { bridgeNoteFailure(bridgeState, now, e, true); }
+    finally { bridgeProbe = null; }
+    return !!bridgeState.up;
+  })();
+  return bridgeProbe;
 }
 
 // Convert the Python engine's EventReport into the shape content.js renders.
 function rowsFromReport(a) {
-  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ineligible: v.ineligible || null, side: v.side || null, tiePayout: v.tie_payout == null ? null : v.tie_payout, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "" })) }));
+  return (a.outcomes || []).map((o) => ({ outcome: o.outcome, label: o.label, fair: o.fair, best: o.best_buy_venue, bestAllIn: o.best_buy_all_in, edge: o.edge_at_best, venues: (o.venues || []).map((v) => ({ venue: v.venue, exchange: v.exchange, mirror: v.mirror_of, ineligible: v.ineligible || null, side: v.side || null, tiePayout: v.tie_payout == null ? null : v.tie_payout, ask: v.ask, bid: v.bid, askSize: v.ask_size, feePerContract: v.fee_per_contract, allIn: v.all_in, maxBuyTaker: v.max_buy_price, maxBuyMaker: v.max_buy_maker, url: v.url, feeNote: "", quoteAge: quoteAgeOf(v) })) }));
+}
+// Seconds since the venue's quote was taken, when the engine says (``quote_age`` today, ``age``
+// as OutcomeQuote spells it); null when absent so the overlay can leave the column out.
+function quoteAgeOf(v) {
+  const x = v && (v.quote_age != null ? v.quote_age : v.age);
+  return x == null || !Number.isFinite(Number(x)) ? null : Number(x);
+}
+// analysis.venues is a list of venue names today; a future bridge may send {venue, quote_age}
+// objects. Normalise to [{venue, quoteAge}] so content.js never branches on the shape.
+function venueAges(list) {
+  return (list || []).map((v) => (typeof v === "string" ? { venue: v, quoteAge: null } : { venue: String(v && v.venue || ""), quoteAge: quoteAgeOf(v) })).filter((v) => v.venue);
 }
 function arbFromReport(a) {
   return a.arb ? { grossSum: a.arb.gross_sum, margin: a.arb.margin, profit: a.arb.profit, contracts: a.arb.contracts, isArb: a.arb.is_arb, legs: (a.arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, fee: l.fee })) } : null;
@@ -51,12 +106,12 @@ function fromBridge(res, cfg) {
   const a = res.analysis;
   if (a.lines) {
     const lines = a.lines.map((d) => ({ key: d.event_key, title: d.title, line: d.line, marketType: d.market_type, fillable: !!d.fillable, flags: d.flags || [], contractId: d.contract_id, rows: rowsFromReport(d), arb: arbFromReport(d), sizedContracts: d.sized_arb ? d.sized_arb.contracts : null, sizedProfit: d.sized_arb ? d.sized_arb.profit : null }));
-    return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, marketType: a.market_type, lines, errors: a.errors || [], fetchedAt: Date.now(), venues: a.venues || [], source: "bridge" } };
+    return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, marketType: a.market_type, lines, errors: a.errors || [], fetchedAt: Date.now(), venues: venueAges(a.venues), source: "bridge" } };
   }
   const rows = rowsFromReport(a);
   const arb = arbFromReport(a);
   if (arb && a.sized_arb) { arb.sizedContracts = a.sized_arb.contracts; arb.sizedProfit = a.sized_arb.profit; arb.sizedLegs = (a.sized_arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, contracts: l.contracts })); }
-  return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: a.venues || [], source: "bridge" } };
+  return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: venueAges(a.venues), source: "bridge" } };
 }
 
 const cache = new Map();
@@ -76,6 +131,22 @@ async function getText(url) {
   const r = await fetch(url, { credentials: "omit" });
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
   return r.text();
+}
+// The bridge's own transport. Only a rejected fetch (connection refused, reset, DNS) is a
+// transport failure — it throws with `transport: true` and counts towards BRIDGE_FAIL_LIMIT.
+// An HTTP status is an answer from a live bridge: bridge.py sends 500 {ok:false,error} for any
+// engine exception (a Robinhood 429 on its page fetch, say), so it comes back as an ordinary
+// {ok:false, error} report for the overlay to show beside the last good tables, never as an
+// outage. A 2xx without JSON is reported the same way.
+async function bridgeJson(url) {
+  let r;
+  try { r = await fetch(url, { credentials: "omit" }); }
+  catch (e) { const err = new Error(String((e && e.message) || e)); err.transport = true; throw err; }
+  let body = null;
+  try { body = await r.json(); } catch (e) { body = null; }
+  if (!r.ok) return { ok: false, error: `engine: ${(body && body.error) ? String(body.error) : `HTTP ${r.status} ${url.split("?")[0].slice(BRIDGE.length)}`}`, httpStatus: r.status };
+  if (!body || typeof body !== "object") return { ok: false, error: `engine: no JSON from ${url.split("?")[0].slice(BRIDGE.length)}`, httpStatus: r.status };
+  return body;
 }
 let teamsLoaded = false;
 async function ensureTeams() {
@@ -352,22 +423,48 @@ async function analyze(url, opts) {
   opts = opts || {};
   await ensureTeams();
   const cfg = await settings();
-  if (cfg.bridge !== "off" && (await bridgeAvailable())) {
+  const now = Date.now();
+  if (cfg.bridge !== "off" && (await bridgeAvailable(now))) {
     try {
-      const res = await getJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}`);
+      const res = await bridgeJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}`);
       const out = fromBridge(res, cfg);
       // In-play view (game state, model vs market, LOCK/STEAL) for game-winner pages.
       if (opts.inplay !== false && out && out.ok && out.analysis && !out.analysis.lines) {
         try {
           const pos = String(cfg.positions || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).map((x) => "&position=" + encodeURIComponent(x)).join("");
           const sizing = cfg.bankroll > 0 ? `&bankroll=${Number(cfg.bankroll)}&kelly=${Number(cfg.kelly) || 0.25}` : "";
-          const ip = await getJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}${sizing}`);
-          if (ip && ip.ok) out.analysis.inplay = ip.view;
+          const ip = await bridgeJson(`${BRIDGE}/inplay?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${pos}${sizing}`);
+          if (ip && ip.ok) { out.analysis.inplay = ip.view; if (ip.view && Array.isArray(ip.view.executable_venues)) bridgeState.executableVenues = ip.view.executable_venues.map(String); }
         } catch (e) { /* optional */ }
       }
+      // The bridge answered: it is up, whatever /health said 29 s ago (an HTTP error body is
+      // still an answer — a {ok:false} report is the engine's opinion, not an outage).
+      if (bridgeState.failures) bridgeNoteSuccess(bridgeState, now);
+      if (out && typeof out === "object") out.bridge = bridgeStatus(bridgeState, Date.now());
       return out;
-    } catch (e) { if (cfg.bridge === "on") throw e; /* else fall through to direct mode */ }
+    } catch (e) {
+      if (!e || !e.transport) {
+        // The bridge answered but its report could not be mapped: an engine-side error, not an
+        // outage. Surface it (the overlay keeps the last good tables) and leave the counters alone.
+        if (bridgeState.failures) bridgeNoteSuccess(bridgeState, now);
+        const err = new Error(`engine: ${(e && e.message) || e}`); err.bridge = bridgeStatus(bridgeState, Date.now()); throw err;
+      }
+      // A transport failure counts towards the fall-back; the N-th one marks the bridge down
+      // and starts the /health backoff. `required` never degrades to direct: it reports.
+      bridgeNoteFailure(bridgeState, now, e, false);
+      if (cfg.bridge === "on") { const err = new Error(`bridge required but not answering (${e.message || e})`); err.bridge = bridgeStatus(bridgeState, Date.now()); throw err; }
+      /* else fall through to direct mode for this tick */
+    }
+  } else if (cfg.bridge === "on") {
+    const st = bridgeStatus(bridgeState, Date.now());
+    const err = new Error(`bridge required but down${st.retryInMs ? ` (retry in ${Math.ceil(st.retryInMs / 1000)} s)` : ""} — run: python -m arb_engine bridge`);
+    err.bridge = st; throw err;
   }
+  const out = await analyzeDirect(url, cfg);
+  if (out && typeof out === "object") out.bridge = cfg.bridge === "off" ? Object.assign(bridgeStatus(bridgeState, Date.now()), { mode: "direct", up: null, retryInMs: 0 }) : bridgeStatus(bridgeState, Date.now());
+  return out;
+}
+async function analyzeDirect(url, cfg) {
   const ev = await robinhoodEvent(url);
   const contracts = ev.contracts;
   const lineTypes = new Set(contracts.map((c) => { const p = ArbCore.parseSymbol(c.symbol); return p && LINE_FAMILIES[p.family]; }).filter(Boolean));
@@ -477,9 +574,24 @@ async function analyzeMany(urls, max) {
   return { ok: true, results, fetchedAt: Date.now(), truncated: unique.length > list.length };
 }
 
+// Popup health card: a forced /health probe plus the executable venue set the bridge reported
+// (its /health field when it has one, else the last /inplay view's executable_venues, else null
+// so the popup can say "unknown" instead of guessing).
+async function bridgeHealth(now) {
+  now = now == null ? Date.now() : now;
+  const cfg = await settings();
+  const up = cfg.bridge === "off" ? null : await bridgeAvailable(now, true);
+  const st = bridgeStatus(bridgeState, Date.now());
+  return { ok: true, up, setting: cfg.bridge, mode: cfg.bridge === "off" ? "direct" : st.mode, failures: st.failures, retryInMs: st.retryInMs, lastError: st.lastError, service: st.service, executableVenues: st.executableVenues };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "analyze") {
-    analyze(msg.url).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message || String(e) }));
+    analyze(msg.url).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message || String(e), bridge: e.bridge || bridgeStatus(bridgeState, Date.now()) }));
+    return true;
+  }
+  if (msg && msg.type === "bridgeHealth") {  // popup: probe now (ignores the backoff) and report the state
+    bridgeHealth().then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message || String(e) }));
     return true;
   }
   if (msg && msg.type === "analyzeMany") {

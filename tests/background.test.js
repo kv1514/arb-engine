@@ -62,7 +62,7 @@
   eq(t.analysis.errors.some((e) => e.indexOf("17.5") >= 0), true, "missing kalshi line reported");
 
   // --- bridge mode ---------------------------------------------------------------------
-  stored.bridge = "auto"; globalThis.__bridgeOnline = true; bridgeUp = null; bridgeChecked = 0; cache.clear();
+  stored.bridge = "auto"; globalThis.__bridgeOnline = true; bridgeState = newBridgeState(); cache.clear();
   const b = await analyze(url);
   eq(b.ok, true, "bridge ok");
   eq(b.analysis.source, "bridge", "bridge source");
@@ -102,10 +102,171 @@
   await analyze(url);
   eq(calls.slice(nBefore).some((u) => u.includes("bankroll=")), false, "no bankroll -> no sizing params");
 
-  // --- bridge required but down --------------------------------------------------------
-  stored.bridge = "on"; globalThis.__bridgeOnline = false; bridgeUp = null; bridgeChecked = 0; cache.clear();
-  const d = await analyze(url);
-  eq(d.analysis.source, "direct", "bridge unavailable -> direct still works when not reachable");
+  // --- bridge status rides along with every answer --------------------------------------
+  eq(b.bridge && b.bridge.mode, "bridge", "bridge answer carries mode=bridge");
+  eq(b.bridge.up, true, "bridge answer says up");
+
+  // --- bridge required but down: never degrades to direct, says so and when it retries ----
+  stored.bridge = "on"; globalThis.__bridgeOnline = false; bridgeState = newBridgeState(); cache.clear();
+  let reqErr = null;
+  try { await analyze(url); } catch (e) { reqErr = e; }
+  eq(!!reqErr, true, "bridge=on + bridge down -> analyze throws instead of direct");
+  eq(/bridge required/.test(reqErr && reqErr.message), true, "required error names the bridge: " + (reqErr && reqErr.message));
+  eq(reqErr.bridge && reqErr.bridge.up, false, "required error carries bridge state (down)");
+  eq(reqErr.bridge.retryInMs > 0 && reqErr.bridge.retryInMs <= BRIDGE_BACKOFF_MIN_MS, true, "first retry due within the minimum backoff");
+
+  // --- pure state machine: N /analyze failures -> down; /health backoff 2 s -> 30 s; recovery -
+  {
+    const st = newBridgeState();
+    eq(bridgeShouldProbe(st, 1000), true, "fresh state probes");
+    bridgeNoteSuccess(st, 1000, { ok: true, service: "arb-engine bridge", executable_venues: ["kalshi", "robinhood"] });
+    eq(st.up === true && st.mode === "bridge", true, "health ok -> up/bridge");
+    eq(st.service, "arb-engine bridge", "service recorded from /health");
+    eq(st.executableVenues.join(","), "kalshi,robinhood", "executable venues recorded from /health");
+    eq(bridgeShouldProbe(st, 1000 + BRIDGE_HEALTH_TTL_MS - 1), false, "up: no re-probe inside the health TTL");
+    eq(bridgeShouldProbe(st, 1000 + BRIDGE_HEALTH_TTL_MS), true, "up: re-probe once the TTL lapses");
+    for (let i = 1; i < BRIDGE_FAIL_LIMIT; i++) { bridgeNoteFailure(st, 2000, new Error("Failed to fetch"), false); eq(st.up, true, `soft failure ${i} keeps the bridge up`); }
+    bridgeNoteFailure(st, 2000, new Error("Failed to fetch"), false);
+    eq(st.up === false && st.mode === "direct", true, `failure ${BRIDGE_FAIL_LIMIT} -> down/direct`);
+    eq(st.backoffMs, BRIDGE_BACKOFF_MIN_MS, "first backoff is the minimum (2 s)");
+    eq(st.nextProbeAt, 2000 + BRIDGE_BACKOFF_MIN_MS, "next probe due after the backoff");
+    eq(bridgeShouldProbe(st, 2000 + BRIDGE_BACKOFF_MIN_MS - 1), false, "down: no probe before the backoff");
+    eq(bridgeShouldProbe(st, 2000 + BRIDGE_BACKOFF_MIN_MS), true, "down: probe when due");
+    const seq = [];
+    let t = st.nextProbeAt;
+    for (let i = 0; i < 6; i++) { bridgeNoteFailure(st, t, new Error("x"), true); seq.push(st.backoffMs); t = st.nextProbeAt; }
+    eq(seq.join(","), "4000,8000,16000,30000,30000,30000", "backoff doubles and caps at 30 s");
+    eq(bridgeStatus(st, t - 500).retryInMs, 500, "status reports the time to the next probe");
+    bridgeNoteSuccess(st, t);
+    eq(st.up === true && st.mode === "bridge" && st.failures === 0 && st.backoffMs === 0, true, "health answers -> back to bridge, counters reset");
+    eq(bridgeStatus(st, t).retryInMs, 0, "up: no retry pending");
+    eq(st.executableVenues.join(","), "kalshi,robinhood", "recovery keeps the last known executable set");
+  }
+
+  // --- integration: /analyze failing N times in auto mode flips to direct, then recovers ----
+  {
+    const realFetch = globalThis.fetch, realNow = Date.now;
+    let clock = 1_000_000, analyzeDown = false;
+    Date.now = () => clock;
+    globalThis.fetch = async (u, init) => { if (analyzeDown && u.startsWith("http://127.0.0.1:8765/analyze")) throw new TypeError("Failed to fetch"); return realFetch(u, init); };
+    try {
+      stored.bridge = "auto"; globalThis.__bridgeOnline = true; bridgeState = newBridgeState(); cache.clear();
+      const ok1 = await analyze(url);
+      eq(ok1.analysis.source, "bridge", "auto: bridge answers -> bridge mode");
+      analyzeDown = true; globalThis.__bridgeOnline = false;
+      let healthCalls = () => calls.filter((u) => u.startsWith("http://127.0.0.1:8765/health")).length;
+      const h0 = healthCalls();
+      for (let i = 1; i <= BRIDGE_FAIL_LIMIT; i++) {
+        clock += 1000; cache.clear();
+        const r = await analyze(url);
+        eq(r.analysis.source, "direct", `auto: failed /analyze ${i} falls through to direct for this tick`);
+        eq(r.bridge.failures, i, `failure count ${i}`);
+        eq(r.bridge.up, i < BRIDGE_FAIL_LIMIT, `bridge marked down only on failure ${BRIDGE_FAIL_LIMIT}`);
+      }
+      eq(healthCalls(), h0, "no /health probe while counting failures (the health TTL is still valid)");
+      const nAnalyze = () => calls.filter((u) => u.startsWith("http://127.0.0.1:8765/analyze")).length;
+      const a0 = nAnalyze();
+      clock += 500; cache.clear();
+      const r2 = await analyze(url);
+      eq(r2.analysis.source, "direct", "down: direct without touching the bridge");
+      eq(nAnalyze(), a0, "down: /analyze not attempted before the backoff");
+      eq(healthCalls(), h0, "down: /health not probed before the backoff");
+      eq(r2.bridge.retryInMs > 0, true, "down: retry countdown reported");
+      clock += BRIDGE_BACKOFF_MIN_MS; cache.clear();
+      const r3 = await analyze(url);
+      eq(healthCalls(), h0 + 1, "backoff elapsed: one /health probe");
+      eq(r3.analysis.source, "direct", "probe failed: still direct");
+      eq(r3.bridge.backoffMs, 2 * BRIDGE_BACKOFF_MIN_MS, "probe failed: backoff doubled");
+      globalThis.__bridgeOnline = true; analyzeDown = false;
+      clock += 2 * BRIDGE_BACKOFF_MIN_MS; cache.clear();
+      const r4 = await analyze(url);
+      eq(healthCalls(), h0 + 2, "second probe after the doubled backoff");
+      eq(r4.analysis.source, "bridge", "health answers -> back to bridge mode");
+      eq(r4.bridge.up === true && r4.bridge.failures === 0, true, "recovered state reported");
+      eq(Array.isArray(r4.bridge.executableVenues) || r4.bridge.executableVenues === null, true, "executable venues degrade to null when the bridge does not say");
+
+      // --- popup health probe: forced, ignores the backoff, reports setting + mode ----------
+      globalThis.__bridgeOnline = false; bridgeState = newBridgeState(); bridgeNoteFailure(bridgeState, clock, new Error("x"), true);
+      const hc = healthCalls();
+      const ph = await bridgeHealth(clock);
+      eq(healthCalls(), hc + 1, "bridgeHealth probes even inside the backoff");
+      eq(ph.ok === true && ph.up === false && ph.mode === "direct" && ph.setting === "auto", true, "health card: down/direct/auto: " + JSON.stringify(ph));
+      globalThis.__bridgeOnline = true;
+      const ph2 = await bridgeHealth(clock + 60_000);
+      eq(ph2.up === true && ph2.mode === "bridge" && ph2.service === null, true, "health card: up; the stub /health carries no service name so it stays null: " + JSON.stringify(ph2));
+      stored.bridge = "off";
+      const ph3 = await bridgeHealth(clock + 60_000);
+      eq(ph3.up === null && ph3.mode === "direct" && ph3.setting === "off", true, "health card: bridge=off never probes");
+      const offRes = await analyze(url);
+      eq(offRes.bridge.mode === "direct" && offRes.bridge.up === null, true, "bridge=off: status says direct, no up/down claim");
+    } finally { globalThis.fetch = realFetch; Date.now = realNow; }
+  }
+
+  // --- an HTTP error answer is the engine's opinion, not an outage: no fall-back, no backoff -
+  {
+    const realFetch = globalThis.fetch, realNow = Date.now;
+    let clock = 2_000_000, analyzeStatus = 0, analyzeBody = '{"ok":false,"error":"Robinhood page fetch: HTTP 429"}';
+    Date.now = () => clock;
+    globalThis.fetch = async (u, init) => {
+      if (analyzeStatus && u.startsWith("http://127.0.0.1:8765/analyze")) { __calls.push(u); return { ok: false, status: analyzeStatus, text: async () => analyzeBody, json: async () => JSON.parse(analyzeBody) }; }
+      return realFetch(u, init);
+    };
+    try {
+      stored.bridge = "auto"; globalThis.__bridgeOnline = true; bridgeState = newBridgeState(); cache.clear();
+      eq((await analyze(url)).analysis.source, "bridge", "http-error: bridge answers first");
+      const healthCalls = () => calls.filter((u) => u.startsWith("http://127.0.0.1:8765/health")).length;
+      const nAnalyze = () => calls.filter((u) => u.startsWith("http://127.0.0.1:8765/analyze")).length;
+      const h0 = healthCalls();
+      analyzeStatus = 500;
+      for (let i = 1; i <= BRIDGE_FAIL_LIMIT + 1; i++) {
+        clock += 1000; cache.clear();
+        const a0 = nAnalyze();
+        const r = await analyze(url);
+        eq(nAnalyze(), a0 + 1, `500 #${i}: /analyze still attempted (the bridge is alive)`);
+        eq(r.ok, false, `500 #${i}: surfaced as an error, not silently swapped for direct`);
+        eq(/engine: Robinhood page fetch: HTTP 429/.test(r.error), true, `500 #${i}: engine error text kept: ${r.error}`);
+        eq(r.analysis === undefined, true, `500 #${i}: no direct-mode analysis substituted`);
+        eq(r.bridge.up === true && r.bridge.mode === "bridge" && r.bridge.failures === 0, true, `500 #${i}: bridge stays up/bridge with no failures counted: ${JSON.stringify(r.bridge)}`);
+      }
+      eq(healthCalls(), h0, "500s: no /health backoff probe started");
+      // A 500 with a non-JSON body still names the route; a transport failure after it starts counting from zero.
+      analyzeBody = "Internal Server Error"; clock += 1000; cache.clear();
+      const rt = await analyze(url);
+      eq(rt.ok === false && /engine: HTTP 500 \/analyze/.test(rt.error), true, "500 without JSON: route named: " + rt.error);
+      analyzeStatus = 0; clock += 1000; cache.clear();
+      eq((await analyze(url)).analysis.source, "bridge", "engine recovers: bridge mode without any probe or backoff");
+      eq(healthCalls(), h0, "still no /health probe (the health TTL is valid throughout)");
+      // bridge=on: an engine error is reported as such, never as 'bridge required but not answering'.
+      stored.bridge = "on"; analyzeStatus = 500; analyzeBody = '{"ok":false,"error":"boom"}'; clock += 1000; cache.clear();
+      const ro = await analyze(url);
+      eq(ro.ok === false && ro.error === "engine: boom", true, "bridge=on + 500: engine error surfaced: " + ro.error);
+      eq(ro.bridge.up === true && ro.bridge.mode === "bridge", true, "bridge=on + 500: still bridge mode");
+      // The in-play strip's 500 is optional and never poisons the /analyze answer.
+      analyzeStatus = 0; stored.bridge = "auto";
+      const realFetch2 = globalThis.fetch;
+      globalThis.fetch = async (u, init) => (u.startsWith("http://127.0.0.1:8765/inplay") ? (__calls.push(u), { ok: false, status: 500, text: async () => "{}", json: async () => ({ ok: false, error: "espn" }) }) : realFetch2(u, init));
+      clock += 1000; cache.clear();
+      const ri = await analyze(url);
+      eq(ri.ok === true && ri.analysis.source === "bridge" && ri.analysis.inplay === undefined, true, "inplay 500: tables still from the bridge, strip absent");
+      eq(ri.bridge.up === true && ri.bridge.failures === 0, true, "inplay 500: no failure counted");
+      // The transport classifier itself.
+      let te = null;
+      globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+      try { await bridgeJson("http://127.0.0.1:8765/analyze?x"); } catch (e) { te = e; }
+      eq(!!te && te.transport === true && /Failed to fetch/.test(te.message), true, "rejected fetch -> transport error");
+      globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => "nope", json: async () => { throw new SyntaxError("bad json"); } });
+      const nj = await bridgeJson("http://127.0.0.1:8765/analyze?x");
+      eq(nj.ok === false && /engine: no JSON from \/analyze/.test(nj.error), true, "2xx without JSON -> engine error, not transport: " + nj.error);
+    } finally { globalThis.fetch = realFetch; Date.now = realNow; stored.bridge = "auto"; }
+  }
+
+  // --- quote ages: degrade to null when the engine does not send them ----------------------
+  eq(quoteAgeOf({ quote_age: 0.4 }), 0.4, "quote_age read");
+  eq(quoteAgeOf({ age: 2 }), 2, "age alias read");
+  eq(quoteAgeOf({}), null, "missing quote age -> null");
+  eq(quoteAgeOf({ quote_age: "nan" }), null, "non-numeric quote age -> null");
+  eq(JSON.stringify(venueAges(["robinhood", { venue: "kalshi", quote_age: 1.5 }, { quote_age: 1 }])), JSON.stringify([{ venue: "robinhood", quoteAge: null }, { venue: "kalshi", quoteAge: 1.5 }]), "venueAges normalises names and objects");
+  eq(b.analysis.rows[0].venues.every((v) => "quoteAge" in v && v.quoteAge === null), true, "bridge rows carry quoteAge=null when absent");
 
   // --- category page: analyzeMany --------------------------------------------------------
   stored.bridge = "off"; cache.clear();

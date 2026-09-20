@@ -4,3 +4,7 @@ label { display: block; margin: 8px 0; }
 input[type=number], select { width: 100px; float: right; background: #1e242b; color: #eee; border: 1px solid #333b44; border-radius: 4px; padding: 2px 4px; }
 button { background: #2b6b45; color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
 .muted { color: #9aa4ad; } .small { font-size: 11px; }
+.health { margin: 6px 0 10px; padding: 6px 8px; border-radius: 6px; background: #1a1f26; border-left: 3px solid #555; font-size: 12px; }
+.health.up { border-left-color: #7fe0a0; } .health.down { border-left-color: #f28b82; } .health.off { border-left-color: #9aa4ad; }
+.errors { color: #f28b82; font-size: 11px; margin-top: 6px; white-space: pre-line; }
+label.invalid { color: #f28b82; }
