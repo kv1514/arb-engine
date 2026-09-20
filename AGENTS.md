@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (613)
+python -m unittest discover -s tests -t .      # Python tests (628)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -151,7 +151,10 @@ When you declare a key, add its row here.
 | `TICK_REPLAY_STALE_AFTER_S` | `ARB_TICK_REPLAY_STALE_AFTER_S` | `15.0` | Fallback feed-stale threshold for `backtest-ticks` when the live gates are absent. |
 | `kalshi_gtd_horizon_s` | `KALSHI_GTD_HORIZON_S` | `3600.0` | Seconds a resting Kalshi order may live before the exchange expires it (capped at kickoff). |
 | `wp_kneel_floor_enabled` | `ARB_WP_KNEEL_FLOOR` | `None` | Override `nfl_wp_rules.json` `kneel_floor.enabled` (1/0); unset keeps the table value. |
-| `inplay_stale_after_s` | `INPLAY_STALE_AFTER_S` | `15.0` | Seconds without an ESPN state change (while a venue mid moves ≥ 0.02) before STEAL/LOCK are gated `feed-stale`. |
+| `inplay_stale_after_s` | `INPLAY_STALE_AFTER_S` | `15.0` | Seconds without an ESPN state change (while a venue mid moved ≥ 0.02 over the last `max(interval, 10 s)`) before STEAL/LOCK are gated `feed-stale`. |
+| `inplay_frozen_s` | `INPLAY_FROZEN_S` | `None` | Seconds of identical ESPN state with the clock running and a venue mid moved ≥ 0.02 since, before STEAL/LOCK are gated `clock-frozen`; unset = `max(3 × poll interval, 30 s)`. |
+| `inplay_agreement_gap` | `INPLAY_AGREEMENT_GAP` | `0.12` | Model-vs-market gap above which a STEAL is gated `disagreement` when ESPN's win probability sides with the market (provisional; measure on the first recorded Sunday). |
+| `inplay_quiet` | `INPLAY_QUIET` | `False` | `live`: print only STEAL / LOCK / GATED lines and a one-line summary per tick (`--quiet`). |
 | `inplay_delay_haircut_cdna` | `INPLAY_DELAY_HAIRCUT_CDNA` | `0.02` | Extra edge a STEAL on a CDNA-routed Robinhood contract needs, for its 3 s order delay. |
 | `inplay_slate_cap` | `INPLAY_SLATE_CAP` | `None` | Dollars the live slate may deploy per tick across every STEAL (default: the bankroll); stakes scale proportionally. |
 | `maker_hedge_cash` | `MAKER_HEDGE_CASH` | `250.0` | Max dollars of hand-executed hedge legs the maker may leave resting at once (sum of size × hedge ask). |

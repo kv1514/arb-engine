@@ -54,7 +54,7 @@ import random
 import statistics
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from .fees.kalshi import KalshiFees
 from .fees.robinhood import RobinhoodFees
@@ -1045,11 +1045,22 @@ def shuffled_labels(results: list[ReplayResult], seed: int = 0) -> list[ReplayRe
     return out
 
 
-def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02, 0.04, 0.06, 0.10), contracts: int = 10, lock: bool = True, source: str = "blend", target_margin: float = 0.0, fee_model: Any = None, lock_fraction: float = 0.0, pairing: str = "primary", fee_multiplier: Optional[float] = None, placebo: Optional[str] = None, seed: int = 0, play_classes: Optional[tuple[str, ...]] = None) -> dict[str, Any]:
+def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02, 0.04, 0.06, 0.10), contracts: int = 10, lock: bool = True, source: str = "blend", target_margin: float = 0.0, fee_model: Any = None, lock_fraction: float = 0.0, pairing: str = "primary", fee_multiplier: Optional[float] = None, placebo: Optional[str] = None, seed: int = 0, play_classes: Optional[tuple[str, ...]] = None, filters: Optional[Iterable[str]] = None, agreement_gap: float = 0.12) -> dict[str, Any]:
     """Replay the in-play rules against Kalshi's candle asks. One STEAL entry per game: buy
     ``contracts`` of a side when ``fair - all_in >= edge``; then LOCK the other side when its
     all-in leaves ``target_margin`` on the pair **and** the guaranteed profit is at least
     ``lock_fraction`` of the expected profit of holding; otherwise hold to settlement.
+
+    ``filters`` names live STEAL gates to replay: ``"agreement"`` skips the STEAL entry on a
+    row where ``strategy.inplay.agreement_gate`` would fire (model vs market further apart
+    than ``agreement_gap`` with ESPN's win probability on the market's side; locks are not
+    gated, as in play). Skipped rows are counted per edge as ``filtered``, so the with /
+    without runs measure what the gate costs or saves. The live default of 0.12 is a
+    *provisional* risk control chosen from one college slate (PUR @ UCLA, model 0.93 vs
+    market and ESPN 0.77, blend still +11 %), not from a replay: the committed results
+    fixtures are metrics-only and the week-1 cache is synthetic, so the number is to be
+    measured on the first recorded Sunday (``live --record`` then ``backtest-ticks``) before
+    anyone trusts it.
 
     ``pairing`` picks which fair meets which ask: ``pre_before`` (pre-play fair vs the
     candle before the play), ``post_after`` (post-play fair vs the candle after: the
@@ -1060,15 +1071,27 @@ def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02
     given. Depth is unknown (candles), so keep ``contracts`` small."""
     fair_cols, ask_h, ask_a = PAIRINGS.get(pairing, PAIRINGS["primary"])
     fair_col = fair_cols.get(source, fair_cols["blend"])
+    filters = tuple(filters or ())
+    unknown = [f for f in filters if f not in ("agreement",)]
+    if unknown:
+        raise ValueError(f"unknown simulate_steal filter(s) {unknown}; known: agreement")
     if placebo == "shuffle":
         results = shuffled_labels(results, seed)
     out: dict[str, Any] = {"contracts": contracts, "source": source, "lock": lock, "target_margin": target_margin, "lock_fraction": lock_fraction, "pairing": pairing, "placebo": placebo, "by_edge": {}}
+    if filters:
+        # Only a filtered run carries the filter keys: the committed results fixtures are
+        # unfiltered and byte-stable, so an unfiltered run must not change shape.
+        out["filters"], out["agreement_gap"] = list(filters), (agreement_gap if "agreement" in filters else None)
+    if "agreement" in filters:
+        from .strategy.inplay import agreement_gate   # the live rule itself, so replay and watcher never drift
+        model_col, market_col = fair_cols["model"], fair_cols["market"]
     if pairing == "pre_before" and any(res.bar_mode == "after" for res in results):
         # blend_p was built on the after candle: this pairing is then trading before-asks with after information.
         out["note"] = "results replayed with bar_mode=after: the pre-play blend already contains the after candle, so pre_before is contaminated; rerun with --bar-mode before"
     for edge in edges:
         trades: list[SimTrade] = []
         games = []
+        filtered = 0
         for res in results:
             y = res.home_won
             kfee = fee_model or KalshiFees.from_series({"fee_type": "quadratic_with_maker_fees", "fee_multiplier": fee_multiplier if fee_multiplier is not None else res.kalshi_fee_multiplier})
@@ -1081,6 +1104,9 @@ def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02
                 fair_home = getattr(r, fair_col, None)
                 if fair_home is None:
                     continue
+                # ESPN's post-play number is the row's only espn column; the gate compares it with
+                # the same-alignment model and market fairs the pairing trades on.
+                gate = "agreement" in filters and agreement_gate(getattr(r, model_col, None), getattr(r, market_col, None), r.espn_p, agreement_gap)
                 for side, ask, fair in (("home", getattr(r, ask_h, None), fair_home), ("away", getattr(r, ask_a, None), 1.0 - fair_home)):
                     if ask is None or not (0 < ask < 1):
                         continue
@@ -1088,6 +1114,9 @@ def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02
                     fee = float(kfee.fee(ask, contracts, "taker"))
                     all_in = ask + fee / contracts
                     if pos[side] is None and pos[other] is None and fair - all_in >= edge:
+                        if gate:
+                            filtered += 1
+                            continue
                         pos[side] = (all_in * contracts, contracts)
                         trades.append(SimTrade(res.final, side, "steal", r.period, r.clock, ask, round(all_in, 4), round(fair, 4), contracts))
                     elif lock and pos[side] is None and pos[other] is not None and pos[other][0] + all_in * contracts <= contracts * (1.0 - target_margin):
@@ -1112,6 +1141,8 @@ def simulate_steal(results: list[ReplayResult], edges: tuple[float, ...] = (0.02
             "pnl_per_game_90": {"lo": bs["lo90"], "hi": bs["hi90"]} if bs else None,
             "games": games, "trades": [asdict(t) for t in trades],
         }
+        if filters:
+            out["by_edge"][str(edge)]["filtered"] = filtered
     return out
 
 
@@ -1129,16 +1160,16 @@ def simulate_pairings(results: list[ReplayResult], edges: tuple[float, ...] = (0
 
 def summarize_sim(sim: dict[str, Any]) -> str:
     lock_desc = f"lock when guaranteed ≥ {sim.get('lock_fraction', 0):.0%} of hold EV" if sim["lock"] else "no lock (hold to settlement)"
-    tag = f"pairing={sim.get('pairing', 'primary')}" + (f", placebo={sim['placebo']}" if sim.get("placebo") else "")
+    tag = f"pairing={sim.get('pairing', 'primary')}" + (f", placebo={sim['placebo']}" if sim.get("placebo") else "") + (f", filters={','.join(sim['filters'])} (gap {sim.get('agreement_gap')})" if sim.get("filters") else "")
     lines = [f"STEAL/LOCK simulation on Kalshi asks ({sim['contracts']} contracts per entry, fair = {sim['source']}, {lock_desc}, taker fees, {tag}):"]
     if sim.get("note"):
         lines.append(f"  note: {sim['note']}")
-    lines.append("  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%")
+    lines.append("  edge   games  steals  locks  wins  losses      cost       pnl     roi    pnl/game 90%" + ("  filtered" if sim.get("filters") else ""))
     for k, v in sim["by_edge"].items():
         roi = f"{v['roi']*100:+.1f}%" if v["roi"] is not None else "  -  "
         ci = v.get("pnl_per_game_90")
         ci_s = f"[{ci['lo']:+.2f}, {ci['hi']:+.2f}]" if ci and ci.get("lo") is not None else "-"
-        lines.append(f"  {v['edge']:<6.2f} {v['games_traded']:>5} {v['steals']:>7} {v['locks']:>6} {v['wins']:>5} {v['losses']:>7}  {v['cost']:>9.2f} {v['pnl']:>9.2f}  {roi:>7}  {ci_s}")
+        lines.append(f"  {v['edge']:<6.2f} {v['games_traded']:>5} {v['steals']:>7} {v['locks']:>6} {v['wins']:>5} {v['losses']:>7}  {v['cost']:>9.2f} {v['pnl']:>9.2f}  {roi:>7}  {ci_s}" + (f"  {v.get('filtered', 0):>8}" if sim.get("filters") else ""))
     return "\n".join(lines)
 
 

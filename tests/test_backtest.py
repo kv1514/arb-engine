@@ -221,6 +221,46 @@ class SimTests(unittest.TestCase):
         self.assertIn("STEAL/LOCK", text)
         self.assertIn("0.05", text)
 
+    def test_agreement_filter_skips_steals_where_espn_sides_with_the_market(self):
+        """The live 'disagreement' STEAL gate replayed: model 0.93 vs market 0.77 with ESPN at
+        0.77 (PUR @ UCLA) is skipped and counted; ESPN at 0.91 keeps the STEAL; locks ignore it."""
+        ucla = _row(blend_p=0.85, model_p=0.93, market_p=0.77, espn_p=0.77, kalshi_home_ask=0.78, kalshi_away_ask=0.23)
+        agree = _row(blend_p=0.85, model_p=0.93, market_p=0.77, espn_p=0.91, kalshi_home_ask=0.78, kalshi_away_ask=0.23)
+        small = _row(blend_p=0.85, model_p=0.88, market_p=0.77, espn_p=0.77, kalshi_home_ask=0.78, kalshi_away_ask=0.23)   # gap 0.11 <= 0.12
+        no_espn = _row(blend_p=0.85, model_p=0.93, market_p=0.77, espn_p=None, kalshi_home_ask=0.78, kalshi_away_ask=0.23)
+        games = [_result(True, [ucla]), _result(True, [agree]), _result(True, [small]), _result(True, [no_espn])]
+        plain = simulate_steal(games, edges=(0.05,), lock=False)
+        gated = simulate_steal(games, edges=(0.05,), lock=False, filters=("agreement",))
+        self.assertEqual(plain["by_edge"]["0.05"]["steals"], 4)
+        self.assertEqual((gated["by_edge"]["0.05"]["steals"], gated["by_edge"]["0.05"]["filtered"]), (3, 1))
+        self.assertEqual((gated["filters"], gated["agreement_gap"]), (["agreement"], 0.12))
+        # An unfiltered run keeps its shape: the committed results fixtures carry no filter keys.
+        self.assertNotIn("filters", plain)
+        self.assertNotIn("filtered", plain["by_edge"]["0.05"])
+        # The gap is a knob: at 0.10 the 0.11-gap row is skipped too.
+        tight = simulate_steal(games, edges=(0.05,), lock=False, filters=["agreement"], agreement_gap=0.10)
+        self.assertEqual((tight["by_edge"]["0.05"]["steals"], tight["by_edge"]["0.05"]["filtered"]), (2, 2))
+        # A later row that no longer disagrees still trades, so the gate delays rather than bans.
+        later = _row(ts=1.0, blend_p=0.85, model_p=0.80, market_p=0.77, espn_p=0.78, kalshi_home_ask=0.78, kalshi_away_ask=0.23)
+        two = simulate_steal([_result(True, [ucla, later])], edges=(0.05,), lock=False, filters=("agreement",))["by_edge"]["0.05"]
+        self.assertEqual((two["steals"], two["filtered"]), (1, 1))
+        self.assertEqual(two["trades"][0]["fair"], 0.85)
+        # Locks are not gated (as in play): holding away, the disagreeing home row still locks.
+        stolen = _row(blend_p=0.40, model_p=0.40, market_p=0.40, espn_p=0.40, kalshi_home_ask=0.70, kalshi_away_ask=0.30)
+        ucla_cheap = _row(ts=1.0, blend_p=0.85, model_p=0.93, market_p=0.77, espn_p=0.77, kalshi_home_ask=0.65, kalshi_away_ask=0.36)   # 0.31 + 0.66 < 1: a real lock
+        lock = simulate_steal([_result(True, [stolen, ucla_cheap])], edges=(0.05,), lock=True, filters=("agreement",))["by_edge"]["0.05"]
+        self.assertEqual([t["kind"] for t in lock["trades"]], ["steal", "lock"])
+        self.assertEqual(lock["filtered"], 0)
+        # The other pairings gate on their own model / market columns.
+        post = _row(blend_after_p=0.85, model_after_p=0.93, market_after_p=0.77, espn_p=0.77, kalshi_after_home_ask=0.78, kalshi_after_away_ask=0.23)
+        pa = simulate_steal([_result(True, [post])], edges=(0.05,), lock=False, pairing="post_after", filters=("agreement",))["by_edge"]["0.05"]
+        self.assertEqual((pa["steals"], pa["filtered"]), (0, 1))
+        with self.assertRaises(ValueError):
+            simulate_steal(games, edges=(0.05,), filters=("bogus",))
+        text = summarize_sim(gated)
+        self.assertIn("filters=agreement (gap 0.12)", text)
+        self.assertIn("filtered", text)
+
     def test_no_lock_holds_to_settlement(self):
         a = _result(True, [_row(blend_p=0.70, kalshi_home_ask=0.55, kalshi_away_ask=0.48), _row(blend_p=0.85, kalshi_home_ask=0.84, kalshi_away_ask=0.30)])
         sim = simulate_steal([a], edges=(0.05,), contracts=10, lock=False)

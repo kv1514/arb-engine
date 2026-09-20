@@ -3,7 +3,7 @@ usage: arb-engine scan [-h] [--sport {nfl,tennis,ncaaf,nba,nhl,mlb}] [--venues V
                        [--candidate-margin CANDIDATE_MARGIN] [--gold]
                        [--max-quote-age MAX_QUOTE_AGE] [--markets MARKETS]
                        [--min-margin MIN_MARGIN] [--limit LIMIT] [--all] [--cross-only]
-                       [--include-live] [--include-thin] [--json JSON] [--record DB]
+                       [--include-live] [--include-thin] [--json JSON] [--record [DB]]
 
 options:
   -h, --help            show this help message and exit
@@ -29,4 +29,5 @@ options:
   --include-live        count in-play events as arbs (default: pre-game only)
   --include-thin        count arbs that are not fillable for >= 1 contract at the quoted size
   --json JSON           write full result to this file
-  --record DB           append every event and quote to this SQLite file (e.g. out/history.db)
+  --record [DB]         append every event and quote to this SQLite file (bare flag:
+                        out/history.db)

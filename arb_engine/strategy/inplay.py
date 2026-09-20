@@ -12,23 +12,50 @@ either way for less than $1: a locked profit. Two signals per loop:
   cheapest venue, fees included) so that both outcomes pay more than the total cost, and
   whether that price is available now. Also reports the locked P&L if you are already flat.
 
+Which venue a signal may name
+-----------------------------
+Every venue's mid feeds the fair value (Polymarket is the deepest in-play book and the best
+signal), but an order can only go to the venues the compliance table (or an explicit
+``EXECUTABLE_VENUES``) allows: ``scanner.resolve_executable_venues(settings)``, or the
+``executable_venues`` kwarg. Per side the STEAL / LOCK action text, the Kelly / depth sizing,
+the ``steal`` flag and the alerts are computed on the cheapest *executable* ask
+(``SideView.exec_*``). ``best_*`` is the side's headline quote: the executable one when it is
+actionable (a STEAL, gated or not) or is the cheapest anyway, otherwise the cheapest ask on
+any venue flagged ``best_ineligible="not executable"`` — *signal only*, no action, no
+contracts, with the executable best beside it. A non-executable ask that undercuts the
+executable one is always reported in ``signal_*`` (the first live college slate recommended
+"buy 80 contracts on polymarket" to an account that cannot trade there; never again).
+
 Execution gates
 ---------------
 STEAL and LOCK fire on the gap between the ESPN-derived fair and a venue ask, but ESPN's
 feed lags the broadcast by 5–20 s and the venues do not: a "cheap" quote that is ahead of our
 information is adverse selection, not an edge. ``FeedFreshness`` remembers, per event,
-when the ESPN state and score last changed and where every venue's mid was on the previous
-poll, and ``evaluate_inplay(freshness=...)`` turns that into gate reasons:
+when the ESPN state and score last changed and where every venue's mid was (a trailing
+window and at the last state change), and ``evaluate_inplay(freshness=...)`` turns that into
+gate reasons. Every rule is in *seconds*, never in polls: the overlay polls the bridge every
+1 s, ``inplay`` every 5 s, ``live`` every 10 s, and a poll count would mean something
+different on each.
 
 * ``feed-stale``    — no ESPN state change for > ``stale_after_s`` while a venue mid moved
-                      ≥ 0.02: the market knows something the feed has not shown us yet.
-* ``clock-frozen``  — identical state for ≥ ``frozen_polls`` polls with the clock running.
-* ``quote-old``     — the venue's own quote timestamp is older than the poll interval
+                      ≥ 0.02 over the last ``max(interval_s, 10 s)``: the market knows
+                      something the feed has not shown us yet.
+* ``clock-frozen``  — identical state for ≥ ``frozen_s`` (default ``max(3 × interval_s,
+                      30 s)``) with the clock running *and* a venue mid moved ≥ 0.02 since
+                      the state last changed. ESPN's normal 10–20 s update lag and a real
+                      clock stoppage with a quiet market do not trip it.
+* ``quote-old``     — the venue's own quote timestamp is older than ``max(interval_s, 10 s)``
                       (only venues that report one; CDNA quotes carry +3 s for its delay).
 * ``score-pending`` — a score changed but ``last_play_id`` has not advanced (the play,
                       and ESPN's post-play win probability, are not published yet); a timer
                       when the feed has no play ids.
 * ``suspect`` / ``review-pending`` — the ESPN feed's own flags (StateGuard).
+* ``disagreement``  — (STEAL only) the model and the market differ by more than
+                      ``inplay_agreement_gap`` and ESPN's own win probability sits on the
+                      market's side: two independent sources against one is a model that
+                      misses something (an injury, a college line the tables never saw), not
+                      an edge. ``backtest.simulate_steal(filters=("agreement",))`` measures
+                      what the gate skips.
 
 A gated STEAL is downgraded to ``wait: <reason>`` and journaled with a ``GATED`` prefix so
 the tick replay can count what the gates cost or saved; a gated LOCK NOW likewise.
@@ -68,6 +95,8 @@ except Exception:  # pragma: no cover - exercised when config.py predates declar
 
 SETTINGS: dict[str, tuple[str, Any, Callable[[str], Any], str]] = {
     "inplay_stale_after_s": ("INPLAY_STALE_AFTER_S", 15.0, float, "seconds without an ESPN state change (while a venue mid moves) before STEAL/LOCK are gated as feed-stale"),
+    "inplay_frozen_s": ("INPLAY_FROZEN_S", None, float, "seconds of identical ESPN state, clock running and a venue mid moved >= 0.02 since, before STEAL/LOCK are gated clock-frozen (default max(3 x poll interval, 30 s))"),
+    "inplay_agreement_gap": ("INPLAY_AGREEMENT_GAP", 0.12, float, "model-vs-market gap above which a STEAL is gated 'disagreement' when ESPN's win probability sides with the market (provisional; measure on the first recorded Sunday)"),
     "inplay_delay_haircut_cdna": ("INPLAY_DELAY_HAIRCUT_CDNA", 0.02, float, "extra edge a STEAL on a CDNA-routed Robinhood contract needs, for its 3 s order delay"),
     "inplay_slate_cap": ("INPLAY_SLATE_CAP", None, float, "dollars the live slate may deploy per tick across every STEAL (default: the bankroll); stakes scale proportionally"),
     "line_fair": ("LINE_FAIR", False, lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), "scan(): attach quant.lines fair values to spread/total events when that module exists"),  # same key/default as scanner.py: one knob attaches AND uses line fairs
@@ -209,6 +238,20 @@ class SideView:
     lock_gated: bool = False         # lock price is available but held back
     steal_threshold: Optional[float] = None    # edge actually required (base, CDNA haircut, 2x for lines)
     best_exchange: Optional[str] = None        # Robinhood routing of the best quote (rothera/kalshi/cdna)
+    # Venue eligibility (module docstring). ``best_ineligible`` is set when the headline quote
+    # sits on a venue this account cannot execute on (the bridge recomputes the same value
+    # from best_venue); ``exec_*`` is the cheapest executable ask the actions / sizing use and
+    # ``signal_*`` a non-executable ask that undercuts it (priced into the fair, never bought).
+    best_ineligible: Optional[str] = None
+    exec_venue: Optional[str] = None
+    exec_ask: Optional[float] = None
+    exec_all_in: Optional[float] = None
+    exec_edge: Optional[float] = None
+    exec_exchange: Optional[str] = None
+    signal_venue: Optional[str] = None
+    signal_ask: Optional[float] = None
+    signal_all_in: Optional[float] = None
+    signal_edge: Optional[float] = None
 
 
 @dataclass
@@ -230,6 +273,8 @@ class InplayView:
     gated_reasons: list[str] = field(default_factory=list)   # event-level gate reasons this poll
     spread_source: Optional[str] = None        # where the model's pre-game spread came from
     freshness: Optional[dict] = None           # FeedFreshness.as_dict() snapshot
+    executable_venues: Optional[list[str]] = None   # the resolved set the actions were computed on (None = unrestricted)
+    disagreement_gated: bool = False           # the 'disagreement' STEAL gate fired this poll (both sides)
 
 
 # ---- feed freshness -------------------------------------------------------------------------
@@ -241,13 +286,18 @@ class FeedFreshness:
     ``record_tick(freshness=...)`` accepts (keys ``last_state_change_ts``,
     ``last_score_change_ts``, ``mids`` plus the gate bookkeeping).
 
-    Thresholds: ``stale_after_s`` (feed-stale), ``frozen_polls`` (clock-frozen),
-    ``interval_s`` (quote-old), ``score_hold_s`` (score-pending without play ids),
-    ``score_hold_max_s`` (cap so a feed whose ids never advance cannot gate forever).
+    Thresholds, all in seconds so the 1 s overlay, the 5 s watcher and the 10 s slate gate
+    the same way: ``stale_after_s`` (feed-stale), ``frozen_s`` (clock-frozen; ``None`` =
+    ``max(3 × interval_s, 30)``), ``interval_s`` (the caller's poll cadence; the quote-old
+    and mid-move windows are ``max(interval_s, window_min_s)``), ``score_hold_s``
+    (score-pending without play ids), ``score_hold_max_s`` (cap so a feed whose ids never
+    advance cannot gate forever).
     """
     stale_after_s: float = 15.0
-    frozen_polls: int = 2
+    frozen_s: Optional[float] = None
     interval_s: float = 10.0
+    window_min_s: float = 10.0
+    frozen_min_s: float = 30.0
     score_hold_s: float = 20.0
     score_hold_max_s: float = 120.0
     mid_move: float = 0.02
@@ -261,11 +311,13 @@ class FeedFreshness:
     last_state: Optional[tuple] = None
     last_score: Optional[tuple] = None
     last_play_id: Optional[str] = None
-    frozen: int = 0                                # consecutive polls with no state change
+    frozen: int = 0                                # consecutive polls with no state change (informational)
     score_pending: bool = False
     score_pending_play_id: Optional[str] = None    # play id seen when the score changed (None = timer fallback)
     mids: dict[str, dict[str, float]] = field(default_factory=dict)   # venue -> outcome -> mid (latest poll)
-    mid_moves: dict[str, float] = field(default_factory=dict)         # venue -> max |mid move| vs the previous poll
+    mid_moves: dict[str, float] = field(default_factory=dict)         # venue -> max |mid move| over the trailing window
+    mids_at_state_change: dict[str, dict[str, float]] = field(default_factory=dict)   # mids when the ESPN state last changed
+    _mid_history: list[tuple[float, dict[str, dict[str, float]]]] = field(default_factory=list, repr=False)
     # per-event caches for the spread fallback chain
     pregame_home_p: Optional[float] = None         # last pre-game blended P(home)
     spread_home: Optional[float] = None
@@ -274,11 +326,38 @@ class FeedFreshness:
 
     @classmethod
     def from_settings(cls, settings: Optional[dict[str, Any]] = None, interval_s: float = 10.0, **kw: Any) -> "FeedFreshness":
-        return cls(stale_after_s=float(setting(settings, "inplay_stale_after_s")), interval_s=float(interval_s), **kw)
+        frozen = setting(settings, "inplay_frozen_s")
+        return cls(stale_after_s=float(setting(settings, "inplay_stale_after_s")), frozen_s=(float(frozen) if frozen is not None else None), interval_s=float(interval_s), **kw)
+
+    # -- derived thresholds -----------------------------------------------------------------
+    @property
+    def window_s(self) -> float:
+        """Trailing window for the feed-stale mid move and the quote-old age: the poll
+        interval, floored so a 1 s overlay poll is not judged against a 1 s window."""
+        return max(float(self.interval_s), float(self.window_min_s))
+
+    @property
+    def frozen_after_s(self) -> float:
+        return float(self.frozen_s) if self.frozen_s is not None else max(3.0 * float(self.interval_s), float(self.frozen_min_s))
 
     @staticmethod
     def _signature(gs: Any) -> tuple:
         return tuple(getattr(gs, k, None) for k in ("home_score", "away_score", "period", "clock_seconds_remaining_in_period", "possession", "down", "distance", "yardline_100"))
+
+    @staticmethod
+    def _max_move(new: dict[str, dict[str, float]], old: dict[str, dict[str, float]]) -> dict[str, float]:
+        moves: dict[str, float] = {}
+        for venue, per in new.items():
+            prev = old.get(venue) or {}
+            deltas = [abs(per[o] - prev[o]) for o in per if o in prev]
+            if deltas:
+                moves[venue] = max(deltas)
+        return moves
+
+    def moved_since_state_change(self) -> float:
+        """Largest |mid move| on any venue since the ESPN state last changed."""
+        m = self._max_move(self.mids, self.mids_at_state_change)
+        return max(m.values()) if m else 0.0
 
     def observe(self, gs: Any, quotes_by_venue: Any, now: Optional[float] = None) -> None:
         """Record one poll. Call once per poll before ``evaluate_inplay`` (which does it for
@@ -286,7 +365,8 @@ class FeedFreshness:
         now = time.time() if now is None else float(now)
         self.polls += 1
         self.now = now
-        # venue mids
+        # venue mids: the move is measured against the poll ~window_s ago (the previous poll
+        # at a 10 s cadence, the tenth-previous at 1 s), so the gate is cadence-independent.
         new: dict[str, dict[str, float]] = {}
         for venue, qs in (quotes_by_venue or {}).items():
             vals = qs.values() if isinstance(qs, dict) else (qs if isinstance(qs, (list, tuple)) else [qs])
@@ -294,13 +374,15 @@ class FeedFreshness:
                 m = getattr(q, "mid", None)
                 if m is not None:
                     new.setdefault(venue, {})[q.outcome] = float(m)
-        moves: dict[str, float] = {}
-        for venue, per in new.items():
-            old = self.mids.get(venue) or {}
-            deltas = [abs(per[o] - old[o]) for o in per if o in old]
-            if deltas:
-                moves[venue] = max(deltas)
-        self.mids, self.mid_moves = new, moves
+        cutoff = now - self.window_s
+        base = next((m for ts, m in reversed(self._mid_history) if ts <= cutoff), None)
+        if base is None and self._mid_history:
+            base = self._mid_history[0][1]   # history shorter than the window: the oldest poll
+        self.mid_moves = self._max_move(new, base) if base is not None else {}
+        keep = [i for i, (ts, _) in enumerate(self._mid_history) if ts <= cutoff]
+        self._mid_history = self._mid_history[keep[-1]:] if keep else self._mid_history
+        self._mid_history.append((now, new))
+        self.mids = new
         if gs is None:
             return
         self.status = getattr(gs, "status", None)
@@ -311,6 +393,7 @@ class FeedFreshness:
         if self.last_state is None or sig != self.last_state:
             self.last_state_change_ts = now
             self.frozen = 0
+            self.mids_at_state_change = new
         else:
             self.frozen += 1
         if self.last_score is not None and score != self.last_score:
@@ -343,11 +426,12 @@ class FeedFreshness:
             reasons.append("review-pending")
         if self.score_pending:
             reasons.append("score-pending")
+        since = (now - self.last_state_change_ts) if (self.last_state_change_ts is not None and now is not None) else None
         moved = max(self.mid_moves.values()) if self.mid_moves else 0.0
-        if self.last_state_change_ts is not None and now is not None and (now - self.last_state_change_ts) > self.stale_after_s and moved >= self.mid_move:
+        if since is not None and since > self.stale_after_s and moved >= self.mid_move:
             reasons.append("feed-stale")
         clock = getattr(gs, "clock_seconds_remaining_in_period", None)
-        if self.frozen >= self.frozen_polls and clock not in (None, 0):
+        if since is not None and since >= self.frozen_after_s and clock not in (None, 0) and self.moved_since_state_change() >= self.mid_move:
             reasons.append("clock-frozen")
         return reasons
 
@@ -361,7 +445,7 @@ class FeedFreshness:
 
     def quote_reasons(self, q: OutcomeQuote) -> list[str]:
         age = self.quote_age(q)
-        if age is not None and age > self.interval_s:
+        if age is not None and age > self.window_s:
             return [f"quote-old:{q.venue}"]
         return []
 
@@ -369,8 +453,9 @@ class FeedFreshness:
         return {
             "last_state_change_ts": self.last_state_change_ts, "last_score_change_ts": self.last_score_change_ts,
             "mids": {v: dict(per) for v, per in self.mids.items()}, "mid_moves": dict(self.mid_moves),
+            "mids_at_state_change": {v: dict(per) for v, per in self.mids_at_state_change.items()}, "moved_since_state_change": self.moved_since_state_change(),
             "polls": self.polls, "frozen": self.frozen, "score_pending": self.score_pending, "score_pending_play_id": self.score_pending_play_id,
-            "last_play_id": self.last_play_id, "stale_after_s": self.stale_after_s, "interval_s": self.interval_s,
+            "last_play_id": self.last_play_id, "stale_after_s": self.stale_after_s, "frozen_s": self.frozen_after_s, "interval_s": self.interval_s, "window_s": self.window_s,
             "spread_home": self.spread_home, "spread_source": self.spread_source, "pregame_home_p": self.pregame_home_p,
         }
 
@@ -544,6 +629,35 @@ def _line_fair(me: MergedEvent, settings: Optional[dict[str, Any]]) -> Optional[
     return {o: float(lf[o]) for o in me.info.outcomes}
 
 
+def resolve_executable(settings: Optional[dict[str, Any]], explicit: Optional[Iterable[str]] = None) -> Optional[set[str]]:
+    """Venues an in-play order can go to: the explicit set, else the scanner's resolution of
+    ``settings`` (compliance table > ``EXECUTABLE_VENUES``; ``None`` = unrestricted). The
+    scanner import is lazy so this module still loads if the scanner's imports break."""
+    if explicit is not None:
+        return {str(v).strip().lower() for v in explicit}
+    try:
+        from ..scanner import resolve_executable_venues
+    except Exception:  # pragma: no cover - the scanner is part of this package
+        return None
+    try:
+        return resolve_executable_venues({k: v for k, v in (settings or {}).items() if not (k == "executable_venues" and v is None)})
+    except Exception:
+        return None
+
+
+def agreement_gate(model_p: Optional[float], market_p: Optional[float], espn_p: Optional[float], gap: float = 0.12) -> bool:
+    """The 'disagreement' STEAL gate on one probability triple (any consistent side): the
+    model and the market differ by more than ``gap`` *and* ESPN's win probability is closer
+    to the market than to the model. Absent inputs never gate. Shared with
+    ``backtest.simulate_steal(filters=("agreement",))`` so the replay measures exactly the
+    rule the live watcher applies."""
+    if model_p is None or market_p is None or espn_p is None:
+        return False
+    if abs(model_p - market_p) <= gap:
+        return False
+    return abs(espn_p - market_p) < abs(espn_p - model_p)
+
+
 def _p_tie(gs: Any) -> Optional[float]:
     """P(tie) from the ESPN state: P02's ``espn_tie`` or the last win-probability row's tie mass."""
     if gs is None:
@@ -560,7 +674,13 @@ def _p_tie(gs: Any) -> Optional[float]:
     return t if t and t > 0 else None
 
 
-def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, freshness: Optional[FeedFreshness] = None, now: Optional[float] = None, pool: str = "linear") -> InplayView:
+def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, game_state: Any = None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, freshness: Optional[FeedFreshness] = None, now: Optional[float] = None, pool: str = "linear", executable_venues: Optional[Iterable[str]] = None) -> InplayView:
+    """Price one two-way event for the watcher / slate / bridge (module docstring).
+
+    ``executable_venues`` is the venue set an order can go to (``None`` = resolve it from
+    ``settings`` through ``scanner.resolve_executable_venues``: the compliance table unless
+    ``EXECUTABLE_VENUES`` says otherwise). Every venue still prices the fair; only an
+    executable ask can be a STEAL, a LOCK or a size."""
     settings = settings or {}
     from ..quant.sizing import hedge_kelly as _hedge_kelly
     from ..quant.sizing import kelly_stake as _kelly
@@ -617,17 +737,35 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
     event_reasons = freshness.event_reasons(game_state, now) if (freshness is not None and live) else []
     cdna_haircut = float(setting(settings, "inplay_delay_haircut_cdna"))
     base_threshold = steal_edge * (2.0 if line_fair is not None else 1.0)
+    exec_set = resolve_executable(settings, executable_venues)
+    # The agreement gate (module docstring) is symmetric in the two sides, so decide it once.
+    disagreement_gated = bool(live and line_fair is None and agreement_gate(m_wp, market_probs.get(home_o), e_wp, float(setting(settings, "inplay_agreement_gap"))))
+
+    def leg_fair(q: Optional[OutcomeQuote], o: str) -> Optional[float]:
+        # Per-leg fair: the blend's tie mass is paid out by this contract's own tie rule
+        # (Rothera YES pays nothing on a tie, Kalshi half). Without p_tie this is blend.fair.
+        if q is not None and line_fair is None and blend.p_tie:
+            return blend.leg_fair(o, float((q.meta or {}).get("tie_payout", 0.5)))
+        return fair.get(o)
 
     sides: list[SideView] = []
     actions: list[str] = []
     for o in info.outcomes:
         quotes = [q for q in all_quotes if q.outcome == o and q.ask is not None]
-        best: Optional[tuple[float, OutcomeQuote, Any]] = None
+        best_any: Optional[tuple[float, OutcomeQuote, Any]] = None    # cheapest on any venue: the market's signal
+        best: Optional[tuple[float, OutcomeQuote, Any]] = None        # cheapest an order can actually go to
         lock_best: Optional[tuple[float, OutcomeQuote, Any]] = None
         cdna_seen: Optional[tuple[float, OutcomeQuote, Any]] = None
+        ineligible_seen: Optional[tuple[float, OutcomeQuote, Any]] = None
         for q in quotes:
             fm = fee_model_for_quote(q, settings)
             all_in = q.ask + fm.per_contract(q.ask, max(1.0, max_held - held[o]) if max_held > held[o] else 100.0)
+            if best_any is None or all_in < best_any[0]:
+                best_any = (all_in, q, fm)
+            if exec_set is not None and q.venue not in exec_set:
+                if ineligible_seen is None or all_in < ineligible_seen[0]:
+                    ineligible_seen = (all_in, q, fm)
+                continue
             if best is None or all_in < best[0]:
                 best = (all_in, q, fm)
             is_cdna = _exchange_of(q) == "cdna"
@@ -636,11 +774,10 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                     cdna_seen = (all_in, q, fm)
             elif lock_best is None or all_in < lock_best[0]:
                 lock_best = (all_in, q, fm)
-        # Per-leg fair: the blend's tie mass is paid out by this contract's own tie rule
-        # (Rothera YES pays nothing on a tie, Kalshi half). Without p_tie this is blend.fair.
-        fv = fair.get(o)
-        if best is not None and line_fair is None and blend.p_tie:
-            fv = blend.leg_fair(o, float((best[1].meta or {}).get("tie_payout", 0.5)))
+        # A non-executable ask that undercuts the executable best (or stands alone) is the
+        # signal: priced, shown, never bought.
+        signal = ineligible_seen if (ineligible_seen is not None and (best is None or ineligible_seen[0] < best[0] - 1e-12)) else None
+        fv = leg_fair(best[1] if best else None, o)
         edge = (fv - best[0]) if (fv is not None and best) else None
         best_ex = _exchange_of(best[1]) if best else None
         threshold = base_threshold + (cdna_haircut if best_ex == "cdna" else 0.0)
@@ -653,8 +790,20 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
             agree = model_edge >= threshold
         would_steal = bool(edge is not None and edge >= threshold and agree)
         reasons = list(event_reasons) + (freshness.quote_reasons(best[1]) if (freshness is not None and live and best is not None) else [])
+        if disagreement_gated:
+            reasons.append("disagreement")
         gated = would_steal and bool(reasons)
-        sv = SideView(outcome=o, label=info.labels.get(o, o), held=held[o], cost=cost[o], avg_all_in=(cost[o] / held[o]) if held[o] else None, fair=fv, best_venue=best[1].venue if best else None, best_ask=best[1].ask if best else None, best_all_in=best[0] if best else None, steal_edge=edge, steal=would_steal and not gated, market_p=market_probs.get(o), model_p=model_probs.get(o), espn_p=espn_probs.get(o), gated_reasons=reasons if (would_steal or reasons) else [], steal_gated=gated, steal_threshold=threshold, best_exchange=best_ex)
+        # Headline quote: the executable one when it is actionable or simply the cheapest;
+        # otherwise the cheaper non-executable ask, flagged so the overlay prints "signal only".
+        head, ineligible = (best, None) if (best is not None and (would_steal or signal is None)) else (best_any, ("not executable" if best_any is not None else None))
+        head_fv = fv if head is best else leg_fair(head[1] if head else None, o)
+        head_edge = (head_fv - head[0]) if (head_fv is not None and head) else None
+        sv = SideView(outcome=o, label=info.labels.get(o, o), held=held[o], cost=cost[o], avg_all_in=(cost[o] / held[o]) if held[o] else None, fair=head_fv, best_venue=head[1].venue if head else None, best_ask=head[1].ask if head else None, best_all_in=head[0] if head else None, steal_edge=head_edge, steal=would_steal and not gated, market_p=market_probs.get(o), model_p=model_probs.get(o), espn_p=espn_probs.get(o), gated_reasons=reasons if (would_steal or reasons) else [], steal_gated=gated, steal_threshold=threshold, best_exchange=(_exchange_of(head[1]) if head else None), best_ineligible=ineligible)
+        if best is not None:
+            sv.exec_venue, sv.exec_ask, sv.exec_all_in, sv.exec_edge, sv.exec_exchange = best[1].venue, best[1].ask, best[0], edge, best_ex
+        if signal is not None:
+            s_fv = leg_fair(signal[1], o)
+            sv.signal_venue, sv.signal_ask, sv.signal_all_in, sv.signal_edge = signal[1].venue, signal[1].ask, signal[0], ((s_fv - signal[0]) if s_fv is not None else None)
         # How much to buy if this is a STEAL: fractional Kelly on the bankroll (fees are already
         # inside all_in), capped by what is actually offered at that price. Pure arbs are sized
         # by depth elsewhere (size_from_books); this is the directional case.
@@ -666,11 +815,16 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                 sv.kelly_contracts = ks["contracts"]
                 depth = int(sv.depth_contracts) if sv.depth_contracts is not None else None
                 sv.suggested_contracts = min(ks["contracts"], depth) if depth is not None else ks["contracts"]
+        elif head is not None:
+            sv.depth_contracts = head[1].ask_size
         # Lock: how many of this side are needed to equalise payouts, and the max price for them.
         need = max_held - held[o]
         if need > 0 and lock_best is None and cdna_seen is not None:
             sv.need = need
             actions.append(f"wait: {sv.label} only offered on {cdna_seen[1].venue} (cdna) at {cdna_seen[1].ask:.2f} — delayed 3 s - not lockable in play")
+        elif need > 0 and lock_best is None and ineligible_seen is not None:
+            sv.need = need
+            actions.append(f"wait: {sv.label} only offered on {ineligible_seen[1].venue} at {ineligible_seen[1].ask:.2f} — not executable for this account")
         elif need > 0 and lock_best is not None:
             # After buying `need` more, this side pays max_held if it wins. max_price_for_leg
             # budgets `need * (1 - target_margin)` for the leg, so the fixed leg must carry
@@ -708,6 +862,7 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                 actions.append(f"no lock possible for {sv.label} at current holdings (avg cost too high)")
             if cdna_seen is not None and (lock_best is None or cdna_seen[0] < lock_best[0]):
                 actions.append(f"note: {sv.label} is cheaper on {cdna_seen[1].venue} (cdna, ask {cdna_seen[1].ask:.2f}) but delayed 3 s - not lockable in play")
+        sig = f" [{sv.signal_venue} all-in {sv.signal_all_in:.3f} signal only]" if signal is not None else ""
         if sv.steal or sv.steal_gated:
             src = f" [market {sv.market_p:.2f} / model {sv.model_p:.2f}]" if sv.model_p is not None and sv.market_p is not None else ""
             size = ""
@@ -718,10 +873,14 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
                 size = " → size 0 at this bankroll/depth"
             hc = f" [cdna +{cdna_haircut:.0%} haircut]" if best_ex == "cdna" else ""
             ln = " [line 2x edge]" if line_fair is not None else ""
-            text = f"{sv.label} all-in {sv.best_all_in:.3f} on {sv.best_venue} vs fair {sv.fair:.3f} (+{sv.steal_edge:.1%}){hc}{ln}{src}{size}"
+            text = f"{sv.label} all-in {sv.exec_all_in:.3f} on {sv.exec_venue} vs fair {fv:.3f} (+{edge:.1%}){hc}{ln}{sig}{src}{size}"
             actions.append(f"STEAL: {text}" if sv.steal else f"GATED STEAL: wait: {', '.join(reasons)} — {text}")
         elif live and market_edge is not None and market_edge >= threshold and not agree:
             actions.append(f"market says {sv.label} is cheap (+{market_edge:.1%}) but the model does not ({model_probs[o]:.2f} vs all-in {best[0]:.3f}) — likely a stale quote, not a steal")
+        if signal is not None and sv.signal_edge is not None and sv.signal_edge >= base_threshold and (not live or model_probs.get(o) is None or line_fair is not None or model_probs[o] - signal[0] >= base_threshold):
+            # The cheap ask everyone else sees; the account cannot take it, so no size, no alert.
+            beside = f"; best executable {sv.exec_venue} all-in {sv.exec_all_in:.3f} ({sv.exec_edge:+.1%})" if best is not None else "; no executable ask"
+            actions.append(f"signal only: {sv.label} all-in {sv.signal_all_in:.3f} on {sv.signal_venue} vs fair {leg_fair(signal[1], o):.3f} (+{sv.signal_edge:.1%}) — not executable for this account{beside}")
         sides.append(sv)
     payout_if = {o: held[o] for o in info.outcomes}
     balanced = len({round(v, 6) for v in held.values()}) == 1 and max_held > 0
@@ -730,11 +889,11 @@ def evaluate_inplay(me: MergedEvent, lots: Iterable[Lot], settings: Optional[dic
         actions.insert(0, f"FLAT: both sides held {max_held:g}; locked P&L ${locked:.2f} on ${total_cost:.2f}")
     if blend.disagreement is not None and blend.disagreement > 0.05:
         srcs = ", ".join(f"{k} {v:.2f}" for k, v in blend.sources.items() if v is not None)
-        actions.append(f"sources disagree by {blend.disagreement:.2f} on P({info.labels.get(home_o, home_o)}): {srcs}")
+        actions.append(f"sources disagree by {blend.disagreement:.2f} on P({info.labels.get(home_o, home_o)}): {srcs}" + (" — STEAL gated: ESPN sides with the market" if disagreement_gated else ""))
     fair_line = None
     if any(v is not None for v in blend.sources.values()):
         fair_line = "P(" + info.labels.get(home_o, home_o) + "): " + " / ".join(f"{k} {v:.2f}" for k, v in blend.sources.items() if v is not None) + (f" → blended {blend.home_p:.2f}" if blend.home_p is not None else "")
-    return InplayView(event_key=me.event_key, title=info.title(), live=live, sides=sides, total_cost=total_cost, payout_if=payout_if, locked_pnl=locked, balanced=balanced, actions=actions, game_line=game_line(game_state), fair_line=fair_line, game_state=(game_state.as_dict() if game_state is not None and hasattr(game_state, "as_dict") else None), blend=blend.as_dict(), disagreement=blend.disagreement, gated_reasons=event_reasons, spread_source=spread_source, freshness=freshness.as_dict() if freshness is not None else None)
+    return InplayView(event_key=me.event_key, title=info.title(), live=live, sides=sides, total_cost=total_cost, payout_if=payout_if, locked_pnl=locked, balanced=balanced, actions=actions, game_line=game_line(game_state), fair_line=fair_line, game_state=(game_state.as_dict() if game_state is not None and hasattr(game_state, "as_dict") else None), blend=blend.as_dict(), disagreement=blend.disagreement, gated_reasons=event_reasons, spread_source=spread_source, freshness=freshness.as_dict() if freshness is not None else None, executable_venues=(sorted(exec_set) if exec_set is not None else None), disagreement_gated=disagreement_gated)
 
 
 # ---- recording hooks (P07's store tables; every call guarded by hasattr) ---------------------
@@ -792,8 +951,9 @@ def record_view(store: Any, view: InplayView, me: Optional[MergedEvent] = None, 
 class InplayWatcher:
     """Poll one event and alert on STEAL / LOCK changes. ``fetch`` returns a MergedEvent."""
 
-    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, store: Any = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 5.0, freshness: Optional[FeedFreshness] = None):
+    def __init__(self, fetch, lots: list[Lot], alerter: Optional[Alerter] = None, settings: Optional[dict[str, Any]] = None, steal_edge: float = 0.03, target_margin: float = 0.0, fetch_state=None, model: Any = None, blend_weights: Optional[dict[str, float]] = None, store: Any = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 5.0, freshness: Optional[FeedFreshness] = None, executable_venues: Optional[Iterable[str]] = None):
         self.fetch = fetch
+        self.executable_venues = resolve_executable(settings, executable_venues)   # None = unrestricted
         self.store = store  # optional arb_engine.store.Store
         self.bankroll, self.kelly_fraction = bankroll, kelly_fraction
         self.fetch_state = fetch_state  # () -> GameState | None (ESPN); optional
@@ -816,7 +976,7 @@ class InplayWatcher:
             except Exception as e:
                 self.alerts.info(f"game state unavailable: {e!r}")
         me = self.fetch()
-        view = evaluate_inplay(me, self.lots, self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, blend_weights=self.blend_weights, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=self.freshness, now=now)
+        view = evaluate_inplay(me, self.lots, self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, blend_weights=self.blend_weights, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=self.freshness, now=now, executable_venues=self.executable_venues)
         if view.game_line:
             self.alerts.info(f"{view.game_line}  |  {view.fair_line or ''}", event=view.event_key, game_state=view.game_state, blend=view.blend)
         for err in record_view(self.store, view, me, gs, self.freshness, now):

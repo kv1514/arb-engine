@@ -1,7 +1,7 @@
 usage: arb-engine inplay [-h] [--position POSITION] [--steal-edge STEAL_EDGE]
                          [--target-margin TARGET_MARGIN] [--contracts CONTRACTS] [--gold]
                          [--interval INTERVAL] [--duration DURATION] [--iterations ITERATIONS]
-                         [--once] [--journal JOURNAL] [--no-espn] [--record DB]
+                         [--once] [--journal JOURNAL] [--no-espn] [--record [DB]]
                          [--bankroll BANKROLL] [--kelly KELLY]
                          url
 
@@ -24,7 +24,8 @@ options:
   --once                evaluate once and print
   --journal JOURNAL
   --no-espn             do not pull live game state / model (market consensus only)
-  --record DB           append every tick (game state, sources, actions) to this SQLite file
+  --record [DB]         append every tick (game state, sources, actions) to this SQLite file (bare
+                        flag: out/history.db)
   --bankroll BANKROLL   dollars you are willing to deploy; STEAL alerts then say how many
                         contracts (fractional Kelly, capped by depth)
   --kelly KELLY         Kelly fraction for sizing (default 0.25)

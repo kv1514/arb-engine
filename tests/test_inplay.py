@@ -298,18 +298,61 @@ class GateTests(unittest.TestCase):
         self.assertAlmostEqual(f.mid_moves["kalshi"], 0.03)
         self.assertTrue(_side(third, "KC").steal, third.actions)
 
-    def test_clock_frozen_after_repeated_identical_polls(self):
-        f = FeedFreshness(stale_after_s=100.0, frozen_polls=2)
+    def test_clock_frozen_is_time_based_and_needs_a_market_move(self):
+        # 5 s cadence, identical ESPN state for a minute, venues quiet: never frozen (a real
+        # clock stoppage or ESPN's 10-20 s update lag must not gate everything).
+        f = FeedFreshness(stale_after_s=100.0, interval_s=5.0)
+        self.assertEqual(f.frozen_after_s, 30.0)                       # max(3 x 5 s, 30 s)
         with _stub_model(0.45):
-            views = [evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0 + 5 * i) for i in range(3)]
-        self.assertTrue(_side(views[0], "KC").steal)
-        self.assertTrue(_side(views[1], "KC").steal)      # one unchanged poll is normal between plays
-        self.assertEqual(_side(views[2], "KC").gated_reasons, ["clock-frozen"])
-        # Halftime / end of period: the clock is legitimately 0 -> no frozen gate.
-        f2 = FeedFreshness(stale_after_s=100.0, frozen_polls=2)
+            quiet = [evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0 + 5 * i) for i in range(13)]
+        self.assertTrue(all(_side(v, "KC").steal for v in quiet), [v.gated_reasons for v in quiet])
+        # Same cadence, but Kalshi mids drifted 0.03 since the state last changed: frozen from
+        # 30 s on (not at 25 s), and cleared the moment the state moves.
+        f2 = FeedFreshness(stale_after_s=100.0, interval_s=5.0)
+        moved = self._steal_me(k_den=(0.62, 0.64), k_kc=(0.36, 0.38))
         with _stub_model(0.45):
-            ht = [evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(period=2, clock_seconds_remaining_in_period=0, game_seconds_remaining=1800), freshness=f2, now=1000.0 + 5 * i) for i in range(4)]
-        self.assertTrue(_side(ht[-1], "KC").steal, ht[-1].actions)
+            first = evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(), freshness=f2, now=1000.0)
+            at25 = evaluate_inplay(moved, [], steal_edge=0.03, game_state=_gs(), freshness=f2, now=1025.0)
+            at30 = evaluate_inplay(moved, [], steal_edge=0.03, game_state=_gs(), freshness=f2, now=1030.0)
+            after = evaluate_inplay(moved, [], steal_edge=0.03, game_state=_gs(clock_seconds_remaining_in_period=240), freshness=f2, now=1035.0)
+        self.assertTrue(_side(first, "KC").steal)
+        self.assertTrue(_side(at25, "KC").steal, at25.gated_reasons)
+        self.assertEqual(_side(at30, "KC").gated_reasons, ["clock-frozen"])
+        self.assertEqual(at30.freshness["frozen_s"], 30.0)
+        self.assertAlmostEqual(at30.freshness["moved_since_state_change"], 0.03)
+        self.assertTrue(_side(after, "KC").steal, after.actions)
+        # Halftime / end of period: the clock is legitimately 0 -> no frozen gate even with a move.
+        f3 = FeedFreshness(stale_after_s=100.0, interval_s=5.0)
+        with _stub_model(0.45):
+            evaluate_inplay(self._steal_me(), [], steal_edge=0.03, game_state=_gs(period=2, clock_seconds_remaining_in_period=0, game_seconds_remaining=1800), freshness=f3, now=1000.0)
+            ht = evaluate_inplay(moved, [], steal_edge=0.03, game_state=_gs(period=2, clock_seconds_remaining_in_period=0, game_seconds_remaining=1800), freshness=f3, now=1040.0)
+        self.assertTrue(_side(ht, "KC").steal, ht.actions)
+        # The threshold is a setting (seconds) and scales with the cadence: 3 x 20 s at --every 20.
+        self.assertEqual(FeedFreshness.from_settings({"inplay_frozen_s": 12.0}, interval_s=1.0).frozen_after_s, 12.0)
+        self.assertEqual(FeedFreshness.from_settings({}, interval_s=20.0).frozen_after_s, 60.0)
+        self.assertEqual(FeedFreshness.from_settings({}, interval_s=1.0).frozen_after_s, 30.0)
+
+    def test_feed_stale_and_quote_old_at_a_one_second_cadence(self):
+        # The overlay polls the bridge every second. feed-stale measures the mid move over a
+        # trailing max(interval, 10 s) window, so a 0.003/s drift (0.03 over 10 s) trips it
+        # after stale_after_s exactly as one 0.03 jump between two 10 s polls does.
+        f = FeedFreshness(stale_after_s=15.0, interval_s=1.0)
+        self.assertEqual(f.window_s, 10.0)
+        views = []
+        with _stub_model(0.45):
+            for i in range(21):
+                d = 0.003 * i
+                views.append(evaluate_inplay(self._steal_me(k_den=(0.59 + d, 0.61 + d), k_kc=(0.39 - d, 0.41 - d)), [], steal_edge=0.03, game_state=_gs(), freshness=f, now=1000.0 + i))
+        self.assertTrue(all(_side(v, "KC").steal for v in views[:16]), [(i, v.gated_reasons) for i, v in enumerate(views[:16])])   # <= 15 s: not stale yet
+        self.assertEqual(_side(views[16], "KC").gated_reasons, ["feed-stale"])
+        self.assertAlmostEqual(views[20].freshness["mid_moves"]["kalshi"], 0.03, places=6)   # vs the poll 10 s ago, not 1 s ago
+        # quote-old at 1 s: a quote 5 s old is normal REST lag, 11 s is old (floor 10 s).
+        q = OutcomeQuote("robinhood", "x", KEY, "KC", ask=0.3, bid=0.28, ts=1000.0, quote_time=995.0, meta={"exchange": "rothera"})
+        self.assertEqual(f.quote_reasons(q), [])
+        q.quote_time = 989.0
+        self.assertEqual(f.quote_reasons(q), ["quote-old:robinhood"])
+        # At a 30 s cadence the window is the cadence itself.
+        self.assertEqual(FeedFreshness(interval_s=30.0).window_s, 30.0)
 
     def test_quote_old_gates_only_venues_that_report_a_time(self):
         me = self._steal_me()
@@ -377,10 +420,10 @@ class GateTests(unittest.TestCase):
         self.assertTrue(any(a.startswith("LOCK NOW") for a in clean.actions))
 
     def test_watcher_journals_gated_actions_as_info_not_alerts(self):
-        me = self._steal_me()
-        f = FeedFreshness(frozen_polls=1)
+        tapes = iter([self._steal_me(), self._steal_me(k_den=(0.62, 0.64), k_kc=(0.36, 0.38))])   # Kalshi moves 0.03 on the second poll
+        f = FeedFreshness(frozen_s=5.0, stale_after_s=100.0, interval_s=5.0)
         alerter = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), "inplay_gate_test.jsonl"), quiet=True, desktop=False, webhook="")
-        w = InplayWatcher(lambda: me, [], alerter, fetch_state=lambda: _gs(), steal_edge=0.03, freshness=f)
+        w = InplayWatcher(lambda: next(tapes), [], alerter, fetch_state=lambda: _gs(), steal_edge=0.03, freshness=f)
         with _stub_model(0.45):
             w.step(now=1000.0)
             w.step(now=1005.0)
@@ -578,6 +621,189 @@ class LineEdgeTests(unittest.TestCase):
         v = evaluate_inplay(me, [], steal_edge=0.03)
         self.assertEqual(_side(v, "KC").steal_threshold, 0.03)
         self.assertTrue(_side(v, "KC").steal)
+
+
+def _me3(p_den=(0.59, 0.61), p_kc=(0.39, 0.41), **kw):
+    """Kalshi + Robinhood (``_me``) plus a Polymarket leg: the signal-only venue by default."""
+    me = _me(**kw)
+    q = lambda o, bid, ask: OutcomeQuote("polymarket", f"pm-{o}", KEY, o, ask=ask, bid=bid, ask_size=500, meta={"tie_payout": 0.5})  # noqa: E731
+    me.quotes_by_venue["polymarket"] = [q("DEN", *p_den), q("KC", *p_kc)]
+    return me
+
+
+class ExecutableVenueTests(unittest.TestCase):
+    """Tonight's bug: 'STEAL: UCLA all-in 0.770 on polymarket ... buy 80 contracts' for an
+    account whose compliance table says Polymarket is signal-only."""
+
+    def test_default_table_resolves_from_settings(self):
+        v = evaluate_inplay(_me3(), [], {})
+        self.assertEqual(v.executable_venues, ["kalshi", "robinhood"])
+        self.assertIsNone(evaluate_inplay(_me3(), [], {"executable_venues": "all"}).executable_venues)
+        self.assertEqual(evaluate_inplay(_me3(), [], {}, executable_venues=["Kalshi"]).executable_venues, ["kalshi"])
+        # load_settings() carries executable_venues=None (unset): the table applies, not "unrestricted".
+        self.assertEqual(evaluate_inplay(_me3(), [], {"executable_venues": None}).executable_venues, ["kalshi", "robinhood"])
+
+    def test_cheap_polymarket_ask_is_signal_only_never_a_steal(self):
+        # Polymarket KC 0.30 while Kalshi / Robinhood ask ~0.41: the market's consensus says
+        # ~0.38, the model 0.45 -> a STEAL on Polymarket, which this account cannot take.
+        me = _me3(p_kc=(0.28, 0.30))
+        with _stub_model(0.45):
+            v = evaluate_inplay(me, [], {}, steal_edge=0.03, game_state=_gs(), bankroll=1000.0)
+        kc = _side(v, "KC")
+        self.assertFalse(kc.steal)
+        self.assertFalse(kc.steal_gated)
+        self.assertIsNone(kc.suggested_contracts)
+        self.assertIsNone(kc.kelly_stake)
+        self.assertEqual((kc.best_venue, kc.best_ask, kc.best_ineligible), ("polymarket", 0.30, "not executable"))
+        self.assertGreater(kc.steal_edge, 0.03)                       # the signal's edge, for the display
+        self.assertEqual((kc.exec_venue, kc.exec_ask), ("robinhood", 0.40))   # the executable best beside it (0.40 + $0.01 < Kalshi 0.41 + quadratic fee)
+        self.assertEqual((kc.signal_venue, kc.signal_ask), ("polymarket", 0.30))
+        self.assertAlmostEqual(kc.signal_all_in, kc.best_all_in)
+        self.assertFalse(any(a.startswith("STEAL") or a.startswith("GATED STEAL") for a in v.actions), v.actions)
+        sig = [a for a in v.actions if a.startswith("signal only:")]
+        self.assertEqual(len(sig), 1, v.actions)
+        self.assertIn("on polymarket", sig[0])
+        self.assertIn("not executable", sig[0])
+        self.assertIn("best executable robinhood", sig[0])
+        # Every venue's mid still prices the fair: dropping Polymarket changes the market consensus.
+        with _stub_model(0.45):
+            without = evaluate_inplay(_me(), [], {}, steal_edge=0.03, game_state=_gs())
+        self.assertNotAlmostEqual(kc.market_p, _side(without, "KC").market_p, places=3)
+        # Opt in (EXECUTABLE_VENUES=all, or the explicit kwarg) and the same quote is a STEAL with a size.
+        with _stub_model(0.45):
+            opted = evaluate_inplay(me, [], {"executable_venues": "kalshi,robinhood,polymarket"}, steal_edge=0.03, game_state=_gs(), bankroll=1000.0)
+            explicit = evaluate_inplay(me, [], {}, steal_edge=0.03, game_state=_gs(), bankroll=1000.0, executable_venues={"polymarket"})
+        for view in (opted, explicit):
+            side = _side(view, "KC")
+            self.assertTrue(side.steal)
+            self.assertEqual((side.best_venue, side.best_ineligible, side.signal_venue), ("polymarket", None, None))
+            self.assertTrue(side.suggested_contracts)
+            self.assertTrue(any(a.startswith("STEAL: Kansas City all-in") and "on polymarket" in a for a in view.actions), view.actions)
+
+    def test_executable_steal_wins_the_headline_over_a_cheaper_signal(self):
+        # Robinhood KC 0.30 (executable STEAL) and Polymarket KC 0.27 (cheaper, not executable).
+        me = _me3(r_kc=(0.28, 0.30), p_kc=(0.25, 0.27))
+        for q in me.quotes_by_venue["robinhood"]:
+            q.ask_size = 150
+        with _stub_model(0.45):
+            v = evaluate_inplay(me, [], {}, steal_edge=0.03, game_state=_gs(), bankroll=1000.0)
+        kc = _side(v, "KC")
+        self.assertTrue(kc.steal)
+        self.assertEqual((kc.best_venue, kc.best_ask, kc.best_ineligible), ("robinhood", 0.30, None))
+        self.assertEqual((kc.exec_venue, kc.signal_venue, kc.signal_ask), ("robinhood", "polymarket", 0.27))
+        self.assertEqual(kc.depth_contracts, 150)                     # sized on the executable book, not Polymarket's 500
+        self.assertLessEqual(kc.suggested_contracts, 150)
+        steal = next(a for a in v.actions if a.startswith("STEAL"))
+        self.assertIn("on robinhood", steal)
+        self.assertIn("[polymarket all-in 0.280 signal only]", steal)     # the signal's all-in (0.27 + Polymarket fee), like every other price in the line
+        self.assertNotIn("on polymarket", steal.split("[")[0])
+        # The bridge recomputes best_ineligible from best_venue and lands on the same answer.
+        from dataclasses import asdict
+
+        from arb_engine.bridge import with_gate_fields
+        out = with_gate_fields(asdict(v), {"kalshi", "robinhood"})
+        self.assertEqual([sv["best_ineligible"] for sv in out["sides"]], [sv.best_ineligible for sv in v.sides])
+        self.assertEqual(out["sides"][1]["exec_venue"], "robinhood")
+
+    def test_gated_executable_steal_keeps_the_executable_headline(self):
+        me = _me3(r_kc=(0.28, 0.30), p_kc=(0.25, 0.27))
+        with _stub_model(0.45):
+            v = evaluate_inplay(me, [], {}, steal_edge=0.03, game_state=_gs(GS2, suspect=True), freshness=FeedFreshness(), now=1000.0)
+        kc = _side(v, "KC")
+        self.assertTrue(kc.steal_gated)
+        self.assertEqual((kc.best_venue, kc.best_ineligible), ("robinhood", None))
+        self.assertTrue(any(a.startswith("GATED STEAL: wait: suspect") and "on robinhood" in a for a in v.actions), v.actions)
+
+    def test_lock_never_lands_on_a_non_executable_venue(self):
+        # Holding 100 DEN @ 0.50; KC at 0.40 only on Polymarket, Kalshi / Robinhood ask 0.48.
+        me = _me3(k_kc=(0.46, 0.48), r_kc=(0.46, 0.48), p_kc=(0.38, 0.40))
+        v = evaluate_inplay(me, [Lot("robinhood", "DEN", 0.50, 100)], {})
+        kc = _side(v, "KC")
+        self.assertFalse(kc.lock_available)
+        self.assertEqual(kc.lock_price, 0.46)
+        self.assertFalse(any(a.startswith("LOCK NOW") for a in v.actions), v.actions)
+        # With no executable KC ask at all the watcher says why it cannot lock.
+        me2 = _me3(p_kc=(0.38, 0.40))
+        me2.quotes_by_venue["kalshi"] = [q for q in me2.quotes_by_venue["kalshi"] if q.outcome != "KC"]
+        me2.quotes_by_venue["robinhood"] = [q for q in me2.quotes_by_venue["robinhood"] if q.outcome != "KC"]
+        v2 = evaluate_inplay(me2, [Lot("robinhood", "DEN", 0.50, 100)], {})
+        kc2 = _side(v2, "KC")
+        self.assertEqual((kc2.best_venue, kc2.best_ineligible, kc2.exec_venue, kc2.need), ("polymarket", "not executable", None, 100.0))
+        self.assertTrue(any(a.startswith("wait: Kansas City only offered on polymarket") and "not executable" in a for a in v2.actions), v2.actions)
+        # Opted in, the same Polymarket ask locks.
+        v3 = evaluate_inplay(me, [Lot("robinhood", "DEN", 0.50, 100)], {"executable_venues": "all"})
+        self.assertTrue(any(a.startswith("LOCK NOW") and "on polymarket" in a for a in v3.actions), v3.actions)
+
+    def test_watcher_and_slate_resolve_the_set_once(self):
+        me = _me3(p_kc=(0.28, 0.30))
+        w = InplayWatcher(lambda: me, [], Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), "inplay_exec_test.jsonl"), quiet=True, desktop=False, webhook=""), fetch_state=lambda: _gs(), steal_edge=0.03)
+        self.assertEqual(w.executable_venues, {"kalshi", "robinhood"})
+        with _stub_model(0.45):
+            view = w.step(now=1000.0)
+        self.assertFalse(_side(view, "KC").steal)
+        self.assertEqual([e for e in w.alerts.events if e["kind"] == "alert"], [])
+        self.assertTrue(any(e["kind"] == "info" and e["msg"].startswith("signal only:") for e in w.alerts.events))
+
+
+class AgreementGateTests(unittest.TestCase):
+    """PUR 28-31 UCLA, Q3 10:23, spread -13.5: model 0.93 vs Kalshi / Polymarket 0.77 and ESPN
+    0.77 - the blend still said STEAL +11 %. Two sources against the model is not an edge."""
+
+    def _ucla(self, **kw):
+        # KC plays UCLA here: home ask 0.78 on both venues (all-in ~0.79); model 0.93 -> blend ~0.85.
+        return _me(k_den=(0.21, 0.23), k_kc=(0.77, 0.78), r_den=(0.21, 0.23), r_kc=(0.77, 0.78), **kw)
+
+    def test_gate_rule(self):
+        from arb_engine.strategy.inplay import agreement_gate
+        self.assertTrue(agreement_gate(0.93, 0.77, 0.77))
+        self.assertTrue(agreement_gate(0.93, 0.77, 0.80))            # ESPN nearer the market
+        self.assertFalse(agreement_gate(0.93, 0.77, 0.90))           # ESPN sides with the model
+        self.assertFalse(agreement_gate(0.88, 0.77, 0.77))           # gap 0.11 <= 0.12
+        self.assertTrue(agreement_gate(0.88, 0.77, 0.77, gap=0.10))
+        self.assertFalse(agreement_gate(None, 0.77, 0.77))
+        self.assertFalse(agreement_gate(0.93, 0.77, None))
+        self.assertTrue(agreement_gate(0.07, 0.23, 0.23))            # symmetric in the side
+
+    def test_steal_gated_when_espn_sides_with_the_market(self):
+        with _stub_model(0.93):
+            v = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(espn_home_wp=0.77), freshness=FeedFreshness(), now=1000.0, bankroll=500.0)
+        kc = _side(v, "KC")
+        self.assertGreater(kc.steal_edge, 0.03)
+        self.assertGreater(v.disagreement, 0.12)
+        self.assertTrue(v.disagreement_gated)
+        self.assertFalse(kc.steal)
+        self.assertTrue(kc.steal_gated)
+        self.assertEqual(kc.gated_reasons, ["disagreement"])
+        self.assertIsNone(kc.suggested_contracts)
+        self.assertEqual(v.gated_reasons, [])                          # a STEAL gate, not an event / LOCK gate
+        self.assertTrue(any(a.startswith("GATED STEAL: wait: disagreement") for a in v.actions), v.actions)
+        self.assertTrue(any(a.startswith("sources disagree") and "STEAL gated" in a for a in v.actions), v.actions)
+        # No freshness object needed: the gate is a probability rule, not poll memory.
+        with _stub_model(0.93):
+            plain = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(espn_home_wp=0.77))
+        self.assertEqual(_side(plain, "KC").gated_reasons, ["disagreement"])
+
+    def test_not_gated_when_espn_sides_with_the_model_or_gap_is_small(self):
+        with _stub_model(0.93):
+            with_model = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(espn_home_wp=0.91))
+            wide_gap = evaluate_inplay(self._ucla(), [], {"inplay_agreement_gap": 0.30}, steal_edge=0.03, game_state=_gs(espn_home_wp=0.77))
+            no_espn = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(espn_home_wp=None))
+        for view in (with_model, wide_gap, no_espn):
+            self.assertTrue(_side(view, "KC").steal, view.actions)
+            self.assertFalse(view.disagreement_gated)
+        # Pre-game the blend is market-only and the gate never applies.
+        with _stub_model(0.93):
+            pre = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(status="pre", possession=None, home_score=0, away_score=0, game_seconds_remaining=3600, espn_home_wp=0.77))
+        self.assertFalse(pre.disagreement_gated)
+
+    def test_gate_stacks_with_the_feed_gates_and_the_lock_ignores_it(self):
+        with _stub_model(0.93):
+            v = evaluate_inplay(self._ucla(), [], {}, steal_edge=0.03, game_state=_gs(GS2, espn_home_wp=0.77, suspect=True), freshness=FeedFreshness(), now=1000.0)
+        self.assertEqual(_side(v, "KC").gated_reasons, ["suspect", "disagreement"])
+        # Holding 100 DEN @ 0.18: KC at 0.78 locks (0.19 + 0.792 all-in < 1) regardless of the model gap.
+        with _stub_model(0.93):
+            lock = evaluate_inplay(self._ucla(), [Lot("robinhood", "DEN", 0.18, 100)], {}, game_state=_gs(espn_home_wp=0.77))
+        self.assertTrue(any(a.startswith("LOCK NOW") for a in lock.actions), lock.actions)
 
 
 class FeeMultiplierTests(unittest.TestCase):

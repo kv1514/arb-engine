@@ -1,7 +1,7 @@
 usage: arb-engine live [-h] [--sport {nfl,ncaaf,nba,nhl}] [--every EVERY] [--hours HOURS]
                        [--iterations ITERATIONS] [--once] [--pre-hours PRE_HOURS]
                        [--steal-edge STEAL_EDGE] [--target-margin TARGET_MARGIN] [--venues VENUES]
-                       [--contracts CONTRACTS] [--gold] [--record DB] [--bankroll BANKROLL]
+                       [--contracts CONTRACTS] [--gold] [--record [DB]] [--bankroll BANKROLL]
                        [--kelly KELLY] [--journal JOURNAL]
 
 options:
@@ -18,7 +18,7 @@ options:
   --venues VENUES
   --contracts CONTRACTS
   --gold
-  --record DB           append every game tick to this SQLite file
+  --record [DB]         append every game tick to this SQLite file (bare flag: out/history.db)
   --bankroll BANKROLL   dollars to deploy; STEAL alerts then include a contract count (fractional
                         Kelly, capped by depth)
   --kelly KELLY

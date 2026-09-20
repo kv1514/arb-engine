@@ -135,11 +135,16 @@ poll-to-poll memory, so only those two long-running commands construct one). A s
 
 | reason | fires when |
 |---|---|
-| `feed-stale` | no ESPN state change for `--stale-after` s (default 15) while a venue mid moved ≥ 0.02 — the market knows something the feed does not show yet |
-| `clock-frozen` | identical state for several polls with the clock supposedly running |
-| `quote-old:<venue>` | that venue's own quote timestamp is older than the poll interval |
+| `feed-stale` | no ESPN state change for `--stale-after` s (default 15) while a venue mid moved ≥ 0.02 over the trailing max(poll interval, 10 s) — the market knows something the feed does not show yet |
+| `clock-frozen` | identical state for ≥ `inplay_frozen_s` (default max(3 × poll interval, 30 s)) with the clock running *and* a venue mid moved ≥ 0.02 since the state last changed; ESPN's normal 10–20 s lag and a stoppage with a quiet market do not trip it |
+| `quote-old:<venue>` | that venue's own quote timestamp is older than max(poll interval, 10 s) (CDNA quotes carry +3 s for their order delay) |
 | `score-pending` | a score changed but the last play id has not advanced (the play is not fully published) |
 | `suspect` / `review-pending` | the ESPN feed's own StateGuard flags (score went backwards, score before its play) |
+| `disagreement` (STEAL only) | the model is more than `inplay_agreement_gap` (default 0.12) from the market *and* ESPN sides with the market — a provisional risk control until the first recorded Sunday measures it |
+
+Every rule is in seconds, never polls: the overlay polls every 1 s, `inplay` every 5 s and
+`live` every 10 s. STEAL/LOCK actions and sizing use the cheapest *executable* ask; a cheaper
+non-executable ask (Polymarket) is shown as *signal only* and never recommended.
 
 A STEAL on a CDNA-routed Robinhood contract also needs `--cdna-haircut` (default +0.02) of
 extra edge for its 3 s order delay and is never lockable in play; a STEAL on a spread/total

@@ -13,6 +13,12 @@ suggested stakes proportionally), and, when a recorder is attached, writes every
 every priced tick with its venue L1 and freshness, every STEAL / GATED STEAL, the ladder
 update and one pre-game line anchor per event. Each recorder hook is optional (``hasattr``),
 so an older store that only has ``record_tick(view)`` still works.
+
+Every evaluation runs on the resolved executable venue set (``executable_venues`` kwarg, else
+``scanner.resolve_executable_venues(settings)``: Polymarket is signal-only for a US account),
+so a STEAL line names a venue the account can buy on; a cheaper non-executable ask is printed
+as ``signal only``. ``quiet=True`` (``--quiet`` / ``INPLAY_QUIET``) prints one summary line per
+tick plus the STEAL / LOCK / GATED lines instead of every game.
 """
 
 from __future__ import annotations
@@ -26,7 +32,17 @@ from typing import Any, Iterable, Optional
 from ..matching.matcher import MergedEvent, merge_snapshots
 from ..venues.espn import ESPNClient, ESPNFeed, GameState
 from .alerts import Alerter
-from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, setting, steal_record
+from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, resolve_executable, setting, steal_record
+
+try:  # the settings registry (config.declare_setting); this module must import without it
+    from ..config import declare_setting as _declare_setting  # type: ignore
+except Exception:  # pragma: no cover
+    _declare_setting = None
+if _declare_setting is not None:
+    try:
+        _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
+    except Exception:  # pragma: no cover
+        pass
 
 
 @dataclass
@@ -37,10 +53,11 @@ class SlateTick:
     missing: list[str] = field(default_factory=list)   # games with no merged venue event
     errors: list[str] = field(default_factory=list)
     stake_scale: float = 1.0   # < 1 when the slate cap scaled this tick's STEAL stakes
+    quiet: bool = False        # how the slate wants this tick printed (format_tick honours it)
 
 
 class LiveSlate:
-    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None):
+    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None, executable_venues: Optional[Iterable[str]] = None, quiet: Optional[bool] = None):
         self.adapters = list(adapters)
         self.feed = feed or ESPNFeed(ESPNClient(sport=sport))
         self.settings = settings or {}
@@ -58,6 +75,8 @@ class LiveSlate:
         if slate_cap is None:
             slate_cap = setting(self.settings, "inplay_slate_cap")
         self.slate_cap = float(slate_cap) if slate_cap is not None else bankroll   # dollars per tick across every STEAL
+        self.executable_venues = resolve_executable(self.settings, executable_venues)   # None = unrestricted; resolved once, passed to every evaluation
+        self.quiet = bool(quiet) if quiet is not None else bool(setting(self.settings, "inplay_quiet", False))
         self._enriched: dict[str, tuple[float, GameState]] = {}   # event_id -> (when, enriched state)
         self._seen_steal: set[str] = set()
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
@@ -152,7 +171,7 @@ class LiveSlate:
         now = now or time.time()
         errors: list[str] = []
         games = self.wanted_games(self.feed.games(), now)
-        out = SlateTick(at=now, views=[], games=len(games), errors=errors)
+        out = SlateTick(at=now, views=[], games=len(games), errors=errors, quiet=self.quiet)
         if not games:
             return out
         merged = self.merged_events(errors)
@@ -165,7 +184,7 @@ class LiveSlate:
             gs = self.state_for(g, now)
             fresh = self.freshness_for(me.event_key)
             try:
-                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=fresh, now=now)
+                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=fresh, now=now, executable_venues=self.executable_venues)
             except Exception as e:
                 errors.append(f"{g.away} @ {g.home}: {e!r}")
                 continue
@@ -227,25 +246,56 @@ def format_view(v: InplayView) -> str:
         head += f"  [gated: {', '.join(v.gated_reasons)}]"
     parts = [head]
     for sv in v.sides:
-        flag = "  STEAL" if sv.steal else ("  GATED" if sv.steal_gated else "")
-        parts.append(f"    {sv.label:<16} fair {_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}]  best {sv.best_venue or '-':<10} ask {_p(sv.best_ask)} all-in {_p(sv.best_all_in)}  edge {'' if sv.steal_edge is None else f'{sv.steal_edge*100:+.1f}%'}{flag}{f' → {sv.suggested_contracts} ct' if sv.suggested_contracts else ''}")
+        flag = "  STEAL" if sv.steal else ("  GATED" if sv.steal_gated else ("  SIGNAL ONLY" if sv.best_ineligible else ""))
+        # Beside the headline: the executable best when the headline is signal-only, or the
+        # cheaper non-executable ask when the headline is the executable one.
+        beside = ""
+        if sv.best_ineligible and sv.exec_venue:
+            beside = f"  exec {sv.exec_venue} all-in {_p(sv.exec_all_in)} ({sv.exec_edge*100:+.1f}%)" if sv.exec_edge is not None else f"  exec {sv.exec_venue} all-in {_p(sv.exec_all_in)}"
+        elif sv.signal_venue and not sv.best_ineligible:
+            beside = f"  ({sv.signal_venue} {_p(sv.signal_all_in)} signal only)"
+        parts.append(f"    {sv.label:<16} fair {_p(sv.fair)} [mkt {_p(sv.market_p)} model {_p(sv.model_p)} espn {_p(sv.espn_p)}]  best {sv.best_venue or '-':<10} ask {_p(sv.best_ask)} all-in {_p(sv.best_all_in)}  edge {'' if sv.steal_edge is None else f'{sv.steal_edge*100:+.1f}%'}{flag}{f' → {sv.suggested_contracts} ct' if sv.suggested_contracts else ''}{beside}")
     for a in v.actions:
-        if a.startswith("STEAL") or a.startswith("GATED STEAL"):
+        if a.startswith("STEAL") or a.startswith("GATED STEAL") or a.startswith("signal only"):
             parts.append(f"    -> {a}")
     if v.disagreement is not None and v.disagreement > 0.05:
-        parts.append(f"    sources disagree by {v.disagreement:.2f}")
+        parts.append(f"    sources disagree by {v.disagreement:.2f}" + (" — STEAL gated" if v.disagreement_gated else ""))
     return "\n".join(parts)
 
 
-def format_tick(t: SlateTick) -> str:
+def _signal_lines(v: InplayView) -> list[str]:
+    """The lines a quiet tick keeps for one game: STEAL / LOCK NOW / GATED actions, each
+    prefixed with the game line so the reader knows which game without the full block."""
+    head = v.game_line or v.title
+    if v.live and not head.startswith("LIVE"):
+        head = "LIVE " + head
+    return [f"    {head}  ->  {a}" for a in v.actions if a.startswith(("STEAL", "LOCK NOW", "GATED"))]
+
+
+def format_tick(t: SlateTick, quiet: Optional[bool] = None) -> str:
+    """One tick as text. ``quiet`` (default: the tick's own flag, set by the slate from
+    ``--quiet``) keeps the summary line, the STEAL / LOCK / GATED lines and the errors only."""
+    quiet = t.quiet if quiet is None else bool(quiet)
     stamp = datetime.fromtimestamp(t.at).strftime("%H:%M:%S")
     if not t.games:
         return f"{stamp} no live games (and none starting within the window)"
-    lines = [f"{stamp} {len(t.views)} game(s) priced, {len(t.missing)} without venue quotes" + (f", stakes scaled to {t.stake_scale:.0%} by the slate cap" if t.stake_scale < 1 else "")]
-    for v in sorted(t.views, key=lambda x: (not x.live, x.title)):
-        lines.append(format_view(v))
-    for m in t.missing:
-        lines.append(f"    no quotes: {m}")
+    views = sorted(t.views, key=lambda x: (not x.live, x.title))
+    summary = f"{stamp} {len(t.views)} game(s) priced, {len(t.missing)} without venue quotes" + (f", stakes scaled to {t.stake_scale:.0%} by the slate cap" if t.stake_scale < 1 else "")
+    if quiet:
+        n_live = sum(1 for v in views if v.live)
+        n_steal = sum(1 for v in views for s in v.sides if s.steal)
+        n_gated = sum(1 for v in views for s in v.sides if s.steal_gated or s.lock_gated)
+        n_lock = sum(1 for v in views for s in v.sides if s.lock_available and not s.lock_gated)
+        n_signal = sum(1 for v in views for s in v.sides if s.best_ineligible)
+        lines = [summary + f"; {n_live} live, {n_steal} STEAL, {n_lock} LOCK, {n_gated} gated, {n_signal} signal-only"]
+        for v in views:
+            lines.extend(_signal_lines(v))
+    else:
+        lines = [summary]
+        for v in views:
+            lines.append(format_view(v))
+        for m in t.missing:
+            lines.append(f"    no quotes: {m}")
     for e in t.errors:
         lines.append(f"    error: {e}")
     return "\n".join(lines)
