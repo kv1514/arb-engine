@@ -43,15 +43,17 @@ for the season) — see [docs/SPORTS.md](docs/SPORTS.md); tennis with per-venue 
 
 | Piece | What it does |
 |---|---|
-| `arb_engine/fees` | Exact (`Decimal`) fee models: Kalshi taker/maker with series multipliers, Robinhood commission (Gold/no Gold) + exchange fee, Polymarket sports schedule, Polymarket US theta. Tested against the venues' own tables. |
-| `arb_engine/quant` | Odds conversion & de-vig (multiplicative / power / Shin), fee-aware arb evaluation, max-buy price on the tick grid, depth-limited sizing, Kelly, consensus fair value. |
+| `arb_engine/fees` | Exact (`Decimal`) fee models: Kalshi taker/maker with series multipliers, Robinhood commission (Gold/no Gold) + exchange fee with opt-in Rothera / CDNA schedules, Polymarket sports schedule, Polymarket US theta. Tested against the venues' own tables and worked examples. |
+| `arb_engine/quant` | Odds conversion & de-vig (multiplicative / power / Shin / additive), tie-aware fee-adjusted arb evaluation, max-buy price on the tick grid, depth-limited sizing with venue minimums, Kelly + hedge Kelly, consensus fair value, spread/total fair values from margin distributions (`lines.py`), calibration statistics (`calibration.py`: game-cluster bootstrap, isotonic, games-needed), event study. |
+| `arb_engine/compliance.py`, `data/venue_rules.json`, `data/settlement_rules.json` | Which venues a US account can execute on (Polymarket is signal-only by default; `EXECUTABLE_VENUES` overrides) and how each venue settles ties, postponements, cancellations, walkovers and retirements, with the rule text pinned by sha256. |
 | `arb_engine/venues` | Adapters for Kalshi, Polymarket, Robinhood — moneylines, and every NFL spread/total line (one binary market per line on all three venues); Kalshi RSA-PSS signing for portfolio/orders. |
 | `arb_engine/matching` | Canonical NFL team codes (every venue's spelling), tennis surname keys, Eastern-date event keys with market type + line (`nfl:BUF|DET:2026-09-17:spread:BUF-1.5`), cross-venue merge. |
-| `arb_engine/scanner.py` | Sport-wide scan: merge → fees → arbs/edges/max-buy; an arb must be **fillable** (≥ 1 contract at quoted depth); `--books` runs a second pass with real order books for candidate events and reports the profit-maximising size. Flags live matches, stale snapshots, thin quotes and same-book quotes. |
+| `arb_engine/scanner.py` | Sport-wide scan: merge → fees → eligibility → arbs/edges/max-buy; an arb must be **fillable** (≥ 1 contract at quoted depth); `--books` runs a second pass with real order books for candidate events and reports the profit-maximising size. Flags live matches, stale snapshots, thin quotes, same-book quotes, tie-rule mismatches, below-minimum legs, settlement mismatches and signal-only venues. |
 | `arb_engine/eventlookup.py`, `bridge.py` | One Robinhood event across venues; local HTTP server for the overlay. |
 | `arb_engine/execution` | Kalshi order plans + executor with three safety gates (dry-run → demo → prod needs `ARB_LIVE_TRADING=1`). |
-| `arb_engine/venues/espn.py`, `arb_engine/models/wp.py` | Live NFL game state from ESPN (score, clock, situation, timeouts, ESPN WP, DraftKings line) and the in-game win-probability model (XGBoost on nflverse play-by-play, stdlib inference; `scripts/train_wp_model.py` retrains). |
-| `arb_engine/strategy` | **Maker runner**: rests post-only Kalshi orders at the price where a fill *creates* an arb against the cheapest hedge elsewhere, re-prices/cancels as the hedge moves, and fires a HEDGE-NOW alert (bell, macOS notification, webhook, JSONL journal) with the exact hedge instruction when a fill lands. Paper broker (simulated fills from live prices), demo and live Kalshi brokers. |
+| `arb_engine/venues/espn.py`, `arb_engine/models/wp.py` | Live game state from ESPN (score, clock, situation, timeouts, ESPN WP, sportsbook line) behind a `StateGuard` that holds impossible score changes, and the in-game win-probability model (XGBoost on nflverse play-by-play, stdlib inference, dead-ball rules table; `scripts/train_wp_model.py` retrains). |
+| `arb_engine/strategy` | **Maker runner**: rests post-only Kalshi orders (with an exchange-side expiry) at the price where a fill *creates* an arb against the cheapest *executable* hedge, re-prices/cancels as the hedge moves, fires a HEDGE-NOW alert (bell, macOS notification, webhook, JSONL journal) with the exact hedge instruction, and cancels everything on a pause or a kill. **In-play watcher / live slate**: fair per side from model + market + ESPN, STEAL / LOCK NOW behind feed-freshness gates (a stale or suspect feed downgrades the alert to `GATED`). Paper broker, demo and live Kalshi brokers. |
+| `arb_engine/backtest.py`, `tickreplay.py`, `store.py` | Replay a finished week against Kalshi candles under both alignments, Polymarket history, ESPN and the model with game-cluster intervals and placebo-checked STEAL/LOCK simulations; replay recorded ticks through the watcher with the gates on/off; SQLite recorder for scans, in-play ticks and STEAL observations. |
 | `extension/` | Chrome MV3 overlay for `robinhood.com/us/en/prediction-markets/…/events/…`: panel + badges with fair value, all-in cost, edge, max-buy; direct mode or via the bridge. |
 | `.mcp.json` | Wires the [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi) MCP server so Claude Code / Codex can browse and (with your keys) trade Kalshi. |
 
@@ -89,6 +91,7 @@ python -m arb_engine inplay "https://robinhood.com/us/en/prediction-markets/nfl/
 python -m arb_engine inplay "<game url>" --position robinhood:DEN:0.50:100 --position robinhood:DEN:0.40:100   # keeps watching
 python -m arb_engine live --every 10 --pre-hours 1 --record out/history.db   # the whole slate: every live game, STEAL alerts, ticks recorded
 python -m arb_engine live --sport ncaaf --once --pre-hours 6    # college football: same thing for Saturday (65 games matched on 2026-09-18)
+python -m arb_engine live --every 10 --bankroll 500 --slate-cap 200 --stale-after 15 --cdna-haircut 0.02 --allowed-venues executable
 ```
 
 `live` is the Sunday mode: one venue pull and one ESPN scoreboard call per tick, a summary
@@ -105,73 +108,89 @@ see [docs/MODEL.md](docs/MODEL.md). Inference is stdlib (`arb_engine/models/wp.p
 
 Fair value in play = blend of **model** (0.55), **market consensus** (0.30, scaled down
 when the best book is wide) and **ESPN** (0.15), renormalised over what is available;
-pre-game the market alone. The weights come from the week-1 replay below. Per side it prints
+pre-game the market alone (with the sportsbook moneyline de-vigged in). The weights and the
+policy for changing them are in [docs/MODEL.md](docs/MODEL.md). Per side it prints
 what you hold and its all-in average, the fair with its three sources, the cheapest venue,
 and — for the side you are short of — the **lock price**: the most you can pay (fees
 included) so the pair pays $1 either way for less than you spent. Alerts `LOCK NOW` when
-that price is available and `STEAL` when a side is below fair by `--steal-edge` **and the
-model agrees** (a stale quote on one venue cannot trigger it alone). Plain-English fee
-mechanics and the Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
+that price is available (with what holding is worth at fair beside it) and `STEAL` when a
+side is below fair by `--steal-edge` **and the model agrees** (a stale quote on one venue
+cannot trigger it alone). Both pass through **feed gates**: no ESPN change while a venue mid
+moves (`feed-stale`), a frozen clock, an old quote, a score whose play has not been published
+or a `suspect` state downgrade the alert to `GATED … wait: <reason>`; a CDNA-routed contract
+needs 2 extra points of edge for its order delay. Plain-English fee mechanics and the
+Chiefs/Broncos worked example: [docs/FEES_EXPLAINED.md](docs/FEES_EXPLAINED.md).
 
-### Backtest: replay a finished game against every price source
+### Backtest: replay a finished week against every price source
 
 ```bash
-python -m arb_engine backtest --week 1                              # every finished game of the week: pooled scores + blend-weight fit
-python -m arb_engine backtest --sport ncaaf --week 2                # same for college football (86 games; the NFL model transfers, docs/MODEL.md)
-python -m arb_engine games                                          # prints the ESPN id per game
+python -m arb_engine backtest --week 1 --season 2026 --bar-mode both --slices --placebo --results-json out/w1.json   # the documented run
+python -m arb_engine backtest --sport ncaaf --week 2 --season 2026 --bar-mode both --slices --placebo             # college (86 games)
+python -m arb_engine backtest --week 2 --offline --cache-dir out/cache/history                                    # rerun from the cache, no network
+python -m arb_engine backtest --pool 'out/week*.json'                                                            # pooled weeks: intervals, games needed, walk-forward fit
 python -m arb_engine backtest --espn 401872932 --rh-home <contract id> --rh-away <contract id> --pm-away <token id> --json out/backtest.json
-python -m arb_engine scan --sport nfl --record out/history.db       # persist every event + quote (SQLite)
-python -m arb_engine inplay "<game url>" --position … --record out/history.db   # persist every tick
-python -m arb_engine record --sport nfl --every 300 --books         # keep scanning on a schedule (Ctrl-C or --hours N)
-python -m arb_engine stats --db out/history.db                      # arb share by market × hours-to-kickoff, episodes + duration
+python -m arb_engine lines-eval --week 1 --season 2026                 # spread/total fair values vs Kalshi mids, both alignments
+python -m arb_engine record --sport nfl --every 300 --books            # keep scanning on a schedule (Ctrl-C or --hours N)
+python -m arb_engine stats --db out/history.db --convergence           # arb share by market × hours-to-kickoff; STEAL ladder convergence
+python -m arb_engine backtest-ticks --db out/live.db --gates both      # a recorded game through the watcher, gates on/off, CLV, settled P&L
+python -m arb_engine event-study --rows out/w1_full.json --trades 'kalshi=KXNFLGAME-26SEP14DETBUF-BUF@DET|BUF'   # absorption of model moves
+python -m arb_engine clv --db out/live.db                              # closing-line value of recorded STEALs
 ```
 
-`--week N` replays every final of an NFL week with Kalshi (tickers derived), Polymarket
-(token ids resolved from the Gamma event slug), ESPN and the model, pools the scores and
-grid-searches the blend weights. **2026 week 1, 16 games, 2,888 in-play plays** (P(home)
-per play, lower is better):
+`--week N` replays every final of a week with Kalshi (1-minute candles under **two
+alignments**: the last candle before the play and the first after it), Polymarket (token ids
+from the Gamma slug), ESPN and the model, classifies every play, pools the scores three ways
+(all rows, in play, in-play scrimmage — the headline), fits the blend weights, and puts a 90 %
+game-cluster bootstrap interval on every comparison. **NFL 2026 week 1, 16 games, 2,263 in-play
+scrimmage plays** (P(home) per play, lower is better):
 
-| source | log-loss | Brier |
-|---|---|---|
-| model (`models/wp.py`) | **0.391** | **0.128** |
-| blend (0.30 market / 0.55 model / 0.15 ESPN) | 0.403 | 0.132 |
-| ESPN win probability | 0.413 | 0.137 |
-| market consensus (Kalshi + Polymarket mids) | 0.429 | 0.143 |
-| Kalshi mid (candle close) | 0.429 | 0.142 |
-| Polymarket last trade | 0.432 | 0.144 |
+<!-- results:nfl_w1_pooled -->
+| source (P(home) per play) | games | scrimmage plays | log-loss | Brier | log-loss, all in-play rows | log-loss, all rows |
+|---|---|---|---|---|---|---|
+| model (state before the play) | 16 | 2,263 | 0.4060 | 0.1336 | 0.3993 | 0.3974 |
+| model (state after the play) | 16 | 2,263 | 0.4022 | 0.1323 | 0.3956 | 0.3937 |
+| ESPN win probability | 16 | 2,263 | 0.4205 | 0.1391 | 0.4132 | 0.4109 |
+| Kalshi mid, last candle before the play | 16 | 2,261 | 0.4425 | 0.1472 | 0.4332 | 0.4311 |
+| Kalshi mid, first candle after the play | 16 | 2,260 | 0.4382 | 0.1456 | 0.4290 | 0.4267 |
+| Polymarket last trade | 16 | 2,263 | 0.4415 | 0.1471 | 0.4318 | 0.4297 |
+| market consensus | 16 | 2,263 | 0.4417 | 0.1471 | 0.4322 | 0.4301 |
+| blend 0.30 market / 0.55 model / 0.15 ESPN | 16 | 2,263 | 0.4173 | 0.1378 | 0.4097 | 0.4077 |
+| blend, post-play state and candle | 16 | 2,263 | 0.4146 | 0.1368 | 0.4074 | 0.4054 |
+| Kalshi, book ≤ 4¢ wide | 16 | 2,048 | 0.4875 | 0.1625 | 0.4837 | 0.4834 |
+| model on those same plays | 16 | 2,048 | 0.4478 | 0.1475 | 0.4450 | 0.4448 |
+<!-- /results:nfl_w1_pooled -->
 
-On the 2,547 plays where Kalshi's book was ≤4¢ wide the comparison is the same (Kalshi
-0.482 vs the model 0.437 on those plays): the in-play NFL books are thin and slow, not
-just wide. That is why the blend leans on the model, why `STEAL` requires the model to
-agree, and it is the edge the in-play watcher is built to take. It is also one week; rerun
-with `--week N` as the season goes and the fit line at the bottom of the output says
-whether the weights should move.
+The model scores **0.406 against Kalshi's 0.438–0.443** (the truth is inside that range) with
+a game-cluster interval that excludes zero; on the plays where Kalshi's book was ≤ 4¢ wide the
+gap is wider (0.488 vs 0.448). The current blend is *worse* than the model alone on this week
+(0.417, interval excludes zero) but college week 2 (86 games) shows no difference and 185
+earlier college games favoured the blend, so the weights stay put until the season-to-date
+interval or two consecutive weeks say otherwise. The same run simulates the watcher's rules
+against Kalshi's asks (10 contracts, taker fees, one STEAL per game) under honest pairings and
+two placebos: on the NFL every hold-to-settlement P&L interval includes zero and the
+shuffled-outcomes placebo produces comparable ROIs, so **the STEAL edge is not demonstrated on
+the NFL yet** (roughly 70 games are needed at these effect sizes); on college the real pairing
+is +3.5 % / +7.1 % / +5.5 % ROI at 3 / 5 / 8 % edges against a placebo of −23 % / −22 % /
+−13 %, intervals still including zero. Every break-even LOCK variant loses on the NFL week
+(−4.7 % to −13 %); on college it loses at 2–6 % edges and is positive only at the 10 % edge
+(+6.3 % on 25 games). All of it, with the
+per-quarter, per-class, ESPN-timing, feed-parity and line-evaluation tables, is in
+[docs/MODEL.md](docs/MODEL.md); the tables are rendered from the committed fixtures
+(`python scripts/render_results.py --check`, [docs/results/README.md](docs/results/README.md)).
 
-The same run simulates the watcher's rules against Kalshi's asks (10 contracts, taker
-fees, entry on the candle *after* the play): one STEAL entry per game when
-`fair − all-in ≥ edge`, then either hold to settlement or LOCK the other side. Week 1:
-holding paid (+3.5% to +16% on ~$80 staked with the blend at edges 0.03–0.08; +15% to
-+24% with the model), while every lock variant lost (−5% to −23%) because a break-even
-lock hands the edge back and mostly fires when the position has already gone bad. The
-watcher's `LOCK NOW` line therefore also prints what holding is worth at fair. Sixteen
-games is not a track record; treat this as the first data point, not a result.
-
-`backtest` walks the game's ESPN play-by-play (wall-clock stamped), scores the WP model on
-each play's pre-snap state and looks up what Kalshi (1-min candles, bid/ask), Robinhood
-(5-min bars, trade prices) and Polymarket (1-min price history) were quoting at that moment;
-Kalshi tickers are derived from the teams and kickoff. It prints log-loss / Brier for the
-model, ESPN, each venue, the market consensus and the blend, and counts the minutes a
-fee-aware arb existed inside Kalshi's book and across Kalshi × Robinhood. DET @ BUF
-2026-09-17 (189 plays): model 0.070, Robinhood 0.078, ESPN 0.079, blend 0.078, Kalshi 0.087,
-Polymarket 0.089 log-loss; 0 Kalshi-book arb minutes, 6 indicative Kalshi × Robinhood minutes
-(Robinhood history is trades, not the book; Robinhood contract ids are only known for open
-events, so `--week` runs without it). `arb_engine/store.py` holds the SQLite schema
-(`scans`, `quotes`, `inplay_ticks`) and `Store.arb_stats()` for the recorded scans.
+`backtest --espn <id>` replays one game (DET @ BUF 2026-09-17, 189 plays: model 0.070,
+Robinhood 0.078, ESPN 0.079, blend 0.078, Kalshi 0.087, Polymarket 0.089 log-loss under the
+old after-candle alignment) and counts the minutes a fee-aware arb existed inside Kalshi's book
+and across Kalshi × Robinhood (Robinhood history is trades, not the book; Robinhood contract
+ids are only known for open events, so `--week` runs without it). `arb_engine/store.py` holds
+the SQLite schema (`scans`, `quotes`, `inplay_ticks`, `espn_ticks`, per-venue L1 ticks,
+`steal_observations` with a +10 s … +15 min ladder).
 
 ### Maker runner
 
 ```bash
 python -m arb_engine maker --sport nfl --markets total,spread --mode paper --min-margin 0.005 --duration 3600
+python -m arb_engine maker --sport nfl --mode paper --hedge-venues robinhood --hedge-cash 250 --allowed-venues executable   # the defaults, spelled out
 python -m arb_engine maker --sport nfl --mode demo --confirm --size 50 --max-orders 5 --max-notional 300   # real orders on Kalshi's demo exchange
 KALSHI_ENV=prod ARB_LIVE_TRADING=1 python -m arb_engine maker --sport nfl --mode live --confirm --size 20 --max-notional 200
 ```
@@ -183,9 +202,14 @@ re-runs the cross-venue scan. The price it rests at is
 `min(max_buy_maker(hedge ask), Kalshi ask − 1 tick)`, only when the margin-if-filled clears
 `--min-margin` and (by default) the price is at or above Kalshi's best bid — resting behind
 the bid rarely fills; `--deep-queue` allows it. Limits: `--max-orders`, `--max-notional`,
-`--max-per-event`. Ctrl-C cancels everything resting. The hedge leg is manual (Robinhood
-has no API; Polymarket needs a wallet), so keep sizes at what you can hedge by hand within
-a minute.
+`--max-per-event`, `--hedge-cash` (dollars of hand-executed hedge legs resting at once, $250
+by default) and the Kalshi balance. Hedges are only taken on venues this account can execute on
+(`--hedge-venues`, default `robinhood`; a watch whose hedge sits on Polymarket alerts `HEDGE
+VENUE NOT EXECUTABLE` instead of resting — on the fixture scans that was 5 of 8 NFL hedges).
+Every resting order carries an exchange-side expiry (`min(kickoff, now + 1 h)`), an exchange
+pause cancels everything, Ctrl-C cancels everything resting and a restart sweeps orphans. The
+hedge leg is manual (Robinhood has no API), so keep sizes at what you can hedge by hand within a
+minute.
 
 Kalshi account (needs `KALSHI_API_KEY` + `KALSHI_PRIVATE_KEY_PATH`; demo environment by default):
 
@@ -195,7 +219,11 @@ python -m arb_engine kalshi order --ticker KXNFLGAME-26SEP20PHITEN-PHI --side-ac
 python -m arb_engine kalshi order --ticker ... --confirm                                                                                        # submits (demo)
 ```
 
-Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADING=1`.
+Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADING=1`. The
+signed path (external-api hosts, PSS salt, V2 order / cancel / batched-cancel payloads, int64
+expiry) is unit-tested against schema-derived fixtures; `python scripts/kalshi_demo_check.py`
+verifies it against the demo exchange with your demo key and `--record` replaces the fixtures
+with real responses — not yet run, see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Robinhood overlay
 
@@ -208,9 +236,14 @@ Real-money orders additionally require `KALSHI_ENV=prod` **and** `ARB_LIVE_TRADI
    fee per contract, all-in cost, and max-buy prices; contract tabs get a badge. On a
    game's **Spread** or **Totals** page it lists every line (arbs first) with your all-in
    cost, the max price to pay here, the cheapest hedge for the other side and the margin.
-   With the bridge running, game pages also get a **LIVE strip**: score/clock/situation,
-   model vs market vs ESPN fair per side, and LOCK/STEAL hints for the lots you enter in
-   the popup. If "Load unpacked" fails, see [docs/EXTENSION.md](docs/EXTENSION.md).
+   Polymarket rows are tagged **`signal only`** (priced into the fair value, never an arb leg)
+   unless the popup's "I can trade on Polymarket" is ticked — US accounts cannot use
+   polymarket.com. With the bridge running, game pages also get a **LIVE strip**:
+   score/clock/situation, model vs market vs ESPN fair per side, and LOCK/STEAL hints for the
+   lots you enter in the popup. The strip is feed-gated like the CLI: the bridge keeps a
+   per-event `FeedFreshness` across polls, so a `feed-stale` / `clock-frozen` / … signal shows
+   as `GATED · wait` instead of `NOW` (see [docs/EXTENSION.md](docs/EXTENSION.md), also for
+   "Load unpacked" failures).
    On a **category page** (`…/prediction-markets/nfl/`) every game card's price buttons
    ("PHI - 77¢") get a badge with the consensus fair value and the max price to pay here
    (first 16 games; `ARB +x%` when one exists) and the panel summarises the page.
@@ -256,32 +289,58 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 * Flags: `live` (in play — gaps are staleness, excluded by default), `same book as …`
   (Robinhood re-selling Kalshi; never arbed against Kalshi), `thin` (positive margin but
   not fillable), `depth-checked` (real books used), `tie-rule-unverified` (Rothera NFL
-  moneyline), `stale-quote` (snapshot older than `--max-quote-age`). Spread/total lines are
-  half-points on all three venues, so they cannot push.
+  moneyline: the engine reads its terms as "no winner on a tie" but has not seen the text),
+  `tie-rule-mismatch` (the chosen legs settle a tie differently; `tie_margin` says what the pair
+  pays then), `below-min-size` (a venue minimum exceeds what is offered), `signal-only` (a leg's
+  venue is not executable for this account), `settlement-mismatch:<case>` (tennis walkover /
+  cancellation / postponement rules differ), `stale-quote` (snapshot older than
+  `--max-quote-age`). Spread/total lines are half-points on all three venues, so they cannot push.
 
-## Status (2026-09-18)
+## Status (2026-09-19)
 
-Live data verified for all three venues; 180 Python tests + 2 JS suites (2,195 fee parity
-vectors, background-worker integration incl. totals and category pages) pass; CI runs them on
-Python 3.10–3.13. What the data has said so far:
+Live data verified for all three venues; **613 Python tests** and the JS suites
+(**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
+**72 background-worker checks** incl. totals, category pages and signal-only rows) pass;
+CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results
+table in the docs equal to its committed fixture. What the data has said so far:
 
 * **NFL** moneylines are efficient to within fees; the ~1,000 spread/total lines held 16
   fillable, depth-checked arbs on a Tuesday (Rothera far-tail overs vs Kalshi unders, ≈1 % on
   capital) that were gone by Friday — the maker runner sits at the prices where they reappear.
+  With the eligibility table applied, the only arb on the committed fixture scans disappears
+  (its cheap leg was Polymarket): what is executable for a US account is Kalshi × Robinhood.
+* **In play, NFL 2026 week 1** (16 games, 2,263 scrimmage plays): the win-probability model
+  scores 0.406 log-loss against Kalshi's 0.438–0.443 (before / after the play; the truth is in
+  that range), 90 % game-cluster interval excluding zero. The current blend is worse than the
+  model alone on this week (0.417) but not on college week 2 (86 games, no difference), so the
+  weights are unchanged. The **STEAL edge is not demonstrated**: hold-to-settlement P&L
+  intervals include zero on the NFL and a shuffled-outcomes placebo does as well; on college the
+  real pairing beats its placebo (+3.5 % / +7.1 % / +5.5 % vs −23 % / −22 % / −13 %) with
+  intervals that still include zero. Every break-even LOCK variant loses on the NFL week;
+  on college only the widest (10 %) break-even lock came out ahead. Spreads and totals: a
+  normal margin model scores level with Kalshi in play (0.616 vs 0.622–0.628; totals 0.640 vs
+  0.636–0.641) **but its in-play sd floors were picked on those same 16 games** (untuned it
+  is 0.632 / 0.718, behind the market), so that is in-sample until another week is scored.
+  All of it in [docs/MODEL.md](docs/MODEL.md), one week each.
+* **Inputs are checked**: the replay's ESPN-derived state agrees with nflverse on ≥ 99.8 % of
+  aligned plays on every field but the clock; ESPN's own win probability is a *post*-play
+  number; the college spread rescale changes nothing beyond noise.
 * **College football** (Kalshi × Polymarket × Robinhood/CDNA): 263 moneylines and 10,525
-  spread/total lines on a Friday, 1,384 lines on all three venues, two fillable tail arbs.
-* **In play**, the win-probability model beat every market on NFL week 1 (2,888 plays) and
-  matched ESPN / beat the market consensus on two college weeks (185 games); the STEAL/LOCK
-  simulation says hold-to-settlement entries were +EV and break-even locks were not
-  ([docs/MODEL.md](docs/MODEL.md)). One week each — data points, not a track record.
+  spread/total lines on a Friday, 1,384 lines on all three venues, two fillable tail arbs
+  (Polymarket legs, i.e. signal-only for a US account).
 * **Tennis** on Robinhood is Kalshi's book re-sold (fee routing only); Kalshi × Polymarket
-  pairs settle walkovers differently and are flagged.
+  pairs settle walkovers differently (Kalshi fair price vs Polymarket 50-50; 3.25 % of tour
+  and 1.98 % of challenger matches settle that way) and are gated `walkover-exposed`.
 * **NHL/NBA** are wired for the season (NHL preseason already merges Kalshi × Polymarket).
+* **Fees**: the exchanges' own schedules (Rothera per-order quadratic, CDNA range) are wired
+  as opt-in models; the $0.01/contract default stays until an order ticket says which one
+  Robinhood passes on — on the fixtures the flip changes no arb's sign.
 
-Everything left on `docs/ROADMAP.md` needs credentials I do not have: a Kalshi key for the
-websocket feed and the demo broker, a Polymarket wallet for auto-hedging, an Odds API key for
-sportsbook consensus — plus one Robinhood order-ticket fee preview to pin the Rothera/CDNA
-exchange fee and Kalshi's cent rounding.
+**Needs you**: every remaining step is by hand on your own accounts — a Rothera / CDNA
+order-ticket fee preview (never submit), the Kalshi demo-key check, a Polymarket US gateway
+curl, recording a live Sunday slate, re-fitting the in-play sd floors out of sample, re-running
+the walkover shares with `--pages 20`, and the fee-default decision. The list with commands is
+in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Not investment advice. Prediction-market contracts can lose their full cost; rule
 differences (ties, retirements, postponements) can break a "hedge". Verify every fee and

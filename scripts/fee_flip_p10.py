@@ -95,7 +95,16 @@ def fee_flip_metrics() -> dict[str, Any]:
     return out
 
 
+USAGE = """usage: fee_flip_p10.py [--print]
+  (no flag)  recompute the fee-flip metrics over the fixture scans and REWRITE
+             tests/fixtures/results/fee_flip_p10.json (offline)
+  --print    print the metrics only"""
+
+
 def main(argv: list[str]) -> None:
+    if "-h" in argv or "--help" in argv or any(a.startswith("-") and a != "--print" for a in argv):
+        print(USAGE)
+        raise SystemExit(0 if ("-h" in argv or "--help" in argv) else 2)
     metrics = fee_flip_metrics()
     text = json.dumps(metrics, indent=1, sort_keys=True)
     if "--print" in argv:

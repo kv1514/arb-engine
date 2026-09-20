@@ -108,7 +108,7 @@ bridge.
 | `background.js` | Service worker: fetches Robinhood/Kalshi/Polymarket or the bridge, runs the math. `importScripts("arb-core.js")`. |
 | `arb-core.js` | JS twin of `arb_engine/fees` + `quant` (BigInt money math; parity-tested against `tests/fixtures/fee_vectors.json`). |
 | `content.js`, `content.css` | Overlay panel and badges on robinhood.com event pages. |
-| `popup.html`, `popup.js`, `popup.css` | Settings (Gold, size, target margin, refresh, bridge, venues). |
+| `popup.html`, `popup.js`, `popup.css` | Settings (Gold, size, target margin, refresh, bridge, venues, "I can trade on Polymarket", positions, bankroll, Kelly fraction). |
 | `nfl_teams.json` | Team code mapping, exposed via `web_accessible_resources`. |
 
 
@@ -144,6 +144,33 @@ the Python engine resolves the teams through its 761-program table and the panel
 and category-page badges work exactly as for the NFL; in direct mode the panel says so instead
 of showing nothing. CDNA quotes are priced with the $0.01/contract exchange fee (assumed).
 
+## Which venues can be a leg: the `signal only` tag
+
+Global Polymarket is not executable for a US-resident account (`arb_engine/data/venue_rules.json`,
+`docs/VENUES.md` "Eligibility"), so by default the overlay treats it as a **signal**: its ask
+still enters the consensus fair value, but it is never chosen as an arb leg, never gets a
+max-buy price, and never becomes the "best" venue of a side. Such rows are dimmed and carry a
+`signal only` tag (hover: "priced into the fair value, never an arb leg"). This holds in both
+modes — the bridge resolves eligibility exactly like `python -m arb_engine scan`, and direct
+mode applies the same rule in `background.js`. If your account really can trade there, tick
+**"I can trade on Polymarket"** in the popup (direct mode) or run the bridge with
+`EXECUTABLE_VENUES=kalshi,robinhood,polymarket`; the tag disappears and the arb math includes it.
+
+**The LIVE strip is feed-gated the same way the CLI is.** The in-play feed gates
+(`docs/ARCHITECTURE.md`, "Gates": `feed-stale`, `clock-frozen`, `quote-old:<venue>`,
+`score-pending`, `suspect`, `review-pending`) need poll-to-poll memory of when the ESPN state
+and each venue's mid last moved; the bridge keeps one `FeedFreshness` per event across
+`GET /inplay` requests (the overlay polls every second, so the gates see the same cadence as
+`live`). A side whose STEAL or LOCK NOW would have fired but for the gates shows a
+`GATED · wait` tag (hover for the reasons) instead of an actionable `NOW`, and the engine's
+`GATED … wait: <reasons>` line is echoed under the strip; a STEAL whose best venue is not
+executable for you carries a `signal only` tag and no buy count. The bridge keeps no JSONL
+journal — run `python -m arb_engine live --journal` alongside if you want the gate history on
+disk. The `LOCK ≤ price` hint is a
+guarantee, not advice: the engine's LOCK NOW line also carries what holding is worth at fair,
+because in the NFL week-1 replay the break-even lock lost at every edge and on college week 2
+it came out ahead only at the 10 % edge (`docs/MODEL.md`).
+
 ## Refresh rate and sizing
 
 The content script ticks every 500 ms and re-analyses when the last result is older than the
@@ -155,8 +182,12 @@ requests/s per open tab — keep one game page open at a time to stay under Kals
 
 Sizing: the panel's ARB line shows `Buy N contracts` — the depth-limited size from
 `size_from_books` (top-of-book sizes on Robinhood and Kalshi; Polymarket sizes when the book was
-fetched) — with the per-leg contract counts and the locked profit after fees. STEAL alerts include
-`→ buy N contracts` when a bankroll is set in the popup: fractional Kelly (default ¼) on the
-fee-inclusive edge `(fair − all-in) / (1 − all-in)`, capped by the contracts offered at that ask.
-Nothing is placed; the counts are what the engine would do at those exact prices.
+fetched), stepped to each venue's tick and floored at its minimum order size (a leg below the
+venue minimum is flagged `below-min-size` instead of sized) — with the per-leg contract counts and
+the locked profit after fees. STEAL alerts include `→ buy N contracts` when a bankroll is set in
+the popup: fractional Kelly (default ¼) on the fee-inclusive edge `(fair − all-in) / (1 − all-in)`,
+capped by the contracts offered at that ask; the slate-wide cap in `live` scales every STEAL's
+stake on a tick so their sum stays under `--slate-cap`. Nothing is placed; the counts are what the
+engine would do at those exact prices — and the replays say the STEAL edge itself is not yet
+demonstrated on the NFL (`docs/MODEL.md`), so treat the count as a ceiling, not a recommendation.
 

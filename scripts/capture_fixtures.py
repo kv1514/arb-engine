@@ -165,9 +165,19 @@ def main() -> None:
     print("fixtures written to", OUT)
 
 
+USAGE = """usage: capture_fixtures.py [--rules | --tennis]
+  (no flag)  refresh the trimmed venue fixtures under tests/fixtures/ from the live public APIs
+  --rules    capture the settlement rule texts into tests/fixtures/rules/ (sha256-pinned)
+  --tennis   capture the settled Kalshi tennis feed sample
+Every mode hits the network and REWRITES committed fixtures; there is nothing to preview."""
+
+
 if __name__ == "__main__":
     from datetime import date
 
+    if "-h" in sys.argv or "--help" in sys.argv or any(a.startswith("-") and a not in ("--rules", "--tennis") for a in sys.argv[1:]):
+        print(USAGE)
+        raise SystemExit(0 if ("-h" in sys.argv or "--help" in sys.argv) else 2)
     _today = date.today().isoformat()
     if "--rules" in sys.argv:
         capture_rules(_today)

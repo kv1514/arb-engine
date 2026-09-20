@@ -1,65 +1,63 @@
 # Roadmap
 
-Ordered by expected value for the NFL/tennis focus.
+Status as of 2026-09-19. The thirteen items of the September plan (P01–P13) are on `main`;
+what each measured is in `docs/MODEL.md`, `docs/VENUES.md` and `docs/results/README.md`.
+Everything below the first table is either deferred behind a stated reopen gate or needs a
+step only the account holder can take.
 
-1. ~~Spreads and totals~~ — done 2026-09-16 for the NFL on all three venues (every line,
-   canonical `spread:<FAV>-<line>` / `total:<line>` keys, overlay support for Robinhood's
-   Spread/Totals pages). Next: first-half/quarter lines (`KXNFL1HSPREAD`, Polymarket
-   `first_half_spreads`, Rothera `KXNFL1H…` routed to Kalshi), team totals, NCAAF lines.
-2. **Depth everywhere.** Kalshi and Polymarket books are wired (`--books` = second pass for
-   candidate events, rate-limited); Robinhood only exposes top-of-book size. Show the sized
-   result in the overlay via the bridge.
-3. ~~Maker strategy runner~~ — done 2026-09-18 (`python -m arb_engine maker`, see README):
-   paper / demo / live brokers, batched Kalshi polling, hedge alerts, journal. Next: auto-hedge
-   on Polymarket once the CLOB client is wired; partial-fill handling in paper mode; a
-   queue-position estimate from the order book (rest only when expected fill time is short);
-   run the demo broker against a demo API key to verify the V2 order/fill field names.
-3b. ~~In-play model~~ — done 2026-09-18: ESPN live game state (`venues/espn.py`) + XGBoost
-   WP model on nflverse play-by-play (`models/wp.py`, `docs/MODEL.md`), blended with the
-   market in `quant/inplay_fair.py`; `arb-engine games` / `inplay --espn`; overlay LIVE strip.
-   Next: retrain each week (`scripts/train_wp_model.py`), add injuries/weather features, and
-   back-test the STEAL signal on journaled ticks.
-4. **Streaming quotes.** Kalshi websocket (`wss://api.elections.kalshi.com/trade-api/ws/v2`)
-   and Polymarket market channel instead of polling; the Robinhood quotes API polls fine at
-   ~2 s.
-5. **Polymarket execution.** `py-clob-client` with a dedicated wallet; keep the same gates.
-6. **Sportsbook consensus.** The Odds API `h2h` lines → `devig_power` → weight into
-   `consensus_fair_value` (weights already parameterised). Adds a "true" fair value that
-   does not depend on the exchanges themselves.
-7. **Tennis specifics.** ~~Retirement/walkover rule table per venue~~ (done 2026-09-18: rules
-   quoted in SPORTS.md, `settlement-mismatch:*` flags for Kalshi × Polymarket pairs — walkovers
-   and cancellations settle differently, retirements agree); still open: ITF/challenger
-   coverage on Polymarket via tag ids; player-name canonicalisation with a small alias file.
-8. ~~NCAAF~~ — done 2026-09-18: `data/ncaaf_teams.json` (761 programs from ESPN + venue codes,
-   `scripts/build_ncaaf_teams.py`), `scan/live/games --sport ncaaf` across Kalshi, Polymarket
-   (`cfb`) and Robinhood's CDNA-routed college games. College spreads/totals from Kalshi
-   and Robinhood/CDNA are in (8,689 line events on 2026-09-18). Polymarket college lines too. Two college
-   weeks replayed (185 games): blend best, NFL model ≈ ESPN, weights unchanged (docs/MODEL.md).
-   NBA/NHL tables done the same way
-   (`scripts/build_teams.py`, 2026-09-18; live NHL preseason scan merges Kalshi × Polymarket).
-9. ~~History & backtest~~ — done 2026-09-18: `scan --record out/history.db` / `inplay --record`
-   persist every event, quote and in-play tick to SQLite (`arb_engine/store.py`);
-   `python -m arb_engine backtest --espn <id> …` replays a finished game play-by-play
-   against Kalshi 1-min candles, Robinhood 5-min bars and Polymarket price history and
-   scores every source (model / ESPN / each venue / blend) by log-loss and Brier, plus
-   counts the minutes an arb existed; `backtest --week N` does a whole week and fits the
-   blend weights (week 1: model beats every market, weights moved to 0.30/0.55/0.15). `arb-engine record --every 300`
-   keeps scanning into SQLite and `arb-engine stats` reports the arb share by market type ×
-   hours-to-kickoff and the length of each arb episode — run it through a game week to learn
-   when the tail-line arbs appear and how long they last.
-10. ~~Category-page badges~~ — done 2026-09-18: on `/prediction-markets/<category>/` every
-    game card's price buttons get `fair · max` badges (first 16 games, `ARB +x%` when one
-    exists); worker `analyzeMany` with a small concurrency and per-URL cache.
+## Landed (2026-09-16 → 2026-09-19)
 
-## Needs you (2026-09-18)
-
-Every remaining item is blocked on something only the account holder can supply:
-
-| Item | What is needed | Then |
+| item | what landed | where |
 |---|---|---|
-| 4. Streaming quotes | Kalshi API key (`KALSHI_KEY`, `KALSHI_PRIVATE_KEY_PATH`) — the websocket is authenticated | `maker`/`live` switch from 8 req/s polling to pushed books |
-| 3. Maker runner, demo → live | a Kalshi **demo** key first, then prod with `ARB_LIVE_TRADING=1` | rest real post-only orders at the arb-creating prices |
-| 5. Polymarket auto-hedge | a funded Polymarket wallet + `py-clob-client` | hedge legs on Polymarket instead of alerting |
-| 6. Sportsbook consensus | The Odds API key | sportsbook de-vigged lines as a fourth fair-value source |
-| Fees | one screenshot of a Robinhood order ticket (100 contracts, Rothera and CDNA) before pressing submit | pin the exchange fee and Kalshi's cent-vs-centicent rounding |
+| Spreads and totals (2026-09-16) | every NFL / NCAAF line on all three venues, canonical `spread:<FAV>-<line>` / `total:<line>` keys, overlay Spread/Totals pages | `matching/`, `venues/` |
+| Maker runner, in-play model, NCAAF, NBA/NHL tables, history & backtest, category badges (2026-09-18) | see the git history; superseded in detail by the items below | — |
+| P01 foundation | `quant/calibration.py` (paired game-cluster bootstrap, isotonic / CORP decomposition, reliability bands, `games_needed`), `models/cv.py` (grouped / leave-one-season-out folds that never split a game), `cli_plugins/` registry with `--help` golden fixtures, `config.declare_setting`, `tests/helpers.SequencedFakeHttp` | `tests/test_calibration.py`, `test_cv.py`, `test_cli_registry.py` |
+| P02 ESPN feed hardening | `StateGuard` (score never decreases unexplained; score-before-lastPlay marks `suspect`), per-sport clocks incl. NFL playoff OT and college OT sentinel, `classify_play`, timeout recount, sportsbook ML/spread from `pickcenter`, 403 host / UA fallback | `venues/espn.py`, `venues/http.py` |
+| P03 replay harness honesty | bracketed Kalshi alignment (`kalshi_before` / `kalshi_after`), play classes, per-team timeouts, synthetic try / kickoff-pending rows, strata tables, class gaps, game-cluster intervals + games-needed, linear / logit weight fits, walk-forward and pooled weeks, STEAL pairings + shift / shuffle placebos, read-through cache with `--offline`, `--results-json` | `backtest.py`, `venues/history.py`, `cli_plugins/backtest_flags.py` |
+| P04 replay input verification | nflverse feed parity (≥ 99.8 % on every field but the clock), ESPN WP scored **post**-play, college spread rescale / clamp within noise, OT clock mapping the one real fix | `quant/feedparity.py`, `scripts/backtest_live_feed.py`, `check_espn_wp_alignment.py`, `college_experiment.py` |
+| P05 WP dead-ball rules | `data/nfl_wp_rules.json`: era neutral yardline, kickoff-pending / try states, OT clamps, final, spread inversion on the monotone envelope, kneel floor (off); default output bit-identical | `models/wp.py` |
+| P06 in-play execution gates (also on the bridge / overlay strip since P14) | `FeedFreshness` + gate reasons `feed-stale` / `clock-frozen` / `quote-old:<venue>` / `score-pending` / `suspect` / `review-pending` that downgrade STEAL and LOCK NOW to **GATED**, CDNA delay haircut, tie-aware per-leg fair, sportsbook ML in the pre-game consensus, hedge Kelly, slate-wide stake cap | `strategy/inplay.py`, `strategy/live.py`, `quant/sizing.py` |
+| P07 tick recording and event study | `live --record` writes ESPN ticks, per-venue L1 ticks and STEAL observations with a +10 s … +15 min ladder; public trade fetchers; `event-study` (absorption by \|ΔWP\| bucket, Mincer-Zarnowitz / under-reaction regressions, anomaly episodes); `backtest-ticks` replays a recorded game through the watcher with the gates on / off; `stats --convergence`, `clv` | `store.py`, `venues/trades.py`, `quant/eventstudy.py`, `tickreplay.py` |
+| P08 settlement registry | 23 sha256-pinned rule rows, per-field provenance, tennis gates (`walkover-exposed`, `tier:*`, `thin-book`), walkover shares tour 3.25 % / challenger 1.98 %, Polymarket tennis postponement now 14 days, Polymarket book meta (tick / min size / restricted) | `data/settlement_rules.json`, `matching/settlement_rules.py` |
+| P09 cross-venue arb correctness | tie-aware margin (`tie_margin`, tie-break toward the tie-paying leg), Rothera NO leg as `<id>#no`, tick-grid max-buy and min-size floors, side-aware same-book dedupe, signal-only rows, registry settlement flags, JS parity on 54 arb vectors | `quant/arbitrage.py`, `scanner.py`, `eventlookup.py` |
+| P10 venue fee corrections | opt-in Rothera per-order quadratic and CDNA fee models (`flat_001` stays the default), Polymarket US worked example, 3,650 fee vectors with the JS twin in parity; the flip moves 14 NFL Rothera rows, improves 5 margins, flips no sign | `fees/robinhood.py`, `fees/registry.py`, `extension/arb-core.js` |
+| P11 venue eligibility | `compliance.py` + `data/venue_rules.json` (Polymarket not executable for US persons; `EXECUTABLE_VENUES` override), maker hedge venues default to Robinhood with `HEDGE VENUE NOT EXECUTABLE` alerts, `--hedge-cash` cap, balance-bounded orders, exchange-status pause + cancel-all; on the fixture scans 5 of 8 NFL and 7 of 10 college maker hedges were Polymarket | `compliance.py`, `strategy/maker.py`, `scripts/eligibility_impact.py` |
+| P12 Kalshi client | external-api hosts with a one-shot legacy fallback on connection errors only, PSS salt = digest length, V2 write paths + documented read paths, int64 `expiration_time`, `SelfMatchGuard`, batched cancel with per-order retry, orphan sweep, `scripts/kalshi_demo_check.py` | `venues/kalshi.py`, `execution/kalshi.py`, `strategy/broker.py` |
+| P13 line fair values | `NormalMargin` / `EmpiricalMargin`, de-vigged sportsbook close (Shin / additive / power), margin tables from nflverse 2016–2025 with the season in progress excluded, `lines-eval`: in-play spreads 0.616 vs Kalshi 0.622–0.628, totals 0.640 vs 0.636–0.641, opt-in `LINE_FAIR=1` in the scanner and watcher | `quant/lines.py`, `quant/odds.py`, `quant/fairvalue.py`, `quant/margintable.py`, `scripts/eval_lines.py` |
+| Overlay | direct mode is Polymarket signal-only unless the popup's "I can trade on Polymarket" is ticked (parity with the bridge); `signal only` tag on the row | `extension/background.js`, `popup.html`, `content.js` |
+| P14 docs | this pass: results tables rendered from the committed fixtures (`scripts/render_results.py --check` in CI), honest headline numbers, this file | `docs/`, `tests/test_docs_results.py` |
 
+## Deferred, with the gate that reopens each
+
+| item | why it waits | reopen when |
+|---|---|---|
+| Move the in-play blend weights toward the model | NFL week 1 says model-only (blend − model +0.011, interval excludes zero) but college week 2 says no difference and 185 earlier college games favoured the blend; 16 games do not overrule that | the season-to-date `backtest --pool` game-cluster interval on best-grid − current excludes zero, **or** two consecutive weeks agree on the direction |
+| Logit pool as the live default | on both weeks it lands within 0.001 of the linear pool | a pooled week where the logit fit beats the linear one by more than its interval |
+| Kneel-out WP floor (`kneel_floor.enabled`) | the week-1 kneel class shows 35 rows and one STEAL-qualifying row at 3 %: nothing to fix | a per-class table with fewer STEAL-qualifying kneel rows at no log-loss cost, or an nflverse tabulation with n ≥ 200 and a leader win rate ≥ 0.99 |
+| Rothera `quadratic` / CDNA fee models as defaults | which fee Robinhood passes on is unverified; the flip changes no sign on the fixtures | one order-ticket fee preview per exchange (below) |
+| Polymarket US read-only adapter | the product is executable for US persons but its market-data gateway has not been confirmed from here | a by-hand `curl` of the public gateway (below); then the adapter mirrors `venues/polymarket.py` |
+| Polymarket execution (`py-clob-client`) | not executable for a US-resident account (`venue_rules.json`); a non-US operator sets `EXECUTABLE_VENUES` | an account that may trade there and a funded wallet |
+| Streaming quotes (Kalshi websocket `wss://api.elections.kalshi.com/trade-api/ws/v2`, Polymarket market channel) | the Kalshi websocket is authenticated; polling at 15 req/s covers a slate | a Kalshi key, then `maker` / `live` switch from polling to pushed books |
+| Sportsbook consensus as a fourth fair-value source | the de-vig and the weighting are wired (`quant/odds.py`, `quant/fairvalue.py`); ESPN's `pickcenter` gives one book pre-game | an Odds API key (`ODDS_API_KEY`) for a multi-book close |
+| First-half / quarter lines, team totals | the line machinery exists; these need their own tickers / slugs and settlement rows | a week where the moneyline and full-game line edges are established first |
+| In-play STEAL as a strategy | not demonstrated: NFL P&L intervals include zero and the shuffle placebo matches the real ROI; college separates from the placebo but its intervals include zero | a recorded live Sunday (below) scored by `backtest-ticks` / `clv`, and roughly 70 NFL games (four weeks) of replay |
+| Retraining the WP model on 2025–2026 | 2025 doubled as the selection season; 2026 is the clean out-of-sample season and must stay so for the replays | the 2026 season file is final (`scripts/train_wp_model.py --train-seasons 2016-2025 --test-season 2026`) |
+
+## Needs you
+
+Every step below is by hand, on your own accounts, with nothing submitted unless it says
+so. Each one unblocks a row above.
+
+| step | how | what it unblocks |
+|---|---|---|
+| **Rothera order-ticket fee preview** (never submit) | on robinhood.com open an NFL game (`NFLGAME-…`), enter a limit order for 100 contracts at ~$0.50 and again at ~$0.03, read the fee line on the review screen, cancel. Repeat once on a college game (`NX.F.OPT.CFB-…`, CDNA) | the Rothera fee-default flip decision: does the ticket show ~$1.00 commission + $1.00 exchange fee (`flat_001`) or + $0.50 (`quadratic`)? Same for CDNA (`flat_001` / `flat_002` / `weighted_007`). Then set `ROBINHOOD_ROTHERA_FEE_MODEL` / `CDNA_FEE_MODEL`, update `docs/VENUES.md` with the date and rerun `scripts/gen_fee_vectors.py` |
+| **Kalshi cent-vs-centicent rounding** | one of your own Kalshi fills, any size at a price with a fractional-cent fee | `KALSHI_FEE_ROUNDING` default |
+| **Kalshi demo-key check** | `KALSHI_ENV=demo KALSHI_API_KEY=… KALSHI_PRIVATE_KEY_PATH=… python scripts/kalshi_demo_check.py --record` (rests $0.01 bids, cancels them, refuses prod) | replaces the schema-derived `tests/fixtures/kalshi_orders/` with real shapes; proves the salt / host / V2 / batched-cancel / expiry path before `maker --mode demo` |
+| **Polymarket US gateway curl** | from your machine, `curl` the public market-data endpoint named on docs.polymarket.us and paste the response shape | the Polymarket US read-only adapter |
+| **Record a live Sunday slate** | `python -m arb_engine live --sport nfl --every 10 --pre-hours 1 --record out/live_w3.db` for the whole slate (one venue pull + one ESPN scoreboard call per tick) | `backtest-ticks --db out/live_w3.db --gates both`, `stats --db … --convergence`, `clv --db …` and `event-study`: the STEAL ladder, absorption speed and CLV on real ticks instead of candles |
+| **Re-fit the in-play sd floors out of sample** | after two more weeks: `python scripts/eval_lines.py --week N` per week, then compare the in-play spread / total log-loss with floors 3 / 6 against 2 / 4 and 4 / 8 on weeks the floors were not tuned on | `quant/lines.py` sd floors (`NormalMargin`) |
+| **Re-run the walkover shares** | `python scripts/tennis_settlement_share.py --pages 20 --write` (network; the committed 3.25 % / 1.98 % use the first 1,200 settled markets per series) | `tennis_walkover` rows in `settlement_rules.json`, the `walkover-exposed` gate |
+| **Paste the Rothera tie clause** | fetch Rothera's certified NFL contract terms (rule 40.2(d)) and paste the text into `tests/fixtures/rules/rothera_nfl_moneyline_note.txt`, flip the registry row to `derived` and update its sha256 | `tie: no_winner` stops being an assumption; the `tie-rule-unverified` flag goes away |
+| **Capture the Polymarket NBA template** | `python scripts/capture_fixtures.py --rules` once NBA game markets list on Gamma (every mode hits the network and rewrites committed fixtures; `--help` is safe) | the `unverified` NBA row in the registry |
+| **Verify state restrictions** | list the states where Kalshi / Robinhood block sports contracts in `venue_rules.json` `state_restrictions` with a source and date | `executable_venues(home_state=…)` |
+| Odds API key, funded Polymarket wallet (non-US operator only) | `ODDS_API_KEY`; `EXECUTABLE_VENUES` + `py-clob-client` | sportsbook consensus; Polymarket auto-hedge |

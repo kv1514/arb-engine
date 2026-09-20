@@ -87,13 +87,19 @@
   function renderInplay(v) {
     const live = v.live ? "LIVE" : "PRE";
     let html = `<div class="arbe-arb ${v.live ? "arbe-live" : ""}"><b>${live}</b> ${esc(v.game_line || "")}${v.fair_line ? `<div class="arbe-muted">${esc(v.fair_line)}</div>` : ""}`;
+    const gatedTag = (reasons) => ` <span class="arbe-tag arbe-signal" title="the feed cannot be trusted right now: ${esc((reasons || []).join(", "))}">GATED · wait</span>`;
     for (const sv of v.sides || []) {
       const held = sv.held ? ` · held ${sv.held} @ ${fmtP(sv.avg_all_in)}` : "";
-      const lock = sv.need ? ` · <b class="${sv.lock_available ? "arbe-good" : ""}">LOCK ≤ ${fmtP(sv.lock_price)}</b>${sv.lock_available ? " NOW" : ""}` : "";
-      const steal = sv.steal ? ` · <b class="arbe-good">STEAL +${fmtPct(sv.steal_edge)}${sv.suggested_contracts ? ` → buy ${sv.suggested_contracts} ct` : ""}</b>` : "";
-      html += `<div class="arbe-small">${esc(sv.label)}: fair ${fmtP(sv.fair)} (mkt ${fmtP(sv.market_p)} / model ${fmtP(sv.model_p)}${sv.espn_p != null ? " / espn " + fmtP(sv.espn_p) : ""}) · best ${esc(sv.best_venue || "–")} all-in ${fmtP(sv.best_all_in)}${held}${lock}${steal}</div>`;
+      // A gated LOCK / STEAL is shown as such — never as an actionable NOW — mirroring the CLI's
+      // "GATED … wait: <reasons>" (bridge /inplay keeps a FeedFreshness per event across polls).
+      const lockNow = sv.lock_available && !sv.lock_gated;
+      const lock = sv.need ? ` · <b class="${lockNow ? "arbe-good" : ""}">LOCK ≤ ${fmtP(sv.lock_price)}</b>${lockNow ? " NOW" : ""}${sv.lock_gated ? gatedTag(sv.gated_reasons) : ""}` : "";
+      const bestNote = sv.best_ineligible ? ` <span class="arbe-tag arbe-signal" title="${esc(sv.best_ineligible)}">signal only</span>` : "";
+      const steal = sv.steal && !sv.best_ineligible ? ` · <b class="arbe-good">STEAL +${fmtPct(sv.steal_edge)}${sv.suggested_contracts ? ` → buy ${sv.suggested_contracts} ct` : ""}</b>` : (sv.steal_gated ? ` · STEAL +${fmtPct(sv.steal_edge)}${gatedTag(sv.gated_reasons)}` : "");
+      html += `<div class="arbe-small">${esc(sv.label)}: fair ${fmtP(sv.fair)} (mkt ${fmtP(sv.market_p)} / model ${fmtP(sv.model_p)}${sv.espn_p != null ? " / espn " + fmtP(sv.espn_p) : ""}) · best ${esc(sv.best_venue || "–")}${bestNote} all-in ${fmtP(sv.best_all_in)}${held}${lock}${steal}</div>`;
     }
     for (const act of (v.actions || []).filter((x) => /^(LOCK NOW|STEAL|FLAT)/.test(x))) html += `<div class="arbe-good arbe-small">→ ${esc(act)}</div>`;
+    for (const act of (v.actions || []).filter((x) => /^GATED/.test(x))) html += `<div class="arbe-muted arbe-small">⏸ ${esc(act)}</div>`;
     html += `</div>`;
     return html;
   }

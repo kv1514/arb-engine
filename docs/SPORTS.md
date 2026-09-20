@@ -36,23 +36,46 @@
 * Matching is by surname pair + Eastern date with one-day tolerance (order-of-play times
   drift); duplicate surnames fall back to full names.
 
-### Settlement rules, verbatim from the venues (2026-09-18)
+### Settlement rules, verbatim from the venues (re-read 2026-09-19)
 
-| Case | Kalshi (`KXATPMATCH` / `KXWTAMATCH` market `rules_primary` + `rules_secondary`; Robinhood tennis is this book) | Polymarket (market `description`) |
+| Case | Kalshi (`KXATPMATCH` / `KXWTAMATCH` / `KX{ATP,WTA}CHALLENGERMATCH` market `rules_primary` + `rules_secondary`; Robinhood tennis is this book) | Polymarket (market `description`) |
 |---|---|---|
 | Match completed | "If X wins the … match … **after a ball has been played**, then the market resolves to Yes." | "resolve to 'X' if X **advances** against Y" |
-| Retirement / default / DQ after the first ball | X "wins" per the tour = the player who advances | "the player who advances" |
-| Walkover / withdrawal / cancellation **before** the first ball | "the market will resolve to a **fair price** in accordance with the rules" (not a 50-50, not a refund at cost) | "resolve to **50-50**" |
-| Postponed | "will remain open and close after the rescheduled match has finished (within two weeks)" | "delayed beyond 7 days … without a winner → 50-50" |
+| Retirement / default / DQ after the first ball | X "wins" per the tour = the player who advances (`retirement: advancer`, a *derived* field) | "the player who advances" |
+| Walkover / withdrawal / cancellation **before** the first ball | "the market will resolve to a **fair price** in accordance with the rules" (not a 50-50, not a refund at cost; the settled feed shows 0.85/0.15, 0.89/0.11 …) | "resolve to **50-50**" |
+| Postponed | "will remain open and close after the rescheduled match has finished (within two weeks)" | "a winner has not been determined by <date> (**14 days** after the scheduled start) → 50-50" (was 7 days in the 2026-09-18 template; the adapter reads each market's own deadline) |
 
 Retirements agree, so a Kalshi × Polymarket hedge survives the common case. **Walkovers and
 cancellations do not**: Polymarket pays 50¢ a side while Kalshi settles at a "fair price" it
-determines, so the pair is not a lock in that case. The adapters store each venue's rules in
-`EventInfo.venues[venue]["settlement"]` (`TENNIS_SETTLEMENT` in `venues/kalshi.py` and
-`venues/polymarket.py`) and the scanner adds `settlement-mismatch:<case>` flags whenever the
-venues that hold quotes differ — `settlement-mismatch:walkover`, `:cancelled`, `:postponed` for
-every Kalshi × Polymarket tennis pair. Kalshi and its Robinhood mirror never mismatch.
+determines, so the pair is not a lock in that case. The rows live in the settlement registry
+(`arb_engine/data/settlement_rules.json`, rule text pinned by sha256 under
+`tests/fixtures/rules/`), the adapters expose them as `EventInfo.venues[venue]["settlement"]`,
+and the scanner adds `settlement-mismatch:<case>` flags whenever the venues that hold quotes
+differ — `settlement-mismatch:walkover`, `:cancelled`, `:postponed` for every Kalshi × Polymarket
+tennis pair. Kalshi and its Robinhood mirror never mismatch.
 
+### How often a walkover actually happens, and the gates it drives
+
+`scripts/tennis_settlement_share.py` counts the settled Kalshi tennis markets that closed at
+a scalar "fair price" (a walkover or a cancellation before the first ball) rather than 0/1:
+
+| tier | series | settled markets (matches) | scalar settlements | `p_walkover` | status |
+|---|---|---|---|---|---|
+| tour | `KXATPMATCH`, `KXWTAMATCH` | 2,400 (1,200) | 78 | **3.25 %** | derived from the settled feed, 2026-09-19 (first 1,200 markets per series) |
+| challenger | `KXATPCHALLENGERMATCH`, `KXWTACHALLENGERMATCH` | 2,222 (1,111) | 44 | **1.98 %** | derived the same way; lower than the 9 % provisional guess |
+| itf | (no Kalshi series) | – | – | 9 % provisional | until Polymarket resolutions are tallied |
+
+`--pages 20` widens the sample (the committed numbers use the first 1,200 markets per
+series); `--write` updates the rows. `ARB_TENNIS_WALKOVER_P_<TIER>` overrides a tier.
+
+`matching/settlement_rules.tennis_pair_flags()` turns that into three gates on every
+Kalshi × Polymarket tennis pair (an explicit `0` in a setting disables that gate):
+
+| flag | fires when | why |
+|---|---|---|
+| `walkover-exposed` | the **favourite** leg sits on Polymarket (pays 50¢ on a walkover while Kalshi fair-prices the other leg near its cost) and the pair's margin is below the expected walkover loss `p_walkover × (p_fav − 0.5)` | the "lock" loses money in the walkover case more often than the margin pays |
+| `tier:challenger` / `tier:itf` | the pair is not a tour-level match (from the Kalshi series / Polymarket slug) | thinner books, more withdrawals; the tour tier is the default |
+| `thin-book` | any leg with `\|yes_ask + no_ask − 1\| > 0.03` (`ARB_TENNIS_THIN_SPREAD`) or a top-of-book size under 20 contracts (`ARB_TENNIS_THIN_SIZE`) | a 1-contract ghost is not an arb |
 
 ## Other sports already supported by the adapters
 
@@ -94,9 +117,13 @@ venues, 100 Kalshi + Robinhood-mirror), and `live --sport ncaaf` matched 65 ESPN
 quotes with none missing.
 
 In-play: the NFL win-probability model is used as an approximation (same clock, different OT,
-pace and variance; spreads above ±17 are outside its training range), so the college blend
-keeps the market as the anchor (`SPORT_WEIGHTS["ncaaf"]` = market 0.50 / model 0.35 / ESPN 0.15)
-until a college replay says otherwise. College spreads/totals: Kalshi `KXNCAAFSPREAD`/`KXNCAAFTOTAL` (≈1,000 open markets
+pace and variance; spreads above ±17 are outside its training range). Three college weeks have
+now been replayed (185 games under the old harness, week 2 again under the bracketed one): the
+NFL model transfers — it beats ESPN's college number and the market consensus, the spread
+rescale / clamp experiment changes nothing beyond noise, and the blend-vs-model difference is
+zero within its interval — so college uses the same weights as the NFL
+(`SPORT_WEIGHTS["ncaaf"]` = the default 0.30 market / 0.55 model / 0.15 ESPN) and the same
+weight-change policy (`docs/MODEL.md`). College spreads/totals: Kalshi `KXNCAAFSPREAD`/`KXNCAAFTOTAL` (≈1,000 open markets
 each, same ⌈line⌉ ticker suffix as the NFL) and Robinhood's CDNA line events
 (`EVENT_TYPE_SPREAD` / `EVENT_TYPE_TOTALS`, ~45 contracts per game named "Oregon -93.5 points" /
 "Over 44.5 points", one contract per line, favourite named on the contract) are ingested;
