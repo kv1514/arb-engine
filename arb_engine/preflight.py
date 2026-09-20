@@ -43,7 +43,8 @@ from typing import Any, Callable, Iterable, Mapping, Optional
 
 PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
 _RANK = {PASS: 0, WARN: 1, FAIL: 2}
-MIN_PYTHON = (3, 13)
+MIN_PYTHON = (3, 10)        # CI runs the suite on 3.10-3.13; 3.13 is what the author uses
+RECOMMENDED_PYTHON = (3, 13)
 OPTIONAL_THIRD_PARTY = {"cryptography"}  # Kalshi request signing; the engine imports without it
 DISK_WARN_BYTES = 1 << 30      # 1 GiB: a Sunday of ticks + journals is ~100 MB, leave headroom
 DISK_FAIL_BYTES = 100 << 20    # 100 MiB
@@ -120,7 +121,8 @@ def _err(e: BaseException) -> str:
 
 def check_python(version: tuple[int, ...] = tuple(sys.version_info[:3])) -> Check:
     ok = tuple(version[:2]) >= MIN_PYTHON
-    return Check("python", PASS if ok else FAIL, f"Python {'.'.join(map(str, version))}" + ("" if ok else f" < {'.'.join(map(str, MIN_PYTHON))} (the engine uses 3.13 syntax)"), data={"version": list(version)})
+    note = "" if tuple(version[:2]) >= RECOMMENDED_PYTHON else f" (3.13 recommended; {'.'.join(map(str, MIN_PYTHON))}+ supported)"
+    return Check("python", PASS if ok else FAIL, f"Python {'.'.join(map(str, version))}" + (note if ok else f" < {'.'.join(map(str, MIN_PYTHON))} (unsupported)"), data={"version": list(version)})
 
 
 # Runs in a fresh interpreter: import every module under the package, then report every

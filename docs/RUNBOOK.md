@@ -22,7 +22,7 @@ Gamma call, the Robinhood category page, one ESPN scoreboard, one adapter fetch 
 
 | row | PASS means | if it is not PASS |
 |---|---|---|
-| `python` | 3.13+ | `python3 --version`; the engine uses 3.13 syntax |
+| `python` | 3.10+ (3.13 recommended — what the author runs and CI tests first) | `python3 --version` |
 | `imports` | every `arb_engine` module imports, stdlib only (checked in a fresh `python3 -I` so what this shell already imported cannot hide anything) | the detail names the module and the exception; a non-stdlib import is a FAIL (`cryptography` is the one optional package and only a note) |
 | `wp-model` | the packaged WP model loads and prices a known Q3 state and a pre-game spread sanely | `arb_engine/data/nfl_wp_model.json` is corrupt or the rules table changed: `git status arb_engine/data`, `python3 -m unittest tests.test_wp_model` |
 | `settings` | the executable venue set is the table's (`kalshi,robinhood`) | **WARN "polymarket is executable"**: an `EXECUTABLE_VENUES` from an experiment is still exported (`unset EXECUTABLE_VENUES`, check `.env`). A US account cannot execute there; with it set the scanner will show Polymarket legs and the overlay will drop the `signal only` tag |

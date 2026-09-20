@@ -53,9 +53,10 @@ def _clients(bridge_health=None, bridge_fail=False, espn=True, ext_rc=0):
 class LocalChecks(unittest.TestCase):
     def test_python_version_gate(self):
         self.assertEqual(pf.check_python((3, 13, 2)).status, pf.PASS)
-        c = pf.check_python((3, 12, 9))
-        self.assertEqual(c.status, pf.FAIL)
+        c = pf.check_python((3, 12, 9))  # CI's 3.10-3.12 are supported; 3.13 is recommended
+        self.assertEqual(c.status, pf.PASS)
         self.assertIn("3.13", c.detail)
+        self.assertEqual(pf.check_python((3, 9, 1)).status, pf.FAIL)
 
     def test_imports_every_module_stdlib_only(self):
         c = pf.check_imports()
@@ -528,6 +529,8 @@ def on_int(sig, frame):
     sys.exit(0)
 signal.signal(signal.SIGINT, on_int)
 signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+with open(log, "a") as f:  # handlers installed: the test waits for this before signalling
+    f.write("READY\\n")
 time.sleep(60)
 PYEOF
   ;;
@@ -582,6 +585,19 @@ class SundayLauncherTests(unittest.TestCase):
         except OSError:
             return 0
 
+    def _wait_ready(self, n: int, timeout: float = 15.0) -> None:
+        """Block until ``n`` stub children have installed their signal handlers (a SIGINT
+        delivered before that is Python's default KeyboardInterrupt and is never logged)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                if Path(self.int_log).read_text().count("READY") >= n:
+                    return
+            except OSError:
+                pass
+            time.sleep(0.1)
+        self.fail(f"stub children not ready: {self._ints()} INT, log={self.int_log}")
+
     def test_help_and_bad_action(self):
         out = self._sh("--help")
         self.assertEqual(out.returncode, 0)
@@ -626,6 +642,7 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertIn("already running", again.stdout)
         self.assertIn("[--steal-edge 0.04]", st.stdout)  # status shows the extras live runs with
         self.assertEqual(Path(run, "live.args").read_text().strip(), "--steal-edge 0.04")
+        self._wait_ready(2)  # bridge + live (the maker stub crashes on purpose)
         t0 = time.monotonic()
         stop = self._sh("stop")
         self.assertEqual(stop.returncode, 0)
@@ -645,6 +662,7 @@ class SundayLauncherTests(unittest.TestCase):
         first = self._child("live")
         log = Path(self.tmp, "out", "logs", "live-2026-09-20.log")
         self.assertEqual(self._sh("restart", "bogus").returncode, 1)
+        self._wait_ready(2)  # bridge + live handlers installed before the restart's SIGINT
         r = self._sh("restart", "live")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         second = self._child("live", not_pid=first)
@@ -653,6 +671,7 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertEqual(len(starts), 2)
         self.assertIn("--bankroll 250 --kelly 0.25 --steal-edge 0.04 --pre-hours 0.5", starts[-1])  # the start extras survive
         self.assertEqual(self._ints(), 1)  # the old child got exactly one SIGINT
+        self._wait_ready(3)  # the restarted live child
         r2 = self._sh("restart", "live", "--", "--steal-edge", "0.06")
         self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
         third = self._child("live", not_pid=second)
