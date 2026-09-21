@@ -380,7 +380,7 @@ class LiveSlateTests(unittest.TestCase):
         self.assertGreater(len(full.splitlines()), len(quiet.splitlines()))
         lines = quiet.splitlines()
         self.assertIn("1 game(s) priced, 1 without venue quotes; 1 live, ", lines[0])
-        self.assertRegex(lines[0], r"\d+ STEAL, \d+ LOCK, \d+ gated, \d+ signal-only$")
+        self.assertRegex(lines[0], r"\d+ STEAL, \d+ LOCK, \d+ gated, \d+ signal-only, \d+ LAG, \d+ ARB$")
         self.assertTrue(all(l.startswith("    LIVE ") and "  ->  " in l for l in lines[1:]), lines)
         self.assertTrue(all(("STEAL" in l or "LOCK" in l or "GATED" in l) for l in lines[1:]), lines)
         self.assertNotIn("[mkt ", quiet)                                  # no per-side rows

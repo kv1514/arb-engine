@@ -68,6 +68,26 @@ scripts/sunday.sh restart live      # same extras as at start (out/run/live.args
 scripts/sunday.sh preflight         # the report alone (also written to out/logs/preflight-<date>.log)
 ```
 
+## 1b. Pushes to your phone (ntfy, optional, 2 minutes)
+
+1. Install the **ntfy** app (iOS / Android) or open https://ntfy.sh in a browser, and
+   subscribe to a topic name nobody would guess, e.g. `arb-kv15-7q2x9m` (anyone who knows
+   the name can read it, so make it random; no account needed).
+2. Export the topic before the launcher starts (or restart `live` after):
+
+```bash
+export ARB_ALERT_NTFY=arb-kv15-7q2x9m          # or a full https://ntfy.example/topic URL
+BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start   # or: scripts/sunday.sh restart live
+```
+
+3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
+   **LAG** (one venue repriced, the other has not — buy the laggard), **HEDGE NOW** (a paper
+   maker fill), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed unless you add
+   them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL`): the first live Sunday lost on STEAL. One push
+   per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`); HEDGE NOW is never throttled.
+   The full text is in `out/live_journal.jsonl` (`"kind": "alert"`); pushes are logged as
+   `"kind": "ntfy"`, throttled ones as `ntfy_throttled`.
+
 ## 2. Reload the extension (12:35)
 
 1. `chrome://extensions` → the "Arb Engine Robinhood Overlay" card → the circular reload

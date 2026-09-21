@@ -1,0 +1,173 @@
+{
+ "date": "2026-09-20",
+ "games": 14,
+ "lag_replay": {
+  "by_follower": {
+   "kalshi": 127,
+   "robinhood": 6
+  },
+  "by_leader": {
+   "kalshi": 6,
+   "robinhood": 127
+  },
+  "edge_median": 0.059,
+  "exit_at_bid": {
+   "30": {
+    "loss": 24,
+    "mean_pnl_per_contract": 0.0593,
+    "unknown": 0,
+    "win": 109
+   },
+   "300": {
+    "loss": 22,
+    "mean_pnl_per_contract": 0.0803,
+    "unknown": 17,
+    "win": 94
+   },
+   "60": {
+    "loss": 12,
+    "mean_pnl_per_contract": 0.0796,
+    "unknown": 1,
+    "win": 120
+   }
+  },
+  "signals": 133
+ },
+ "leadlag": {
+  "kalshi->polymarket": {
+   "caught_up_5min": 69,
+   "follower_moved_first": 8,
+   "lead_moves": 117,
+   "median_lag_s": 139.1,
+   "never_5min": 48,
+   "p25_lag_s": 50.2
+  },
+  "kalshi->robinhood": {
+   "caught_up_5min": 60,
+   "follower_moved_first": 100,
+   "lead_moves": 121,
+   "median_lag_s": 43.6,
+   "never_5min": 61,
+   "p25_lag_s": 12.0
+  },
+  "polymarket->kalshi": {
+   "caught_up_5min": 32,
+   "follower_moved_first": 14,
+   "lead_moves": 81,
+   "median_lag_s": 71.8,
+   "never_5min": 49,
+   "p25_lag_s": 0.0
+  },
+  "polymarket->robinhood": {
+   "caught_up_5min": 32,
+   "follower_moved_first": 10,
+   "lead_moves": 81,
+   "median_lag_s": 51.2,
+   "never_5min": 49,
+   "p25_lag_s": 0.0
+  },
+  "robinhood->kalshi": {
+   "caught_up_5min": 106,
+   "follower_moved_first": 32,
+   "lead_moves": 133,
+   "median_lag_s": 25.3,
+   "never_5min": 27,
+   "p25_lag_s": 15.4
+  },
+  "robinhood->polymarket": {
+   "caught_up_5min": 71,
+   "follower_moved_first": 12,
+   "lead_moves": 133,
+   "median_lag_s": 166.0,
+   "never_5min": 62,
+   "p25_lag_s": 76.7
+  }
+ },
+ "moves": {
+  "all": {
+   "horizons": {
+    "120": {
+     "continue": 19,
+     "flat": 71,
+     "mean_later_over_initial": 0.1034,
+     "n": 105,
+     "revert": 15
+    },
+    "30": {
+     "continue": 8,
+     "flat": 96,
+     "mean_later_over_initial": 0.0031,
+     "n": 111,
+     "revert": 7
+    },
+    "300": {
+     "continue": 30,
+     "flat": 49,
+     "mean_later_over_initial": 0.2137,
+     "n": 96,
+     "revert": 17
+    }
+   },
+   "mean_model_move_over_market_move": 0.2282,
+   "n": 121
+  },
+  "move": 0.05,
+  "no_score_change": {
+   "horizons": {
+    "120": {
+     "continue": 17,
+     "flat": 69,
+     "mean_later_over_initial": 0.1048,
+     "n": 100,
+     "revert": 14
+    },
+    "30": {
+     "continue": 7,
+     "flat": 92,
+     "mean_later_over_initial": 0.0021,
+     "n": 106,
+     "revert": 7
+    },
+    "300": {
+     "continue": 27,
+     "flat": 47,
+     "mean_later_over_initial": 0.2138,
+     "n": 91,
+     "revert": 17
+    }
+   },
+   "mean_model_move_over_market_move": 0.1377,
+   "n": 112
+  },
+  "score_changed": {
+   "horizons": {
+    "120": {
+     "continue": 2,
+     "flat": 2,
+     "mean_later_over_initial": 0.0752,
+     "n": 5,
+     "revert": 1
+    },
+    "30": {
+     "continue": 1,
+     "flat": 4,
+     "mean_later_over_initial": 0.0242,
+     "n": 5,
+     "revert": 0
+    },
+    "300": {
+     "continue": 3,
+     "flat": 2,
+     "mean_later_over_initial": 0.2117,
+     "n": 5,
+     "revert": 0
+    }
+   },
+   "mean_model_move_over_market_move": 1.3534,
+   "n": 9
+  },
+  "venue": "kalshi"
+ },
+ "sport": "nfl",
+ "ticks": 14487
+}

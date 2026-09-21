@@ -687,6 +687,62 @@ interval includes zero, and the point estimates are slightly worse). The one rea
 overtime clock mapping (3.32 → 1.05 log-loss on the 79 OT rows of three games), which the
 harness applies; the model itself is unchanged.
 
+## The first live Sunday: momentum, lead-lag and the LAG rule (NFL 2026-09-20)
+
+`live --record` ran through the first NFL Sunday with this code (14 games, 14,473 in-play
+ticks at 5 s; the laptop slept through part of the early window, so the coverage is partial).
+`scripts/leadlag_study.py --db out/history.db --date 2026-09-20` reproduces every number
+below from the recorded per-venue L1 (`tests/fixtures/results/leadlag_nfl_2026_w2.json`).
+
+**Do big moves revert ("odds inflated by momentum") or continue?** Every Kalshi mid move of
+≥ 5¢ between polls ≤ 30 s apart was followed for five minutes. Without a score change (a
+drive, a turnover, a big play — 112 of the 121 moves):
+
+| horizon | n | continued | reverted | flat | mean later move ÷ initial move |
+|---|---|---|---|---|---|
+| +30 s | 106 | 7 | 7 | 92 | +0.00 |
+| +2 min | 100 | 17 | 14 | 69 | +0.10 |
+| +5 min | 91 | 27 | 17 | 47 | **+0.21** |
+
+The price kept going: on average another fifth of the move over five minutes. That is the
+under-reaction the NBA Kalshi study measures (impact 0.64), not over-reaction. **Buying the
+dip against a momentum move lost today.** The WP model moved only 9 % as much as the market
+on those plays — its ESPN state had not updated yet — which is why the model-vs-market STEAL
+rule lost as well (273 ungated STEALs, 91 settled at −$0.39 per contract on average).
+
+**Who leads?** For every ≥ 5¢ move on one venue, had the other already moved half as much
+the same way over the previous 60 s, and how long did it take to catch up?
+
+| leader → follower | lead moves | follower had moved first | caught up ≤ 5 min | median lag |
+|---|---|---|---|---|
+| Robinhood (Rothera) → Kalshi | 133 | 32 | 106 | **25 s** |
+| Kalshi → Robinhood | 121 | 100 | 60 | 44 s |
+| Robinhood → Polymarket | 133 | 12 | 71 | 166 s |
+| Kalshi → Polymarket | 117 | 8 | 69 | 139 s |
+
+Rothera reprices first; Kalshi follows about 25 s later; Polymarket trails by minutes and
+often never catches up within five. So the dip that is actually cheap is the *lagging
+venue's stale price*, not the move itself.
+
+**The LAG rule** (`arb_engine/strategy/leadlag.py`, on by default in `live`): when a leader
+venue's mid moves ≥ `leadlag_move` (5¢) within `leadlag_window_s` (30 s) and an executable
+follower's mid has moved less than half of that (or the other way), buy the side the leader
+moved toward on the follower, provided its all-in ask sits ≥ `leadlag_min_edge` (2¢) below
+the leader's mid and both quotes are fresh. Replayed over the same ticks (fills at the
+recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid):
+
+| exit | signals | wins | losses | mean P&L per contract |
+|---|---|---|---|---|
+| +30 s | 133 | 109 | 24 | +$0.059 |
+| +60 s | 133 | 120 | 12 | **+$0.080** |
+| +5 min | 133 | 94 | 22 | +$0.080 |
+
+127 of the 133 signals were Rothera leading Kalshi. The optimistic assumption is the fill:
+the recorded Kalshi ask is at least one 5 s poll old by the time it is seen, and top-of-book
+depth is what is recorded. Every live LAG is journalled as a `kind="lag"` observation so the
+store's +10 s … +15 min ladder measures the real convergence next Sunday; the rule is not
+sized beyond `bankroll × kelly_fraction / ask` and the follower's displayed depth until it is.
+
 ## Spreads and totals: line fair values vs Kalshi mids (P13)
 
 `quant/lines.py` prices a spread or total from a margin distribution: `NormalMargin` (σ by

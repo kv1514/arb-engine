@@ -33,6 +33,7 @@ from ..matching.matcher import MergedEvent, merge_snapshots
 from ..venues.espn import ESPNClient, ESPNFeed, GameState
 from .alerts import Alerter
 from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, resolve_executable, setting, steal_record
+from .leadlag import LagSignal, LeadLagTracker
 
 try:  # the settings registry (config.declare_setting); this module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore
@@ -54,6 +55,8 @@ class SlateTick:
     errors: list[str] = field(default_factory=list)
     stake_scale: float = 1.0   # < 1 when the slate cap scaled this tick's STEAL stakes
     quiet: bool = False        # how the slate wants this tick printed (format_tick honours it)
+    lags: list[str] = field(default_factory=list)   # LAG signal texts this tick (lead-lag, market vs market)
+    arbs: list[str] = field(default_factory=list)   # fresh two-leg ARB texts this tick (fees, depth, quote age <= 10 s)
 
 
 class LiveSlate:
@@ -79,6 +82,10 @@ class LiveSlate:
         self.quiet = bool(quiet) if quiet is not None else bool(setting(self.settings, "inplay_quiet", False))
         self._enriched: dict[str, tuple[float, GameState]] = {}   # event_id -> (when, enriched state)
         self._seen_steal: set[str] = set()
+        # Market-vs-market signals: the venue that has not repriced yet (LAG) and fresh two-leg
+        # arbs (ARB) — both need no ESPN state, so they run on every priced event, in play or not.
+        self.leadlag = LeadLagTracker.from_settings(self.settings, executable=self.executable_venues, fresh_s=max(10.0, float(interval)))
+        self._arb_last: dict[str, float] = {}                     # event_key -> last ARB alert time
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
 
@@ -190,6 +197,7 @@ class LiveSlate:
                 continue
             out.views.append(view)
             priced.append((gs, me, view, fresh))
+            self.market_signals(me, view, out, now)
         out.stake_scale = self.apply_slate_cap(out.views)
         for gs, me, view, fresh in priced:
             for act in view.actions:
@@ -214,6 +222,34 @@ class LiveSlate:
             except Exception as e:
                 errors.append(f"record: update_ladder: {e!r}")
         return out
+
+    def market_signals(self, me: MergedEvent, view: InplayView, out: SlateTick, now: float) -> None:
+        """LAG (lead-lag) and fresh ARB signals for one event: alerted, journalled and, for
+        LAG, recorded as a ``kind="lag"`` observation so the store's ladder measures
+        convergence. Failures here never stop the tick."""
+        try:
+            for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
+                text = sig.text()
+                out.lags.append(f"{view.title}: {text}")
+                extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}
+                _call_optional(self.alerts.alert, "LAG", f"{view.title}: {text}", event=view.event_key, **extra)
+        except Exception as e:
+            out.errors.append(f"leadlag: {e!r}")
+        try:
+            from ..scanner import analyze_event
+
+            rep = analyze_event(me, self.settings, contracts=self.contracts, target_margin=self.target_margin, max_quote_age=max(10.0, float(self.interval)), now=now, executable_venues=self.executable_venues)
+            arb = rep.arb or {}
+            if arb.get("is_arb") and rep.fillable and "stale-quote" not in (rep.flags or []):
+                legs = ", ".join(f"{l.get('label') or l.get('outcome')} on {l['venue']} @ {l['price']:.2f}" for l in arb.get("legs", []))
+                sized = rep.sized_arb or {}
+                text = f"ARB {arb.get('margin', 0):+.2%} after fees: {legs}" + (f" → {sized.get('contracts')} contracts, profit ${sized.get('profit', 0):.2f}" if sized.get("contracts") else "")
+                out.arbs.append(f"{view.title}: {text}")
+                if now - self._arb_last.get(me.event_key, -1e18) >= 30.0:
+                    self._arb_last[me.event_key] = now
+                    _call_optional(self.alerts.alert, "ARB", f"{view.title}: {text}", event=view.event_key, margin=arb.get("margin"), legs=arb.get("legs"), contracts=sized.get("contracts"))
+        except Exception as e:
+            out.errors.append(f"arb: {e!r}")
 
     def run(self, interval: Optional[float] = None, duration: float = 6 * 3600, max_iterations: Optional[int] = None, printer=print) -> None:
         interval = self.interval if interval is None else float(interval)
@@ -287,7 +323,7 @@ def format_tick(t: SlateTick, quiet: Optional[bool] = None) -> str:
         n_gated = sum(1 for v in views for s in v.sides if s.steal_gated or s.lock_gated)
         n_lock = sum(1 for v in views for s in v.sides if s.lock_available and not s.lock_gated)
         n_signal = sum(1 for v in views for s in v.sides if s.best_ineligible)
-        lines = [summary + f"; {n_live} live, {n_steal} STEAL, {n_lock} LOCK, {n_gated} gated, {n_signal} signal-only"]
+        lines = [summary + f"; {n_live} live, {n_steal} STEAL, {n_lock} LOCK, {n_gated} gated, {n_signal} signal-only, {len(t.lags)} LAG, {len(t.arbs)} ARB"]
         for v in views:
             lines.extend(_signal_lines(v))
     else:
@@ -296,6 +332,10 @@ def format_tick(t: SlateTick, quiet: Optional[bool] = None) -> str:
             lines.append(format_view(v))
         for m in t.missing:
             lines.append(f"    no quotes: {m}")
+    for a in t.arbs:
+        lines.append(f"    *** ARB *** {a}")
+    for l in t.lags:
+        lines.append(f"    LAG {l}")
     for e in t.errors:
         lines.append(f"    error: {e}")
     return "\n".join(lines)
