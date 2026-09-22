@@ -41,8 +41,22 @@ class StoreTests(unittest.TestCase):
             os.unlink(self.path)
 
     def tearDown(self):
-        if os.path.exists(self.path):
-            os.unlink(self.path)
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(self.path + suffix):
+                os.unlink(self.path + suffix)
+
+    def test_file_store_uses_wal_so_a_reader_never_blocks_the_recorder(self):
+        # Two recorders and the study scripts share one file all week: a second connection
+        # holding a read transaction must not stop the store's insert (WAL), and the store's
+        # busy timeout must be long enough to ride out another process's write burst.
+        st = Store(self.path)
+        self.assertEqual(st.conn.execute("PRAGMA journal_mode").fetchone()[0], "wal")
+        reader = sqlite3.connect(self.path)
+        reader.execute("BEGIN")
+        reader.execute("SELECT count(*) FROM scans").fetchone()   # an open read transaction
+        st.record_scan(scan("nfl", _adapters(), now=FIXTURE_NOW, settings={}))   # must not raise
+        reader.rollback()
+        self.assertEqual(Store(":memory:").conn.execute("PRAGMA journal_mode").fetchone()[0], "memory")
 
     def test_record_scan_and_stats(self):
         res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})

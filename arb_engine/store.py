@@ -159,8 +159,17 @@ class Store:
         # The live slate's fast lane records from a second thread: one connection shared under a
         # re-entrant lock (every public method takes it) instead of a connection per thread.
         self._lock = threading.RLock()
-        self.conn = sqlite3.connect(path, check_same_thread=False)
+        # Two recorders (NFL + college) and the study scripts share one file all week: WAL lets
+        # a long read (leadlag_study over a 500 MB day) run without blocking the recorders'
+        # inserts, and 30 s of busy-wait covers the other process's write bursts (the default
+        # 5 s raised "database is locked" into a tick). In-memory files have no WAL.
+        self.conn = sqlite3.connect(path, check_same_thread=False, timeout=30.0)
         self.conn.row_factory = sqlite3.Row
+        if path != ":memory:":
+            try:
+                self.conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.DatabaseError:
+                pass  # read-only or unsupported file system: the default journal still works
         self.conn.executescript(SCHEMA)
         # Older files predate these columns; add them in place (SQLite appends, defaults NULL).
         self._ensure_columns("scans", {"start_time": "TEXT"})
