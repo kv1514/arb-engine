@@ -130,10 +130,13 @@ class NtfyTests(unittest.TestCase):
         # The maker rates every spread/total line of a game in one pass: one push per game
         # per minute (the first, best-margin line), not one per line; another game still goes.
         a = self._alerter(min_interval_s=60)
-        for line in ("NYG-14.5", "NYG+5.5", "over44.5"):
-            a.alert("TAKER ARB", f"line {line}", watch=f"nfl:NYG|TEN|kalshi:{line}", event="nfl:NYG|TEN")
-        a.alert("TAKER ARB", "other game", watch="nfl:KC|DEN|kalshi:KC-3.5", event="nfl:KC|DEN")
-        self.assertEqual([b for _, b, _ in self.sent], ["line NYG-14.5", "other game"])
+        from arb_engine.matching import game_event_key
+        keys = ("nfl:NYG|TEN:2026-09-27:spread:NYG-14.5", "nfl:NYG|TEN:2026-09-27:spread:TEN-5.5", "nfl:NYG|TEN:2026-09-27:total:44.5")
+        for k in keys:
+            a.alert("TAKER ARB", f"line {k}", watch=k + "|kalshi:x", event=game_event_key(k))
+        a.alert("TAKER ARB", "other game", watch="nfl:DEN|KC:2026-09-27:spread:KC-3.5|kalshi:x", event=game_event_key("nfl:DEN|KC:2026-09-27:spread:KC-3.5"))
+        self.assertEqual([b for _, b, _ in self.sent], [f"line {keys[0]}", "other game"])
+        self.assertEqual(game_event_key("nfl:DEN|KC:2026-09-27"), "nfl:DEN|KC:2026-09-27")
 
     def test_transport_failure_is_journalled_not_raised(self):
         def boom(url, body, headers):

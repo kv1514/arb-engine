@@ -133,6 +133,15 @@ def total_event_key(sport: str, codes: list[str], date_str: Optional[str], line:
     return f"{sport}:" + "|".join(sorted(codes)) + f":{date_str or ''}:total:{fmt_line(line)}"
 
 
+def game_event_key(event_key: str) -> str:
+    """The game behind a line key: ``nfl:BUF|DET:2026-09-17:spread:BUF-1.5`` ->
+    ``nfl:BUF|DET:2026-09-17``; a moneyline key is returned unchanged."""
+    for tag in (":spread:", ":total:"):
+        if tag in event_key:
+            return event_key.split(tag, 1)[0]
+    return event_key
+
+
 def split_pair(pair: str, known: str) -> Optional[str]:
     """'DETBUF' with known 'BUF' -> 'DET' (the other code in a Kalshi/Rothera ticker pair)."""
     if pair.endswith(known) and len(pair) > len(known):
