@@ -282,3 +282,57 @@ class FastLaneTests(unittest.TestCase):
         self.assertTrue(any("ARB +" in a and "KC on kalshi @ 0.60" in a for a in arbs), arbs)
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
+
+
+class PaperLagTests(unittest.TestCase):
+    """strategy/paperlag.py: paper fills judged on the next quotes."""
+
+    def _sig(self, ask=0.60, depth=300, contracts=100, t=1000.0):
+        from arb_engine.strategy.leadlag import LagSignal
+        return LagSignal(event_key=KEY, title="DEN @ KC", leader="robinhood", follower="kalshi", outcome="KC", label="Kansas City", lead_move=0.08, follower_move=0.0, leader_mid=0.675, follower_ask=ask, follower_all_in=ask + 0.017, edge=0.058, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=t)
+
+    def _quotes(self, t, ask, bid, size=300):
+        return {"kalshi": [_q("kalshi", "KC", bid, ask, t, size=size), _q("kalshi", "DEN", 1 - ask, 1 - bid, t, size=size)]}
+
+    def test_fill_mark_settle_and_summary(self):
+        from arb_engine.store import Store
+        from arb_engine.strategy.paperlag import LagPaperBook
+
+        db = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"paperlag_{os.getpid()}.db")
+        if os.path.exists(db):
+            os.remove(db)
+        book = LagPaperBook(store=Store(db), fill_window_s=10)
+        o = book.open(self._sig(), 1000.0)
+        self.assertIsNotNone(o)
+        self.assertIsNone(book.open(self._sig(), 1001.0))                   # one open order per (event, follower, side)
+        # +1 s: the ask is still there -> filled at 0.60.
+        lines = book.observe(KEY, self._quotes(1001.0, 0.60, 0.59), 1001.0)
+        self.assertTrue(lines and "filled 100 x KC on kalshi @ 0.60" in lines[0], lines)
+        self.assertEqual(o.fill_price, 0.60)
+        # Marks at +30 / +60 s from the bid; settlement from the final score.
+        book.observe(KEY, self._quotes(1031.0, 0.67, 0.66), 1031.0)
+        book.observe(KEY, self._quotes(1062.0, 0.69, 0.68), 1062.0)
+        self.assertEqual((o.marks.get("bid_30"), o.marks.get("bid_60")), (0.66, 0.68))
+        self.assertEqual(book.settle(KEY, "KC"), 1)
+        s = book.summary()
+        self.assertEqual((s["orders"], s["filled"], s["expired"]), (1, 1, 0))
+        self.assertAlmostEqual(s["pnl_bid_60"]["mean"], 0.68 - 0.617, places=6)
+        self.assertAlmostEqual(s["pnl_settle"]["mean"], 1.0 - 0.617, places=6)
+        row = book.store.conn.execute("select filled_at, fill_price, bid_60, settled, settle_value, pnl_settle from lag_paper").fetchone()
+        self.assertEqual((row[1], row[2], row[3], row[4]), (0.60, 0.68, 1, 1.0))
+        self.assertAlmostEqual(row[5], 1.0 - 0.617, places=4)
+
+    def test_order_expires_when_the_ask_is_gone(self):
+        from arb_engine.strategy.paperlag import LagPaperBook
+
+        book = LagPaperBook(store=None, fill_window_s=10)
+        book.open(self._sig(ask=0.60), 1000.0)
+        # Kalshi caught up within a second: ask 0.67, never back to 0.60.
+        for t in (1001.0, 1005.0, 1009.0):
+            self.assertEqual(book.observe(KEY, self._quotes(t, 0.67, 0.66), t), [])
+        lines = book.observe(KEY, self._quotes(1011.0, 0.67, 0.66), 1011.0)
+        self.assertTrue(lines and "expired unfilled" in lines[0], lines)
+        self.assertEqual(book.summary()["expired"], 1)
+        # A zero-size ask does not fill either.
+        book.open(self._sig(ask=0.60, t=1020.0), 1020.0)
+        self.assertEqual(book.observe(KEY, self._quotes(1021.0, 0.60, 0.59, size=0), 1021.0), [])

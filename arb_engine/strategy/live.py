@@ -36,6 +36,7 @@ from .alerts import Alerter
 from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, resolve_executable, setting, steal_record
 from .fastlane import FastLane
 from .leadlag import LagSignal, LeadLagTracker
+from .paperlag import LagPaperBook
 
 try:  # the settings registry (config.declare_setting); this module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore
@@ -59,6 +60,7 @@ class SlateTick:
     quiet: bool = False        # how the slate wants this tick printed (format_tick honours it)
     lags: list[str] = field(default_factory=list)   # LAG signal texts this tick (lead-lag, market vs market)
     arbs: list[str] = field(default_factory=list)   # fresh two-leg ARB texts this tick (fees, depth, quote age <= 10 s)
+    paper: list[str] = field(default_factory=list)  # paper LAG fills / expiries this tick
 
 
 class LiveSlate:
@@ -97,6 +99,9 @@ class LiveSlate:
         self._live_priced: dict[str, tuple[GameState, MergedEvent, InplayView]] = {}   # from the last full tick
         self._sig_lock = threading.RLock()   # market_signals / seed run from the fast thread and the tick thread
         self._stop = threading.Event()
+        # Paper fills for every LAG, judged on the next quotes (strategy/paperlag.py): the
+        # fill-adjusted P&L the replay cannot give. Rows in the store's lag_paper table.
+        self.paper = LagPaperBook(store=self.store, alerter=self.alerts) if self.store is not None else LagPaperBook(store=None, alerter=self.alerts)
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
 
@@ -232,6 +237,13 @@ class LiveSlate:
                 call_store(self.store, "update_ladder", now)   # once per tick, after every game's STEALs are in
             except Exception as e:
                 errors.append(f"record: update_ladder: {e!r}")
+        for gs, me, view, _ in priced:
+            if getattr(gs, "status", "") == "final" and gs.home_score is not None and gs.away_score is not None:
+                try:
+                    winner = None if gs.home_score == gs.away_score else (gs.home if gs.home_score > gs.away_score else gs.away)
+                    self.paper.settle(me.event_key, winner, now)
+                except Exception as e:
+                    errors.append(f"paperlag settle: {e!r}")
         with self._sig_lock:
             self._live_priced = {me.event_key: (gs, me, view) for gs, me, view, _ in priced if view.live}
             if self.fast:
@@ -279,9 +291,18 @@ class LiveSlate:
 
     def _market_signals(self, me: MergedEvent, view: InplayView, out: SlateTick, now: float) -> None:
         try:
+            for line in self.paper.observe(me.event_key, me.quotes_by_venue, now):
+                out.paper.append(f"{view.title}: {line}")
+        except Exception as e:
+            out.errors.append(f"paperlag: {e!r}")
+        try:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
                 text = sig.text()
                 out.lags.append(f"{view.title}: {text}")
+                try:
+                    self.paper.open(sig, now)
+                except Exception as e:
+                    out.errors.append(f"paperlag open: {e!r}")
                 # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in
                 # the observation's extra_json so the ladder can be split STEAL vs LAG.
                 extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "signal_kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}
@@ -351,6 +372,8 @@ class LiveSlate:
                         printer(f"{time.strftime('%H:%M:%S')} *** ARB *** {line}")
                     for line in ft.lags:
                         printer(f"{time.strftime('%H:%M:%S')} LAG {line}")
+                    for line in ft.paper:
+                        printer(f"{time.strftime('%H:%M:%S')} {line}")
                     for e in ft.errors:
                         if e != last_err:   # a venue that keeps failing is printed once, not every second
                             printer(f"{time.strftime('%H:%M:%S')} fast: {e}")
@@ -427,6 +450,8 @@ def format_tick(t: SlateTick, quiet: Optional[bool] = None) -> str:
         lines.append(f"    *** ARB *** {a}")
     for l in t.lags:
         lines.append(f"    LAG {l}")
+    for l in t.paper:
+        lines.append(f"    {l}")
     for e in t.errors:
         lines.append(f"    error: {e}")
     return "\n".join(lines)

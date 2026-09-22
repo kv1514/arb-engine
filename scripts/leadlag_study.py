@@ -189,6 +189,34 @@ def lag_replay(db: str, date: str, sport: str, bankroll: float = 500.0, horizons
     return out
 
 
+def paper_summary(db: str, date: Optional[str] = None) -> dict[str, Any]:
+    """What the live paper book (``lag_paper``) recorded: fill rate, latency, P&L at the marks
+    and at settlement — the fill-adjusted answer the replay cannot give."""
+    c = sqlite3.connect(db)
+    c.row_factory = sqlite3.Row
+    try:
+        rows = [dict(r) for r in c.execute("select * from lag_paper order by ts")]
+    except sqlite3.OperationalError:
+        return {"orders": 0}
+    if date:
+        day = _dt.datetime.strptime(date, "%Y-%m-%d")
+        t0, t1 = day.timestamp(), (day + _dt.timedelta(days=1)).timestamp()
+        rows = [r for r in rows if t0 <= r["ts"] < t1]
+    filled = [r for r in rows if r["filled_at"] is not None]
+    out: dict[str, Any] = {"orders": len(rows), "filled": len(filled), "expired": sum(1 for r in rows if r["expired_at"] is not None), "by_follower": dict(collections.Counter(r["follower"] for r in rows))}
+    if filled:
+        lat = sorted(r["filled_at"] - r["ts"] for r in filled)
+        out["fill_latency_median_s"] = round(lat[len(lat) // 2], 2)
+        for off in (30, 60, 300):
+            xs = [r[f"bid_{off}"] - r["all_in"] for r in filled if r.get(f"bid_{off}") is not None]
+            if xs:
+                out[f"pnl_bid_{off}"] = {"n": len(xs), "wins": sum(1 for x in xs if x > 0), "mean": round(statistics.mean(xs), 4)}
+        st = [r["pnl_settle"] for r in filled if r["settled"] and r["pnl_settle"] is not None]
+        if st:
+            out["pnl_settle"] = {"n": len(st), "wins": sum(1 for x in st if x > 0), "mean": round(statistics.mean(st), 4)}
+    return out
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default="out/history.db")
@@ -198,7 +226,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--out", help="write the metrics JSON here")
     a = p.parse_args(argv)
     by = load_ticks(a.db, a.date, a.sport)
-    res = {"date": a.date, "sport": a.sport, "games": len(by), "ticks": sum(len(v) for v in by.values()), "moves": move_study(by, "kalshi", a.move), "leadlag": leadlag_study(by, a.move), "lag_replay": lag_replay(a.db, a.date, a.sport)}
+    res = {"date": a.date, "sport": a.sport, "games": len(by), "ticks": sum(len(v) for v in by.values()), "moves": move_study(by, "kalshi", a.move), "leadlag": leadlag_study(by, a.move), "lag_replay": lag_replay(a.db, a.date, a.sport), "paper": paper_summary(a.db, a.date)}
     ms = res["moves"]
     print(f"{res['games']} games, {res['ticks']} in-play ticks; Kalshi moves >= {a.move:.0%}: {ms['all']['n']} (score changed {ms['score_changed']['n']}, no score change {ms['no_score_change']['n']})")
     for label in ("all", "no_score_change"):
@@ -207,7 +235,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     for k, v in res["leadlag"].items():
         print(f"  {k}: {v['lead_moves']} moves; follower moved first {v['follower_moved_first']}; caught up within 5 min {v['caught_up_5min']} (median {v['median_lag_s']} s), never {v['never_5min']}")
     lr = res["lag_replay"]
-    print(f"  LAG rule replayed: {lr['signals']} signals; " + "; ".join(f"sell at bid +{h}s: {v['win']}W/{v['loss']}L mean {v['mean_pnl_per_contract']:+.4f}/ct" for h, v in lr["exit_at_bid"].items()))
+    print(f"  LAG rule replayed: {lr['signals']} signals; " + "; ".join(f"sell at bid +{h}s: {v['win']}W/{v['loss']}L mean {(v['mean_pnl_per_contract'] if v['mean_pnl_per_contract'] is not None else 0.0):+.4f}/ct" for h, v in lr["exit_at_bid"].items()))
+    pp = res["paper"]
+    print(f"  live paper book: {pp.get('orders', 0)} orders, {pp.get('filled', 0)} filled, {pp.get('expired', 0)} expired" + (f", fill latency median {pp['fill_latency_median_s']} s" if pp.get("fill_latency_median_s") is not None else "") + "".join(f"; +{k[8:]}s {v['wins']}/{v['n']} wins mean {v['mean']:+.4f}" for k, v in pp.items() if k.startswith("pnl_bid_")) + (f"; settled {pp['pnl_settle']['wins']}/{pp['pnl_settle']['n']} mean {pp['pnl_settle']['mean']:+.4f}" if pp.get("pnl_settle") else ""))
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
             json.dump(res, f, indent=1, sort_keys=True)
