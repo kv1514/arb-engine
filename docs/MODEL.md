@@ -739,9 +739,15 @@ recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid):
 
 127 of the 133 signals were Rothera leading Kalshi. The optimistic assumption is the fill:
 the recorded Kalshi ask is at least one 5 s poll old by the time it is seen, and top-of-book
-depth is what is recorded. Every live LAG is journalled as a `signal_kind="lag"` observation so the
-store's +10 s … +15 min ladder measures the real convergence next Sunday; the rule is not
-sized beyond `bankroll × kelly_fraction / ask` and the follower's displayed depth until it is.
+depth is what is recorded. Two things now measure that live: the **fast lane** (`live
+--fast 1`, on by default in the launcher) refreshes Kalshi + Robinhood top of book every
+second for the live games on its own thread, and the **paper book** (`strategy/paperlag.py`)
+opens a paper order at the follower's ask on every LAG, fills it only if the next seconds
+still show that ask with size (10 s window), marks it to the bid at +30/+60/+300 s and
+settles it from the final score — `scripts/leadlag_study.py --date <day>` prints the fill
+rate, fill latency and fill-adjusted P&L from the `lag_paper` table. Until that number exists
+the rule is not sized beyond `bankroll × kelly_fraction / ask` and the follower's displayed
+depth. (The Monday-night game was already decided when the fast lane went live: 0 signals.)
 
 ## Spreads and totals: line fair values vs Kalshi mids (P13)
 
