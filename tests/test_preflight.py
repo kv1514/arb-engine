@@ -556,7 +556,9 @@ class SundayLauncherTests(unittest.TestCase):
         Path(self.stub).write_text(STUB, encoding="utf-8")
         os.chmod(self.stub, 0o755)
         self.int_log = os.path.join(self.tmp, "ints.log")
-        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log}
+        # KEEP_AWAKE=0: the real caffeinate is a no-op on CI and misbehaves under the local
+        # sandbox; the wiring is checked with a stub in test_keep_awake_wraps_the_live_supervisor.
+        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log, "KEEP_AWAKE": "0"}
         self.env.pop("DATE", None)
 
     def tearDown(self):
@@ -706,6 +708,29 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertFalse(_alive(sup))
         self.assertFalse(_alive(live))
         self.assertIn("live    down", self._sh("status").stdout)  # the stale pid file reads as down, not up
+
+    def test_keep_awake_wraps_the_live_supervisor(self):
+        """With KEEP_AWAKE unset the launcher runs `caffeinate -i -w <live supervisor pid>`;
+        a stub caffeinate on PATH records its arguments and exits when that pid does."""
+        bindir = os.path.join(self.tmp, "bin")
+        os.makedirs(bindir, exist_ok=True)
+        rec = os.path.join(self.tmp, "caffeinate.args")
+        stub = os.path.join(bindir, "caffeinate")
+        with open(stub, "w") as f:
+            f.write("#!/usr/bin/env bash\n")
+            f.write(f'echo "$@" >> "{rec}"\n')
+            f.write('while kill -0 "$3" 2>/dev/null; do sleep 0.2; done\n')
+        os.chmod(stub, 0o755)
+        env = {**self.env, "PATH": bindir + os.pathsep + os.environ.get("PATH", ""), "KEEP_AWAKE": "1"}
+        out = self._sh("start", env=env, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("caffeinate -i holding idle sleep off", out.stdout)
+        sup = Path(self.tmp, "out", "run", "live.pid").read_text().strip()
+        deadline = time.time() + 5   # the stub is a background job of a script that has already returned
+        while time.time() < deadline and not os.path.exists(rec):
+            time.sleep(0.1)
+        self.assertEqual(Path(rec).read_text().split(), ["-i", "-w", sup])
+        self._sh("stop")
 
     def test_preflight_only(self):
         out = self._sh("preflight")

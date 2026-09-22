@@ -2,7 +2,7 @@
 # Sunday launcher: preflight, then the bridge, the live slate and the paper maker under a
 # restart-on-crash supervisor (10 s backoff), logs under out/logs/, PIDs under out/run/.
 #
-#   scripts/sunday.sh start [-- <extra args for live>]   preflight (refuses on FAIL), then start all
+#   scripts/sunday.sh start [-- <extra args for live>]   preflight (refuses on FAIL), then start all (idle sleep held off while live runs)
 #   scripts/sunday.sh stop                                stop every supervisor and its child
 #   scripts/sunday.sh status                              what is running, log tails
 #   scripts/sunday.sh preflight                           the readiness report only
@@ -107,6 +107,13 @@ supervise() {
   ) </dev/null >/dev/null 2>&1 &
   echo $! > "$RUN/$name.pid"
   echo "  started $name (supervisor pid $!, log $log)"
+  # Hold off idle sleep while the supervisor lives (a closed lid still sleeps: keep it open
+  # and on power). The first Sunday's recorder lost hours to sleep; the -w form releases the
+  # assertion by itself when the supervisor exits, so stop/restart leave nothing behind.
+  if [ "$name" = "live" ] && [ "${KEEP_AWAKE:-1}" != "0" ] && command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -i -w "$(cat "$RUN/$name.pid")" </dev/null >/dev/null 2>&1 &
+    echo "  caffeinate -i holding idle sleep off while live runs (KEEP_AWAKE=0 disables)"
+  fi
 }
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }

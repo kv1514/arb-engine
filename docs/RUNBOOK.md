@@ -47,7 +47,10 @@ BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start
 ```
 
 `start` runs preflight again (it refuses on FAIL, and on WARN when `START_ON_WARN=0`), then
-starts three processes, each under a supervisor that restarts it 10 s after any exit:
+starts three processes, each under a supervisor that restarts it 10 s after any exit. It also
+runs `caffeinate -i -w <live supervisor>` so the Mac cannot idle-sleep while the recorder is
+up (`KEEP_AWAKE=0` skips it) — a closed lid still sleeps, so leave it open and on power; the
+first Sunday lost most of the early window to sleep:
 
 | name | command | log | writes |
 |---|---|---|---|
