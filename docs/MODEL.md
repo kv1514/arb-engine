@@ -739,7 +739,7 @@ recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid):
 
 127 of the 133 signals were Rothera leading Kalshi. The optimistic assumption is the fill:
 the recorded Kalshi ask is at least one 5 s poll old by the time it is seen, and top-of-book
-depth is what is recorded. Every live LAG is journalled as a `kind="lag"` observation so the
+depth is what is recorded. Every live LAG is journalled as a `signal_kind="lag"` observation so the
 store's +10 s … +15 min ladder measures the real convergence next Sunday; the rule is not
 sized beyond `bankroll × kelly_fraction / ask` and the follower's displayed depth until it is.
 

@@ -18,7 +18,7 @@ follower must be executable for this account; the leader may be any venue (Polym
 print is a fine signal even though the account cannot trade there).
 
 Each signal is journalled as an observation through ``store.record_steal`` with
-``kind="lag"`` so the +10 s … +15 min ladder measures convergence, exactly as for STEAL —
+``signal_kind="lag"`` so the +10 s … +15 min ladder measures convergence, exactly as for STEAL —
 today's convergence rate is the number the next Sunday should update. Sizing is by the
 follower's displayed depth and a fraction of bankroll (``bankroll * kelly_fraction / ask``),
 which is deliberately conservative: a convergence trade's payoff is the gap, not $1.

@@ -231,7 +231,9 @@ class LiveSlate:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
                 text = sig.text()
                 out.lags.append(f"{view.title}: {text}")
-                extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}
+                # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in
+                # the observation's extra_json so the ladder can be split STEAL vs LAG.
+                extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "signal_kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}
                 _call_optional(self.alerts.alert, "LAG", f"{view.title}: {text}", event=view.event_key, **extra)
         except Exception as e:
             out.errors.append(f"leadlag: {e!r}")
@@ -242,8 +244,14 @@ class LiveSlate:
             arb = rep.arb or {}
             if arb.get("is_arb") and rep.fillable and "stale-quote" not in (rep.flags or []):
                 legs = ", ".join(f"{l.get('label') or l.get('outcome')} on {l['venue']} @ {l['price']:.2f}" for l in arb.get("legs", []))
-                sized = rep.sized_arb or {}
-                text = f"ARB {arb.get('margin', 0):+.2%} after fees: {legs}" + (f" → {sized.get('contracts')} contracts, profit ${sized.get('profit', 0):.2f}" if sized.get("contracts") else "")
+                sized = dict(rep.sized_arb or {})
+                if sized.get("contracts") and self.bankroll:
+                    # Depth can be thousands of contracts; the operator's bankroll is the real cap.
+                    cost = sum(float(l["price"]) for l in arb.get("legs", [])) or 1.0
+                    cap = int(self.bankroll // cost)
+                    if cap < sized["contracts"]:
+                        sized = {**sized, "contracts": cap, "profit": round(float(arb.get("margin", 0)) * cap, 2), "capped_by": "bankroll"}
+                text = f"ARB {arb.get('margin', 0):+.2%} after fees: {legs}" + (f" → {int(sized['contracts'])} contracts, profit ${sized.get('profit', 0):.2f}" + (" (bankroll cap)" if sized.get("capped_by") else "") if sized.get("contracts") else "")
                 out.arbs.append(f"{view.title}: {text}")
                 if now - self._arb_last.get(me.event_key, -1e18) >= 30.0:
                     self._arb_last[me.event_key] = now

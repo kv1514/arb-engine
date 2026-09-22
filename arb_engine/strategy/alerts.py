@@ -28,6 +28,9 @@ from typing import Any, Callable, Iterable, Optional
 # ``store.record_steal`` when the alerter was given a store — the observation ladder in
 # ``arb_engine.store`` then measures whether the price converged toward fair or ran away.
 STEAL_FIELDS = ("outcome", "venue", "ask", "bid", "all_in", "fair", "edge", "model_p", "market_p", "espn_p", "gated", "gated_reasons", "suggested_contracts", "state_hash", "period")
+# Extra structured fields stored in the observation's ``extra_json`` (LAG signals: which venue
+# led and by how much) so the ladder can be split by signal kind.
+STEAL_EXTRA_FIELDS = ("signal_kind", "leader", "lead_move", "follower_move")
 
 
 NTFY_DEFAULT_URL = "https://ntfy.sh"
@@ -104,7 +107,7 @@ class Alerter:
         """
         # A structured STEAL is identified by its (outcome, venue) pair; other alerts (maker
         # fills carry ``side``/``price``) keep every kwarg as plain journal data.
-        steal = {k: data.pop(k) for k in STEAL_FIELDS if k in data} if "outcome" in data and "venue" in data else {}
+        steal = {k: data.pop(k) for k in STEAL_FIELDS + STEAL_EXTRA_FIELDS if k in data} if "outcome" in data and "venue" in data else {}
         if steal:
             ts = data.pop("ts", None)
             steal.setdefault("ts", ts if ts is not None else time.time())
@@ -116,7 +119,7 @@ class Alerter:
             data["steal"] = steal
             if self.store is not None and hasattr(self.store, "record_steal"):
                 try:
-                    self.store.record_steal(**{k: v for k, v in steal.items() if k in ("ts", "event_key") or k in STEAL_FIELDS})
+                    self.store.record_steal(**{k: v for k, v in steal.items() if k in ("ts", "event_key") or k in STEAL_FIELDS or k in STEAL_EXTRA_FIELDS})
                 except Exception as e:
                     self.journal("record_steal_error", error=repr(e))
         self.journal("alert", title=title, msg=msg, **data)

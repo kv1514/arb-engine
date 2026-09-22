@@ -141,3 +141,24 @@ class NtfyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveWiringTests(unittest.TestCase):
+    def test_lag_alert_is_journalled_and_recorded_with_signal_kind(self):
+        """The slate's LAG alert carries structured fields; ``signal_kind`` (never ``kind``,
+        which is Alerter.journal's positional) reaches the store's extra_json."""
+        import json
+        from arb_engine.store import Store
+
+        db = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_store_{os.getpid()}.db")
+        if os.path.exists(db):
+            os.remove(db)
+        st = Store(db)
+        a = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_alerts_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="", store=st)
+        a.alert("LAG", "DEN @ KC: LAG …", event=KEY, outcome="KC", venue="kalshi", ask=0.60, all_in=0.617, fair=0.675, edge=0.058, market_p=0.675, suggested_contracts=100, signal_kind="lag", leader="robinhood", lead_move=0.08, follower_move=0.0, ts=1_800_000_000.0)
+        rows = st.conn.execute("select outcome, venue, extra_json from steal_observations").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0][0], rows[0][1]), ("KC", "kalshi"))
+        self.assertEqual(json.loads(rows[0][2])["signal_kind"], "lag")
+        st.close() if hasattr(st, "close") else None
+
