@@ -558,7 +558,8 @@ class SundayLauncherTests(unittest.TestCase):
         self.int_log = os.path.join(self.tmp, "ints.log")
         # KEEP_AWAKE=0: the real caffeinate is a no-op on CI and misbehaves under the local
         # sandbox; the wiring is checked with a stub in test_keep_awake_wraps_the_live_supervisor.
-        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log, "KEEP_AWAKE": "0"}
+        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log, "KEEP_AWAKE": "0", "EXTRA_SPORTS": ""}
+        self.env.pop("ARB_ALERT_NTFY", None)
         self.env.pop("DATE", None)
 
     def tearDown(self):
@@ -731,6 +732,27 @@ class SundayLauncherTests(unittest.TestCase):
             time.sleep(0.1)
         self.assertEqual(Path(rec).read_text().split(), ["-i", "-w", sup])
         self._sh("stop")
+
+    def test_extra_sports_get_their_own_live_recorder(self):
+        """EXTRA_SPORTS=ncaaf adds a live-ncaaf supervisor: same recorder, --sport ncaaf, its
+        own journal; restart/stop know the name; a persisted ntfy topic is exported."""
+        os.makedirs(os.path.join(self.tmp, "out", "run"), exist_ok=True)
+        Path(self.tmp, "out", "run", "ntfy_topic.txt").write_text("arb-test-topic")
+        env = {**self.env, "EXTRA_SPORTS": "ncaaf"}
+        out = self._sh("start", env=env)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("started live-ncaaf", out.stdout)
+        self.assertIn("ntfy pushes -> arb-test-topic", out.stdout)
+        logs = os.path.join(self.tmp, "out", "logs")
+        self._child("live-ncaaf")   # the supervisor writes the log asynchronously
+        self.assertIn("-m arb_engine live --sport ncaaf --every 5 --record out/history.db --journal out/live_ncaaf_journal.jsonl", Path(logs, "live-ncaaf-2026-09-20.log").read_text())
+        self.assertIn("-m arb_engine live --sport nfl", Path(logs, "live-2026-09-20.log").read_text())
+        st = self._sh("status", env=env).stdout
+        self.assertIn("live-ncaaf", st)
+        r = self._sh("restart", "live-ncaaf", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self._sh("stop", env=env).returncode, 0)
+        self.assertEqual([f for f in os.listdir(os.path.join(self.tmp, "out", "run")) if f.endswith((".pid", ".child"))], [])
 
     def test_preflight_only(self):
         out = self._sh("preflight")

@@ -433,3 +433,26 @@ class LiveSlateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FinalSummaryTests(unittest.TestCase):
+    def test_final_game_pushes_one_summary_and_settles_the_paper_book(self):
+        """A game reaching status=final on a full tick alerts FINAL once (journal + ntfy kind),
+        with the LAG/ARB counts and the paper book's result for that game."""
+        from .test_store import _adapters
+        adapters = _adapters()
+        key, me = _moneyline_key(adapters)
+        away, home = me.info.outcomes[0], me.info.outcomes[1]
+        final = GameState(event_id="1", home=home, away=away, home_score=27, away_score=20, status="final", period=4, clock_seconds_remaining_in_period=0, game_seconds_remaining=0, event_key=key)
+        sent = []
+        alerter = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"final_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="t", transport=lambda u, b, h: sent.append((h["Title"], b.decode())))
+        slate = LiveSlate(adapters, feed=FakeFeed([final]), settings={}, alerter=alerter)
+        slate._counts[key] = {"lag": 3, "arb": 1}
+        slate.wanted_games = lambda games, now=None: list(games)   # a final game is normally out of the window
+        slate.tick(1_800_000_000.0)
+        slate.tick(1_800_000_010.0)
+        finals = [b for t, b in sent if t == "FINAL"]
+        self.assertEqual(len(finals), 1, sent)
+        self.assertIn(f"FINAL {away} 20-27 {home}: 3 LAG, 1 ARB", finals[0])
+        self.assertIn("paper LAG 0 filled / 0 expired", finals[0])
+

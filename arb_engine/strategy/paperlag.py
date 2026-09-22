@@ -138,10 +138,11 @@ class LagPaperBook:
                 n += 1
         return n
 
-    def summary(self) -> dict[str, Any]:
-        filled = [o for o in self.orders if o.filled_at is not None]
-        expired = [o for o in self.orders if o.expired_at is not None]
-        out: dict[str, Any] = {"orders": len(self.orders), "filled": len(filled), "expired": len(expired), "open": sum(1 for o in self.orders if o.open)}
+    def summary(self, event_key: Optional[str] = None) -> dict[str, Any]:
+        orders = [o for o in self.orders if event_key is None or o.event_key == event_key]
+        filled = [o for o in orders if o.filled_at is not None]
+        expired = [o for o in orders if o.expired_at is not None]
+        out: dict[str, Any] = {"orders": len(orders), "filled": len(filled), "expired": len(expired), "open": sum(1 for o in orders if o.open)}
         if filled:
             out["fill_latency_median_s"] = sorted(o.filled_at - o.opened for o in filled)[len(filled) // 2]
             for off in MARK_OFFSETS:

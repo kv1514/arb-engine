@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROAD
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (707)
+python -m unittest discover -s tests -t .      # Python tests (709)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -154,13 +154,14 @@ When you declare a key, add its row here.
 | `inplay_stale_after_s` | `INPLAY_STALE_AFTER_S` | `15.0` | Seconds without an ESPN state change (while a venue mid moved ≥ 0.02 over the last `max(interval, 10 s)`) before STEAL/LOCK are gated `feed-stale`. |
 | `inplay_frozen_s` | `INPLAY_FROZEN_S` | `None` | Seconds of identical ESPN state with the clock running and a venue mid moved ≥ 0.02 since, before STEAL/LOCK are gated `clock-frozen`; unset = `max(3 × poll interval, 30 s)`. |
 | `inplay_agreement_gap` | `INPLAY_AGREEMENT_GAP` | `0.12` | Model-vs-market gap above which a STEAL is gated `disagreement` when ESPN's win probability sides with the market (provisional; measure on the first recorded Sunday). |
+| `inplay_idle_every_s` | `INPLAY_IDLE_EVERY_S` | `60.0` | Live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can run all week). |
 | `leadlag_move` | `LEADLAG_MOVE` | `0.05` | Lead-lag: leader mid move (dollars) within the window that counts as a repricing. |
 | `leadlag_window_s` | `LEADLAG_WINDOW_S` | `30.0` | Lead-lag: seconds over which the leader's move and the follower's (non-)move are measured. |
 | `leadlag_min_edge` | `LEADLAG_MIN_EDGE` | `0.02` | Lead-lag: minimum leader mid minus follower all-in ask to signal LAG. |
 | `leadlag_cooldown_s` | `LEADLAG_COOLDOWN_S` | `60.0` | Lead-lag: seconds before the same (event, follower, side) may signal again unless the edge grew. |
 | `leadlag_leaders` | `LEADLAG_LEADERS` | `robinhood,kalshi` | Lead-lag: venues whose repricing may lead a signal (Polymarket is thin and sometimes stale; measure before adding it). |
 | `alert_ntfy` | `ARB_ALERT_NTFY` | `None` | ntfy topic name (on ntfy.sh) or full `https://host/topic` URL that receives ARB / LAG / HEDGE NOW pushes. |
-| `alert_ntfy_kinds` | `ARB_ALERT_NTFY_KINDS` | `ARB,LAG,HEDGE NOW,TAKER ARB,EXCHANGE PAUSED,HEDGE VENUE NOT EXECUTABLE` | Comma list of alert titles pushed to ntfy (add `STEAL` / `LOCK NOW` to opt in). |
+| `alert_ntfy_kinds` | `ARB_ALERT_NTFY_KINDS` | `ARB,LAG,HEDGE NOW,TAKER ARB,EXCHANGE PAUSED,HEDGE VENUE NOT EXECUTABLE,FINAL` | Comma list of alert titles pushed to ntfy (add `STEAL` / `LOCK NOW` to opt in). |
 | `alert_min_interval_s` | `ARB_ALERT_MIN_INTERVAL_S` | `60.0` | Seconds between two pushes for the same (title, event, side); HEDGE NOW is never throttled. |
 | `inplay_quiet` | `INPLAY_QUIET` | `False` | `live`: print only STEAL / LOCK / GATED lines and a one-line summary per tick (`--quiet`). |
 | `inplay_delay_haircut_cdna` | `INPLAY_DELAY_HAIRCUT_CDNA` | `0.02` | Extra edge a STEAL on a CDNA-routed Robinhood contract needs, for its 3 s order delay. |

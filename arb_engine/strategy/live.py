@@ -46,6 +46,7 @@ except Exception:  # pragma: no cover
 if _declare_setting is not None:
     try:
         _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
+        _declare_setting("inplay_idle_every_s", env="INPLAY_IDLE_EVERY_S", default=60.0, cast=float, doc="live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can then run all week)")
     except Exception:  # pragma: no cover
         pass
 
@@ -104,6 +105,9 @@ class LiveSlate:
         # fill-adjusted P&L the replay cannot give. Rows in the store's lag_paper table.
         self.paper = LagPaperBook(store=self.store, alerter=self.alerts) if self.store is not None else LagPaperBook(store=None, alerter=self.alerts)
         self.lag_executor = lag_executor   # strategy/lagexec.py: off | intent | demo | live
+        self.idle_every = float(setting(self.settings, "inplay_idle_every_s", 60.0) or 60.0)   # tick cadence with nothing to price
+        self._final_seen: set[str] = set()
+        self._counts: dict[str, dict[str, int]] = {}   # event_key -> {"lag": n, "arb": n}
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
 
@@ -246,6 +250,9 @@ class LiveSlate:
                     self.paper.settle(me.event_key, winner, now)
                 except Exception as e:
                     errors.append(f"paperlag settle: {e!r}")
+                if me.event_key not in self._final_seen:
+                    self._final_seen.add(me.event_key)
+                    self.final_summary(gs, me, now)
         with self._sig_lock:
             self._live_priced = {me.event_key: (gs, me, view) for gs, me, view, _ in priced if view.live}
             if self.fast:
@@ -283,6 +290,19 @@ class LiveSlate:
                 out.errors.append(f"record: update_ladder: {e!r}")
         return out
 
+    def final_summary(self, gs: GameState, me: MergedEvent, now: float) -> None:
+        """One FINAL line per game (journal + ntfy when subscribed): score, how many LAG / ARB
+        signals it produced and what the paper book made of the LAGs."""
+        c = self._counts.get(me.event_key, {"lag": 0, "arb": 0})
+        ps = self.paper.summary(me.event_key)
+        pnl = ps.get("pnl_settle") or {}
+        text = (f"FINAL {gs.away} {gs.away_score}-{gs.home_score} {gs.home}: {c['lag']} LAG, {c['arb']} ARB; paper LAG {ps.get('filled', 0)} filled / {ps.get('expired', 0)} expired"
+                + (f", settled {pnl.get('wins', 0)}/{pnl.get('n', 0)} wins, {pnl.get('mean', 0):+.3f}/ct" if pnl else ""))
+        try:
+            _call_optional(self.alerts.alert, "FINAL", text, event=me.event_key)
+        except Exception:
+            self.alerts.info(text, event=me.event_key)
+
     def market_signals(self, me: MergedEvent, view: InplayView, out: SlateTick, now: float) -> None:
         """LAG (lead-lag) and fresh ARB signals for one event: alerted, journalled and, for
         LAG, recorded as a ``signal_kind="lag"`` observation so the store's ladder measures
@@ -301,6 +321,7 @@ class LiveSlate:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
                 text = sig.text()
                 out.lags.append(f"{view.title}: {text}")
+                self._counts.setdefault(me.event_key, {"lag": 0, "arb": 0})["lag"] += 1
                 try:
                     self.paper.open(sig, now)
                 except Exception as e:
@@ -334,6 +355,7 @@ class LiveSlate:
                         sized = {**sized, "contracts": cap, "profit": round(float(arb.get("margin", 0)) * cap, 2), "capped_by": "bankroll"}
                 text = f"ARB {arb.get('margin', 0):+.2%} after fees: {legs}" + (f" → {int(sized['contracts'])} contracts, profit ${sized.get('profit', 0):.2f}" + (" (bankroll cap)" if sized.get("capped_by") else "") if sized.get("contracts") else "")
                 out.arbs.append(f"{view.title}: {text}")
+                self._counts.setdefault(me.event_key, {"lag": 0, "arb": 0})["arb"] += 1
                 if now - self._arb_last.get(me.event_key, -1e18) >= 30.0:
                     self._arb_last[me.event_key] = now
                     _call_optional(self.alerts.alert, "ARB", f"{view.title}: {text}", event=view.event_key, margin=arb.get("margin"), legs=arb.get("legs"), contracts=sized.get("contracts"))
@@ -352,15 +374,19 @@ class LiveSlate:
             self._stop.clear()
             fast_thread = threading.Thread(target=self._fast_loop, args=(printer,), name="fastlane", daemon=True)
             fast_thread.start()
+        tick = None
         while time.time() < t_end and (max_iterations is None or n < max_iterations):
             t0 = time.time()
+            tick = None
             try:
                 tick = self.tick(t0)
                 printer(format_tick(tick))
             except Exception as e:
                 printer(f"{time.strftime('%H:%M:%S')} tick failed: {e!r}")
             n += 1
-            time.sleep(max(1.0, interval - (time.time() - t0)))
+            idle = not self._live_priced and not (tick.views if "tick" in locals() and tick is not None else [])
+            pause = self.idle_every if idle else interval
+            time.sleep(max(1.0, pause - (time.time() - t0)))
         self._stop.set()
         if fast_thread is not None:
             fast_thread.join(timeout=self.fast * 3 + 5)

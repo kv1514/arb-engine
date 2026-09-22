@@ -39,7 +39,14 @@ Exit code 0 on PASS or WARN, 2 on FAIL. `--json` prints the same as one JSON doc
 (`--offline` skips every network row; `--limit N` caps the games matched; `--venue-timeout S`
 bounds each adapter fetch). Read every WARN once; start only when you understand each one.
 
-## 1. Start everything: the launcher (12:30)
+## 1. Start everything: the launcher (12:30 — or leave it running all week)
+
+The recorders idle at one ESPN poll a minute when nothing is live or within the pre-game
+window (`INPLAY_IDLE_EVERY_S`), so the launcher can stay up from Thursday to Monday. It runs
+an NFL recorder (`live`) and a college one (`live-ncaaf`, `EXTRA_SPORTS=ncaaf` by default;
+`EXTRA_SPORTS=""` for none) — Saturday's slate is recorded with the same fast lane, LAG rule,
+paper book and pushes, into the same `out/history.db` (its own journal
+`out/live_ncaaf_journal.jsonl`).
 
 ```bash
 BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start
@@ -71,25 +78,27 @@ scripts/sunday.sh restart live      # same extras as at start (out/run/live.args
 scripts/sunday.sh preflight         # the report alone (also written to out/logs/preflight-<date>.log)
 ```
 
-## 1b. Pushes to your phone (ntfy, optional, 2 minutes)
+## 1b. Pushes to your phone (ntfy, 2 minutes)
 
 1. Install the **ntfy** app (iOS / Android) or open https://ntfy.sh in a browser, and
-   subscribe to a topic name nobody would guess, e.g. `arb-kv15-7q2x9m` (anyone who knows
-   the name can read it, so make it random; no account needed).
-2. Export the topic before the launcher starts (or restart `live` after):
+   subscribe to a topic name nobody would guess (anyone who knows the name can read it, so
+   make it random; no account needed). The current topic is in `out/run/ntfy_topic.txt`.
+2. Tell the launcher once — it persists the topic and sends a test push; every later
+   `start` / `restart` picks it up (an exported `ARB_ALERT_NTFY` wins over the file):
 
 ```bash
-export ARB_ALERT_NTFY=arb-kv15-7q2x9m          # or a full https://ntfy.example/topic URL
-BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start   # or: scripts/sunday.sh restart live
+scripts/sunday.sh ntfy arb-kv15-7q2x9m          # or a full https://ntfy.example/topic URL
+scripts/sunday.sh restart live                  # if the recorders are already running
 ```
 
 3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
-   **LAG** (one venue repriced, the other has not — buy the laggard), **HEDGE NOW** (a paper
-   maker fill), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed unless you add
-   them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL`): the first live Sunday lost on STEAL. One push
-   per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`); HEDGE NOW is never throttled.
-   The full text is in `out/live_journal.jsonl` (`"kind": "alert"`); pushes are logged as
-   `"kind": "ntfy"`, throttled ones as `ntfy_throttled`.
+   **LAG** (one venue repriced, the other has not — buy the laggard, with the link), **HEDGE
+   NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB counts,
+   paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed unless
+   you add them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL,FINAL`): the first live Sunday lost on
+   STEAL. One push per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`); HEDGE NOW is
+   never throttled. The full text is in `out/live_journal.jsonl` (`"kind": "alert"`); pushes
+   are logged as `"kind": "ntfy"`, throttled ones as `ntfy_throttled`.
 
 ## 1c. Acting on LAG automatically (needs your Kalshi API key)
 

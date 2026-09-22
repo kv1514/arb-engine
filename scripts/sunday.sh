@@ -10,9 +10,11 @@
 #                                                         bounce one process (e.g. after a code pull);
 #                                                         live keeps the extras given at start unless new ones follow --
 #   scripts/sunday.sh logs [name]                         tail -f the log(s)
+#   scripts/sunday.sh ntfy <topic>                        set the ntfy topic (persisted), send a test push
 #
 # Environment knobs (all optional):
-#   SPORT=nfl  DATE=<YYYY-MM-DD ET, default today>  BANKROLL=<dollars, default 1000>
+#   SPORT=nfl  EXTRA_SPORTS=ncaaf (a live-<sport> recorder per extra sport; "" for none)
+#   DATE=<YYYY-MM-DD ET, default today>  BANKROLL=<dollars, default 1000>
 #   KELLY=0.25  EVERY=5  MAKER_SIZE=10  BRIDGE_PORT=8765  PREFLIGHT_LIMIT=16  BRIDGE_WAIT_S=10
 #   EXECUTABLE_VENUES / ROBINHOOD_GOLD / INPLAY_* pass straight through to the engine.
 #   START_ON_WARN=1 (default) — a WARN verdict still starts; FAIL never does.
@@ -39,9 +41,15 @@ BRIDGE_WAIT_S="${BRIDGE_WAIT_S:-10}"
 PY="${PYTHON:-python3}"
 LOGS="$ROOT/out/logs"
 RUN="$ROOT/out/run"
+# Extra sports get their own live recorder (live-<sport>): college on Saturdays by default.
+EXTRA_SPORTS="${EXTRA_SPORTS-ncaaf}"
 NAMES="bridge live maker"
+for _s in $(echo "$EXTRA_SPORTS" | tr ',' ' '); do [ -n "$_s" ] && [ "$_s" != "$SPORT" ] && NAMES="$NAMES live-$_s"; done
+# The ntfy topic persists in out/run/ntfy_topic.txt (`sunday.sh ntfy <topic>` sets it); an
+# exported ARB_ALERT_NTFY wins.
+if [ -z "${ARB_ALERT_NTFY:-}" ] && [ -f "$ROOT/out/run/ntfy_topic.txt" ]; then export ARB_ALERT_NTFY="$(cat "$ROOT/out/run/ntfy_topic.txt")"; fi
 
-usage() { sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 today_et() {
   local d
@@ -55,12 +63,13 @@ cmd_for() {
   local name="$1"; shift
   case "$name" in
     bridge) echo "$PY -m arb_engine bridge --port $BRIDGE_PORT" ;;
-    live)
-      local quiet="" fast=""
+    live|live-*)
+      local quiet="" fast="" sport="$SPORT" journal="out/live_journal.jsonl"
+      if [ "$name" != "live" ]; then sport="${name#live-}"; journal="out/live_${sport}_journal.jsonl"; fi
       if "$PY" -m arb_engine live --help 2>/dev/null | grep -q -- '--quiet'; then quiet=" --quiet"; fi
       # the fast lane (1 s Kalshi + Robinhood refreshes between full ticks) when the build has it; FAST=0 disables
       if [ "${FAST:-1}" != "0" ] && "$PY" -m arb_engine live --help 2>/dev/null | grep -q -- '--fast'; then fast=" --fast ${FAST:-1}"; fi
-      echo "$PY -m arb_engine live --sport $SPORT --every $EVERY --record out/history.db --journal out/live_journal.jsonl --bankroll $BANKROLL --kelly $KELLY$quiet$fast ${*:-}" ;;
+      echo "$PY -m arb_engine live --sport $sport --every $EVERY --record out/history.db --journal $journal --bankroll $BANKROLL --kelly $KELLY$quiet$fast ${*:-}" ;;
     maker) echo "$PY -m arb_engine maker --sport $SPORT --mode paper --size $MAKER_SIZE --journal out/maker_journal.jsonl" ;;
     *) echo "unknown process: $name" >&2; return 1 ;;
   esac
@@ -110,7 +119,7 @@ supervise() {
   # Hold off idle sleep while the supervisor lives (a closed lid still sleeps: keep it open
   # and on power). The first Sunday's recorder lost hours to sleep; the -w form releases the
   # assertion by itself when the supervisor exits, so stop/restart leave nothing behind.
-  if [ "$name" = "live" ] && [ "${KEEP_AWAKE:-1}" != "0" ] && command -v caffeinate >/dev/null 2>&1; then
+  if [ "$name" = "live" ] && [ "${KEEP_AWAKE:-1}" != "0" ] && command -v caffeinate >/dev/null 2>&1; then  # one hold is enough: the others live as long
     caffeinate -i -w "$(cat "$RUN/$name.pid")" </dev/null >/dev/null 2>&1 &
     echo "  caffeinate -i holding idle sleep off while live runs (KEEP_AWAKE=0 disables)"
   fi
@@ -203,14 +212,24 @@ case "$action" in
     wait_health "$BRIDGE_WAIT_S" || echo "  bridge /health not answering on :$BRIDGE_PORT yet (see $LOGS/bridge-$DATE.log); live and maker start anyway"
     supervise live "$(cmd_for live "$extra")" "$DATE"
     supervise maker "$(cmd_for maker)" "$DATE"
+    for n in $NAMES; do
+      case "$n" in live-*) printf '%s' "$extra" > "$RUN/$n.args"; supervise "$n" "$(cmd_for "$n" "$extra")" "$DATE" ;; esac
+    done
+    [ -n "${ARB_ALERT_NTFY:-}" ] && echo "  ntfy pushes -> ${ARB_ALERT_NTFY} (ARB / LAG / HEDGE NOW)"
     echo "watch:  $0 logs live      status:  $0 status      stop:  $0 stop" ;;
   stop)
-    for n in maker live bridge; do stop_one "$n"; done
+    rev=""; for n in $NAMES; do rev="$n $rev"; done   # children first, bridge last
+    for n in $rev; do stop_one "$n"; done
     rm -f "$RUN"/*.args ;;
+  ntfy)
+    t="${1:-}"; [ -z "$t" ] && { echo "usage: $0 ntfy <topic-or-url>   (current: ${ARB_ALERT_NTFY:-none})"; exit 1; }
+    mkdir -p "$RUN"; printf '%s' "$t" > "$RUN/ntfy_topic.txt"; export ARB_ALERT_NTFY="$t"
+    url="$t"; case "$t" in http://*|https://*) ;; *) url="https://ntfy.sh/$t" ;; esac
+    curl -s -m 8 -X POST -H "Title: Arb Engine" -H "Tags: white_check_mark" --data-binary "Connected: ARB / LAG / HEDGE NOW pushes from the live slates will arrive here." "$url" >/dev/null && echo "test push sent to $url; restart live processes to pick the topic up: $0 restart live" || echo "push failed (no network?)"; ;;
   restart)
-    n="${1:-}"; [ -z "$n" ] && { echo "restart which? bridge|live|maker"; exit 1; }
+    n="${1:-}"; [ -z "$n" ] && { echo "restart which? $NAMES"; exit 1; }
     shift
-    case "$n" in bridge|live|maker) ;; *) echo "unknown process: $n (bridge|live|maker)"; exit 1 ;; esac
+    case " $NAMES " in *" $n "*) ;; *) echo "unknown process: $n ($NAMES)"; exit 1 ;; esac
     DATE="${DATE:-$(today_et)}"; mkdir -p "$LOGS" "$RUN"
     # The extras `start` was given survive a restart (they are what the operator is running
     # with); new ones after -- replace them for this and later restarts.
