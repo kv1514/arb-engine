@@ -736,6 +736,7 @@ recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid):
 | +30 s | 172 | 143 | 29 | +$0.054 |
 | +60 s | 172 | 149 | 22 | **+$0.073** |
 | +5 min | 172 | 117 | 38 | +$0.067 |
+| held to settlement (3 finals recorded, 32 signals) | 32 | 23 | 9 | +$0.207 |
 
 161 of the 172 signals were Rothera leading Kalshi. The optimistic assumption is the fill:
 the recorded Kalshi ask is at least one 5 s poll old by the time it is seen, and top-of-book

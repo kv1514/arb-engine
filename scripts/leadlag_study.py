@@ -174,6 +174,19 @@ def lag_replay(db: str, date: str, sport: str, bankroll: float = 500.0, horizons
         return None if not q or q.get("bid") is None else q["bid"]
 
     out: dict[str, Any] = {"signals": len(sigs), "by_leader": dict(collections.Counter(s.leader for _, s in sigs)), "by_follower": dict(collections.Counter(s.follower for _, s in sigs)), "edge_median": round(statistics.median(s.edge for _, s in sigs), 4) if sigs else None, "exit_at_bid": {}}
+    # Hold to settlement: the final score from the ESPN ticks decides each signal's side.
+    finals = {r["event_key"]: dict(r) for r in c.execute("select * from espn_ticks where status = 'final' and ts >= ? and ts < ? + 86400 order by ts", (t0, t1)).fetchall()}
+    settled = []
+    for ts, sg in sigs:
+        f = finals.get(sg.event_key)
+        if not f or f.get("home_score") is None or f.get("away_score") is None:
+            continue
+        hs, as_ = f["home_score"], f["away_score"]
+        winner = None if hs == as_ else (f.get("home") if hs > as_ else f.get("away"))
+        value = 0.5 if winner is None else (1.0 if sg.outcome == winner else 0.0)
+        settled.append(value - sg.follower_all_in)
+    if settled:
+        out["hold_to_settlement"] = {"n": len(settled), "win": sum(1 for x in settled if x > 0), "loss": sum(1 for x in settled if x <= 0), "mean_pnl_per_contract": round(statistics.mean(settled), 4), "total_per_contract": round(sum(settled), 2)}
     for h in horizons:
         wins = losses = unknown = 0
         pnl = []
@@ -236,6 +249,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"  {k}: {v['lead_moves']} moves; follower moved first {v['follower_moved_first']}; caught up within 5 min {v['caught_up_5min']} (median {v['median_lag_s']} s), never {v['never_5min']}")
     lr = res["lag_replay"]
     print(f"  LAG rule replayed: {lr['signals']} signals; " + "; ".join(f"sell at bid +{h}s: {v['win']}W/{v['loss']}L mean {(v['mean_pnl_per_contract'] if v['mean_pnl_per_contract'] is not None else 0.0):+.4f}/ct" for h, v in lr["exit_at_bid"].items()))
+    if lr.get("hold_to_settlement"):
+        h = lr["hold_to_settlement"]
+        print(f"  … or held to settlement: {h['win']}W/{h['loss']}L mean {h['mean_pnl_per_contract']:+.4f}/ct (sum {h['total_per_contract']:+.2f} per contract-lot)")
     pp = res["paper"]
     print(f"  live paper book: {pp.get('orders', 0)} orders, {pp.get('filled', 0)} filled, {pp.get('expired', 0)} expired" + (f", fill latency median {pp['fill_latency_median_s']} s" if pp.get("fill_latency_median_s") is not None else "") + "".join(f"; +{k[8:]}s {v['wins']}/{v['n']} wins mean {v['mean']:+.4f}" for k, v in pp.items() if k.startswith("pnl_bid_")) + (f"; settled {pp['pnl_settle']['wins']}/{pp['pnl_settle']['n']} mean {pp['pnl_settle']['mean']:+.4f}" if pp.get("pnl_settle") else ""))
     if a.out:
