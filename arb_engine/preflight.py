@@ -376,8 +376,11 @@ def check_espn(client: Any, sport: str, date: str) -> Check:
     ms = _ms(t0)
     data = {"date": date, "games": rows, "with_spread": with_spread, "no_spread": no_spread, "unkeyed": unkeyed, "other_dates": other}
     if not rows:
-        hint = f"the scoreboard lists {other} on other dates: wrong --date (it is the ET date)?" if other else "the scoreboard answered empty (wrong --date, or ESPN refused)"
-        return Check("espn", FAIL, f"no {sport} game on {date}; {hint}", latency_ms=ms, data=data)
+        if other:   # games exist, just not on this date: the --date is mis-set (it is the ET date)
+            return Check("espn", FAIL, f"no {sport} game on {date}; the scoreboard lists {other} on other dates: wrong --date (it is the ET date)?", latency_ms=ms, data=data)
+        # An empty scoreboard is an off day (the all-week launcher hits this Tue-Wed): the
+        # recorder idles until the next kickoff, so it is a WARN, not a reason to refuse to start.
+        return Check("espn", WARN, f"no {sport} game on {date}: off day, the recorder idles until the next kickoff (wrong --date if you expected games)", latency_ms=ms, data=data)
     kicks = [g.start_time for g in on_date if g.start_time]
     head = f"{len(rows)} games on {date}, kickoffs {_fmt_kick(min(kicks) if kicks else None)}..{_fmt_kick(max(kicks) if kicks else None)}, {with_spread} with a spread" + (f" (+{other} on other dates)" if other else "")
     if unkeyed:

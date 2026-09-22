@@ -35,6 +35,10 @@ STEAL_EXTRA_FIELDS = ("signal_kind", "leader", "lead_move", "follower_move")
 
 NTFY_DEFAULT_URL = "https://ntfy.sh"
 NTFY_DEFAULT_KINDS = ("ARB", "LAG", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
+# Kinds throttled per game rather than per (game, side): the maker rates every spread and
+# total line of a game in one pass, and one push per game per minute (the best-margin line
+# comes first, the watches are ranked) beats eight in three seconds.
+NTFY_GAME_LEVEL = ("TAKER ARB",)
 NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
 NTFY_TAGS = {"HEDGE NOW": "rotating_light", "ARB": "moneybag", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
 
@@ -142,13 +146,14 @@ class Alerter:
     # ---- ntfy --------------------------------------------------------------------------------
     def push(self, title: str, msg: str, event: Any = None, side: Any = None, force: bool = False) -> bool:
         """One ntfy push for ``title`` unless its kind is not subscribed or the same
-        (title, event, side) was pushed less than ``min_interval_s`` ago (HEDGE NOW always goes)."""
+        (title, event, side) was pushed less than ``min_interval_s`` ago (HEDGE NOW always goes;
+        ``NTFY_GAME_LEVEL`` kinds throttle per (title, event))."""
         if not self.ntfy:
             return False
         kind = title.upper()
         if not force and kind not in self.ntfy_kinds:
             return False
-        key = (kind, str(event or ""), str(side or ""))
+        key = (kind, str(event or ""), "" if kind in NTFY_GAME_LEVEL and event else str(side or ""))
         now = time.time()
         if not force and kind != "HEDGE NOW" and now - self._last_push.get(key, -1e18) < self.min_interval_s:
             self.journal("ntfy_throttled", title=title, event=event, side=side)

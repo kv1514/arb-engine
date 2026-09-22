@@ -438,7 +438,7 @@ class MakerRunner:
                     self.alerts.info(f"hedge-cash: not resting {w.kalshi_ticker} {w.kalshi_side} — hedge {w.hedge_label} on {w.hedge_venue} would need ${hedge_cost:.0f} on top of ${hedge_cash:.0f} already exposed (cap ${cfg.hedge_cash:g})", watch=w.key, reason="hedge-cash")
                 continue
             if w.taker_arb:
-                self.alerts.alert("TAKER ARB", f"{w.title}: buy {w.kalshi_label} on Kalshi at the ask {w.kalshi_ask:.2f} and {w.hedge_label} on {w.hedge_venue} at {w.hedge_ask:.2f} ({compliance.eligibility_note(w.hedge_venue, self.settings)}) — locks ≥ {w.margin_if_filled:.2%}", watch=w.key, kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=compliance.eligibility_note(w.hedge_venue, self.settings))
+                self.alerts.alert("TAKER ARB", f"{w.title}: buy {w.kalshi_label} on Kalshi at the ask {w.kalshi_ask:.2f} and {w.hedge_label} on {w.hedge_venue} at {w.hedge_ask:.2f} ({compliance.eligibility_note(w.hedge_venue, self.settings)}) — locks ≥ {w.margin_if_filled:.2%}", watch=w.key, event=w.event_key, kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=compliance.eligibility_note(w.hedge_venue, self.settings))
             kwargs: dict[str, Any] = {"watch_key": w.key, "exchange_index": w.exchange_index}
             if self._place_accepts_resting:  # P12's SelfMatchGuard wants our own open orders on this ticker
                 kwargs["resting"] = [o for o in self._resting() if o.ticker == w.kalshi_ticker]

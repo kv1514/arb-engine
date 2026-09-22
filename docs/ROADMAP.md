@@ -42,6 +42,7 @@ step only the account holder can take.
 | First-half / quarter lines, team totals | the line machinery exists; these need their own tickers / slugs and settlement rows | a week where the moneyline and full-game line edges are established first |
 | In-play STEAL as a strategy | not demonstrated: NFL P&L intervals include zero and the shuffle placebo matches the real ROI; college separates from the placebo but its intervals include zero | a recorded live Sunday (below) scored by `backtest-ticks` / `clv`, and roughly 70 NFL games (four weeks) of replay |
 | Retraining the WP model on 2025–2026 | 2025 doubled as the selection season; 2026 is the clean out-of-sample season and must stay so for the replays | the 2026 season file is final (`scripts/train_wp_model.py --train-seasons 2016-2025 --test-season 2026`) |
+| Literature-backed candidates (37, ranked, with offline tests) | `docs/RESEARCH.md` merges ten research clusters against the measured numbers; ranks 1–20 run offline on the week caches of one prior network run (`out/cache/replay`, gitignored; the committed data is the 2-game `replay_trim`, synthetic ticks and metrics-only results summaries), the rest wait on the Needs-you rows below | each row names its own metric and offline test; nothing there moves a live default until its interval excludes zero |
 
 ## Needs you
 

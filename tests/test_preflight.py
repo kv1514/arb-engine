@@ -271,7 +271,10 @@ class VenueChecks(unittest.TestCase):
         wrong = pf.check_espn(cl.espn, "nfl", "2026-09-21")
         self.assertEqual(wrong.status, pf.FAIL)
         self.assertIn("3 on other dates", wrong.detail)
-        self.assertEqual(pf.check_espn(ESPNClient(http=FakeHttp({"/scoreboard": {"events": []}}), sport="nfl"), "nfl", "2026-01-01").status, pf.FAIL)
+        # An empty scoreboard is an off day (the all-week launcher must still start): WARN.
+        off = pf.check_espn(ESPNClient(http=FakeHttp({"/scoreboard": {"events": []}}), sport="nfl"), "nfl", "2026-01-01")
+        self.assertEqual(off.status, pf.WARN)
+        self.assertIn("off day", off.detail)
         self.assertEqual(pf.check_espn(ESPNClient(http=BoomHttp(), sport="nfl"), "nfl", FIXTURE_DATE).status, pf.FAIL)
         self.assertEqual(pf.check_espn(None, "nfl", FIXTURE_DATE).status, pf.WARN)
 

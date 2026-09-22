@@ -298,7 +298,7 @@ project and its tools cover markets, order books, rules PDFs, balance, positions
 
 ## Status (2026-09-19)
 
-Live data verified for all three venues; **709 Python tests** and the JS suites
+Live data verified for all three venues; **710 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results
@@ -341,6 +341,8 @@ order-ticket fee preview (never submit), the Kalshi demo-key check, a Polymarket
 curl, recording a live Sunday slate, re-fitting the in-play sd floors out of sample, re-running
 the walkover shares with `--pages 20`, and the fee-default decision. The list with commands is
 in [docs/ROADMAP.md](docs/ROADMAP.md).
+The literature review behind the next round of candidates, ranked with offline tests, is in
+[docs/RESEARCH.md](docs/RESEARCH.md).
 
 Not investment advice. Prediction-market contracts can lose their full cost; rule
 differences (ties, retirements, postponements) can break a "hedge". Verify every fee and

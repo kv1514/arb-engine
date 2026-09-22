@@ -68,13 +68,13 @@ arb_engine/
   data/        venue_rules.json (eligibility), settlement_rules.json, WP model + rules, margin distributions, team tables
 extension/     Chrome MV3 overlay (arb-core.js is the JS twin of fees/ + quant/; background.js consumes the bridge's /analyze and /inplay)
 tests/         unittest suite (offline fixtures) + JS tests run by scripts/test_js.sh; fixtures/results/*.json = replay summaries
-docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, ROADMAP.md
+docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODEL.md (measurements), ROADMAP.md, RESEARCH.md + research/ (literature review, ranked candidates)
 ```
 
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (709)
+python -m unittest discover -s tests -t .      # Python tests (710)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

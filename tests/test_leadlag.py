@@ -126,6 +126,15 @@ class NtfyTests(unittest.TestCase):
         self.assertEqual(len(self.sent), 5)
         self.assertEqual(self.sent[-1][2]["Priority"], "5")
 
+    def test_taker_arb_throttles_per_game_not_per_line(self):
+        # The maker rates every spread/total line of a game in one pass: one push per game
+        # per minute (the first, best-margin line), not one per line; another game still goes.
+        a = self._alerter(min_interval_s=60)
+        for line in ("NYG-14.5", "NYG+5.5", "over44.5"):
+            a.alert("TAKER ARB", f"line {line}", watch=f"nfl:NYG|TEN|kalshi:{line}", event="nfl:NYG|TEN")
+        a.alert("TAKER ARB", "other game", watch="nfl:KC|DEN|kalshi:KC-3.5", event="nfl:KC|DEN")
+        self.assertEqual([b for _, b, _ in self.sent], ["line NYG-14.5", "other game"])
+
     def test_transport_failure_is_journalled_not_raised(self):
         def boom(url, body, headers):
             raise OSError("ntfy down")
