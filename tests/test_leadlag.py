@@ -162,3 +162,123 @@ class LiveWiringTests(unittest.TestCase):
         self.assertEqual(json.loads(rows[0][2])["signal_kind"], "lag")
         st.close() if hasattr(st, "close") else None
 
+
+
+class FastLaneTests(unittest.TestCase):
+    """strategy/fastlane.py: batched 1 s refreshes that keep the snapshot's quote objects."""
+
+    def _kalshi_client(self, prices):
+        calls = []
+
+        class C:
+            def get(self, path, params=None, **kw):
+                calls.append((path, dict(params or {})))
+                out = []
+                for t in params["tickers"].split(","):
+                    if t in prices:
+                        b, a = prices[t]
+                        out.append({"ticker": t, "yes_bid_dollars": str(b), "yes_ask_dollars": str(a), "yes_ask_size_fp": "120.00", "yes_bid_size_fp": "80.00", "last_price_dollars": str(b)})
+                return {"markets": out}
+        return C(), calls
+
+    def _robinhood(self, quotes):
+        class R:
+            venue = "robinhood"
+
+            def quotes(self, ids, workers=8):
+                return {i: quotes[i] for i in ids if i in quotes}
+        return R()
+
+    def test_refresh_kalshi_updates_prices_keeps_fee_params_and_no_rows(self):
+        from arb_engine.strategy.fastlane import refresh_kalshi
+
+        q_yes = OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-KC", KEY, "KC", ask=0.60, bid=0.59, ask_size=10, ts=1.0, fee_params=KFEE, meta={"ticker": "KXNFLGAME-26SEP21DENKC-KC", "side": "yes"})
+        q_den = OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-DEN", KEY, "DEN", ask=0.41, bid=0.40, ts=1.0, fee_params=KFEE, meta={"ticker": "KXNFLGAME-26SEP21DENKC-DEN", "side": "yes"})
+        client, calls = self._kalshi_client({"KXNFLGAME-26SEP21DENKC-KC": (0.66, 0.67), "KXNFLGAME-26SEP21DENKC-DEN": (0.33, 0.34)})
+        out = refresh_kalshi(client, [q_yes, q_den], now=50.0)
+        self.assertEqual(len(calls), 1)                       # one batched call for both tickers
+        self.assertEqual(sorted(calls[0][1]["tickers"].split(",")), sorted([q_den.meta["ticker"], q_yes.meta["ticker"]]))
+        kc = next(q for q in out if q.outcome == "KC")
+        self.assertEqual((kc.bid, kc.ask, kc.ask_size, kc.bid_size, kc.ts), (0.66, 0.67, 120.0, 80.0, 50.0))
+        self.assertEqual(kc.fee_params, KFEE)                 # untouched: fees, book id, ids
+        self.assertEqual(kc.venue_market_id, q_yes.venue_market_id)
+        # A ticker missing from the answer keeps its old quote.
+        client2, _ = self._kalshi_client({"KXNFLGAME-26SEP21DENKC-KC": (0.70, 0.71)})
+        out2 = refresh_kalshi(client2, [q_yes, q_den], now=60.0)
+        self.assertEqual(next(q for q in out2 if q.outcome == "DEN").ask, 0.41)
+
+    def test_refresh_robinhood_updates_yes_and_no_rows_with_quote_time(self):
+        from arb_engine.strategy.fastlane import refresh_robinhood
+
+        yes = OutcomeQuote("robinhood", "cid-1", KEY, "KC", ask=0.61, bid=0.58, ts=1.0, fee_params={"exchange": "rothera"}, meta={"contract_id": "cid-1", "side": "yes", "exchange": "rothera"}, book_id="rothera")
+        no = OutcomeQuote("robinhood", "cid-1#no", KEY, "DEN", ask=0.42, bid=0.39, ts=1.0, fee_params={"exchange": "rothera"}, meta={"contract_id": "cid-1", "side": "no", "exchange": "rothera"}, book_id="rothera")
+        rh = self._robinhood({"cid-1": {"yes_ask_price": "0.69", "yes_bid_price": "0.66", "no_ask_price": "0.34", "no_bid_price": "0.31", "ask_size": "300", "bid_size": "250", "ask_venue_timestamp": "2026-09-21T02:00:00Z", "state": "active"}})
+        out = refresh_robinhood(rh, [yes, no], now=70.0)
+        y = next(q for q in out if q.meta["side"] == "yes")
+        n = next(q for q in out if q.meta["side"] == "no")
+        self.assertEqual((y.ask, y.bid, y.ask_size, y.bid_size), (0.69, 0.66, 300.0, 250.0))
+        self.assertEqual((n.ask, n.bid, n.ask_size, n.bid_size), (0.34, 0.31, 250.0, 300.0))   # NO's ask depth is the YES bid depth
+        self.assertIsNotNone(y.quote_time)
+        self.assertEqual(y.book_id, "rothera")
+
+    def test_lane_step_merges_refreshed_venues_and_survives_a_failing_one(self):
+        from arb_engine.strategy.fastlane import FastLane
+
+        kq = OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=0.60, bid=0.59, ts=1.0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})
+        rq = OutcomeQuote("robinhood", "c1", KEY, "KC", ask=0.61, bid=0.58, ts=1.0, meta={"contract_id": "c1", "side": "yes", "exchange": "rothera"})
+        pq = OutcomeQuote("polymarket", "tok", KEY, "KC", ask=0.62, bid=0.60, ts=1.0)
+        client, _ = self._kalshi_client({"T-KC": (0.63, 0.64)})
+
+        class Boom:
+            venue = "robinhood"
+
+            def quotes(self, ids, workers=8):
+                raise RuntimeError("robinhood 503")
+        lane = FastLane(kalshi_client=client, robinhood=Boom(), clock=lambda: 100.0)
+        lane.seed({KEY: {"kalshi": [kq], "robinhood": [rq], "polymarket": [pq]}})
+        by, errs = lane.step()
+        self.assertEqual(by[KEY]["kalshi"][0].ask, 0.64)       # refreshed
+        self.assertEqual(by[KEY]["robinhood"][0].ask, 0.61)    # kept: the venue failed
+        self.assertEqual(by[KEY]["polymarket"][0].ask, 0.62)   # never refreshed on the lane
+        self.assertEqual(len(errs), 1)
+        self.assertIn("robinhood 503", errs[0])
+        self.assertEqual(lane.steps, 1)
+
+    def test_slate_fast_step_runs_signals_on_refreshed_quotes(self):
+        """A LiveSlate with fast=1 sees the lane's fresh Kalshi book: a Rothera-led move that
+        the full tick missed becomes a LAG on the very next second."""
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo
+        from arb_engine.strategy.inplay import InplayView
+        from arb_engine.strategy.live import LiveSlate
+
+        info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
+        t0 = 1_800_000_000.0
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=0.60, bid=0.59, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"}), OutcomeQuote("kalshi", "T-DEN", KEY, "DEN", ask=0.41, bid=0.40, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-DEN", "side": "yes"})]
+        rq = [OutcomeQuote("robinhood", "c1", KEY, "KC", ask=0.61, bid=0.58, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c1", "side": "yes", "exchange": "rothera"}, book_id="rothera"), OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=0.42, bid=0.39, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
+        rh_prices = {"c1": {"yes_ask_price": "0.61", "yes_bid_price": "0.58", "ask_venue_timestamp": t0}, "c2": {"yes_ask_price": "0.42", "yes_bid_price": "0.39", "ask_venue_timestamp": t0}}
+        client, _ = self._kalshi_client({"T-KC": (0.59, 0.60), "T-DEN": (0.40, 0.41)})
+        rh = self._robinhood(rh_prices)
+        rh.client = None
+        slate = LiveSlate([], settings={"executable_venues": "kalshi,robinhood"}, alerter=Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"fast_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy=""), bankroll=500, fast=1.0, interval=5.0)
+        slate.fastlane.kalshi, slate.fastlane.robinhood = client, rh
+        view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
+        slate._live_priced = {KEY: (None, me, view)}
+        slate.fastlane.seed({KEY: me.quotes_by_venue})
+        # Second 1: nothing moved.
+        self.assertEqual(slate.fast_step(t0 + 1).lags, [])
+        # Second 2: Rothera reprices KC +8c (fresh venue timestamp); Kalshi's book is unchanged.
+        rh_prices["c1"].update({"yes_ask_price": "0.69", "yes_bid_price": "0.66", "ask_venue_timestamp": t0 + 2})
+        rh_prices["c2"].update({"yes_ask_price": "0.34", "yes_bid_price": "0.31", "ask_venue_timestamp": t0 + 2})
+        lags, arbs, errors = [], [], []
+        for t in (2, 3):
+            ft = slate.fast_step(t0 + t)
+            lags += ft.lags
+            arbs += ft.arbs
+            errors += ft.errors
+        self.assertTrue(any("buy Kansas City on kalshi at 0.60" in l for l in lags), lags)
+        # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi).
+        self.assertTrue(any("ARB +" in a and "KC on kalshi @ 0.60" in a for a in arbs), arbs)
+        self.assertEqual(errors, [])
+        self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))

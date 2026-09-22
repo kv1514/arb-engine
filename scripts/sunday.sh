@@ -56,9 +56,11 @@ cmd_for() {
   case "$name" in
     bridge) echo "$PY -m arb_engine bridge --port $BRIDGE_PORT" ;;
     live)
-      local quiet=""
+      local quiet="" fast=""
       if "$PY" -m arb_engine live --help 2>/dev/null | grep -q -- '--quiet'; then quiet=" --quiet"; fi
-      echo "$PY -m arb_engine live --sport $SPORT --every $EVERY --record out/history.db --journal out/live_journal.jsonl --bankroll $BANKROLL --kelly $KELLY$quiet ${*:-}" ;;
+      # the fast lane (1 s Kalshi + Robinhood refreshes between full ticks) when the build has it; FAST=0 disables
+      if [ "${FAST:-1}" != "0" ] && "$PY" -m arb_engine live --help 2>/dev/null | grep -q -- '--fast'; then fast=" --fast ${FAST:-1}"; fi
+      echo "$PY -m arb_engine live --sport $SPORT --every $EVERY --record out/history.db --journal out/live_journal.jsonl --bankroll $BANKROLL --kelly $KELLY$quiet$fast ${*:-}" ;;
     maker) echo "$PY -m arb_engine maker --sport $SPORT --mode paper --size $MAKER_SIZE --journal out/maker_journal.jsonl" ;;
     *) echo "unknown process: $name" >&2; return 1 ;;
   esac

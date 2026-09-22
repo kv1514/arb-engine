@@ -2,7 +2,7 @@ usage: arb-engine live [-h] [--sport {nfl,ncaaf,nba,nhl}] [--every EVERY] [--hou
                        [--iterations ITERATIONS] [--once] [--pre-hours PRE_HOURS]
                        [--steal-edge STEAL_EDGE] [--target-margin TARGET_MARGIN] [--venues VENUES]
                        [--contracts CONTRACTS] [--gold] [--record [DB]] [--bankroll BANKROLL]
-                       [--kelly KELLY] [--journal JOURNAL]
+                       [--kelly KELLY] [--journal JOURNAL] [--fast SECONDS]
 
 options:
   -h, --help            show this help message and exit
@@ -23,3 +23,5 @@ options:
                         Kelly, capped by depth)
   --kelly KELLY
   --journal JOURNAL
+  --fast SECONDS        between full ticks, refresh Kalshi + Robinhood top of book for the live
+                        games every SECONDS (e.g. 1) and run the LAG / ARB signals on it

@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, Iterable, Optional
@@ -138,13 +139,27 @@ def _f(x: Any) -> Optional[float]:
         return None
 
 
+def _locked(fn):
+    """Serialise a Store method on the instance lock (SQLite connection shared across threads)."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(self, *a, **kw):
+        with self._lock:
+            return fn(self, *a, **kw)
+    return wrapper
+
+
 class Store:
     def __init__(self, path: str = "out/history.db"):
         import os
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.path = path
-        self.conn = sqlite3.connect(path)
+        # The live slate's fast lane records from a second thread: one connection shared under a
+        # re-entrant lock (every public method takes it) instead of a connection per thread.
+        self._lock = threading.RLock()
+        self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         # Older files predate these columns; add them in place (SQLite appends, defaults NULL).
@@ -173,6 +188,7 @@ class Store:
         return int(cur.lastrowid or 0)
 
     # ---- scans ---------------------------------------------------------------------------
+    @_locked
     def record_scan(self, result: Any) -> int:
         """Persist a ScanResult (every event + every venue quote). Returns rows written."""
         ts = float(getattr(result, "fetched_at", None) or time.time())
@@ -232,6 +248,7 @@ class Store:
                     row[f"{v}_{side}_{f}"] = d.get(f) if d else None
         return row
 
+    @_locked
     def record_tick(self, view: Any, quotes_by_venue: Any = None, freshness: Any = None, ts: Optional[float] = None) -> int:
         """One row per priced game per poll. ``view`` is an ``InplayView`` (or a dict of one);
         ``quotes_by_venue`` is the merged event's ``{venue: [OutcomeQuote]}`` for the per-venue
@@ -254,6 +271,7 @@ class Store:
         with self.conn:
             return self._insert("inplay_ticks", row)
 
+    @_locked
     def record_l1(self, ts: float, event_key: str, quotes_by_venue: Any, game_state: Any = None, home: Optional[str] = None, away: Optional[str] = None, live: Optional[bool] = None, freshness: Any = None) -> int:
         """L1-only tick (no evaluation): what a recorder writes when it has quotes and a game
         state but ran no strategy — also how fixtures are loaded for the tick replay."""
@@ -268,6 +286,7 @@ class Store:
         with self.conn:
             return self._insert("inplay_ticks", self._tick_row(ts, event_key, live, game_state, l1, home, away, freshness))
 
+    @_locked
     def record_espn_tick(self, gs: Any, ts: Optional[float] = None, state_source: Optional[str] = None) -> int:
         """One row per game per poll of the ESPN state (GameState or its ``as_dict()``)."""
         g = _get(gs)
@@ -277,17 +296,21 @@ class Store:
         with self.conn:
             return self._insert("espn_ticks", row)
 
+    @_locked
     def espn_tick_rows(self, event_key: Optional[str] = None) -> list[dict[str, Any]]:
         q = "SELECT * FROM espn_ticks" + (" WHERE event_key=?" if event_key else "") + " ORDER BY event_key, ts"
         return [dict(r) for r in self.conn.execute(q, (event_key,) if event_key else ())]
 
+    @_locked
     def tick_rows(self, event_key: Optional[str] = None) -> list[dict[str, Any]]:
         q = "SELECT * FROM inplay_ticks" + (" WHERE event_key=?" if event_key else "") + " ORDER BY event_key, ts"
         return [dict(r) for r in self.conn.execute(q, (event_key,) if event_key else ())]
 
+    @_locked
     def event_keys(self, table: str = "inplay_ticks") -> list[str]:
         return [r[0] for r in self.conn.execute(f"SELECT DISTINCT event_key FROM {table} ORDER BY event_key")]
 
+    @_locked
     def anomaly_counts(self) -> dict[str, Any]:
         """StateGuard anomalies and state-source reasons counted from espn_ticks."""
         out: dict[str, Any] = {"ticks": 0, "games": 0, "suspect": 0, "review_pending": 0, "by_source": {}, "episodes": {}}
@@ -309,6 +332,7 @@ class Store:
         return out
 
     # ---- STEAL observations + ladder -----------------------------------------------------
+    @_locked
     def record_steal(self, ts: float, event_key: str, outcome: str, venue: str, ask: Optional[float], all_in: Optional[float], fair: Optional[float], edge: Optional[float] = None, model_p: Optional[float] = None, market_p: Optional[float] = None, espn_p: Optional[float] = None, gated: bool = False, gated_reasons: Any = None, suggested_contracts: Optional[float] = None, state_hash: Optional[str] = None, period: Optional[int] = None, bid: Optional[float] = None, **extra: Any) -> int:
         """One observation per STEAL (or GATED would-be STEAL) action. Returns the row id."""
         if edge is None and fair is not None and all_in is not None:
@@ -331,6 +355,7 @@ class Store:
             d = {}
         return d.get("bid"), d.get("ask")
 
+    @_locked
     def quote_at_or_after(self, event_key: str, venue: str, outcome: str, t: float, max_ticks: int = 50) -> Optional[tuple[float, Optional[float], Optional[float]]]:
         """``(tick_ts, bid, ask)`` of the first tick at or after ``t`` that actually carries a
         quote for ``venue``/``outcome``. A poll where one adapter hiccupped still writes a tick
@@ -342,6 +367,7 @@ class Store:
                 return float(tick["ts"]), bid, ask
         return None
 
+    @_locked
     def update_ladder(self, now: Optional[float] = None, offsets: Iterable[int] = LADDER_OFFSETS) -> int:
         """Fill every observation's ladder slot whose time has come (first tick at or after
         ``ts + offset`` that quotes the observation's venue), refresh the last in-play bid/mid,
@@ -396,6 +422,7 @@ class Store:
             return None
         return 1.0 if outcome == winner else 0.0
 
+    @_locked
     def settle_event(self, event_key: str, winner: Optional[str], now: Optional[float] = None) -> int:
         """Manual settlement (winner None = tie). Returns observations settled."""
         n = 0
@@ -406,10 +433,12 @@ class Store:
                 n += 1
         return n
 
+    @_locked
     def steal_rows(self, event_key: Optional[str] = None) -> list[dict[str, Any]]:
         q = "SELECT * FROM steal_observations" + (" WHERE event_key=?" if event_key else "") + " ORDER BY ts"
         return [dict(r) for r in self.conn.execute(q, (event_key,) if event_key else ())]
 
+    @_locked
     def convergence(self, min_games: int = 30, offsets: Iterable[int] = LADDER_OFFSETS, buckets: Iterable[tuple[float, float, str]] = EDGE_BUCKETS) -> dict[str, Any]:
         """Toward/away ratios and CLV per edge bucket (split by gated / ungated). Ratios and
         CLV are reported only for cells with at least ``min_games`` distinct games — ``n`` and
@@ -463,16 +492,19 @@ class Store:
         return out
 
     # ---- pre-game lines (CLV anchor) -----------------------------------------------------
+    @_locked
     def record_pregame_line(self, event_key: str, sportsbook_ml_home: Optional[float] = None, sportsbook_ml_away: Optional[float] = None, kalshi_mid: Optional[float] = None, ts: Optional[float] = None) -> bool:
         """First pre-kickoff line per event wins (idempotent): returns True when inserted."""
         with self.conn:
             cur = self.conn.execute("INSERT OR IGNORE INTO pregame_lines (event_key, ts, sportsbook_ml_home, sportsbook_ml_away, kalshi_mid) VALUES (?,?,?,?,?)", (event_key, ts or time.time(), sportsbook_ml_home, sportsbook_ml_away, kalshi_mid))
             return cur.rowcount == 1
 
+    @_locked
     def pregame_line(self, event_key: str) -> Optional[dict[str, Any]]:
         r = self.conn.execute("SELECT * FROM pregame_lines WHERE event_key=?", (event_key,)).fetchone()
         return dict(r) if r else None
 
+    @_locked
     def clv_report(self, min_games: int = 30) -> dict[str, Any]:
         """Convergence ladder plus the pre-game anchor per event: entry all-in vs the pre-kickoff
         Kalshi mid (and the de-vigged sportsbook fair when ``quant.odds`` can price moneylines)."""
@@ -497,6 +529,7 @@ class Store:
         return conv
 
     # ---- arb frequency (unchanged) -------------------------------------------------------
+    @_locked
     def arb_stats(self, sport: Optional[str] = None) -> dict[str, Any]:
         q = "SELECT market_type, COUNT(*), SUM(fillable), AVG(margin), MAX(margin) FROM scans" + (" WHERE sport=?" if sport else "") + " GROUP BY market_type"
         rows = self.conn.execute(q, (sport,) if sport else ()).fetchall()
@@ -505,6 +538,7 @@ class Store:
     # Hours-to-kickoff buckets for the frequency question ("when do arbs exist?").
     BUCKETS = ((0, 1, "<1h"), (1, 6, "1-6h"), (6, 24, "6-24h"), (24, 72, "1-3d"), (72, 24 * 365, "3d+"))
 
+    @_locked
     def arb_frequency(self, sport: Optional[str] = None, min_margin: float = 0.0) -> dict[str, Any]:
         """How often a fillable arb above ``min_margin`` was present, by market type and hours to
         kickoff: rows = scan snapshots of one event; an *episode* is a run of consecutive scans
@@ -549,5 +583,6 @@ class Store:
             b["arb_share"] = round(b["arb_snapshots"] / b["snapshots"], 4) if b["snapshots"] else None
         return {"snapshots": len(rows), "buckets": sorted(by_bucket.values(), key=lambda b: (b["market_type"], [x[2] for x in self.BUCKETS].index(b["bucket"]) if b["bucket"] in [x[2] for x in self.BUCKETS] else 99)), "episodes": episodes, "episode_scans_mean": round(sum(e["scans"] for e in episodes) / len(episodes), 2) if episodes else None, "episode_seconds_mean": round(sum(e["end"] - e["start"] for e in episodes) / len(episodes), 1) if episodes else None}
 
+    @_locked
     def close(self) -> None:
         self.conn.close()

@@ -24,6 +24,7 @@ tick plus the STEAL / LOCK / GATED lines instead of every game.
 from __future__ import annotations
 
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ from ..matching.matcher import MergedEvent, merge_snapshots
 from ..venues.espn import ESPNClient, ESPNFeed, GameState
 from .alerts import Alerter
 from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, resolve_executable, setting, steal_record
+from .fastlane import FastLane
 from .leadlag import LagSignal, LeadLagTracker
 
 try:  # the settings registry (config.declare_setting); this module must import without it
@@ -60,7 +62,7 @@ class SlateTick:
 
 
 class LiveSlate:
-    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None, executable_venues: Optional[Iterable[str]] = None, quiet: Optional[bool] = None):
+    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None, executable_venues: Optional[Iterable[str]] = None, quiet: Optional[bool] = None, fast: float = 0.0):
         self.adapters = list(adapters)
         self.feed = feed or ESPNFeed(ESPNClient(sport=sport))
         self.settings = settings or {}
@@ -86,6 +88,15 @@ class LiveSlate:
         # arbs (ARB) — both need no ESPN state, so they run on every priced event, in play or not.
         self.leadlag = LeadLagTracker.from_settings(self.settings, executable=self.executable_venues, fresh_s=max(10.0, float(interval)))
         self._arb_last: dict[str, float] = {}                     # event_key -> last ARB alert time
+        # Fast lane: 1 s top-of-book refreshes of Kalshi + Robinhood for the live games between
+        # full ticks (``fast`` seconds; 0 = off). Built from the adapters this slate already has.
+        self.fast = float(fast or 0.0)
+        kalshi_client = next((getattr(a, "client", None) for a in self.adapters if getattr(a, "venue", "") == "kalshi"), None)
+        robinhood = next((a for a in self.adapters if getattr(a, "venue", "") == "robinhood"), None)
+        self.fastlane = FastLane(kalshi_client=kalshi_client, robinhood=robinhood)
+        self._live_priced: dict[str, tuple[GameState, MergedEvent, InplayView]] = {}   # from the last full tick
+        self._sig_lock = threading.RLock()   # market_signals / seed run from the fast thread and the tick thread
+        self._stop = threading.Event()
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
 
@@ -221,12 +232,52 @@ class LiveSlate:
                 call_store(self.store, "update_ladder", now)   # once per tick, after every game's STEALs are in
             except Exception as e:
                 errors.append(f"record: update_ladder: {e!r}")
+        with self._sig_lock:
+            self._live_priced = {me.event_key: (gs, me, view) for gs, me, view, _ in priced if view.live}
+            if self.fast:
+                self.fastlane.seed({k: me.quotes_by_venue for k, (_, me, _) in self._live_priced.items()})
+        return out
+
+    def fast_step(self, now: Optional[float] = None) -> SlateTick:
+        """One fast-lane step: refresh Kalshi + Robinhood top of book for the live games from
+        the last full tick, run the market-vs-market signals (LAG, ARB) on the fresh quotes
+        and record the L1 so the observation ladder gets 1 s resolution. The ESPN state,
+        model and STEAL logic are the full tick's business."""
+        now = now or time.time()
+        with self._sig_lock:
+            live = dict(self._live_priced)
+        out = SlateTick(at=now, views=[], games=len(live), quiet=True)
+        if not live:
+            return out
+        refreshed, errs = self.fastlane.step(list(live), now)
+        out.errors.extend(errs)
+        for key, (gs, me, view) in live.items():
+            by = refreshed.get(key)
+            if not by:
+                continue
+            me2 = MergedEvent(me.event_key, me.info, by)
+            self.market_signals(me2, view, out, now)
+            if self.store is not None:
+                try:
+                    call_store(self.store, "record_tick", view, quotes_by_venue=by, freshness=None, ts=now)
+                except Exception as e:
+                    out.errors.append(f"record: {e!r}")
+        if self.store is not None and (out.lags or out.arbs):
+            try:
+                call_store(self.store, "update_ladder", now)
+            except Exception as e:
+                out.errors.append(f"record: update_ladder: {e!r}")
         return out
 
     def market_signals(self, me: MergedEvent, view: InplayView, out: SlateTick, now: float) -> None:
         """LAG (lead-lag) and fresh ARB signals for one event: alerted, journalled and, for
-        LAG, recorded as a ``kind="lag"`` observation so the store's ladder measures
-        convergence. Failures here never stop the tick."""
+        LAG, recorded as a ``signal_kind="lag"`` observation so the store's ladder measures
+        convergence. Failures here never stop the tick. Serialised: the fast-lane thread and
+        the full tick both call it."""
+        with self._sig_lock:
+            self._market_signals(me, view, out, now)
+
+    def _market_signals(self, me: MergedEvent, view: InplayView, out: SlateTick, now: float) -> None:
         try:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
                 text = sig.text()
@@ -266,6 +317,11 @@ class LiveSlate:
             f.interval_s = interval
         t_end = time.time() + duration
         n = 0
+        fast_thread = None
+        if self.fast:
+            self._stop.clear()
+            fast_thread = threading.Thread(target=self._fast_loop, args=(printer,), name="fastlane", daemon=True)
+            fast_thread.start()
         while time.time() < t_end and (max_iterations is None or n < max_iterations):
             t0 = time.time()
             try:
@@ -275,6 +331,33 @@ class LiveSlate:
                 printer(f"{time.strftime('%H:%M:%S')} tick failed: {e!r}")
             n += 1
             time.sleep(max(1.0, interval - (time.time() - t0)))
+        self._stop.set()
+        if fast_thread is not None:
+            fast_thread.join(timeout=self.fast * 3 + 5)
+
+    def _fast_loop(self, printer=print) -> None:
+        """The fast lane's own thread: a step every ``self.fast`` seconds while there are live
+        games from the last full tick; a step that overruns just shortens the pause. Only
+        signal / error lines are printed (the full tick prints the summaries)."""
+        last_err = ""
+        while not self._stop.is_set():
+            s0 = time.time()
+            try:
+                with self._sig_lock:
+                    have = bool(self._live_priced)
+                if have:
+                    ft = self.fast_step(s0)
+                    for line in ft.arbs:
+                        printer(f"{time.strftime('%H:%M:%S')} *** ARB *** {line}")
+                    for line in ft.lags:
+                        printer(f"{time.strftime('%H:%M:%S')} LAG {line}")
+                    for e in ft.errors:
+                        if e != last_err:   # a venue that keeps failing is printed once, not every second
+                            printer(f"{time.strftime('%H:%M:%S')} fast: {e}")
+                        last_err = e
+            except Exception as e:
+                printer(f"{time.strftime('%H:%M:%S')} fast step failed: {e!r}")
+            self._stop.wait(max(0.05, self.fast - (time.time() - s0)))
 
 
 def _p(x: Optional[float]) -> str:

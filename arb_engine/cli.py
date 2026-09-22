@@ -401,7 +401,7 @@ def cmd_live(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None
 
         store = Store(args.record)
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
-    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts, bankroll=args.bankroll, kelly_fraction=args.kelly)
+    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts, bankroll=args.bankroll, kelly_fraction=args.kelly, fast=getattr(args, "fast", 0.0) or 0.0)
     if args.once:
         print(format_tick(slate.tick()))
         return 0
@@ -657,6 +657,7 @@ def build_parser(plugins: bool = True) -> tuple[argparse.ArgumentParser, dict[st
     lv.add_argument("--bankroll", type=float, help="dollars to deploy; STEAL alerts then include a contract count (fractional Kelly, capped by depth)")
     lv.add_argument("--kelly", type=float, default=0.25)
     lv.add_argument("--journal", default="out/live.jsonl")
+    lv.add_argument("--fast", type=float, default=0.0, metavar="SECONDS", help="between full ticks, refresh Kalshi + Robinhood top of book for the live games every SECONDS (e.g. 1) and run the LAG / ARB signals on it")
     lv.set_defaults(func=cmd_live)
 
     rc = sub.add_parser("record", help="scan on a schedule and append every event + quote to SQLite (arb frequency by time-to-kickoff)")
