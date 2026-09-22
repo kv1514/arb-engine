@@ -1,13 +1,13 @@
 """Lead-lag signals: buy the *lagging* venue when the leading one has already repriced.
 
-Measured on the first recorded NFL Sunday (2026-09-20, 13 games, 5 s ticks — see
-``scripts/leadlag_study.py`` and docs/MODEL.md): when Robinhood/Rothera's mid moved ≥ 5¢ in
-play, Kalshi had moved first only 32/132 times and caught up within a median 25 s (105/132
-within five minutes); the reverse (Kalshi first) happened 21/120 times. Polymarket trailed
-both by minutes. Big moves *continued* over the next five minutes on average (+21 % of the
-initial move), i.e. the market under-reacts to drives — so "buy the dip" against the move
-loses, while buying the side the leader just repriced *on the venue that has not moved yet*
-is the dip that is actually cheap. That is this module.
+Measured on the first recorded NFL Sunday (2026-09-20, 14 games incl. the night game, 5 s
+ticks — see ``scripts/leadlag_study.py`` and docs/MODEL.md): when Robinhood/Rothera's mid
+moved ≥ 5¢ in play, Kalshi had moved first only 51/178 times and caught up within a median
+23 s (144/178 within five minutes); the reverse (Kalshi first) happened 25/157 times.
+Polymarket trailed both by minutes. Big moves did not revert over the next five minutes
+(the market under-reacts to drives, if anything) — so "buy the dip" against the move has
+no edge, while buying the side the leader just repriced *on the venue that has not moved
+yet* is the dip that is actually cheap. That is this module.
 
 The rule is market-vs-market, so it needs no ESPN state and none of the feed gates: the
 leader's quote must be fresh (its venue-reported ``quote_time`` within ``fresh_s``, when
@@ -88,6 +88,7 @@ class LagSignal:
     suggested_contracts: Optional[int]
     lag_s: float              # seconds since the leader's move completed
     ts: float
+    url: Optional[str] = None # the follower's market page, to act on it
 
     def text(self) -> str:
         size = f" → buy {self.suggested_contracts} ct" if self.suggested_contracts else ""
@@ -128,26 +129,46 @@ class LeadLagTracker:
         leaders = {x.strip().lower() for x in str(_setting(settings, "leadlag_leaders")).split(",") if x.strip()}
         return cls(move=_setting(settings, "leadlag_move"), window_s=_setting(settings, "leadlag_window_s"), min_edge=_setting(settings, "leadlag_min_edge"), cooldown_s=_setting(settings, "leadlag_cooldown_s"), fresh_s=fresh_s, executable=set(executable) if executable is not None else None, leaders=leaders or None)
 
-    def _push(self, event_key: str, venue: str, ts: float, mid: float) -> Deque[tuple[float, float]]:
+    def _push(self, event_key: str, venue: str, ts: float, mid: float, bid: Optional[float] = None, ask: Optional[float] = None) -> Deque[tuple[float, float, Optional[float], Optional[float]]]:
         h = self._hist.setdefault((event_key, venue), deque())
-        h.append((ts, mid))
+        h.append((ts, mid, bid, ask))
         while h and ts - h[0][0] > self.history_s:
             h.popleft()
         return h
 
-    def _move_over_window(self, h: Deque[tuple[float, float]], now: float) -> Optional[float]:
-        """Current mid minus the mid at (or just before) ``window_s`` ago; None with no anchor."""
+    def _anchor(self, h: Deque[tuple[float, float, Optional[float], Optional[float]]], now: float) -> Optional[tuple[float, float, Optional[float], Optional[float]]]:
+        """The history point at (or just before) ``window_s`` ago; the oldest point when the
+        history is shorter than the window; None with fewer than two points."""
         if len(h) < 2:
             return None
         anchor = None
-        for ts, m in h:
-            if now - ts >= self.window_s:
-                anchor = m
+        for row in h:
+            if now - row[0] >= self.window_s:
+                anchor = row
             else:
                 if anchor is None:
-                    anchor = m  # history shorter than the window: use its oldest point
+                    anchor = row
                 break
-        return None if anchor is None else h[-1][1] - anchor
+        return anchor
+
+    def _move_over_window(self, h: Deque[tuple[float, float, Optional[float], Optional[float]]], now: float) -> Optional[float]:
+        """Current mid minus the anchor mid; None with no anchor."""
+        a = self._anchor(h, now)
+        return None if a is None else h[-1][1] - a[1]
+
+    def _repriced(self, h: Deque[tuple[float, float, Optional[float], Optional[float]]], now: float, lmove: float) -> bool:
+        """A genuine repricing moves BOTH the bid and the ask the same way (each ≥ 40 % of
+        the mid move); a pulled ask or a lone bid widening the spread also moves the mid but
+        is not a price the market agrees on, and must not lead a signal."""
+        a = self._anchor(h, now)
+        if a is None:
+            return False
+        _, _, b0, a0 = a
+        _, _, b1, a1 = h[-1]
+        if None in (b0, a0, b1, a1):
+            return True  # a venue that reports only a mid cannot be checked; keep the old behaviour
+        db, da = b1 - b0, a1 - a0
+        return db * lmove > 0 and da * lmove > 0 and abs(db) >= 0.4 * abs(lmove) and abs(da) >= 0.4 * abs(lmove)
 
     def observe(self, event_key: str, title: str, outcomes: list[str], labels: dict[str, str], quotes_by_venue: dict[str, list[OutcomeQuote]], settings: Optional[dict[str, Any]] = None, now: Optional[float] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25) -> list[LagSignal]:
         now = time.time() if now is None else float(now)
@@ -166,18 +187,22 @@ class LeadLagTracker:
         for venue, by_out in cur.items():
             qh, qa = by_out.get(home), by_out.get(away)
             mh = _mid(qh) if qh is not None else None
-            if mh is None and qa is not None and _mid(qa) is not None:
+            bid = ask = None
+            if mh is not None:
+                bid, ask = qh.bid, qh.ask  # type: ignore[union-attr]
+            elif qa is not None and _mid(qa) is not None:
                 mh = 1.0 - _mid(qa)  # type: ignore[operator]
+                bid, ask = (1.0 - qa.ask) if qa.ask is not None else None, (1.0 - qa.bid) if qa.bid is not None else None
             if mh is None or not (_fresh(qh, now, self.fresh_s) if qh is not None else True):
                 continue
             mids[venue] = mh
-            self._push(event_key, venue, now, mh)
+            self._push(event_key, venue, now, mh, bid, ask)
         signals: list[LagSignal] = []
         for leader, lmid in mids.items():
             if self.leaders is not None and leader not in self.leaders:
                 continue
             lmove = self._move_over_window(self._hist[(event_key, leader)], now)
-            if lmove is None or abs(lmove) < self.move:
+            if lmove is None or abs(lmove) < self.move or not self._repriced(self._hist[(event_key, leader)], now, lmove):
                 continue
             for follower, fmid in mids.items():
                 if follower == leader or (self.executable is not None and follower not in self.executable):
@@ -212,5 +237,5 @@ class LeadLagTracker:
                     cap = int(math.floor(bankroll * kelly_fraction / q.ask)) if q.ask > 0 else 0
                     contracts = min(cap, int(depth)) if depth is not None else cap
                     contracts = contracts if contracts > 0 else None
-                signals.append(LagSignal(event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now))
+                signals.append(LagSignal(event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

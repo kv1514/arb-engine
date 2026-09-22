@@ -3,141 +3,141 @@
  "games": 14,
  "lag_replay": {
   "by_follower": {
-   "kalshi": 127,
-   "robinhood": 6
+   "kalshi": 161,
+   "robinhood": 11
   },
   "by_leader": {
-   "kalshi": 6,
-   "robinhood": 127
+   "kalshi": 11,
+   "robinhood": 161
   },
-  "edge_median": 0.059,
+  "edge_median": 0.0585,
   "exit_at_bid": {
    "30": {
-    "loss": 24,
-    "mean_pnl_per_contract": 0.0593,
+    "loss": 29,
+    "mean_pnl_per_contract": 0.0538,
     "unknown": 0,
-    "win": 109
+    "win": 143
    },
    "300": {
-    "loss": 22,
-    "mean_pnl_per_contract": 0.0803,
+    "loss": 38,
+    "mean_pnl_per_contract": 0.067,
     "unknown": 17,
-    "win": 94
+    "win": 117
    },
    "60": {
-    "loss": 12,
-    "mean_pnl_per_contract": 0.0796,
+    "loss": 22,
+    "mean_pnl_per_contract": 0.073,
     "unknown": 1,
-    "win": 120
+    "win": 149
    }
   },
-  "signals": 133
+  "signals": 172
  },
  "leadlag": {
   "kalshi->polymarket": {
-   "caught_up_5min": 69,
-   "follower_moved_first": 8,
-   "lead_moves": 117,
+   "caught_up_5min": 85,
+   "follower_moved_first": 11,
+   "lead_moves": 153,
    "median_lag_s": 139.1,
-   "never_5min": 48,
+   "never_5min": 68,
    "p25_lag_s": 50.2
   },
   "kalshi->robinhood": {
-   "caught_up_5min": 60,
-   "follower_moved_first": 100,
-   "lead_moves": 121,
-   "median_lag_s": 43.6,
-   "never_5min": 61,
-   "p25_lag_s": 12.0
+   "caught_up_5min": 80,
+   "follower_moved_first": 132,
+   "lead_moves": 157,
+   "median_lag_s": 41.8,
+   "never_5min": 77,
+   "p25_lag_s": 14.1
   },
   "polymarket->kalshi": {
-   "caught_up_5min": 32,
-   "follower_moved_first": 14,
-   "lead_moves": 81,
-   "median_lag_s": 71.8,
-   "never_5min": 49,
+   "caught_up_5min": 38,
+   "follower_moved_first": 16,
+   "lead_moves": 94,
+   "median_lag_s": 66.8,
+   "never_5min": 56,
    "p25_lag_s": 0.0
   },
   "polymarket->robinhood": {
-   "caught_up_5min": 32,
-   "follower_moved_first": 10,
-   "lead_moves": 81,
-   "median_lag_s": 51.2,
-   "never_5min": 49,
-   "p25_lag_s": 0.0
+   "caught_up_5min": 39,
+   "follower_moved_first": 13,
+   "lead_moves": 94,
+   "median_lag_s": 53.8,
+   "never_5min": 55,
+   "p25_lag_s": 14.6
   },
   "robinhood->kalshi": {
-   "caught_up_5min": 106,
-   "follower_moved_first": 32,
-   "lead_moves": 133,
-   "median_lag_s": 25.3,
-   "never_5min": 27,
-   "p25_lag_s": 15.4
+   "caught_up_5min": 144,
+   "follower_moved_first": 51,
+   "lead_moves": 178,
+   "median_lag_s": 22.6,
+   "never_5min": 34,
+   "p25_lag_s": 13.5
   },
   "robinhood->polymarket": {
-   "caught_up_5min": 71,
-   "follower_moved_first": 12,
-   "lead_moves": 133,
-   "median_lag_s": 166.0,
-   "never_5min": 62,
-   "p25_lag_s": 76.7
+   "caught_up_5min": 80,
+   "follower_moved_first": 13,
+   "lead_moves": 178,
+   "median_lag_s": 165.4,
+   "never_5min": 98,
+   "p25_lag_s": 78.1
   }
  },
  "moves": {
   "all": {
    "horizons": {
     "120": {
-     "continue": 19,
-     "flat": 71,
-     "mean_later_over_initial": 0.1034,
-     "n": 105,
-     "revert": 15
+     "continue": 26,
+     "flat": 93,
+     "mean_later_over_initial": 0.0493,
+     "n": 141,
+     "revert": 22
     },
     "30": {
-     "continue": 8,
-     "flat": 96,
-     "mean_later_over_initial": 0.0031,
-     "n": 111,
-     "revert": 7
+     "continue": 15,
+     "flat": 120,
+     "mean_later_over_initial": 0.0275,
+     "n": 147,
+     "revert": 12
     },
     "300": {
-     "continue": 30,
-     "flat": 49,
-     "mean_later_over_initial": 0.2137,
-     "n": 96,
-     "revert": 17
+     "continue": 39,
+     "flat": 63,
+     "mean_later_over_initial": 0.0634,
+     "n": 131,
+     "revert": 29
     }
    },
-   "mean_model_move_over_market_move": 0.2282,
-   "n": 121
+   "mean_model_move_over_market_move": 0.192,
+   "n": 157
   },
   "move": 0.05,
   "no_score_change": {
    "horizons": {
     "120": {
-     "continue": 17,
-     "flat": 69,
-     "mean_later_over_initial": 0.1048,
-     "n": 100,
-     "revert": 14
+     "continue": 24,
+     "flat": 91,
+     "mean_later_over_initial": 0.0484,
+     "n": 136,
+     "revert": 21
     },
     "30": {
-     "continue": 7,
-     "flat": 92,
-     "mean_later_over_initial": 0.0021,
-     "n": 106,
-     "revert": 7
+     "continue": 14,
+     "flat": 116,
+     "mean_later_over_initial": 0.0276,
+     "n": 142,
+     "revert": 12
     },
     "300": {
-     "continue": 27,
-     "flat": 47,
-     "mean_later_over_initial": 0.2138,
-     "n": 91,
-     "revert": 17
+     "continue": 36,
+     "flat": 61,
+     "mean_later_over_initial": 0.0575,
+     "n": 126,
+     "revert": 29
     }
    },
-   "mean_model_move_over_market_move": 0.1377,
-   "n": 112
+   "mean_model_move_over_market_move": 0.1213,
+   "n": 148
   },
   "score_changed": {
    "horizons": {
@@ -168,6 +168,12 @@
   },
   "venue": "kalshi"
  },
+ "paper": {
+  "by_follower": {},
+  "expired": 0,
+  "filled": 0,
+  "orders": 0
+ },
  "sport": "nfl",
- "ticks": 14487
+ "ticks": 15943
 }

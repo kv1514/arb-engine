@@ -336,3 +336,17 @@ class PaperLagTests(unittest.TestCase):
         # A zero-size ask does not fill either.
         book.open(self._sig(ask=0.60, t=1020.0), 1020.0)
         self.assertEqual(book.observe(KEY, self._quotes(1021.0, 0.60, 0.59, size=0), 1021.0), [])
+
+
+class RepricingTests(unittest.TestCase):
+    def test_a_pulled_ask_does_not_lead(self):
+        """Only a two-sided move counts as the leader repricing: an ask that jumps while the
+        bid stays (a pulled quote / widened spread) moves the mid but is not a price."""
+        tr = LeadLagTracker(move=0.05, window_s=30, min_edge=0.02, cooldown_s=60, fresh_s=10, executable={"kalshi", "robinhood"})
+        tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.59, 0.60), (0.58, 0.61)), now=0)
+        # Rothera ask 0.61 -> 0.75, bid unchanged: mid +7c but no repricing.
+        self.assertEqual(tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(10, (0.59, 0.60), (0.58, 0.75)), now=10), [])
+        # Both sides up: a real move.
+        sigs = tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(20, (0.59, 0.60), (0.66, 0.69)), now=20)
+        self.assertEqual([(s.leader, s.follower) for s in sigs], [("robinhood", "kalshi")])
+        self.assertIsNone(sigs[0].url)   # the fixture quotes carry no url; the analyzer's do

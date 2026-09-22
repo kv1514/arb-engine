@@ -160,7 +160,7 @@ mode applies the same rule in `background.js`. If your account really can trade 
 repriced ≥ 5¢ in the last 30 s and an executable venue has not followed (the bridge runs
 `strategy/leadlag.py` on every 1 s poll): "robinhood moved +8¢, kalshi has not: buy Kansas
 City on kalshi at 0.60 vs robinhood mid 0.675 — edge +5.8% → 208 contracts (300 offered)".
-Sunday's replay put the laggard's catch-up at ~80 % within a minute (docs/MODEL.md, "The
+Sunday's replay put the laggard's catch-up at ~80 % within a minute (median 23 s) (docs/MODEL.md, "The
 first live Sunday"); act within ~20 s, and treat a leader that snaps back as a bad print.
 The bankroll / Kelly fraction in the popup size the suggestion; without a bankroll only the
 depth is shown.

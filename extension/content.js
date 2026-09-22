@@ -149,9 +149,9 @@
       parts.arb = `<div class="arbe-arb ${cls}"><b>${a.arb.isArb ? "ARB" : "No arb"}</b> — cheapest legs sum to ${val("arb:gross", (a.arb.grossSum * 100).toFixed(1) + "¢")}; fee-adjusted margin <b>${val("arb:margin", fmtPct(a.arb.margin, true))}</b> per $1 (${a.arb.contracts} contracts: ${a.arb.profit >= 0 ? "+" : ""}$${a.arb.profit.toFixed(2)})<div class="arbe-muted">${legs}</div>${sized}</div>`;
     }
     // LAG: one venue has repriced and an executable one has not yet — the dip that is cheap
-    // (docs/MODEL.md "The first live Sunday": the laggard caught up within ~25 s on 80% of moves).
+    // (docs/MODEL.md "The first live Sunday": the laggard caught up within ~23 s on 80% of moves).
     if (a.lags && a.lags.length) {
-      parts.arb += a.lags.map((l) => `<div class="arbe-arb arbe-good arbe-lag"><b>LAG</b> — ${esc(l.leader)} moved ${(l.lead_move * 100).toFixed(0) >= 0 ? "+" : ""}${(l.lead_move * 100).toFixed(0)}¢, ${esc(l.follower)} has not: <b>buy ${esc(l.label)} on ${esc(l.follower)} at ${fmtP(l.ask)}</b> (all-in ${fmtP(l.all_in)}) vs ${esc(l.leader)} mid ${fmtP(l.leader_mid)} — edge <b>${fmtPct(l.edge, true)}</b>${l.suggested_contracts ? ` → ${l.suggested_contracts} contracts` : ""}${l.depth != null ? ` (${Math.floor(l.depth)} offered)` : ""}<div class="arbe-muted arbe-small">act within ~20 s; the laggard usually catches up, and a leader that reverses means the print was wrong</div></div>`).join("");
+      parts.arb += a.lags.map((l) => `<div class="arbe-arb arbe-good arbe-lag"><b>LAG</b> — ${esc(l.leader)} moved ${(l.lead_move * 100).toFixed(0) >= 0 ? "+" : ""}${(l.lead_move * 100).toFixed(0)}¢, ${esc(l.follower)} has not: <b>buy ${esc(l.label)} on ${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.follower)}</a>` : esc(l.follower)} at ${fmtP(l.ask)}</b> (all-in ${fmtP(l.all_in)}) vs ${esc(l.leader)} mid ${fmtP(l.leader_mid)} — edge <b>${fmtPct(l.edge, true)}</b>${l.suggested_contracts ? ` → ${l.suggested_contracts} contracts` : ""}${l.depth != null ? ` (${Math.floor(l.depth)} offered)` : ""}<div class="arbe-muted arbe-small">act within ~20 s; the laggard usually catches up, and a leader that reverses means the print was wrong</div></div>`).join("");
     }
     let html = "";
     for (const row of a.rows) {
