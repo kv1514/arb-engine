@@ -297,6 +297,15 @@ class EventAnalyzer:
         self.quote_cache = TtlCache(clk)      # ("rh"|"kalshi"|"pm-market"|"pm-books"|..., key) -> raw payload
         self.slug_cache = TtlCache(clk)       # Polymarket lookup key -> resolved slug (catalogue, page_ttl)
         self.last_event = None            # MergedEvent from the last game-winner analyze_url
+        # Lead-lag tracker shared by every /analyze poll of this process (strategy/leadlag.py):
+        # the overlay polls once a second, which is the cadence the LAG rule wants.
+        try:
+            from .strategy.leadlag import LeadLagTracker
+
+            self.leadlag = LeadLagTracker.from_settings(None, executable=None, fresh_s=10.0)
+        except Exception:  # pragma: no cover
+            self.leadlag = None
+        self._leadlag_mu = threading.Lock()
         self.last_url: Optional[str] = None
         self.last_analyzed_at: float = 0.0
         self.recent_events: dict[str, tuple[Any, float]] = {}  # url -> (MergedEvent, analyzed_at); one slot per open tab
@@ -648,6 +657,20 @@ class EventAnalyzer:
                 del self.recent_events[u]
 
     # ---- analysis -----------------------------------------------------------------------
+    def lag_signals(self, me: MergedEvent, settings: Optional[dict[str, Any]], executable: Optional[set[str]], now: float) -> list[dict[str, Any]]:
+        """LAG signals for this poll (see strategy/leadlag.py), as plain dicts for the overlay:
+        one venue repriced, an executable one has not — buy the laggard. Empty when the
+        tracker is unavailable or the event has fewer than two venues."""
+        if self.leadlag is None or len(me.quotes_by_venue) < 2:
+            return []
+        try:
+            with self._leadlag_mu:
+                self.leadlag.executable = set(executable) if executable is not None else None
+                sigs = self.leadlag.observe(me.event_key, (me.info.venues or {}).get("_teams", {}).get("title") or me.event_key, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, settings, now, (settings or {}).get("bankroll"), float((settings or {}).get("kelly_fraction") or 0.25))
+        except Exception:
+            return []
+        return [{"leader": s.leader, "follower": s.follower, "outcome": s.outcome, "label": s.label, "lead_move": round(s.lead_move, 4), "follower_move": round(s.follower_move, 4), "leader_mid": round(s.leader_mid, 4), "ask": s.follower_ask, "all_in": round(s.follower_all_in, 4), "edge": round(s.edge, 4), "depth": s.depth, "suggested_contracts": s.suggested_contracts, "text": s.text()} for s in sigs]
+
     def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, emit_no_side: bool = False, executable_venues: Optional[set[str]] = None, fresh: bool = False) -> dict[str, Any]:
         """``emit_no_side`` adds the NO side of each Robinhood game contract as its own leg
         (off: the overlay keeps today's row counts); ``executable_venues`` marks the other
@@ -826,9 +849,11 @@ class EventAnalyzer:
         self.last_event = me  # reused by the in-play watcher and the bridge's /inplay
         self.last_url, self.last_analyzed_at = url, now
         self._remember(url, me, now)
-        report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now, executable_venues=resolve_executable_venues(settings, executable_venues))
+        exec_venues = resolve_executable_venues(settings, executable_venues)
+        report = analyze_event(me, settings, contracts=contracts, target_margin=target_margin, now=now, executable_venues=exec_venues)
         out = asdict(report)
         out["errors"] = errors
+        out["lags"] = self.lag_signals(me, settings, exec_venues, now)
         timings["total"] = round(time.perf_counter() - t0, 4)
         return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name"), "sport": sport, "url": url, "key": event_key}, "analysis": out, "timings": timings, "venue_status": venue_status}
 

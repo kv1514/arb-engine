@@ -111,7 +111,7 @@ function fromBridge(res, cfg) {
   const rows = rowsFromReport(a);
   const arb = arbFromReport(a);
   if (arb && a.sized_arb) { arb.sizedContracts = a.sized_arb.contracts; arb.sizedProfit = a.sized_arb.profit; arb.sizedLegs = (a.sized_arb.legs || []).map((l) => ({ venue: l.venue, label: l.label || l.outcome, price: l.price, contracts: l.contracts })); }
-  return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: venueAges(a.venues), source: "bridge" } };
+  return { ok: true, event: res.event, analysis: { contracts: cfg.contracts, targetMargin: cfg.targetMargin, gold: cfg.gold, rows, arb, lags: a.lags || [], errors: (a.errors || []).concat(a.flags && a.flags.length ? ["flags: " + a.flags.join(", ")] : []), fetchedAt: Date.now(), venues: venueAges(a.venues), source: "bridge" } };
 }
 
 const cache = new Map();
@@ -426,7 +426,8 @@ async function analyze(url, opts) {
   const now = Date.now();
   if (cfg.bridge !== "off" && (await bridgeAvailable(now))) {
     try {
-      const res = await bridgeJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}`);
+      const sizing = cfg.bankroll > 0 ? `&bankroll=${Number(cfg.bankroll)}&kelly=${Number(cfg.kelly) || 0.25}` : "";
+      const res = await bridgeJson(`${BRIDGE}/analyze?url=${encodeURIComponent(url)}&contracts=${cfg.contracts}&target_margin=${cfg.targetMargin}&gold=${cfg.gold ? 1 : 0}${sizing}`);
       const out = fromBridge(res, cfg);
       // In-play view (game state, model vs market, LOCK/STEAL) for game-winner pages.
       if (opts.inplay !== false && out && out.ok && out.analysis && !out.analysis.lines) {

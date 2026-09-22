@@ -156,6 +156,15 @@ mode applies the same rule in `background.js`. If your account really can trade 
 **"I can trade on Polymarket"** in the popup (direct mode) or run the bridge with
 `EXECUTABLE_VENUES=kalshi,robinhood,polymarket`; the tag disappears and the arb math includes it.
 
+**LAG boxes.** Below the arb line the panel shows a **LAG** box whenever one venue has
+repriced ≥ 5¢ in the last 30 s and an executable venue has not followed (the bridge runs
+`strategy/leadlag.py` on every 1 s poll): "robinhood moved +8¢, kalshi has not: buy Kansas
+City on kalshi at 0.60 vs robinhood mid 0.675 — edge +5.8% → 208 contracts (300 offered)".
+Sunday's replay put the laggard's catch-up at ~80 % within a minute (docs/MODEL.md, "The
+first live Sunday"); act within ~20 s, and treat a leader that snaps back as a bad print.
+The bankroll / Kelly fraction in the popup size the suggestion; without a bankroll only the
+depth is shown.
+
 **The LIVE strip is feed-gated the same way the CLI is.** The in-play feed gates
 (`docs/ARCHITECTURE.md`, "Gates": `feed-stale`, `clock-frozen`, `quote-old:<venue>`,
 `score-pending`, `suspect`, `review-pending`) need poll-to-poll memory of when the ESPN state

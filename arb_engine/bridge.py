@@ -267,7 +267,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _analyze(self, url: str, settings: dict[str, Any], qs: dict[str, str]) -> dict[str, Any]:
         """One venue scan with the scan/live-parity arguments (module docstring)."""
-        res = self.analyzer.analyze_url(url, settings=settings, contracts=float(qs.get("contracts", 100)), target_margin=float(qs.get("target_margin", 0)), emit_no_side=True, executable_venues=executable_venues_for(settings), fresh=_truthy(qs.get("fresh")))
+        # bankroll / kelly ride along in the settings so the LAG signals can size (0 = no sizing).
+        st = dict(settings)
+        if qs.get("bankroll"):
+            try:
+                st["bankroll"] = float(qs["bankroll"]) or None
+                st["kelly_fraction"] = float(qs.get("kelly", 0.25) or 0.25)
+            except ValueError:
+                pass
+        res = self.analyzer.analyze_url(url, settings=st, contracts=float(qs.get("contracts", 100)), target_margin=float(qs.get("target_margin", 0)), emit_no_side=True, executable_venues=executable_venues_for(settings), fresh=_truthy(qs.get("fresh")))
         return with_overlay_fields(res)
 
     def _freshness(self, event_key: str, settings: dict[str, Any], interval_s: float):

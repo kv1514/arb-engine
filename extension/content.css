@@ -49,3 +49,4 @@ a.arbe-cat-host { position: relative !important; padding-bottom: 12px !important
 #arbe-panel .arbe-v { display: inline-block; border-radius: 3px; padding: 0 1px; }
 #arbe-panel .arbe-flash { animation: arbe-flash 1.2s ease-out 1; }
 @keyframes arbe-flash { 0% { background: #3d5a2f; color: #fff; } 100% { background: transparent; } }
+#arbe-panel .arbe-lag { border-left: 3px solid #d9b36b; }

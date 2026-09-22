@@ -598,3 +598,35 @@ class PageCacheTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)      # expired -> refetched
 if __name__ == "__main__":
     unittest.main()
+
+
+class LagSignalTests(unittest.TestCase):
+    def test_lag_signals_appear_after_a_rothera_repricing(self):
+        """The analyzer's LeadLagTracker persists across analyze_url polls: poll 1 seeds the
+        history, a Robinhood repricing before poll 2 (Kalshi unchanged) yields a LAG dict."""
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo, OutcomeQuote
+
+        an = EventAnalyzer.__new__(EventAnalyzer)  # only lag_signals is exercised
+        import threading
+        from arb_engine.strategy.leadlag import LeadLagTracker
+        an.leadlag = LeadLagTracker(move=0.05, window_s=30, min_edge=0.02, cooldown_s=60, fresh_s=10)
+        an._leadlag_mu = threading.Lock()
+        key = "nfl:DEN|KC:2026-09-21"
+        info = EventInfo(event_key=key, sport="nfl", market_type="moneyline", outcomes=["DEN", "KC"], labels={"DEN": "Denver", "KC": "Kansas City"}, venues={"_teams": {"title": "DEN @ KC"}})
+        kfee = {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}
+
+        def me(t, rh_kc):
+            k = [OutcomeQuote("kalshi", "T-KC", key, "KC", ask=0.60, bid=0.59, ask_size=300, ts=t, fee_params=kfee, meta={"ticker": "T-KC", "side": "yes"}), OutcomeQuote("kalshi", "T-DEN", key, "DEN", ask=0.41, bid=0.40, ask_size=300, ts=t, fee_params=kfee, meta={"ticker": "T-DEN", "side": "yes"})]
+            r = [OutcomeQuote("robinhood", "c1", key, "KC", ask=rh_kc[1], bid=rh_kc[0], ts=t, quote_time=t, fee_params={"exchange": "rothera"}, meta={"contract_id": "c1", "side": "yes", "exchange": "rothera"}, book_id="rothera"), OutcomeQuote("robinhood", "c2", key, "DEN", ask=round(1 - rh_kc[0], 2), bid=round(1 - rh_kc[1], 2), ts=t, quote_time=t, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+            return MergedEvent(key, info, {"kalshi": k, "robinhood": r})
+
+        self.assertEqual(an.lag_signals(me(1000.0, (0.58, 0.61)), {}, {"kalshi", "robinhood"}, 1000.0), [])
+        lags = an.lag_signals(me(1010.0, (0.66, 0.69)), {"bankroll": 500, "kelly_fraction": 0.25}, {"kalshi", "robinhood"}, 1010.0)
+        self.assertEqual(len(lags), 1)
+        l = lags[0]
+        self.assertEqual((l["leader"], l["follower"], l["outcome"], l["ask"]), ("robinhood", "kalshi", "KC", 0.60))
+        self.assertGreater(l["edge"], 0.02)
+        self.assertEqual(l["suggested_contracts"], min(300, int(500 * 0.25 / 0.60)))
+        self.assertIn("buy Kansas City on kalshi", l["text"])
+
