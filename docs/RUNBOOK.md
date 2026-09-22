@@ -91,6 +91,24 @@ BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start   # or: scripts/sunday.sh resta
    The full text is in `out/live_journal.jsonl` (`"kind": "alert"`); pushes are logged as
    `"kind": "ntfy"`, throttled ones as `ntfy_throttled`.
 
+## 1c. Acting on LAG automatically (needs your Kalshi API key)
+
+A LAG lives ~23 s; reading a push and typing an order is slower. `live --execute-lag` sends
+an **immediate-or-cancel buy** of the laggard's own Kalshi market at the ask the signal saw,
+sized like the signal and capped (`--lag-max-contracts 50`, `--lag-max-per-game 100`,
+`--lag-daily 500`). Modes: `intent` writes what it would send to
+`out/orders/lag_intents.jsonl` (start here; no key needed), `demo` sends to Kalshi's demo
+exchange (`KALSHI_ENV=demo` + `KALSHI_API_KEY` + `KALSHI_PRIVATE_KEY_PATH`), `live` sends to
+production and also needs `ARB_LIVE_TRADING=1`. The launcher passes extras after `--`:
+
+```bash
+scripts/sunday.sh start -- --execute-lag intent          # dry run: intents only
+KALSHI_ENV=demo KALSHI_API_KEY=… KALSHI_PRIVATE_KEY_PATH=… scripts/sunday.sh restart live -- --execute-lag demo
+```
+
+Read `out/orders/lag_intents.jsonl` after a slate before considering `demo`; the paper book
+(`scripts/leadlag_study.py --date <day>`) tells you what those intents would have filled.
+
 ## 2. Reload the extension (12:35)
 
 1. `chrome://extensions` → the "Arb Engine Robinhood Overlay" card → the circular reload

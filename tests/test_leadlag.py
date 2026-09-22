@@ -350,3 +350,73 @@ class RepricingTests(unittest.TestCase):
         sigs = tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(20, (0.59, 0.60), (0.66, 0.69)), now=20)
         self.assertEqual([(s.leader, s.follower) for s in sigs], [("robinhood", "kalshi")])
         self.assertIsNone(sigs[0].url)   # the fixture quotes carry no url; the analyzer's do
+
+
+class LagExecutorTests(unittest.TestCase):
+    """strategy/lagexec.py: intents, caps, IOC plans through a fake executor."""
+
+    def _sig(self, follower="kalshi", ask=0.60, edge=0.058, contracts=100, depth=300, event=KEY):
+        from arb_engine.strategy.leadlag import LagSignal
+        return LagSignal(event_key=event, title="DEN @ KC", leader="robinhood", follower=follower, outcome="KC", label="Kansas City", lead_move=0.08, follower_move=0.0, leader_mid=0.675, follower_ask=ask, follower_all_in=ask + 0.017, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=1000.0)
+
+    def _quotes(self):
+        return {"kalshi": [OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-KC", KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": "KXNFLGAME-26SEP21DENKC-KC", "side": "yes", "exchange_index": 3}), OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-DEN", KEY, "DEN", ask=0.41, bid=0.40, meta={"ticker": "KXNFLGAME-26SEP21DENKC-DEN", "side": "yes"})]}
+
+    def test_intent_mode_journals_without_an_executor(self):
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_intents_{os.getpid()}.jsonl")
+        if os.path.exists(path):
+            os.remove(path)
+        ex = LagExecutor(mode="intent", intents_path=path, max_contracts=50, clock=lambda: 1000.0)
+        rec = ex.on_signal(self._sig(), self._quotes())
+        self.assertEqual((rec["status"], rec["ticker"], rec["side"], rec["count"]), ("intent", "KXNFLGAME-26SEP21DENKC-KC", "yes", 50))  # 100 suggested, capped at 50
+        with open(path) as f:
+            self.assertEqual(len(f.read().splitlines()), 1)
+        self.assertEqual(ex.on_signal(self._sig(follower="robinhood"), self._quotes())["reason"], "follower is not kalshi")
+        self.assertIn("edge", ex.on_signal(self._sig(edge=0.01), self._quotes())["reason"])
+        self.assertIsNone(LagExecutor(mode="off").on_signal(self._sig(), self._quotes()))
+
+    def test_demo_mode_sends_an_ioc_buy_and_respects_caps(self):
+        from arb_engine.execution.kalshi import KalshiExecutor
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        sent = []
+
+        class Client:
+            env, base_url, has_credentials = "demo", "https://demo", True
+
+            def create_order(self, payload):
+                sent.append(payload)
+                return {"order_id": f"o{len(sent)}", "fill_count": int(float(payload["count"])), "remaining_count": 0}  # V2 sends counts as fixed-point strings
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_demo_{os.getpid()}.jsonl"), max_contracts=50, max_notional_per_game=45.0, daily_notional=100.0, clock=lambda: 1000.0)
+        rec = ex.on_signal(self._sig(), self._quotes())
+        self.assertEqual(rec["status"], "SUBMITTED")
+        self.assertEqual((rec["count"], rec["fill_count"], rec["order_id"]), (50, 50, "o1"))
+        self.assertEqual(rec["count"] * 0.60, 30.0)
+        p = sent[0]
+        # V2 spells a YES buy as side=bid with fixed-point strings; IOC never rests, so no expiry.
+        self.assertEqual((p["ticker"], p["side"], int(float(p["count"])), p["price"]), ("KXNFLGAME-26SEP21DENKC-KC", "bid", 50, "0.6000"))
+        self.assertEqual(p.get("time_in_force"), "immediate_or_cancel")
+        self.assertFalse(p.get("post_only"))
+        self.assertNotIn("expiration_time", p)
+        self.assertEqual(p.get("exchange_index"), 3)
+        # Per-game cap: $45 with $30 already sent leaves $15 -> 25 contracts at 0.60.
+        rec2 = ex.on_signal(self._sig(), self._quotes())
+        self.assertEqual((rec2["status"], rec2["count"]), ("SUBMITTED", 25))
+        self.assertEqual(ex.on_signal(self._sig(), self._quotes())["reason"], "notional cap reached")
+        # Another game still has room under the daily cap ($100 - $45).
+        rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21"), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, meta={"ticker": "T-KC", "side": "yes"})]})
+        self.assertEqual((rec4["status"], rec4["count"]), ("SUBMITTED", 50))
+        self.assertAlmostEqual(ex.sent_notional, 75.0)
+
+    def test_live_mode_needs_the_flag_and_no_row_is_skipped(self):
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        os.environ.pop("ARB_LIVE_TRADING", None)
+        with self.assertRaises(RuntimeError):
+            LagExecutor(mode="live", executor=object())
+        ex = LagExecutor(mode="intent", intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_i2_{os.getpid()}.jsonl"))
+        # Only a NO row for the outcome: nothing to buy on Kalshi's own market.
+        q = {"kalshi": [OutcomeQuote("kalshi", "T-DEN#no", KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": "T-DEN", "side": "no"})]}
+        self.assertEqual(ex.on_signal(self._sig(), q)["reason"], "no Kalshi YES row for this outcome")

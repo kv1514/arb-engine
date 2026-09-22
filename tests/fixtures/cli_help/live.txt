@@ -3,6 +3,9 @@ usage: arb-engine live [-h] [--sport {nfl,ncaaf,nba,nhl}] [--every EVERY] [--hou
                        [--steal-edge STEAL_EDGE] [--target-margin TARGET_MARGIN] [--venues VENUES]
                        [--contracts CONTRACTS] [--gold] [--record [DB]] [--bankroll BANKROLL]
                        [--kelly KELLY] [--journal JOURNAL] [--fast SECONDS]
+                       [--execute-lag {off,intent,demo,live}]
+                       [--lag-max-contracts LAG_MAX_CONTRACTS]
+                       [--lag-max-per-game LAG_MAX_PER_GAME] [--lag-daily LAG_DAILY]
 
 options:
   -h, --help            show this help message and exit
@@ -25,3 +28,14 @@ options:
   --journal JOURNAL
   --fast SECONDS        between full ticks, refresh Kalshi + Robinhood top of book for the live
                         games every SECONDS (e.g. 1) and run the LAG / ARB signals on it
+  --execute-lag {off,intent,demo,live}
+                        act on LAG signals whose laggard is Kalshi: intent = write
+                        out/orders/lag_intents.jsonl only; demo = IOC buys on Kalshi's demo
+                        exchange (KALSHI_ENV=demo + key); live = production (also
+                        ARB_LIVE_TRADING=1)
+  --lag-max-contracts LAG_MAX_CONTRACTS
+                        per-order cap for --execute-lag
+  --lag-max-per-game LAG_MAX_PER_GAME
+                        dollars sent per game for --execute-lag
+  --lag-daily LAG_DAILY
+                        dollars sent per day for --execute-lag

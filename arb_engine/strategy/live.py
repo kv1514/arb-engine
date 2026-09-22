@@ -36,6 +36,7 @@ from .alerts import Alerter
 from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_store, evaluate_inplay, record_view, resolve_executable, setting, steal_record
 from .fastlane import FastLane
 from .leadlag import LagSignal, LeadLagTracker
+from .lagexec import LagExecutor
 from .paperlag import LagPaperBook
 
 try:  # the settings registry (config.declare_setting); this module must import without it
@@ -64,7 +65,7 @@ class SlateTick:
 
 
 class LiveSlate:
-    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None, executable_venues: Optional[Iterable[str]] = None, quiet: Optional[bool] = None, fast: float = 0.0):
+    def __init__(self, adapters: Iterable[Any], feed: Optional[ESPNFeed] = None, settings: Optional[dict[str, Any]] = None, sport: str = "nfl", steal_edge: float = 0.03, target_margin: float = 0.0, pre_hours: float = 1.0, alerter: Optional[Alerter] = None, store: Any = None, model: Any = None, refresh_summary_every: float = 30.0, contracts: float = 100, bankroll: Optional[float] = None, kelly_fraction: float = 0.25, interval: float = 10.0, slate_cap: Optional[float] = None, executable_venues: Optional[Iterable[str]] = None, quiet: Optional[bool] = None, fast: float = 0.0, lag_executor: Optional[LagExecutor] = None):
         self.adapters = list(adapters)
         self.feed = feed or ESPNFeed(ESPNClient(sport=sport))
         self.settings = settings or {}
@@ -102,6 +103,7 @@ class LiveSlate:
         # Paper fills for every LAG, judged on the next quotes (strategy/paperlag.py): the
         # fill-adjusted P&L the replay cannot give. Rows in the store's lag_paper table.
         self.paper = LagPaperBook(store=self.store, alerter=self.alerts) if self.store is not None else LagPaperBook(store=None, alerter=self.alerts)
+        self.lag_executor = lag_executor   # strategy/lagexec.py: off | intent | demo | live
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
 
@@ -303,6 +305,13 @@ class LiveSlate:
                     self.paper.open(sig, now)
                 except Exception as e:
                     out.errors.append(f"paperlag open: {e!r}")
+                if self.lag_executor is not None:
+                    try:
+                        rec = self.lag_executor.on_signal(sig, me.quotes_by_venue, now)
+                        if rec is not None:
+                            out.paper.append(f"lag-exec {rec.get('status')}: {rec.get('ticker')} {rec.get('side')} {rec.get('count')} @ {rec.get('price')}" + (f" — {rec['reason']}" if rec.get("reason") else ""))
+                    except Exception as e:
+                        out.errors.append(f"lag-exec: {e!r}")
                 # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in
                 # the observation's extra_json so the ladder can be split STEAL vs LAG.
                 extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "signal_kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}

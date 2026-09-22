@@ -401,7 +401,25 @@ def cmd_live(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None
 
         store = Store(args.record)
     venues = [v.strip() for v in args.venues.split(",") if v.strip()]
-    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=Alerter(journal_path=args.journal), store=store, contracts=args.contracts, bankroll=args.bankroll, kelly_fraction=args.kelly, fast=getattr(args, "fast", 0.0) or 0.0)
+    alerter = Alerter(journal_path=args.journal)
+    lag_exec = None
+    mode = getattr(args, "execute_lag", "off") or "off"
+    if mode != "off":
+        from .strategy.lagexec import LagExecutor
+
+        executor = None
+        if mode in ("demo", "live"):
+            from .execution.kalshi import KalshiExecutor
+            from .venues.kalshi import KalshiClient
+
+            client = KalshiClient(env="prod" if mode == "live" else "demo")
+            if not client.has_credentials:
+                print("--execute-lag demo/live needs KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH", file=sys.stderr)
+                return 2
+            executor = KalshiExecutor(client)
+        lag_exec = LagExecutor(mode=mode, executor=executor, max_contracts=args.lag_max_contracts, max_notional_per_game=args.lag_max_per_game, daily_notional=args.lag_daily, alerter=alerter)
+        print(f"LAG execution: {mode} (caps: {args.lag_max_contracts} ct/order, ${args.lag_max_per_game:g}/game, ${args.lag_daily:g}/day)")
+    slate = LiveSlate(build_adapters(venues, False), settings=settings, sport=args.sport, steal_edge=args.steal_edge, target_margin=args.target_margin, pre_hours=args.pre_hours, alerter=alerter, store=store, contracts=args.contracts, bankroll=args.bankroll, kelly_fraction=args.kelly, fast=getattr(args, "fast", 0.0) or 0.0, lag_executor=lag_exec)
     if args.once:
         print(format_tick(slate.tick()))
         return 0
@@ -658,6 +676,10 @@ def build_parser(plugins: bool = True) -> tuple[argparse.ArgumentParser, dict[st
     lv.add_argument("--kelly", type=float, default=0.25)
     lv.add_argument("--journal", default="out/live.jsonl")
     lv.add_argument("--fast", type=float, default=0.0, metavar="SECONDS", help="between full ticks, refresh Kalshi + Robinhood top of book for the live games every SECONDS (e.g. 1) and run the LAG / ARB signals on it")
+    lv.add_argument("--execute-lag", choices=["off", "intent", "demo", "live"], default="off", help="act on LAG signals whose laggard is Kalshi: intent = write out/orders/lag_intents.jsonl only; demo = IOC buys on Kalshi's demo exchange (KALSHI_ENV=demo + key); live = production (also ARB_LIVE_TRADING=1)")
+    lv.add_argument("--lag-max-contracts", type=int, default=50, help="per-order cap for --execute-lag")
+    lv.add_argument("--lag-max-per-game", type=float, default=100.0, help="dollars sent per game for --execute-lag")
+    lv.add_argument("--lag-daily", type=float, default=500.0, help="dollars sent per day for --execute-lag")
     lv.set_defaults(func=cmd_live)
 
     rc = sub.add_parser("record", help="scan on a schedule and append every event + quote to SQLite (arb frequency by time-to-kickoff)")
