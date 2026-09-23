@@ -47,8 +47,25 @@ class FeeModel(Protocol):
         ...
 
 
+def money(x: Decimal | float) -> str:
+    return f"${float(x):,.2f}"
+
+
+def fnum(x: Decimal | float, places: int = 4) -> str:
+    """0.5600 -> '0.56', 340 -> '340': the shortest faithful form for a formula line."""
+    s = f"{float(x):.{places}f}".rstrip("0").rstrip(".")
+    return s or "0"
+
+
 class _Base:
     name = "base"
+
+    def breakdown(self, price: Number, contracts: Number, role: str = "taker") -> list[dict]:
+        """The fee as the venue's order ticket would itemise it: ``[{label, amount, formula}]``
+        whose amounts sum to ``fee(price, contracts, role)``. Models that know their schedule
+        spell out the formula and the rounding; this default is one unexplained line."""
+        amount = self.fee(price, contracts, role)  # type: ignore[attr-defined]
+        return [{"label": f"{self.name} fee", "amount": float(amount), "formula": money(amount)}]
 
     def per_contract(self, price: Number, contracts: Number, role: str = "taker") -> float:
         c = D(contracts)

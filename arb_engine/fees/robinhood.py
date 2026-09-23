@@ -186,6 +186,41 @@ class RobinhoodFees(_Base):
         per = self.exchange_fee_table.get(self.exchange, Decimal("0.01"))
         return (per * c).quantize(CENT)
 
+    def breakdown(self, price: Number, contracts: Number, role: str = "taker") -> list[dict]:
+        """Commission and exchange fee as two lines, each with its rule, so the numbers can be
+        checked against Robinhood's order review. The exchange fee's model is marked when it
+        is the assumed $0.01/contract ceiling (docs/ROADMAP.md: not yet read off a ticket)."""
+        from .base import fnum, money
+
+        p, c = D(price), D(contracts)
+        if c <= 0:
+            return [{"label": "Robinhood commission", "amount": 0.0, "formula": "$0.00"}]
+        raw = self.k * p * (Decimal(1) - p) * c
+        rounded = ceil_to(raw, CENT)
+        cap = self.commission_cap_per_contract * c
+        com = min(rounded, cap)
+        gold = " (Gold)" if self.gold else ""
+        cformula = f"{fnum(self.k)} x {fnum(c, 2)} x {fnum(p)} x {fnum(Decimal(1) - p)} = ${raw:.4f}"
+        cformula += f" -> {money(rounded)} (rounded up)" if rounded != raw else ""
+        cformula += f", capped at $0.01 x {fnum(c, 2)} = {money(cap)}" if cap < rounded else ""
+        lines = [{"label": f"Robinhood commission{gold}", "amount": float(com), "formula": cformula}]
+        exch = self.exchange_fee(price, contracts)
+        venue = {"rothera": "Rothera", "cdna": "CDNA", "nadex": "Nadex", "kalshi": "Kalshi"}.get(self.exchange, self.exchange or "exchange")
+        model = "per_contract" if self.exchange_fee_per_contract is not None else self.exchange_fee_model
+        if model == "quadratic":
+            ef = f"max({fnum(self.rothera_k)} x {fnum(c, 2)} x {fnum(p)} x {fnum(Decimal(1) - p)} rounded to the cent, $0.01) = {money(exch)}"
+        elif model == "weighted_007":
+            ef = f"0.07 x {fnum(c, 2)} x {fnum(p)} x {fnum(Decimal(1) - p)} rounded up = {money(exch)}"
+        elif model == "flat_002":
+            ef = f"$0.02 x {fnum(c, 2)} = {money(exch)}"
+        else:
+            per = self.exchange_fee_per_contract if self.exchange_fee_per_contract is not None else self.exchange_fee_table.get(self.exchange, Decimal("0.01"))
+            ef = f"${fnum(per)} x {fnum(c, 2)} = {money(exch)}"
+            if model == "flat_001":
+                ef += " (assumed: Robinhood's 'up to $0.01 per contract' ceiling)"
+        lines.append({"label": f"{venue} exchange fee", "amount": float(exch), "formula": ef})
+        return lines
+
     def fee(self, price: Number, contracts: Number, role: str = "taker") -> Decimal:
         """Commission + exchange fee for ONE order of ``contracts`` at ``price``. Robinhood
         charges the same commission whether the order rests or crosses, and Rothera's floor

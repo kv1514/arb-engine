@@ -123,8 +123,13 @@ class LifecycleTests(unittest.TestCase):
         msg = alerts[0]["msg"]
         self.assertTrue(msg.startswith("NFL - "), msg)
         self.assertIn("filled 100 x Under 65.5 @ 0.91 on KALSHI", msg)
-        self.assertIn("ROBINHOOD buy 100 x Over 65.5 @ <= 0.07", msg)
-        self.assertIn("ask now 0.04 -> $4.00 + $1.39 fee = $5.39", msg)
+        self.assertIn("ROBINHOOD: buy 100 x Over 65.5 at no more than $0.07", msg)
+        self.assertIn("at the ask now $0.04 (4c): 100 x $0.04 = $4.00", msg)
+        # Robinhood's two fee items, each checkable by hand: the commission (0.10 x C x p x (1-p)
+        # rounded up, capped at 1c/contract) and the routing exchange's fee.
+        self.assertIn("+ Robinhood commission: 0.1 x 100 x 0.04 x 0.96 = $0.3840 -> $0.39 (rounded up)", msg)
+        self.assertIn("exchange fee: $0.01 x 100 = $1.00", msg)
+        self.assertIn("= you pay $5.39", msg)
         # A filled watch gets a fresh order on the next reconcile (still priceable).
         self.assertEqual(len([x for x in r.orders if x.status == "resting"]), 1)
 

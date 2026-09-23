@@ -56,8 +56,10 @@ class LeadLagTests(unittest.TestCase):
         # (Kalshi rounds up per order, so it is not 208 x the per-contract fee) and the cash.
         txt = s.text()
         self.assertTrue(txt.startswith("NFL - DEN @ KC - LAG:"), txt)
-        self.assertIn(f"KALSHI buy {s.suggested_contracts} x Kansas City @ 0.60", txt)
-        self.assertIn(f"fee = ${0.60 * s.suggested_contracts + s.fee_total:,.2f}", txt)
+        self.assertIn(f"KALSHI: buy {s.suggested_contracts} x Kansas City at the ask $0.60", txt)
+        self.assertTrue(s.fee_detail and abs(sum(d["amount"] for d in s.fee_detail) - s.fee_total) < 1e-9)
+        self.assertIn(f"+ Kalshi taker fee: {s.fee_detail[0]['formula']}", txt)
+        self.assertIn(f"= you pay ${0.60 * s.suggested_contracts + s.fee_total:,.2f}", txt)
         self.assertGreater(s.fee_total, 0)
         self.assertIn("edge vs robinhood mid", txt)
         # Same poll again within the cooldown and no bigger edge: silent.
@@ -384,14 +386,14 @@ class FastLaneTests(unittest.TestCase):
             lags += ft.lags
             arbs += ft.arbs
             errors += ft.errors
-        self.assertTrue(any("KALSHI buy" in l and "Kansas City @ 0.60" in l for l in lags), lags)
+        self.assertTrue(any("KALSHI: buy" in l and "Kansas City at the ask $0.60" in l for l in lags), lags)
         self.assertTrue(all(l.startswith("NFL - DEN @ KC - LAG:") for l in lags), lags)   # sport first, title once
         lag_alerts = [e for e in slate.alerts.events if e["kind"] == "alert" and e["title"] == "LAG"]
         self.assertTrue(lag_alerts and lag_alerts[0]["msg"].startswith("NFL - DEN @ KC - LAG:"), lag_alerts)
         # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi),
         # and it is reported as an order ticket: sport, per-venue counts, prices, fees, totals.
-        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI buy 120 x KC YES @ 0.60" in a
-                            and "ROBINHOOD buy 120 x DEN YES @ 0.34" in a and "fee =" in a and "stake $" in a for a in arbs), arbs)
+        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI: buy 120 x KC YES at the ask $0.60" in a
+                            and "ROBINHOOD: buy 120 x DEN YES at the ask $0.34" in a and "+ Kalshi taker fee:" in a and "total: $" in a for a in arbs), arbs)
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
@@ -437,7 +439,7 @@ class FastLaneTests(unittest.TestCase):
         for _ in range(3):
             clock["t"] += 1.0
             lags += slate.fast_step().lags
-        self.assertTrue(any("KALSHI buy" in l and "Kansas City @ 0.60" in l for l in lags), lags)
+        self.assertTrue(any("KALSHI: buy" in l and "Kansas City at the ask $0.60" in l for l in lags), lags)
 
 class PaperLagTests(unittest.TestCase):
     """strategy/paperlag.py: paper fills judged on the next quotes."""
@@ -668,12 +670,20 @@ class TicketTests(unittest.TestCase):
         txt = ticket.arb_ticket("DEN @ KC", r, size_note="bankroll $500.00", sport="nfl:DEN|KC:2026-09-24")
         lines = txt.splitlines()
         self.assertTrue(lines[0].startswith("NFL - DEN @ KC - ARB "), lines[0])
-        self.assertIn("KALSHI buy 47 x Kansas City @ 0.60", txt)
-        self.assertIn("ROBINHOOD buy 47 x Denver @ 0.36", txt)
-        # Per-leg cash: price x count, the venue's fee for that order, the sum; and the totals.
+        self.assertIn("KALSHI: buy 47 x Kansas City at the ask $0.60 (60c)", txt)
+        self.assertIn("ROBINHOOD: buy 47 x Denver at the ask $0.36 (36c)", txt)
+        # Each leg is a receipt: price x count, every fee item with its formula, the total.
         for leg in r.legs:
-            self.assertIn(f"${leg.price * leg.contracts:,.2f} + ${leg.fee:,.2f} fee = ${leg.cost:,.2f}", txt)
-        self.assertIn(f"stake ${r.total_cost:,.2f} -> pays ${r.payout:,.2f}", txt)
+            self.assertIn(f"price: 47 x ${leg.price:.2f} = ${leg.price * leg.contracts:,.2f}", txt)
+            self.assertAlmostEqual(sum(d["amount"] for d in leg.fee_detail), leg.fee, places=9)
+            for d in leg.fee_detail:
+                self.assertIn(f"+ {d['label']}: {d['formula']}", txt)
+            self.assertIn(f"= you pay ${leg.cost:,.2f}", txt)
+        self.assertIn("0.07 x 47 x 0.6 x 0.4 = $0.7896 -> $0.79 (rounded up to the cent)", txt)   # Kalshi, checkable by hand
+        self.assertIn("Robinhood commission: 0.1 x 47 x 0.36 x 0.64", txt)
+        self.assertIn("Rothera exchange fee: $0.01 x 47 = $0.47", txt)
+        costs = " + ".join(f"${l.cost:,.2f}" for l in r.legs)
+        self.assertIn(f"total: {costs} = ${r.total_cost:,.2f} -> pays ${r.payout:,.2f} whoever wins", txt)
         self.assertIn("fees are entry-only", txt)
         self.assertIn("bankroll $500.00", txt)
 
@@ -682,7 +692,10 @@ class TicketTests(unittest.TestCase):
 
         one, many = self._result(1.0), self._result(100.0)
         self.assertLess(many.legs[0].fee, one.legs[0].fee * 100)      # Kalshi rounds up per order
-        self.assertIn(f"+ ${many.legs[0].fee:,.2f} fee", ticket.arb_ticket("t", many))
+        txt = ticket.arb_ticket("t", many)
+        self.assertIn("+ Kalshi taker fee: 0.07 x 100 x 0.6 x 0.4 = $1.6800", txt)   # exact: no rounding to show
+        self.assertIn(f"= you pay ${many.legs[0].cost:,.2f}", txt)
+        self.assertIn("-> $0.02 (rounded up to the cent)", ticket.arb_ticket("t", one))   # one contract: 0.0168 -> 0.02
 
     def test_a_ticket_that_loses_on_a_tie_says_so(self):
         from arb_engine.quant.arbitrage import Leg, evaluate
@@ -791,8 +804,9 @@ class NearArbAlertTests(unittest.TestCase):
         self._run(slate, me, view, t0 + 1)
         alerts = [e for e in slate.alerts.events if e["kind"] == "alert"]
         self.assertEqual([a["title"] for a in alerts], ["ARB"])
-        self.assertIn("stake $", alerts[0]["msg"])
-        self.assertIn("KALSHI buy", alerts[0]["msg"])
+        self.assertIn("total: $", alerts[0]["msg"])
+        self.assertIn("KALSHI: buy", alerts[0]["msg"])
+        self.assertIn("+ Kalshi taker fee:", alerts[0]["msg"])
 
     def test_the_buffer_is_a_setting(self):
         slate, me, view, t0 = self._slate(0.62, 0.45, arb_near_margin=0.15)   # 10.7c short, buffer 15c

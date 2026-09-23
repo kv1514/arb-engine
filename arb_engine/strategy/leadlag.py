@@ -74,6 +74,7 @@ class LagSignal:
     ts: float
     url: Optional[str] = None # the follower's market page, to act on it
     fee_total: Optional[float] = None  # the follower's fee for the whole order at ``suggested_contracts``
+    fee_detail: tuple = ()              # that fee itemised (FeeModel.breakdown), for the alert
     settlement_flags: tuple[str, ...] = ()  # the follower contract's own rule missing/unverified: blocks execution
     pair_flags: tuple[str, ...] = ()        # leader vs follower rule differences: informational only
     tie_value: Optional[float] = None
@@ -283,5 +284,12 @@ class LeadLagTracker:
                     continue
                 self._last[key] = (now, edge)
                 fee_total = float(total) if contracts else None
-                signals.append(LagSignal(fee_total=fee_total, settlement_flags=settlement_flags, pair_flags=pair, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
+                fee_detail: tuple = ()
+                if contracts:
+                    try:
+                        bd = getattr(fee_model, "breakdown", None)
+                        fee_detail = tuple(bd(q.ask, contracts, "taker")) if bd else ()
+                    except Exception:
+                        fee_detail = ()
+                signals.append(LagSignal(fee_total=fee_total, fee_detail=fee_detail, settlement_flags=settlement_flags, pair_flags=pair, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

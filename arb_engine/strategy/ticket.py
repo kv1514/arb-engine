@@ -52,8 +52,25 @@ def cents(x: Optional[float]) -> str:
     return "?" if x is None else f"{float(x) * 100:+.1f}¢"
 
 
+def fee_lines(detail: Sequence[Any], indent: str = "   ") -> list[str]:
+    """``+ Kalshi taker fee: 0.07 x 340 x 0.56 x 0.44 = $5.8643 -> $5.87 (rounded up ...)``,
+    one line per fee item (per price level when the order walks the book)."""
+    out = []
+    for d in detail or ():
+        at = f" at ${float(_g(d, 'price')):.2f} x {float(_g(d, 'contracts')):g}" if _g(d, "price") is not None else ""
+        formula = _g(d, "formula") or money(_g(d, "amount"))
+        out.append(f"{indent}+ {_g(d, 'label', 'fee')}{at}: {formula}")
+    return out
+
+
 def leg_line(leg: Any, n: int = 0) -> str:
-    """``1) KALSHI buy 47 Buffalo YES @ 0.62 -> $29.14 + $0.35 fee = $29.49 (0.6274/ct)``"""
+    """One leg as an itemised receipt, checkable against the venue's order review::
+
+        1) KALSHI: buy 340 x Green Bay YES at the ask $0.56 (56c), 500 offered
+           price: 340 x $0.56 = $190.40
+           + Kalshi taker fee: 0.07 x 340 x 0.56 x 0.44 = $5.8643 -> $5.87 (rounded up to the cent)
+           = you pay $196.27 ($0.5773 per contract)
+    """
     venue = str(_g(leg, "venue", "?")).upper()
     label = _g(leg, "label") or _g(leg, "outcome") or "?"
     side = _g(leg, "side")
@@ -61,12 +78,21 @@ def leg_line(leg: Any, n: int = 0) -> str:
     price = float(_g(leg, "price", 0) or 0)
     fee = float(_g(leg, "fee", 0) or 0)
     cost = float(_g(leg, "cost", price * contracts + fee) or 0)
-    all_in = _g(leg, "all_in_per_contract")
+    vwap = _g(leg, "vwap")
+    size = _g(leg, "ask_size")
     head = f"{n}) " if n else ""
     sidetxt = f" {str(side).upper()}" if side else ""
-    tail = f" ({float(all_in):.4f}/ct)" if all_in else ""
-    return (f"{head}{venue} buy {contracts:g} x {label}{sidetxt} @ {price:.2f} -> "
-            f"{money(price * contracts)} + {money(fee)} fee = {money(cost)}{tail}")
+    offered = f", {float(size):g} offered" if size is not None else ""
+    lines = [f"{head}{venue}: buy {contracts:g} x {label}{sidetxt} at the ask ${price:.2f} ({price * 100:.0f}c){offered}"]
+    cash = cost - fee
+    if vwap is not None and abs(float(vwap) - price) > 1e-9:
+        lines.append(f"   price: {contracts:g} contracts walk the book, average ${float(vwap):.4f} = {money(cash)}")
+    else:
+        lines.append(f"   price: {contracts:g} x ${price:.2f} = {money(cash)}")
+    detail = _g(leg, "fee_detail") or []
+    lines += fee_lines(detail) if detail else [f"   + fees: {money(fee)}"]
+    lines.append(f"   = you pay {money(cost)} (${cost / contracts:.4f} per contract)" if contracts else f"   = you pay {money(cost)}")
+    return "\n".join(lines)
 
 
 def _urls(legs: Sequence[Any]) -> list[str]:
@@ -94,7 +120,8 @@ def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB"
     roi = _g(result, "roi")
     lines = [f"{headline(title, sport)} - {header} {cents(margin)}/ct after fees"]
     lines += [leg_line(l, i) for i, l in enumerate(legs, 1)]
-    lines.append(f"stake {money(cost)} -> pays {money(payout)} = {'+' if profit >= 0 else ''}{money(profit)}"
+    parts = " + ".join(money(_g(l, "cost", 0) or 0) for l in legs)
+    lines.append(f"total: {parts} = {money(cost)} -> pays {money(payout)} whoever wins = {'+' if profit >= 0 else ''}{money(profit)}"
                  + (f" ({float(roi):+.2%} on cost)" if roi is not None else ""))
     tie_total, tie_margin = _g(result, "tie_payout_total"), _g(result, "tie_margin")
     if tie_total is not None and tie_margin is not None:
@@ -122,9 +149,13 @@ def lag_ticket(sig: Any, fee_total: Optional[float] = None) -> str:
         n = int(n)
         fee = float(fee_total) if fee_total is not None else (all_in - ask) * n
         cash = ask * n
+        detail = _g(sig, "fee_detail") or []
         lines = [head,
-                 f"{follower.upper()} buy {n} x {label} @ {ask:.2f} -> {money(cash)} + {money(fee)} fee = {money(cash + fee)} ({(cash + fee) / n:.4f}/ct)",
-                 f"edge vs {leader} mid {float(_g(sig, 'leader_mid', 0) or 0):.3f}: {cents(edge)}/ct = {money(edge * n)} if it converges (exit fee not counted)"]
+                 f"{follower.upper()}: buy {n} x {label} at the ask ${ask:.2f} ({ask * 100:.0f}c)",
+                 f"   price: {n} x ${ask:.2f} = {money(cash)}"]
+        lines += fee_lines(detail) if detail else [f"   + fees: {money(fee)}"]
+        lines += [f"   = you pay {money(cash + fee)} (${(cash + fee) / n:.4f} per contract)",
+                  f"edge vs {leader} mid {float(_g(sig, 'leader_mid', 0) or 0):.3f}: {cents(edge)}/ct = {money(edge * n)} if it converges (exit fee not counted)"]
     else:
         lines = [head, f"{follower.upper()} buy {label} @ {ask:.2f} (all-in {all_in:.4f}/ct) vs {leader} mid "
                        f"{float(_g(sig, 'leader_mid', 0) or 0):.3f}: {cents(edge)}/ct"]

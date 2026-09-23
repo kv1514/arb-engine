@@ -115,25 +115,36 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    (`AUTO (demo): sent IOC buy 50 x ... -> filled 12.00`).
 
 4. **Reading a push.** The phone's bold line is the kind and the sport (`ARB NFL`); the body
-   is an order ticket, one line per venue, and nothing in it needs arithmetic:
+   is an itemised receipt per venue, priced at the **ask** (what tapping buy costs now, never
+   the mid) and checkable line by line against each venue's order review:
 
    ```
    NFL - ATL @ GB - ARB +1.3c/ct after fees
-   1) KALSHI buy 340 x Green Bay @ 0.56 -> $190.40 + $5.87 fee = $196.27 (0.5773/ct)
-   2) ROBINHOOD buy 340 x Atlanta @ 0.39 -> $132.60 + $6.80 fee = $139.40 (0.4100/ct)
-   stake $335.67 -> pays $340.00 = +$4.33 (+1.29% on cost)
+   1) KALSHI: buy 340 x Green Bay at the ask $0.56 (56c)
+      price: 340 x $0.56 = $190.40
+      + Kalshi taker fee: 0.07 x 340 x 0.56 x 0.44 = $5.8643 -> $5.87 (rounded up to the cent)
+      = you pay $196.27 ($0.5773 per contract)
+   2) ROBINHOOD: buy 340 x Atlanta at the ask $0.39 (39c)
+      price: 340 x $0.39 = $132.60
+      + Robinhood commission: 0.1 x 340 x 0.39 x 0.61 = $8.0886 -> $8.09 (rounded up), capped at $0.01 x 340 = $3.40
+      + Rothera exchange fee: $0.01 x 340 = $3.40 (assumed: Robinhood's 'up to $0.01 per contract' ceiling)
+      = you pay $139.40 ($0.4100 per contract)
+   total: $196.27 + $139.40 = $335.67 -> pays $340.00 whoever wins = +$4.33 (+1.29% on cost)
    tie: pays $340.00 = +$4.33
    340 ct; bankroll $500.00; fees are entry-only (held to settlement)
    ```
 
    The count is one number for both legs (a set pays $1 whoever wins) and is already capped
-   by the thinner book *and* by the bankroll, fees included (`quant.arbitrage.size_for_budget`):
-   the dollars shown are the dollars the venues charge for that exact order, because the fee
-   is evaluated at that count — Kalshi rounds its fee up per order and Rothera has a per-order
-   floor, so 340 x (the fee on one contract) is the wrong number. "Entry-only" means a
-   contract held to settlement pays no exit fee; selling early pays the schedule again.
-   A `tie:` line that says **LOSES on a tie** is a Kalshi-YES + Rothera-YES pair, where a tie
-   pays $0.50 total — take the Rothera NO of the same side instead.
+   by the thinner book *and* by the bankroll, fees included (`quant.arbitrage.size_for_budget`).
+   Each fee line is the venue's rule at that exact count (`FeeModel.breakdown`, whose items
+   sum to the fee): Kalshi's 0.07 x C x p x (1-p) rounded up per order; Robinhood's commission
+   0.10 x C x p x (1-p) rounded up and capped at 1c per contract (0.05 with Gold), plus the
+   routing exchange's fee. The exchange fee marked *assumed* is Robinhood's published
+   "up to $0.01 per contract" ceiling: if Robinhood's order review shows a different
+   exchange fee, that line is the one to tell us about (docs/ROADMAP.md, "Needs you").
+   "Entry-only" means a contract held to settlement pays no exit fee; selling early pays the
+   schedule again. A `tie:` line that says **LOSES on a tie** is a Kalshi-YES + Rothera-YES
+   pair, where a tie pays $0.50 total - take the Rothera NO of the same side instead.
 
    An **ARB CLOSE** body prints what each leg costs now and the price it has to reach, so the
    limit order can be parked before the move:

@@ -634,7 +634,7 @@ class LagSignalTests(unittest.TestCase):
         self.assertEqual(l["settlement_flags"], [])
         self.assertIn("settlement-mismatch:tie", l["pair_flags"])
         # The overlay gets the structured fields *and* the order ticket (with the order fee).
-        self.assertIn("KALSHI buy", l["text"])
-        self.assertIn("Kansas City @ 0.60", l["text"])
+        self.assertIn("KALSHI: buy", l["text"])
+        self.assertIn("Kansas City at the ask $0.60", l["text"])
         self.assertGreater(l["fee_total"], 0)
         self.assertAlmostEqual(l["cost_total"], round(0.60 * l["suggested_contracts"] + l["fee_total"], 2), places=2)

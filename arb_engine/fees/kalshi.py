@@ -78,3 +78,21 @@ class KalshiFees(_Base):
         if raw <= 0:
             return Decimal("0.00")
         return ceil_to(raw, self._quantum())
+
+    def breakdown(self, price: Number, contracts: Number, role: str = "taker") -> list[dict]:
+        """``0.07 x 340 x 0.56 x 0.44 = $5.8643 -> $5.87 (rounded up to the cent)``."""
+        from .base import fnum, money
+
+        p, c = D(price), D(contracts)
+        rate = (self.maker_rate if self.maker_fees else Decimal("0")) if role == "maker" else self.taker_rate
+        raw = self.raw(price, contracts, role)
+        fee = self.fee(price, contracts, role)
+        label = f"Kalshi {'maker' if role == 'maker' else 'taker'} fee"
+        if raw <= 0:
+            why = "no maker fee on this series" if role == "maker" else "zero-fee series"
+            return [{"label": label, "amount": 0.0, "formula": f"$0.00 ({why})"}]
+        mult = "" if self.multiplier == 1 else f"{fnum(self.multiplier)} x "
+        unit = "tenth of a cent" if self.rounding == "centicent" else "cent"
+        formula = f"{mult}{fnum(rate)} x {fnum(c, 2)} x {fnum(p)} x {fnum(Decimal(1) - p)} = ${raw:.4f}"
+        formula += f" -> {money(fee)} (rounded up to the {unit})" if fee != raw else ""
+        return [{"label": label, "amount": float(fee), "formula": formula}]

@@ -102,6 +102,20 @@ class LegResult:
     vwap: Optional[float] = None
     tie_payout: float = DEFAULT_TIE_PAYOUT
     side: Optional[str] = None  # "yes" / "no" contract on the venue, when the adapter says
+    ask_size: Optional[float] = None   # displayed size at the ask when the leg was priced
+    fee_detail: list = field(default_factory=list)   # [{label, amount, formula[, price, contracts]}], sums to fee
+
+
+def fee_detail(leg: "Leg", fills: Sequence[tuple[float, float]]) -> list[dict]:
+    """The leg's fee itemised the way the venue's order ticket would show it, per price level
+    when the order walks the book (each level is charged on its own)."""
+    out: list[dict] = []
+    walked = len(fills) > 1
+    for price, qty in fills:
+        bd = getattr(leg.fee_model, "breakdown", None)
+        lines = bd(price, qty, leg.role) if bd else [{"label": "fee", "amount": float(leg.fee_model.fee(price, qty, leg.role)), "formula": ""}]
+        out.extend({**ln, "price": float(price), "contracts": float(qty)} if walked else ln for ln in lines)
+    return out
 
 
 @dataclass
@@ -156,6 +170,8 @@ def evaluate(legs: Sequence[Leg], contracts: float = 100) -> ArbResult:
                 url=leg.quote.url if leg.quote else None,
                 tie_payout=float(leg.tie_payout),
                 side=leg.quote.meta.get("side") if leg.quote else None,
+                ask_size=leg.quote.ask_size if leg.quote else None,
+                fee_detail=fee_detail(leg, [(float(leg.price), float(c))]),
             )
         )
     payout = c
@@ -326,6 +342,7 @@ def size_from_books(legs: Sequence[Leg], max_contracts: Optional[float] = None, 
                     fee=float(fee), cost=float(cost), all_in_per_contract=float(cost / D(size)), role=leg.role,
                     label=leg.label or (q.outcome_label if q else ""), market_id=q.venue_market_id if q else "",
                     url=q.url if q else None, vwap=vwap, tie_payout=float(leg.tie_payout), side=q.meta.get("side") if q else None,
+                    ask_size=q.ask_size if q else None, fee_detail=fee_detail(leg, fills),
                 )
             )
         profit = D(size) - total

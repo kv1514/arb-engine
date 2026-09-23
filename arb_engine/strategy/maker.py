@@ -484,12 +484,21 @@ class MakerRunner:
             rec.update({"hedge_venue": w.hedge_venue, "hedge_label": w.hedge_label, "hedge_max_price": hedge_max, "hedge_ask_now": w.hedge_ask, "margin_if_hedged_now": now_margin, "hedge_url": w.hedge_url, "hedge_eligibility": eligibility})
             self.fills.append(rec)
             hedge_fee = float(w.hedge_fee.fee(w.hedge_ask, qty, "taker")) if w.hedge_ask is not None else None
-            msg = (f"{ticket.headline(w.title, w.event_key)} - HEDGE NOW\n"
-                   f"filled {qty:g} x {w.kalshi_label} @ {price:.2f} on KALSHI ({o.ticker})\n"
-                   f"{w.hedge_venue.upper()} buy {qty:g} x {w.hedge_label} @ <= {hedge_max if hedge_max is not None else float('nan'):.2f}"
-                   + (f" (ask now {w.hedge_ask:.2f} -> {ticket.money(w.hedge_ask * qty)} + {ticket.money(hedge_fee)} fee = {ticket.money(w.hedge_ask * qty + (hedge_fee or 0))}, locks {ticket.cents(now_margin)}/ct)"
-                      if w.hedge_ask is not None and now_margin is not None else " (hedge ask unknown)")
-                   + f"\n{w.hedge_venue}: {eligibility}" + (f"\n{w.hedge_url}" if w.hedge_url else ""))
+            lines = [f"{ticket.headline(w.title, w.event_key)} - HEDGE NOW",
+                     f"filled {qty:g} x {w.kalshi_label} @ {price:.2f} on KALSHI ({o.ticker})",
+                     f"{w.hedge_venue.upper()}: buy {qty:g} x {w.hedge_label} at no more than ${hedge_max if hedge_max is not None else float('nan'):.2f}"]
+            if w.hedge_ask is not None and now_margin is not None:
+                bd = getattr(w.hedge_fee, "breakdown", None)
+                detail = bd(w.hedge_ask, qty, "taker") if bd else []
+                lines.append(f"   at the ask now ${w.hedge_ask:.2f} ({w.hedge_ask * 100:.0f}c): {qty:g} x ${w.hedge_ask:.2f} = {ticket.money(w.hedge_ask * qty)}")
+                lines += ticket.fee_lines(detail) if detail else [f"   + fees: {ticket.money(hedge_fee)}"]
+                lines.append(f"   = you pay {ticket.money(w.hedge_ask * qty + (hedge_fee or 0))}; locks {ticket.cents(now_margin)}/ct")
+            else:
+                lines.append("   (hedge ask unknown)")
+            lines.append(f"{w.hedge_venue}: {eligibility}")
+            if w.hedge_url:
+                lines.append(w.hedge_url)
+            msg = "\n".join(lines)
             self.alerts.alert("HEDGE NOW", msg, ntfy_title=f"HEDGE NOW {ticket.headline('', w.event_key).replace(' - ', '')}".strip(), **rec)
             if o.status != "resting":
                 w.order = None
