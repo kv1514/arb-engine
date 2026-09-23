@@ -576,7 +576,7 @@ class SundayLauncherTests(unittest.TestCase):
         self.int_log = os.path.join(self.tmp, "ints.log")
         # KEEP_AWAKE=0: the real caffeinate is a no-op on CI and misbehaves under the local
         # sandbox; the wiring is checked with a stub in test_keep_awake_wraps_the_live_supervisor.
-        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log, "KEEP_AWAKE": "0", "EXTRA_SPORTS": ""}
+        self.env = {**os.environ, "PYTHON": self.stub, "BACKOFF_S": "1", "BANKROLL": "250", "BRIDGE_WAIT_S": "0", "INT_LOG": self.int_log, "KEEP_AWAKE": "0", "EXTRA_SPORTS": "", "WEEK": "0"}
         self.env.pop("ARB_ALERT_NTFY", None)
         self.env.pop("DATE", None)
 
@@ -803,6 +803,20 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertIn("live-ncaaf", st)
         r = self._sh("restart", "live-ncaaf", env=env)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self._sh("stop", env=env).returncode, 0)
+        self.assertEqual([f for f in os.listdir(os.path.join(self.tmp, "out", "run")) if f.endswith((".pid", ".child"))], [])
+
+    def test_the_week_scanner_runs_beside_the_recorders(self):
+        """WEEK=1 (the default) adds a supervised weekscan over the same sports, sized from the
+        same bankroll, recording to the same database; stop takes it down with the rest."""
+        env = {**self.env, "EXTRA_SPORTS": "ncaaf", "WEEK": "1"}
+        out = self._sh("start", env=env)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("started week", out.stdout)
+        self._child("week")
+        log = Path(self.tmp, "out", "logs", "week-2026-09-20.log").read_text()
+        self.assertIn("-m arb_engine weekscan --sport nfl --sport ncaaf --every 120 --fast 5 --bankroll 250 --record out/history.db --journal out/week_journal.jsonl --quiet", log)
+        self.assertIn("week", self._sh("status", env=env).stdout)
         self.assertEqual(self._sh("stop", env=env).returncode, 0)
         self.assertEqual([f for f in os.listdir(os.path.join(self.tmp, "out", "run")) if f.endswith((".pid", ".child"))], [])
 

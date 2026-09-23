@@ -148,6 +148,7 @@ class ScanResult:
     venues: list[str]
     events: list[EventReport]
     errors: dict[str, list[str]]
+    merged: Optional[dict[str, Any]] = None   # event_key -> MergedEvent, only with keep_merged (the week scanner re-checks them)
 
     def arbs(self, min_margin: float = 0.0, include_live: bool = False, include_thin: bool = False) -> list[EventReport]:
         """Executable arbs: positive margin, not live, fresh, fillable and not gated
@@ -475,7 +476,8 @@ def attach_line_fair(reports: list[EventReport], selected: list[MergedEvent], se
             r.flags.append("ml-spread-gap")
 
 
-def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0, market_types: Optional[set[str]] = None, depth_for_candidates: bool = False, candidate_margin: float = -0.01, executable_venues: Optional[Iterable[str]] = None, emit_no_side: Optional[bool] = None, now: Optional[float] = None) -> ScanResult:
+def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, only_cross_venue: bool = False, max_quote_age: float = 600.0, market_types: Optional[set[str]] = None, depth_for_candidates: bool = False, candidate_margin: float = -0.01, executable_venues: Optional[Iterable[str]] = None, emit_no_side: Optional[bool] = None, now: Optional[float] = None,
+         keep_merged: bool = False) -> ScanResult:
     """Two passes when ``depth_for_candidates``: top-of-book for everything, then real order
     books only for events whose margin is above ``candidate_margin`` (keeps Kalshi's
     rate limit happy: dozens of book requests instead of hundreds).
@@ -526,4 +528,5 @@ def scan(sport: str, adapters: Iterable[Any], settings: Optional[dict[str, Any]]
     if _as_bool(setting(settings, "line_fair", False)):
         attach_line_fair(reports, selected, settings)
     reports.sort(key=lambda r: (r.live, not r.fillable, -(r.margin if r.margin is not None else -9), r.start_time or ""))
-    return ScanResult(sport=sport, fetched_at=now, venues=[s.venue for s in snapshots], events=reports, errors=errors)
+    return ScanResult(sport=sport, fetched_at=now, venues=[s.venue for s in snapshots], events=reports, errors=errors,
+                      merged={me.event_key: me for me in selected} if keep_merged else None)

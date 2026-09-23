@@ -105,6 +105,7 @@ def cmd_scan(args: argparse.Namespace, settings: Optional[dict[str, Any]] = None
     res = scan(args.sport, build_adapters(venues, False), settings=settings, contracts=args.contracts, target_margin=args.target_margin, only_cross_venue=args.cross_only, max_quote_age=args.max_quote_age, market_types=markets, depth_for_candidates=args.books, candidate_margin=args.candidate_margin)
     if args.json:
         payload = asdict(res)
+        payload.pop("merged", None)   # in-memory snapshots for the week scanner, never written
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=1, default=str)
         print(f"wrote {args.json}")
@@ -382,7 +383,7 @@ def cmd_backtest(args: argparse.Namespace, settings: Optional[dict[str, Any]] = 
     print(summarize(res))
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(asdict(res), f, indent=1, default=str)
+            json.dump({k: v for k, v in asdict(res).items() if k != "merged"}, f, indent=1, default=str)
         print(f"wrote {args.json}")
     return 0
 

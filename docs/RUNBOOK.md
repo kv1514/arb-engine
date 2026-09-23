@@ -48,6 +48,22 @@ an NFL recorder (`live`) and a college one (`live-ncaaf`, `EXTRA_SPORTS=ncaaf` b
 paper book and pushes, into the same `out/history.db` (its own journal
 `out/live_ncaaf_journal.jsonl`).
 
+It also runs the **week scanner** (`week`, `WEEK=0` leaves it out): arbitrage all week, on
+every game and every market (moneyline, spread, total) on Kalshi and Robinhood - days before
+kickoff, when a news-driven move reprices one venue first, and on the spread / total lines
+during games (the recorders own in-play moneylines). A full sweep every `WEEK_EVERY` seconds
+(120; NFL ~1,600 markets in ~6 s, college ~8,700 in ~35 s) plus a fast watch every
+`WEEK_FAST` seconds (5) of the 60 markets closest to locking, refreshed with the fast lane's
+cheap calls. Its ARB / BIG ARB pushes are the game-day tickets (tiers, stake, legging); a
+standing pre-game lock is one push per 10 minutes unless it grows by a cent; near-locks are
+journalled, not pushed (between games most are permanent far-tail lines that never lock).
+Arbs and watched markets are recorded (`scans` / `quotes`) for weekday backtests; journal
+`out/week_journal.jsonl`. One sweep by hand, with the closest markets:
+
+```bash
+python3 -m arb_engine weekscan --once
+```
+
 ```bash
 BANKROLL=1000 KELLY=0.25 scripts/sunday.sh start
 # extra flags for `live` go after --:   scripts/sunday.sh start -- --steal-edge 0.04 --pre-hours 0.5
@@ -100,10 +116,12 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    before it crosses), **EXEC ERROR** (the auto-trader's order failed — loud on
    purpose, one per game per minute),
    **HEDGE NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB
-   counts, paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed
+   counts, paper-book result), EXCHANGE PAUSED. (The maker's own TAKER ARB notice is
+   journalled only: the week scanner covers the same lines with the full ticket.) STEAL and
+   LOCK NOW are not pushed
    unless you add them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL,FINAL`): the first live Sunday
    lost on STEAL. One push per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`);
-   TAKER ARB and ARB CLOSE collapse to one per *game* (a game has a dozen spread and total
+   ARB, BIG ARB and ARB CLOSE collapse to one per *game* (a game has a dozen spread and total
    lines), ARB CLOSE repeats only every `arb_near_every_s` (5 min) or when the gap shrank by
    a cent, and HEDGE NOW is never throttled. The full text is in `out/live_journal.jsonl`
    (`"kind": "alert"`); pushes are logged as `"kind": "ntfy"`, throttled ones as

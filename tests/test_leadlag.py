@@ -213,7 +213,8 @@ class NtfyTests(unittest.TestCase):
     def test_taker_arb_throttles_per_game_not_per_line(self):
         # The maker rates every spread/total line of a game in one pass: one push per game
         # per minute (the first, best-margin line), not one per line; another game still goes.
-        a = self._alerter(min_interval_s=60)
+        # (TAKER ARB is journal-only by default since the week scanner; opted in here.)
+        a = self._alerter(min_interval_s=60, ntfy_kinds=["TAKER ARB"])
         from arb_engine.matching import game_event_key
         keys = ("nfl:NYG|TEN:2026-09-27:spread:NYG-14.5", "nfl:NYG|TEN:2026-09-27:spread:TEN-5.5", "nfl:NYG|TEN:2026-09-27:total:44.5")
         for k in keys:

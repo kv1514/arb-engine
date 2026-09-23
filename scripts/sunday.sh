@@ -14,6 +14,7 @@
 #
 # Environment knobs (all optional):
 #   SPORT=nfl  EXTRA_SPORTS=ncaaf (a live-<sport> recorder per extra sport; "" for none)
+#   WEEK=1 (the week scanner: every game and market, all week; 0 leaves it out)
 #   DATE=<YYYY-MM-DD ET, default today>  BANKROLL=<dollars, default 1000; start remembers it>
 #   KELLY=0.25  EVERY=5  MAKER_SIZE=10  BRIDGE_PORT=8765  PREFLIGHT_LIMIT=16  BRIDGE_WAIT_S=10
 #   EXECUTABLE_VENUES / ROBINHOOD_GOLD / INPLAY_* pass straight through to the engine.
@@ -49,6 +50,9 @@ RUN="$ROOT/out/run"
 EXTRA_SPORTS="${EXTRA_SPORTS-ncaaf}"
 NAMES="bridge live maker"
 for _s in $(echo "$EXTRA_SPORTS" | tr ',' ' '); do [ -n "$_s" ] && [ "$_s" != "$SPORT" ] && NAMES="$NAMES live-$_s"; done
+# The week scanner: every game, every market, all week (arbs between games and on the lines
+# during them). WEEK=0 leaves it out.
+[ "${WEEK:-1}" != "0" ] && NAMES="$NAMES week"
 # The ntfy topic persists in out/run/ntfy_topic.txt (`sunday.sh ntfy <topic>` sets it); an
 # exported ARB_ALERT_NTFY wins.
 if [ -z "${ARB_ALERT_NTFY:-}" ] && [ -f "$ROOT/out/run/ntfy_topic.txt" ]; then export ARB_ALERT_NTFY="$(cat "$ROOT/out/run/ntfy_topic.txt")"; fi
@@ -87,6 +91,10 @@ cmd_for() {
       if [ "${FAST:-1}" != "0" ] && "$PY" -m arb_engine live --help 2>/dev/null | grep -q -- '--fast'; then fast=" --fast ${FAST:-1}"; fi
       echo "$PY -m arb_engine live --sport $sport --every $EVERY --record out/history.db --journal $journal --bankroll $BANKROLL --kelly $KELLY$quiet$fast ${*:-}" ;;
     maker) echo "$PY -m arb_engine maker --sport $SPORT --mode paper --size $MAKER_SIZE --journal out/maker_journal.jsonl" ;;
+    week)
+      local sports="--sport $SPORT"
+      for _s in $(echo "$EXTRA_SPORTS" | tr ',' ' '); do [ -n "$_s" ] && [ "$_s" != "$SPORT" ] && sports="$sports --sport $_s"; done
+      echo "$PY -m arb_engine weekscan $sports --every ${WEEK_EVERY:-120} --fast ${WEEK_FAST:-5} --bankroll $BANKROLL --record out/history.db --journal out/week_journal.jsonl --quiet" ;;
     *) echo "unknown process: $name" >&2; return 1 ;;
   esac
 }
@@ -241,9 +249,12 @@ case "$action" in
     supervise live "$(cmd_for live "$extra")" "$DATE"
     supervise maker "$(cmd_for maker)" "$DATE"
     for n in $NAMES; do
-      case "$n" in live-*) printf '%s' "$extra" > "$RUN/$n.args"; supervise "$n" "$(cmd_for "$n" "$extra")" "$DATE" ;; esac
+      case "$n" in
+        live-*) printf '%s' "$extra" > "$RUN/$n.args"; supervise "$n" "$(cmd_for "$n" "$extra")" "$DATE" ;;
+        week) supervise week "$(cmd_for week)" "$DATE" ;;
+      esac
     done
-    [ -n "${ARB_ALERT_NTFY:-}" ] && echo "  ntfy pushes -> ${ARB_ALERT_NTFY} (ARB / LAG / HEDGE NOW)"
+    [ -n "${ARB_ALERT_NTFY:-}" ] && echo "  ntfy pushes -> ${ARB_ALERT_NTFY} (BIG ARB / ARB / HEDGE NOW / EXEC ERROR / FINAL)"
     echo "watch:  $0 logs live      status:  $0 status      stop:  $0 stop" ;;
   stop)
     rev=""; for n in $NAMES; do rev="$n $rev"; done   # children first, bridge last

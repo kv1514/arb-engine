@@ -39,7 +39,9 @@ NTFY_DEFAULT_URL = "https://ntfy.sh"
 # (docs/MODEL.md). It still runs in the background - journalled, paper-traded, and
 # demo-executed with --execute-lag - until the validation fold shows it pays at 1 s.
 # Opt back in with ARB_ALERT_NTFY_KINDS=...,LAG.
-NTFY_DEFAULT_KINDS = ("BIG ARB", "ARB", "ARB CLOSE", "EXEC ERROR", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
+# TAKER ARB (the maker's own line-arb notice) is journalled, not pushed: the week scanner covers
+# the same spread / total lines with the full ticket (tiers, stake, legging).
+NTFY_DEFAULT_KINDS = ("BIG ARB", "ARB", "ARB CLOSE", "EXEC ERROR", "HEDGE NOW", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
 # Kinds throttled per game rather than per (game, side): the maker rates every spread and
 # total line of a game in one pass, and one push per game per minute (the best-margin line
 # comes first, the watches are ranked) beats eight in three seconds.
