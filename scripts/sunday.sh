@@ -14,7 +14,7 @@
 #
 # Environment knobs (all optional):
 #   SPORT=nfl  EXTRA_SPORTS=ncaaf (a live-<sport> recorder per extra sport; "" for none)
-#   DATE=<YYYY-MM-DD ET, default today>  BANKROLL=<dollars, default 1000>
+#   DATE=<YYYY-MM-DD ET, default today>  BANKROLL=<dollars, default 1000; start remembers it>
 #   KELLY=0.25  EVERY=5  MAKER_SIZE=10  BRIDGE_PORT=8765  PREFLIGHT_LIMIT=16  BRIDGE_WAIT_S=10
 #   EXECUTABLE_VENUES / ROBINHOOD_GOLD / INPLAY_* pass straight through to the engine.
 #   START_ON_WARN=1 (default) — a WARN verdict still starts; FAIL never does.
@@ -29,6 +29,10 @@ export ARB_HTTP_TRANSPORT="${ARB_HTTP_TRANSPORT:-curl}"
 export PYTHONUNBUFFERED=1
 
 SPORT="${SPORT:-nfl}"
+# BANKROLL / KELLY given to `start` are remembered in out/run/ (like the ntfy topic) so a later
+# `restart <name>` sizes with the same money; an exported value wins, the defaults apply last.
+[ -z "${BANKROLL:-}" ] && [ -f "$ROOT/out/run/bankroll" ] && BANKROLL="$(cat "$ROOT/out/run/bankroll")"
+[ -z "${KELLY:-}" ] && [ -f "$ROOT/out/run/kelly" ] && KELLY="$(cat "$ROOT/out/run/kelly")"
 BANKROLL="${BANKROLL:-1000}"
 KELLY="${KELLY:-0.25}"
 EVERY="${EVERY:-5}"
@@ -220,6 +224,7 @@ case "$action" in
     if [ "$rc" -ne 0 ]; then echo "preflight FAIL (rc=$rc): not starting. Fix the FAIL rows above and run again."; exit 2; fi
     echo "preflight ok; starting $NAMES (logs: $LOGS, pids: $RUN)"
     printf '%s' "$extra" > "$RUN/live.args"
+    printf '%s' "$BANKROLL" > "$RUN/bankroll"; printf '%s' "$KELLY" > "$RUN/kelly"
     supervise bridge "$(cmd_for bridge)" "$DATE"
     wait_health "$BRIDGE_WAIT_S" || echo "  bridge /health not answering on :$BRIDGE_PORT yet (see $LOGS/bridge-$DATE.log); live and maker start anyway"
     supervise live "$(cmd_for live "$extra")" "$DATE"

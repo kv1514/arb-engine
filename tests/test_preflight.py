@@ -675,6 +675,30 @@ class SundayLauncherTests(unittest.TestCase):
         # stop_one does not send a second one into the child's cleanup window
         self.assertEqual(self._ints(), 2)
 
+    def test_restart_keeps_the_bankroll_start_was_given(self):
+        """`restart <name>` without BANKROLL in the environment used to fall back to the $1000
+        default and silently double a $500 bankroll; start now remembers it (an exported
+        value still wins)."""
+        env = {**self.env, "BANKROLL": "500", "KELLY": "0.2"}
+        out = self._sh("start", env=env)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        first = self._child("live")
+        self.assertEqual(Path(self.tmp, "out", "run", "bankroll").read_text(), "500")
+        self._wait_ready(2)
+        bare = {k: v for k, v in self.env.items() if k not in ("BANKROLL", "KELLY")}
+        r = self._sh("restart", "live", env=bare)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        second = self._child("live", not_pid=first)
+        log = Path(self.tmp, "out", "logs", "live-2026-09-20.log")
+        starts = [ln for ln in log.read_text().splitlines() if "starting live" in ln]
+        self.assertIn("--bankroll 500 --kelly 0.2", starts[-1])
+        self._wait_ready(3)
+        r = self._sh("restart", "live", env={**bare, "BANKROLL": "900"})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self._child("live", not_pid=second)
+        starts = [ln for ln in log.read_text().splitlines() if "starting live" in ln]
+        self.assertIn("--bankroll 900 --kelly 0.2", starts[-1])   # exported wins
+
     def test_restart_keeps_and_replaces_live_extras(self):
         out = self._sh("start", "--", "--steal-edge", "0.04", "--pre-hours", "0.5")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
