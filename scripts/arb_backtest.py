@@ -77,6 +77,19 @@ class Series:
                 return None
         return None
 
+    def bid_after(self, key: tuple, t: float, window: float = 60.0) -> Optional[OutcomeQuote]:
+        """Where a leg can be sold back: the first quote with a bid in [t, t + window]; failing
+        that, the last one with a bid before t (the contracts are still held, not worthless)."""
+        before = None
+        for ts, q in self.rows.get(key, []):
+            if ts < t and q.bid is not None and q.bid > 0:
+                before = q
+            elif t <= ts <= t + window and q.bid is not None and q.bid > 0:
+                return q
+            elif ts > t + window:
+                break
+        return before
+
 
 def _fee(q: OutcomeQuote, price: float, n: int) -> float:
     try:
@@ -122,8 +135,8 @@ def _buy(q: Optional[OutcomeQuote], n: int, limit: Optional[float], ledger: Opti
 
 
 def _sell(q: Optional[OutcomeQuote], n: int) -> float:
-    """Cash back from selling ``n`` to the bid (0 when no bid: the contracts are stuck and
-    counted at zero - the conservative reading)."""
+    """Cash back from selling ``n`` to the bid (``Series.bid_after`` finds one; 0 only when the
+    contract never showed a bid at all)."""
     if n <= 0 or q is None or q.bid is None or q.bid <= 0:
         return 0.0
     return q.bid * n - _fee(q, q.bid, n)
@@ -160,7 +173,7 @@ def act(series: Series, alert: dict[str, Any], policy: str, l1: float = 5.0, l2:
     if na == 0:
         return {"pnl": 0.0, "matched": 0, "status": "missed", "spent": 0.0, "back": 0.0}
     nb, cb = _buy(series.at(kb, t + l2), na, limits[1], ledger, kb, t + l2)
-    back = _sell(series.at(ka, t + l2 + 5.0), na - nb) if na > nb else 0.0
+    back = _sell(series.bid_after(ka, t + l2 + 5.0), na - nb) if na > nb else 0.0
     # Matched sets pay $1 each at settlement; the unmatched first-leg contracts are sold back.
     pnl = nb * 1.0 + back - ca - cb
     return {"pnl": pnl, "matched": nb, "status": "locked" if nb == na else ("partial" if nb else "unwound"),
@@ -236,11 +249,13 @@ def replay_inplay(db: str, dates: list[str], bankroll: float = 500.0, min_margin
 
 
 def with_bankroll(series: Series, sel: list[dict[str, Any]], policy: str, l1: float, l2: float, bankroll: float,
-                  ends: dict[str, float], max_per_alert: Optional[float] = None) -> list[dict[str, Any]]:
+                  ends: dict[str, float], max_per_alert: Optional[float] = None,
+                  fractions: Optional[dict[str, float]] = None) -> list[dict[str, Any]]:
     """Act on the alerts in time order with one bankroll. Both legs are paid for up front;
     a sold-back leg returns its cash at once; a locked set pays $1 when its game ends (its
     last recorded tick). Each alert is sized down to the cash on hand, so a day's alerts
-    cannot all spend the same $500."""
+    cannot all spend the same $500. ``fractions`` stakes each tier at that fraction of
+    equity (cash plus locked sets awaiting payout), the way the live ticket sizes."""
     cash, held, out = bankroll, [], []
     ledger = Ledger()
     for a in sorted(sel, key=lambda x: x["t"]):
@@ -249,6 +264,8 @@ def with_bankroll(series: Series, sel: list[dict[str, Any]], policy: str, l1: fl
             held.remove(h)
         per = a["cost"] / a["contracts"]
         budget = min(cash, max_per_alert) if max_per_alert else cash
+        if fractions is not None:
+            budget = min(budget, fractions.get(a["tier"], 0.0) * (cash + sum(h[1] for h in held)))
         n = min(a["contracts"], int(budget // per)) if per > 0 else 0
         r = act(series, a, policy, l1, l2, n, ledger)
         cash += r["back"] - r["spent"]
@@ -276,6 +293,111 @@ def summarize_inplay(alerts: list[dict[str, Any]], series: Series, l1: float, l2
                            "unwound": sum(1 for r in res if r["status"] in ("unwound", "partial")), "missed": len(res) - len(done),
                            "won": sum(1 for r in done if r["pnl"] > 0), "lost": sum(1 for r in done if r["pnl"] < 0)}
         out[tier] = row
+    return out
+
+
+# ---- how long an arb stays open, and what Kelly says --------------------------------------
+def episodes(db: str, dates: list[str], budget: float = 100.0, gap_s: float = 8.0) -> list[dict[str, Any]]:
+    """Every run of consecutive ticks on which a game showed a fillable, fresh arb (no
+    throttle). ``seconds`` is last seen minus first seen, so at the recorder's 5 s cadence an
+    arb seen once lasted anywhere from an instant to ~10 s."""
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    cond = " or ".join("event_key like ?" for _ in dates)
+    ticks = con.execute(f"select ts, event_key, live, home, away, l1_json from inplay_ticks where l1_json is not null and ({cond}) order by ts",
+                        [f"%:{d}" for d in dates]).fetchall()
+    con.close()
+    out, cur, last = [], {}, {}
+    for row in ticks:
+        tick = dict(row)
+        me = merged_event_from(tick)
+        if me is None:
+            continue
+        ts, k = float(tick["ts"]), me.event_key
+        rep = analyze_event(me, {}, contracts=100, max_quote_age=10.0, now=ts, executable_venues=EXECUTABLE, budget=budget)
+        arb = rep.arb or {}
+        ok = arb.get("is_arb") and rep.fillable and "stale-quote" not in (rep.flags or [])
+        prev, last[k] = last.get(k), ts
+        e = cur.get(k)
+        if ok:
+            m = float((rep.sized_arb or arb)["margin"])
+            if e is not None and prev is not None and e["end"] == prev and ts - prev <= gap_s:
+                e["end"], e["ticks"] = ts, e["ticks"] + 1
+            else:
+                if e:
+                    out.append(e)
+                cur[k] = {"event": k, "start": ts, "end": ts, "ticks": 1, "margin": m, "live": bool(tick["live"])}
+        elif e is not None:
+            out.append(cur.pop(k))
+    out += list(cur.values())
+    for e in out:
+        e["seconds"] = e["end"] - e["start"]
+    return out
+
+
+def duration_table(eps: list[dict[str, Any]]) -> dict[str, Any]:
+    def tier(m: float) -> str:
+        return "BIG ARB" if m >= 0.03 else ("ARB" if m >= 0.01 else "ARB SMALL")
+    out: dict[str, Any] = {}
+    for name in ("BIG ARB", "ARB", "ARB SMALL", "all"):
+        xs = sorted(e["seconds"] for e in eps if name == "all" or tier(e["margin"]) == name)
+        if not xs:
+            continue
+        q = lambda p: xs[min(len(xs) - 1, int(p * len(xs)))]  # noqa: E731
+        out[name] = {"episodes": len(xs), "seen_once": round(sum(1 for x in xs if x == 0) / len(xs), 3),
+                     "open_15s": round(sum(1 for x in xs if x >= 15) / len(xs), 3), "open_30s": round(sum(1 for x in xs if x >= 30) / len(xs), 3),
+                     "median_s": q(0.5), "p90_s": q(0.9), "max_s": xs[-1]}
+    return out
+
+
+def kelly_fraction(returns: list[float], step: float = 0.001) -> tuple[float, float]:
+    """(f*, growth per bet) maximising mean log(1 + f R) over f in (0, 1] - a stake is paid
+    for in full, so no leverage. 0 when no stake grows the bankroll."""
+    import math
+
+    best_f, best_g = 0.0, 0.0
+    for i in range(1, int(round(1 / step)) + 1):
+        f = i * step
+        if any(1 + f * r <= 0 for r in returns):
+            break
+        g = sum(math.log(1 + f * r) for r in returns) / len(returns) if returns else 0.0
+        if g > best_g:
+            best_f, best_g = f, g
+    return best_f, best_g
+
+
+TIER_STAKES = [(1.0, 0.0, 0.0), (0.5, 0.0, 0.0), (0.3, 0.0, 0.0), (0.2, 0.0, 0.0), (0.1, 0.0, 0.0),
+               (0.2, 0.05, 0.0), (0.2, 0.1, 0.0), (0.2, 0.2, 0.2)]
+
+
+def tier_stakes(alerts: list[dict[str, Any]], series: Series, l1: float, l2: float, bankroll: float, ends: dict[str, float]) -> list[dict[str, Any]]:
+    """Every alert on one bankroll, each tier staked at its own fraction of equity."""
+    out = []
+    for big, arb, small in TIER_STAKES:
+        res = with_bankroll(series, alerts, "guided", l1, l2, bankroll, ends, fractions={"BIG ARB": big, "ARB": arb, "ARB SMALL": small})
+        done = [r for r in res if r["status"] != "missed"]
+        out.append({"bankroll": bankroll, "big": big, "arb": arb, "small": small, "pnl": round(sum(r["pnl"] for r in res), 2),
+                    "acted": len(done), "won": sum(1 for r in done if r["pnl"] > 0), "lost": sum(1 for r in done if r["pnl"] < 0)})
+    return out
+
+
+def kelly_by_tier(alerts: list[dict[str, Any]], series: Series, l1: float = 5.0, l2: float = 15.0) -> dict[str, Any]:
+    """Kelly from the outcomes of acting on each alert by hand (return per dollar staked; a
+    missed order is 0): f* = argmax mean log(1 + f R). Per-bet Kelly assumes the stake comes
+    back before the next bet - a locked arb's does not until its game ends, which is why the
+    bankroll simulation (with that lock-up) is what sets arb_stake_fraction."""
+    out: dict[str, Any] = {}
+    for tier in ("BIG ARB", "ARB", "ARB SMALL"):
+        led, rs = Ledger(), []
+        for a in sorted([a for a in alerts if a["tier"] == tier], key=lambda x: x["t"]):
+            r = act(series, a, "guided", l1, l2, None, led)
+            rs.append(0.0 if r["status"] == "missed" or r["spent"] <= 0 else r["pnl"] / r["spent"])
+        traded = [r for r in rs if r != 0]
+        best_f, best_g = kelly_fraction(rs)
+        out[tier] = {"alerts": len(rs), "traded": len(traded), "won": sum(1 for r in traded if r > 0),
+                     "mean_return": round(sum(traded) / len(traded), 4) if traded else None,
+                     "worst": round(min(traded), 4) if traded else None, "best": round(max(traded), 4) if traded else None,
+                     "kelly": best_f, "half_kelly": best_f / 2, "growth_per_alert": round(best_g, 5)}
     return out
 
 
@@ -345,6 +467,10 @@ def main(argv: Optional[list[str]] = None) -> int:
               "inplay_sensitivity_l2": {str(l2): summarize_inplay(alerts, series, a.l1, l2, a.bankroll, replay_inplay.ends)["all"]["guided"] for l2 in (10.0, 15.0, 30.0)},
               "tie_unsafe_alerts": sum(1 for x in alerts if x["tie_safe"] is False),
               "alerts": [{**{k: v for k, v in x.items() if k not in ("legs", "max_prices")}, "legs": [f"{l['outcome']}@{l['venue']} {l['price']:.2f}" for l in x["legs"]]} for x in alerts]}
+    eps = episodes(a.db, a.date)
+    report["arb_windows"] = duration_table(eps)
+    report["kelly"] = kelly_by_tier(alerts, series, a.l1, a.l2)
+    report["tier_stakes"] = [row for b in (a.bankroll, 2 * a.bankroll) for row in tier_stakes(alerts, series, a.l1, a.l2, b, replay_inplay.ends)]
     if Path(a.maker_journal).exists():
         report["maker_lines"] = maker_episodes(a.maker_journal, a.date + [d for d in []])
     if a.json:

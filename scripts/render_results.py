@@ -450,7 +450,19 @@ def render_arb_backtest(d: dict) -> dict[str, str]:
             g = d["inplay_stake_caps"][cap][tier]
             caps.append([f"${float(cap):.0f}", "BIG ARB only" if tier == "BIG ARB" else "every alert", money(g["pnl"]), f"{g['won']}/{g['lost']}", str(g["locked"]), str(g["unwound"]), str(g["missed"])])
     stakes = table(["stake per arb", "alerts acted on", "result", "won/lost", "locked", "undone", "skipped (cash tied up)"], caps)
-    return {"arb_backtest_tiers": tiers, "arb_backtest_stakes": stakes}
+    out = {"arb_backtest_tiers": tiers, "arb_backtest_stakes": stakes}
+    if "arb_windows" in d:
+        rows = [[tier, str(w["episodes"]), f"{w['median_s']:.0f} s", f"{w['seen_once']:.0%}", f"{w['open_15s']:.0%}", f"{w['open_30s']:.0%}",
+                 f"{w['p90_s']:.0f} s", f"{w['max_s']:.0f} s"] for tier, w in d["arb_windows"].items()]
+        out["arb_backtest_windows"] = table(["tier", "arbs", "median open", "seen on one tick only", "still open at 15 s", "at 30 s", "90th pct", "longest"], rows)
+    if "kelly" in d:
+        rows = [[tier, f"{k['traded']}/{k['alerts']}", f"{k['won']}/{k['traded']}", f"{k['mean_return']:+.2%}", f"{k['worst']:+.1%}", f"{k['best']:+.1%}",
+                 f"{k['kelly']:.0%}"] for tier, k in d["kelly"].items() if k.get("traded")]
+        out["arb_backtest_kelly"] = table(["tier", "acted on", "won", "mean return per $ staked", "worst", "best", "Kelly f*"], rows)
+    if "tier_stakes" in d:
+        rows = [[f"${r['bankroll']:.0f}", f"{r['big']:.0%}", f"{r['arb']:.0%}", f"{r['small']:.0%}", money(r["pnl"]), f"{r['won']}/{r['lost']}"] for r in d["tier_stakes"]]
+        out["arb_backtest_tier_stakes"] = table(["bankroll", "BIG ARB stake", "ARB stake", "ARB SMALL stake", "result", "won/lost"], rows)
+    return out
 
 
 # ---- registry ---------------------------------------------------------------------------------

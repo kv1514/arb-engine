@@ -430,13 +430,14 @@ class FastLaneTests(unittest.TestCase):
         self.assertTrue(lag_alerts and lag_alerts[0]["msg"].startswith("NFL - DEN @ KC - LAG:"), lag_alerts)
         # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi),
         # and it is reported as an order ticket: sport, per-venue counts, prices, fees, totals.
-        # Sized to arb_stake_fraction (20 %) of the $500 bankroll: 102 sets cost <= $100 with fees.
-        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI: buy 102 x KC YES at the ask $0.60" in a
-                            and "ROBINHOOD: buy 102 x DEN YES at the ask $0.34" in a and "+ Kalshi taker fee:" in a and "total: $" in a
-                            and "stake $100.00 = 20% of your $500.00" in a for a in arbs), arbs)
+        # A 2.3c lock is the ARB tier: sized to arb_stake_fraction_arb (5 %) of the $500 bankroll,
+        # so 25 sets cost <= $25 with fees (a BIG ARB would get arb_stake_fraction, 20 %).
+        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI: buy 25 x KC YES at the ask $0.60" in a
+                            and "ROBINHOOD: buy 25 x DEN YES at the ask $0.34" in a and "+ Kalshi taker fee:" in a and "total: $" in a
+                            and "stake $25.00 = 5% of your $500.00" in a for a in arbs), arbs)
         import re
         total = float(re.search(r"= \$([0-9.]+) -> pays", arbs[0]).group(1))
-        self.assertLessEqual(total, 100.0)
+        self.assertLessEqual(total, 25.0)
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
@@ -931,10 +932,26 @@ class NearArbAlertTests(unittest.TestCase):
         out = self._run(slate, me2, view, t0 + 15)
         msg = [e for e in slate.alerts.events if e["kind"] == "alert" and "ARB" in e["title"]][-1]["msg"]
         lines = msg.splitlines()
-        self.assertTrue(lines[1].startswith("1) KALSHI: buy"), msg)             # the stale leg first
+        self.assertTrue(lines[1].startswith("window: arbs this size lasted a median"), msg)   # how long it will last
+        self.assertTrue(lines[2].startswith("1) KALSHI: buy"), msg)             # the stale leg first
         self.assertIn("BUY THIS FIRST - KALSHI has not followed ROBINHOOD", msg)
         self.assertIn("price seen 0s ago", msg)
         self.assertRegex(msg, r"2\) ROBINHOOD: buy[\s\S]*still locks if you pay up to \$0\.3[0-9]")
+
+    def test_the_stake_follows_the_tier(self):
+        """BIG ARB is sized to arb_stake_fraction (20 %), a 1-3c ARB to arb_stake_fraction_arb
+        (5 %); 0 turns the 1-3c tier off (nothing it could buy)."""
+        def ticket(ask_kc, ask_den, **kw):
+            slate, me, view, t0 = self._slate(ask_kc, ask_den, **kw)
+            self._run(slate, me, view, t0 + 1)
+            return [e for e in slate.alerts.events if e["kind"] == "alert" and "ARB" in e["title"]]
+        big = ticket(0.55, 0.38)[-1]["msg"]
+        self.assertIn("BIG ARB", big.splitlines()[0])
+        self.assertIn("= 20% of your $500.00", big)
+        small = ticket(0.57, 0.37)[-1]["msg"]
+        self.assertIn(" - ARB +", small.splitlines()[0])
+        self.assertIn("stake $25.00 = 5% of your $500.00", small)
+        self.assertEqual([e["title"] for e in ticket(0.57, 0.37, arb_stake_fraction_arb=0.0)], [])
 
     def test_the_buffer_is_a_setting(self):
         slate, me, view, t0 = self._slate(0.62, 0.45, arb_near_margin=0.15)   # 10.7c short, buffer 15c

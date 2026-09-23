@@ -164,10 +164,18 @@ scripts/sunday.sh restart live                  # if the recorders are already r
 
    The count is one number for both legs (a set pays $1 whoever wins) and is already capped
    by the thinner book *and* by the stake, fees included (`quant.arbitrage.size_for_budget`).
-   The stake is `arb_stake_fraction` of the bankroll - 20 %, printed as "stake $100.00 = 20% of
-   your $500.00" (the example above is sized all-in for illustration) - because a locked set
-   holds its cost until the game ends: on the recorded week-2 slate a $100 stake per arb made
-   about twice what all-in tickets did (docs/MODEL.md, "Backtest of the arb alerts").
+   The stake depends on the tier: a BIG ARB is sized to `arb_stake_fraction` of the bankroll -
+   20 %, printed as "stake $100.00 = 20% of your $500.00" (the example above is sized all-in
+   for illustration) - because a locked set holds its cost until the game ends: on the
+   recorded week-2 slate 20 % per BIG ARB made about twice what all-in tickets did. A 1-3c ARB
+   gets `arb_stake_fraction_arb`, 5 % ("stake $25.00 = 5% of your $500.00"): bought by hand
+   that tier roughly broke even, so it is sized to not tie up cash a BIG ARB could use
+   (`ARB_STAKE_FRACTION_ARB=0` stops those alerts). docs/MODEL.md, "Backtest of the arb
+   alerts" and "How long an arb lasts, and Kelly".
+
+   The `window:` line under the header is how long arbs of that tier stayed open on the
+   recorded slate - a median of ~8 s, a third still there at 15 s, one in ten at 30 s. If
+   you cannot buy the first leg within a few seconds, skip it.
    Each fee line is the venue's rule at that exact count (`FeeModel.breakdown`, whose items
    sum to the fee): Kalshi's 0.07 x C x p x (1-p) rounded up per order; Robinhood's commission
    0.10 x C x p x (1-p) rounded up and capped at 1c per contract (0.05 with Gold), plus the

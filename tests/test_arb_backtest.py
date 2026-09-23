@@ -3,7 +3,7 @@
 import unittest
 
 from arb_engine.models import OutcomeQuote
-from scripts.arb_backtest import Ledger, Series, act, with_bankroll
+from scripts.arb_backtest import Ledger, Series, act, duration_table, kelly_fraction, with_bankroll
 
 EV = "nfl:DEN|KC:2026-09-20"
 KFEE = {"fee_type": "quadratic", "fee_multiplier": 0}   # fee-free here: the arithmetic is the point
@@ -85,6 +85,45 @@ class BankrollTests(unittest.TestCase):
         self.assertEqual(res[1]["sized"], 100)            # game over at t=10: the first lock paid $100 back
         capped = with_bankroll(s, [a1, a2], "instant", 5, 15, bankroll=100.0, ends={EV: 3600.0}, max_per_alert=40.0)
         self.assertEqual([r["sized"] for r in capped], [43, 43])   # $40 each: both alerts get taken
+
+    def test_each_tier_stakes_its_own_fraction_of_equity(self):
+        s = series((0.55, 0.54), (0.36, 0.35))
+        a1, a2 = {**alert(t=0.0, n=100), "tier": "BIG ARB"}, {**alert(t=30.0, n=100), "tier": "ARB"}
+        res = with_bankroll(s, [a1, a2], "instant", 5, 15, bankroll=100.0, ends={EV: 3600.0}, fractions={"BIG ARB": 0.2, "ARB": 0.05})
+        self.assertEqual(res[0]["sized"], 21)             # $20 at $0.91 a set
+        self.assertEqual(res[1]["sized"], 5)              # 5 % of equity ($80.89 cash + $21 locked) = $5.09
+        res = with_bankroll(s, [a1, a2], "instant", 5, 15, bankroll=100.0, ends={EV: 3600.0}, fractions={"BIG ARB": 0.2})
+        self.assertEqual(res[1]["sized"], 0)              # a tier with no fraction is not traded
+
+
+class UnwindTests(unittest.TestCase):
+    def test_an_unsold_leg_is_valued_at_its_last_bid_not_zero(self):
+        s = Series()
+        s.add(0.0, _Me([q("kalshi", "KC", 0.55, 0.53), q("robinhood", "DEN", 0.36, 0.35)]))
+        s.add(10.0, _Me([q("kalshi", "KC", 0.58, None, t=10.0), q("robinhood", "DEN", 0.47, 0.46, t=10.0)]))
+        key = (EV, "kalshi", "KC")
+        self.assertEqual(s.bid_after(key, 5.0).bid, 0.53)   # no bid after t: the last one before it
+        self.assertIsNone(s.bid_after((EV, "kalshi", "XX"), 5.0))
+
+
+class WindowAndKellyTests(unittest.TestCase):
+    def test_duration_table_by_tier(self):
+        eps = [{"seconds": 0.0, "margin": 0.05}, {"seconds": 10.0, "margin": 0.04}, {"seconds": 35.0, "margin": 0.035},
+               {"seconds": 5.0, "margin": 0.02}]
+        t = duration_table(eps)
+        self.assertEqual(t["BIG ARB"]["episodes"], 3)
+        self.assertEqual(t["BIG ARB"]["median_s"], 10.0)
+        self.assertAlmostEqual(t["BIG ARB"]["seen_once"], 0.333, places=3)
+        self.assertAlmostEqual(t["BIG ARB"]["open_30s"], 0.333, places=3)
+        self.assertEqual(t["all"]["episodes"], 4)
+        self.assertNotIn("ARB SMALL", t)
+
+    def test_kelly_fraction(self):
+        f, g = kelly_fraction([1.0, -1.0, 1.0, -1.0, 1.0])   # p = 0.6 at even odds: f* = 2p - 1 = 0.2
+        self.assertAlmostEqual(f, 0.2, places=2)
+        self.assertGreater(g, 0)
+        self.assertEqual(kelly_fraction([0.02, -0.03])[0], 0.0)   # negative mean: stake nothing
+        self.assertEqual(kelly_fraction([0.05, 0.01])[0], 1.0)    # never loses: all of it (no leverage)
 
 
 if __name__ == "__main__":

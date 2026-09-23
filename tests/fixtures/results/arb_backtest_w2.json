@@ -1,411 +1,646 @@
 {
- "_fixture": "scripts/arb_backtest.py --date 2026-09-20 --date 2026-09-21 (out/history.db, out/maker_journal.jsonl), metrics only",
- "alerts_total": 195,
- "bankroll": 500.0,
- "dates": [
-  "2026-09-20",
-  "2026-09-21"
- ],
- "inplay": {
-  "ARB": {
-   "alerts": 65,
-   "games": 13,
-   "guided": {
-    "acted": 10,
-    "locked": 7,
-    "lost": 2,
-    "missed": 55,
-    "per_alert": 0.412,
-    "pnl": 26.77,
-    "unwound": 3,
-    "won": 8
-   },
-   "instant": {
-    "acted": 11,
-    "locked": 11,
-    "lost": 0,
-    "missed": 54,
-    "per_alert": 0.586,
-    "pnl": 38.06,
-    "unwound": 0,
-    "won": 11
-   },
-   "naive": {
-    "acted": 14,
-    "locked": 10,
-    "lost": 9,
-    "missed": 51,
-    "per_alert": 0.62,
-    "pnl": 40.29,
-    "unwound": 4,
-    "won": 5
-   }
+  "_fixture": "scripts/arb_backtest.py --date 2026-09-20 --date 2026-09-21 (out/history.db, out/maker_journal.jsonl), metrics only",
+  "dates": [
+    "2026-09-20",
+    "2026-09-21"
+  ],
+  "bankroll": 500.0,
+  "l1_s": 5.0,
+  "l2_s": 15.0,
+  "inplay": {
+    "BIG ARB": {
+      "alerts": 73,
+      "games": 14,
+      "instant": {
+        "pnl": 299.61,
+        "per_alert": 4.104,
+        "acted": 9,
+        "locked": 9,
+        "unwound": 0,
+        "missed": 64,
+        "won": 9,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 91.51,
+        "per_alert": 1.254,
+        "acted": 17,
+        "locked": 12,
+        "unwound": 5,
+        "missed": 56,
+        "won": 14,
+        "lost": 3
+      },
+      "naive": {
+        "pnl": 7.47,
+        "per_alert": 0.102,
+        "acted": 11,
+        "locked": 8,
+        "unwound": 3,
+        "missed": 62,
+        "won": 5,
+        "lost": 6
+      }
+    },
+    "ARB": {
+      "alerts": 65,
+      "games": 13,
+      "instant": {
+        "pnl": 38.06,
+        "per_alert": 0.586,
+        "acted": 11,
+        "locked": 11,
+        "unwound": 0,
+        "missed": 54,
+        "won": 11,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 26.77,
+        "per_alert": 0.412,
+        "acted": 10,
+        "locked": 7,
+        "unwound": 3,
+        "missed": 55,
+        "won": 8,
+        "lost": 2
+      },
+      "naive": {
+        "pnl": 41.71,
+        "per_alert": 0.642,
+        "acted": 14,
+        "locked": 10,
+        "unwound": 4,
+        "missed": 51,
+        "won": 6,
+        "lost": 8
+      }
+    },
+    "ARB SMALL": {
+      "alerts": 57,
+      "games": 12,
+      "instant": {
+        "pnl": 16.17,
+        "per_alert": 0.284,
+        "acted": 9,
+        "locked": 9,
+        "unwound": 0,
+        "missed": 48,
+        "won": 9,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": -25.45,
+        "per_alert": -0.446,
+        "acted": 12,
+        "locked": 5,
+        "unwound": 7,
+        "missed": 45,
+        "won": 8,
+        "lost": 4
+      },
+      "naive": {
+        "pnl": -29.32,
+        "per_alert": -0.514,
+        "acted": 6,
+        "locked": 4,
+        "unwound": 2,
+        "missed": 51,
+        "won": 2,
+        "lost": 4
+      }
+    },
+    "all": {
+      "alerts": 195,
+      "games": 15,
+      "instant": {
+        "pnl": 259.25,
+        "per_alert": 1.329,
+        "acted": 11,
+        "locked": 11,
+        "unwound": 0,
+        "missed": 184,
+        "won": 11,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 62.01,
+        "per_alert": 0.318,
+        "acted": 9,
+        "locked": 8,
+        "unwound": 1,
+        "missed": 186,
+        "won": 9,
+        "lost": 0
+      },
+      "naive": {
+        "pnl": -65.13,
+        "per_alert": -0.334,
+        "acted": 11,
+        "locked": 9,
+        "unwound": 2,
+        "missed": 184,
+        "won": 4,
+        "lost": 7
+      }
+    }
   },
-  "ARB SMALL": {
-   "alerts": 57,
-   "games": 12,
-   "guided": {
-    "acted": 12,
-    "locked": 5,
-    "lost": 4,
-    "missed": 45,
-    "per_alert": -0.446,
-    "pnl": -25.45,
-    "unwound": 7,
-    "won": 8
-   },
-   "instant": {
-    "acted": 9,
-    "locked": 9,
-    "lost": 0,
-    "missed": 48,
-    "per_alert": 0.284,
-    "pnl": 16.17,
-    "unwound": 0,
-    "won": 9
-   },
-   "naive": {
-    "acted": 6,
-    "locked": 4,
-    "lost": 4,
-    "missed": 51,
-    "per_alert": -0.506,
-    "pnl": -28.86,
-    "unwound": 2,
-    "won": 2
-   }
+  "inplay_unlimited_cash": {
+    "BIG ARB": {
+      "alerts": 73,
+      "games": 14,
+      "instant": {
+        "pnl": 2077.34,
+        "per_alert": 28.457,
+        "acted": 65,
+        "locked": 65,
+        "unwound": 0,
+        "missed": 8,
+        "won": 65,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 1114.68,
+        "per_alert": 15.27,
+        "acted": 47,
+        "locked": 29,
+        "unwound": 18,
+        "missed": 26,
+        "won": 34,
+        "lost": 13
+      },
+      "naive": {
+        "pnl": -449.21,
+        "per_alert": -6.154,
+        "acted": 65,
+        "locked": 40,
+        "unwound": 25,
+        "missed": 8,
+        "won": 22,
+        "lost": 43
+      }
+    },
+    "ARB": {
+      "alerts": 65,
+      "games": 13,
+      "instant": {
+        "pnl": 537.37,
+        "per_alert": 8.267,
+        "acted": 65,
+        "locked": 65,
+        "unwound": 0,
+        "missed": 0,
+        "won": 65,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 450.76,
+        "per_alert": 6.935,
+        "acted": 50,
+        "locked": 38,
+        "unwound": 12,
+        "missed": 15,
+        "won": 41,
+        "lost": 9
+      },
+      "naive": {
+        "pnl": -439.13,
+        "per_alert": -6.756,
+        "acted": 62,
+        "locked": 48,
+        "unwound": 14,
+        "missed": 3,
+        "won": 24,
+        "lost": 38
+      }
+    },
+    "ARB SMALL": {
+      "alerts": 57,
+      "games": 12,
+      "instant": {
+        "pnl": 111.99,
+        "per_alert": 1.965,
+        "acted": 56,
+        "locked": 56,
+        "unwound": 0,
+        "missed": 1,
+        "won": 55,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": -49.28,
+        "per_alert": -0.865,
+        "acted": 40,
+        "locked": 21,
+        "unwound": 19,
+        "missed": 17,
+        "won": 27,
+        "lost": 13
+      },
+      "naive": {
+        "pnl": -708.08,
+        "per_alert": -12.422,
+        "acted": 51,
+        "locked": 35,
+        "unwound": 16,
+        "missed": 6,
+        "won": 15,
+        "lost": 36
+      }
+    },
+    "all": {
+      "alerts": 195,
+      "games": 15,
+      "instant": {
+        "pnl": 2684.03,
+        "per_alert": 13.764,
+        "acted": 173,
+        "locked": 173,
+        "unwound": 0,
+        "missed": 22,
+        "won": 172,
+        "lost": 0
+      },
+      "guided": {
+        "pnl": 1497.99,
+        "per_alert": 7.682,
+        "acted": 134,
+        "locked": 86,
+        "unwound": 48,
+        "missed": 61,
+        "won": 100,
+        "lost": 34
+      },
+      "naive": {
+        "pnl": -1605.94,
+        "per_alert": -8.236,
+        "acted": 174,
+        "locked": 119,
+        "unwound": 55,
+        "missed": 21,
+        "won": 60,
+        "lost": 114
+      }
+    }
   },
-  "BIG ARB": {
-   "alerts": 73,
-   "games": 14,
-   "guided": {
-    "acted": 17,
-    "locked": 12,
-    "lost": 3,
-    "missed": 56,
-    "per_alert": 1.254,
-    "pnl": 91.51,
-    "unwound": 5,
-    "won": 14
-   },
-   "instant": {
-    "acted": 9,
-    "locked": 9,
-    "lost": 0,
-    "missed": 64,
-    "per_alert": 4.104,
-    "pnl": 299.61,
-    "unwound": 0,
-    "won": 9
-   },
-   "naive": {
-    "acted": 11,
-    "locked": 8,
-    "lost": 6,
-    "missed": 62,
-    "per_alert": 0.102,
-    "pnl": 7.47,
-    "unwound": 3,
-    "won": 5
-   }
+  "inplay_stake_caps": {
+    "50.0": {
+      "BIG ARB": {
+        "pnl": 125.46,
+        "per_alert": 1.719,
+        "acted": 47,
+        "locked": 31,
+        "unwound": 16,
+        "missed": 26,
+        "won": 35,
+        "lost": 12
+      },
+      "all": {
+        "pnl": 102.49,
+        "per_alert": 0.526,
+        "acted": 77,
+        "locked": 48,
+        "unwound": 29,
+        "missed": 118,
+        "won": 57,
+        "lost": 20
+      }
+    },
+    "100.0": {
+      "BIG ARB": {
+        "pnl": 180.01,
+        "per_alert": 2.466,
+        "acted": 35,
+        "locked": 23,
+        "unwound": 12,
+        "missed": 38,
+        "won": 26,
+        "lost": 9
+      },
+      "all": {
+        "pnl": 80.3,
+        "per_alert": 0.412,
+        "acted": 32,
+        "locked": 25,
+        "unwound": 7,
+        "missed": 163,
+        "won": 27,
+        "lost": 4
+      }
+    },
+    "250.0": {
+      "BIG ARB": {
+        "pnl": 112.55,
+        "per_alert": 1.542,
+        "acted": 17,
+        "locked": 12,
+        "unwound": 5,
+        "missed": 56,
+        "won": 14,
+        "lost": 3
+      },
+      "all": {
+        "pnl": 68.49,
+        "per_alert": 0.351,
+        "acted": 17,
+        "locked": 14,
+        "unwound": 3,
+        "missed": 178,
+        "won": 15,
+        "lost": 2
+      }
+    }
   },
-  "all": {
-   "alerts": 195,
-   "games": 15,
-   "guided": {
-    "acted": 9,
-    "locked": 8,
-    "lost": 0,
-    "missed": 186,
-    "per_alert": 0.318,
-    "pnl": 62.01,
-    "unwound": 1,
-    "won": 9
-   },
-   "instant": {
-    "acted": 11,
-    "locked": 11,
-    "lost": 0,
-    "missed": 184,
-    "per_alert": 1.329,
-    "pnl": 259.25,
-    "unwound": 0,
-    "won": 11
-   },
-   "naive": {
-    "acted": 11,
-    "locked": 9,
-    "lost": 7,
-    "missed": 184,
-    "per_alert": -0.332,
-    "pnl": -64.69,
-    "unwound": 2,
-    "won": 4
-   }
-  }
- },
- "inplay_sensitivity_l2": {
-  "10.0": {
-   "acted": 13,
-   "locked": 11,
-   "lost": 2,
-   "missed": 182,
-   "per_alert": 0.218,
-   "pnl": 42.57,
-   "unwound": 2,
-   "won": 11
+  "inplay_sensitivity_l2": {
+    "10.0": {
+      "pnl": 42.57,
+      "per_alert": 0.218,
+      "acted": 13,
+      "locked": 11,
+      "unwound": 2,
+      "missed": 182,
+      "won": 11,
+      "lost": 2
+    },
+    "15.0": {
+      "pnl": 62.01,
+      "per_alert": 0.318,
+      "acted": 9,
+      "locked": 8,
+      "unwound": 1,
+      "missed": 186,
+      "won": 9,
+      "lost": 0
+    },
+    "30.0": {
+      "pnl": 62.23,
+      "per_alert": 0.319,
+      "acted": 10,
+      "locked": 9,
+      "unwound": 1,
+      "missed": 185,
+      "won": 10,
+      "lost": 0
+    }
   },
-  "15.0": {
-   "acted": 9,
-   "locked": 8,
-   "lost": 0,
-   "missed": 186,
-   "per_alert": 0.318,
-   "pnl": 62.01,
-   "unwound": 1,
-   "won": 9
+  "tie_unsafe_alerts": 195,
+  "arb_windows": {
+    "BIG ARB": {
+      "episodes": 77,
+      "seen_once": 0.39,
+      "open_15s": 0.377,
+      "open_30s": 0.065,
+      "median_s": 7.635066270828247,
+      "p90_s": 27.350066900253296,
+      "max_s": 48.16937708854675
+    },
+    "ARB": {
+      "episodes": 61,
+      "seen_once": 0.295,
+      "open_15s": 0.393,
+      "open_30s": 0.131,
+      "median_s": 7.502536773681641,
+      "p90_s": 31.70521903038025,
+      "max_s": 48.93675494194031
+    },
+    "ARB SMALL": {
+      "episodes": 59,
+      "seen_once": 0.407,
+      "open_15s": 0.203,
+      "open_30s": 0.102,
+      "median_s": 5.725387096405029,
+      "p90_s": 30.388074159622192,
+      "max_s": 43.700562953948975
+    },
+    "all": {
+      "episodes": 197,
+      "seen_once": 0.365,
+      "open_15s": 0.33,
+      "open_30s": 0.096,
+      "median_s": 7.123559236526489,
+      "p90_s": 29.797673225402832,
+      "max_s": 48.93675494194031
+    }
   },
-  "30.0": {
-   "acted": 10,
-   "locked": 9,
-   "lost": 0,
-   "missed": 185,
-   "per_alert": 0.319,
-   "pnl": 62.23,
-   "unwound": 1,
-   "won": 10
-  }
- },
- "inplay_stake_caps": {
-  "100.0": {
-   "BIG ARB": {
-    "acted": 35,
-    "locked": 23,
-    "lost": 9,
-    "missed": 38,
-    "per_alert": 2.466,
-    "pnl": 180.01,
-    "unwound": 12,
-    "won": 26
-   },
-   "all": {
-    "acted": 32,
-    "locked": 25,
-    "lost": 4,
-    "missed": 163,
-    "per_alert": 0.412,
-    "pnl": 80.3,
-    "unwound": 7,
-    "won": 27
-   }
+  "kelly": {
+    "BIG ARB": {
+      "alerts": 73,
+      "traded": 47,
+      "won": 34,
+      "mean_return": 0.0302,
+      "worst": -0.4118,
+      "best": 0.356,
+      "kelly": 1.0,
+      "half_kelly": 0.5,
+      "growth_per_alert": 0.01146
+    },
+    "ARB": {
+      "alerts": 65,
+      "traded": 50,
+      "won": 41,
+      "mean_return": -0.0046,
+      "worst": -0.6273,
+      "best": 0.2708,
+      "kelly": 0.0,
+      "half_kelly": 0.0,
+      "growth_per_alert": 0.0
+    },
+    "ARB SMALL": {
+      "alerts": 57,
+      "traded": 40,
+      "won": 27,
+      "mean_return": -0.0197,
+      "worst": -0.2707,
+      "best": 0.0888,
+      "kelly": 0.0,
+      "half_kelly": 0.0,
+      "growth_per_alert": 0.0
+    }
   },
-  "250.0": {
-   "BIG ARB": {
-    "acted": 17,
-    "locked": 12,
-    "lost": 3,
-    "missed": 56,
-    "per_alert": 1.542,
-    "pnl": 112.55,
-    "unwound": 5,
-    "won": 14
-   },
-   "all": {
-    "acted": 17,
-    "locked": 14,
-    "lost": 2,
-    "missed": 178,
-    "per_alert": 0.351,
-    "pnl": 68.49,
-    "unwound": 3,
-    "won": 15
-   }
+  "tier_stakes": [
+    {
+      "bankroll": 500.0,
+      "big": 1.0,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 91.51,
+      "acted": 17,
+      "won": 14,
+      "lost": 3
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.5,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 110.71,
+      "acted": 19,
+      "won": 16,
+      "lost": 3
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.3,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 148.8,
+      "acted": 28,
+      "won": 20,
+      "lost": 8
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.2,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 186.52,
+      "acted": 35,
+      "won": 24,
+      "lost": 10
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.1,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 127.7,
+      "acted": 44,
+      "won": 32,
+      "lost": 12
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.2,
+      "arb": 0.05,
+      "small": 0.0,
+      "pnl": 169.3,
+      "acted": 50,
+      "won": 40,
+      "lost": 10
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.2,
+      "arb": 0.1,
+      "small": 0.0,
+      "pnl": 154.37,
+      "acted": 38,
+      "won": 32,
+      "lost": 5
+    },
+    {
+      "bankroll": 500.0,
+      "big": 0.2,
+      "arb": 0.2,
+      "small": 0.2,
+      "pnl": 80.38,
+      "acted": 34,
+      "won": 28,
+      "lost": 6
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 1.0,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 272.0,
+      "acted": 17,
+      "won": 14,
+      "lost": 3
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.5,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 272.0,
+      "acted": 17,
+      "won": 14,
+      "lost": 3
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.3,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 325.09,
+      "acted": 32,
+      "won": 24,
+      "lost": 8
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.2,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 353.09,
+      "acted": 34,
+      "won": 25,
+      "lost": 9
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.1,
+      "arb": 0.0,
+      "small": 0.0,
+      "pnl": 214.25,
+      "acted": 44,
+      "won": 32,
+      "lost": 12
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.2,
+      "arb": 0.05,
+      "small": 0.0,
+      "pnl": 350.11,
+      "acted": 52,
+      "won": 41,
+      "lost": 10
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.2,
+      "arb": 0.1,
+      "small": 0.0,
+      "pnl": 325.61,
+      "acted": 45,
+      "won": 38,
+      "lost": 6
+    },
+    {
+      "bankroll": 1000.0,
+      "big": 0.2,
+      "arb": 0.2,
+      "small": 0.2,
+      "pnl": 164.8,
+      "acted": 31,
+      "won": 27,
+      "lost": 4
+    }
+  ],
+  "maker_lines": {
+    "detections": 1187,
+    "episodes": 473,
+    "lines": 278,
+    "by_day": {
+      "2026-09-20": {
+        "episodes": 434,
+        "positive_after_taker_fees": 332,
+        "median_minutes_on_offer": 0.0,
+        "on_offer_over_5min": 15,
+        "median_margin_c": 1.0,
+        "dollars_at_size": 98.0
+      },
+      "2026-09-21": {
+        "episodes": 39,
+        "positive_after_taker_fees": 23,
+        "median_minutes_on_offer": 0.0,
+        "on_offer_over_5min": 2,
+        "median_margin_c": 0.1,
+        "dollars_at_size": 2.51
+      }
+    }
   },
-  "50.0": {
-   "BIG ARB": {
-    "acted": 47,
-    "locked": 31,
-    "lost": 12,
-    "missed": 26,
-    "per_alert": 1.719,
-    "pnl": 125.46,
-    "unwound": 16,
-    "won": 35
-   },
-   "all": {
-    "acted": 76,
-    "locked": 47,
-    "lost": 21,
-    "missed": 119,
-    "per_alert": 0.361,
-    "pnl": 70.48,
-    "unwound": 29,
-    "won": 55
-   }
-  }
- },
- "inplay_unlimited_cash": {
-  "ARB": {
-   "alerts": 65,
-   "games": 13,
-   "guided": {
-    "acted": 50,
-    "locked": 38,
-    "lost": 10,
-    "missed": 15,
-    "per_alert": 3.257,
-    "pnl": 211.68,
-    "unwound": 12,
-    "won": 40
-   },
-   "instant": {
-    "acted": 65,
-    "locked": 65,
-    "lost": 0,
-    "missed": 0,
-    "per_alert": 8.267,
-    "pnl": 537.37,
-    "unwound": 0,
-    "won": 65
-   },
-   "naive": {
-    "acted": 62,
-    "locked": 48,
-    "lost": 39,
-    "missed": 3,
-    "per_alert": -6.96,
-    "pnl": -452.41,
-    "unwound": 14,
-    "won": 23
-   }
-  },
-  "ARB SMALL": {
-   "alerts": 57,
-   "games": 12,
-   "guided": {
-    "acted": 40,
-    "locked": 21,
-    "lost": 13,
-    "missed": 17,
-    "per_alert": -8.41,
-    "pnl": -479.35,
-    "unwound": 19,
-    "won": 27
-   },
-   "instant": {
-    "acted": 56,
-    "locked": 56,
-    "lost": 0,
-    "missed": 1,
-    "per_alert": 1.965,
-    "pnl": 111.99,
-    "unwound": 0,
-    "won": 55
-   },
-   "naive": {
-    "acted": 51,
-    "locked": 35,
-    "lost": 36,
-    "missed": 6,
-    "per_alert": -15.429,
-    "pnl": -879.46,
-    "unwound": 16,
-    "won": 15
-   }
-  },
-  "BIG ARB": {
-   "alerts": 73,
-   "games": 14,
-   "guided": {
-    "acted": 47,
-    "locked": 29,
-    "lost": 13,
-    "missed": 26,
-    "per_alert": 15.27,
-    "pnl": 1114.68,
-    "unwound": 18,
-    "won": 34
-   },
-   "instant": {
-    "acted": 65,
-    "locked": 65,
-    "lost": 0,
-    "missed": 8,
-    "per_alert": 28.457,
-    "pnl": 2077.34,
-    "unwound": 0,
-    "won": 65
-   },
-   "naive": {
-    "acted": 65,
-    "locked": 40,
-    "lost": 43,
-    "missed": 8,
-    "per_alert": -6.146,
-    "pnl": -448.65,
-    "unwound": 25,
-    "won": 22
-   }
-  },
-  "all": {
-   "alerts": 195,
-   "games": 15,
-   "guided": {
-    "acted": 134,
-    "locked": 86,
-    "lost": 35,
-    "missed": 61,
-    "per_alert": 4.25,
-    "pnl": 828.84,
-    "unwound": 48,
-    "won": 99
-   },
-   "instant": {
-    "acted": 173,
-    "locked": 173,
-    "lost": 0,
-    "missed": 22,
-    "per_alert": 13.764,
-    "pnl": 2684.03,
-    "unwound": 0,
-    "won": 172
-   },
-   "naive": {
-    "acted": 174,
-    "locked": 119,
-    "lost": 115,
-    "missed": 21,
-    "per_alert": -9.236,
-    "pnl": -1800.96,
-    "unwound": 55,
-    "won": 59
-   }
-  }
- },
- "l1_s": 5.0,
- "l2_s": 15.0,
- "maker_lines": {
-  "by_day": {
-   "2026-09-20": {
-    "dollars_at_size": 98.0,
-    "episodes": 434,
-    "median_margin_c": 1.0,
-    "median_minutes_on_offer": 0.0,
-    "on_offer_over_5min": 15,
-    "positive_after_taker_fees": 332
-   },
-   "2026-09-21": {
-    "dollars_at_size": 2.51,
-    "episodes": 39,
-    "median_margin_c": 0.1,
-    "median_minutes_on_offer": 0.0,
-    "on_offer_over_5min": 2,
-    "positive_after_taker_fees": 23
-   }
-  },
-  "detections": 1187,
-  "episodes": 473,
-  "lines": 278
- },
- "tie_unsafe_alerts": 195
+  "alerts_total": 195
 }

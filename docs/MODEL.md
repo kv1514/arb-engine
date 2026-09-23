@@ -805,8 +805,8 @@ for two minutes; fees on every buy and sale back.
 | alerts fired | count | at the alert's prices | following the ticket | won/lost | Robinhood first, any price |
 |---|---|---|---|---|---|
 | BIG ARB | 73 | +$299.61 | +$91.51 | 14/3 | +$7.47 |
-| ARB | 65 | +$38.06 | +$26.77 | 8/2 | +$40.29 |
-| ARB SMALL | 57 | +$16.17 | -$25.45 | 8/4 | -$28.86 |
+| ARB | 65 | +$38.06 | +$26.77 | 8/2 | +$41.71 |
+| ARB SMALL | 57 | +$16.17 | -$25.45 | 8/4 | -$29.32 |
 <!-- /results:arb_backtest_tiers -->
 
 Following the ticket keeps most of what the big arbs promised and loses money on the small
@@ -818,20 +818,88 @@ next arb. Sizing each ticket to a slice of the bankroll:
 | stake per arb | alerts acted on | result | won/lost | locked | undone | skipped (cash tied up) |
 |---|---|---|---|---|---|---|
 | $50 | BIG ARB only | +$125.46 | 35/12 | 31 | 16 | 26 |
-| $50 | every alert | +$70.48 | 55/21 | 47 | 29 | 119 |
+| $50 | every alert | +$102.49 | 57/20 | 48 | 29 | 118 |
 | $100 | BIG ARB only | +$180.01 | 26/9 | 23 | 12 | 38 |
 | $100 | every alert | +$80.30 | 27/4 | 25 | 7 | 163 |
 | $250 | BIG ARB only | +$112.55 | 14/3 | 12 | 5 | 56 |
 | $250 | every alert | +$68.49 | 15/2 | 14 | 3 | 178 |
 <!-- /results:arb_backtest_stakes -->
 
-Hence `arb_stake_fraction` = 0.20 (a ticket is sized to 20 % of the bankroll). All 195 alerts
+Hence `arb_stake_fraction` = 0.20 (a BIG ARB ticket is sized to 20 % of the bankroll; the
+1-3c tier gets less - see below). All 195 alerts
 were Kalshi YES + Rothera YES pairs, which pay $0.50 on a tie: with an NFL tie rate of a few
 tenths of a percent that costs roughly 0.1-0.2c per set in expectation, and a tied game would
 turn each locked set into a ~$0.45 loss. Caveats: one Sunday and one Monday night; a 5 s
 recorder; a person acting on every alert within 5 s and 15 s; the displayed size taken as
 available to us (others may race for the same stale price); Robinhood's exchange fee at the
 assumed $0.01 per contract. Fixture: `tests/fixtures/results/arb_backtest_w2.json`.
+
+### How long an arb lasts, and Kelly
+
+**Windows.** Every run of consecutive recorder ticks on which a game showed a fillable, fresh
+lock (no throttle), from first to last tick seen. The recorder ticks every 5 s, so "seen on
+one tick only" means it lasted somewhere between an instant and ~10 s:
+
+<!-- results:arb_backtest_windows -->
+| tier | arbs | median open | seen on one tick only | still open at 15 s | at 30 s | 90th pct | longest |
+|---|---|---|---|---|---|---|---|
+| BIG ARB | 77 | 8 s | 39% | 38% | 6% | 27 s | 48 s |
+| ARB | 61 | 8 s | 30% | 39% | 13% | 32 s | 49 s |
+| ARB SMALL | 59 | 6 s | 41% | 20% | 10% | 30 s | 44 s |
+| all | 197 | 7 s | 36% | 33% | 10% | 30 s | 49 s |
+<!-- /results:arb_backtest_windows -->
+
+An in-play arb is a race measured in seconds: about a third are gone before a second
+recorder tick, a third survive 15 s, one in ten survives 30 s, none reached a minute. The
+bottleneck is how fast the first leg is bought, so every ARB ticket now carries a `window:`
+line with its tier's numbers. (Pre-game line arbs from the maker's journal are the same
+story: most last under a minute.)
+
+**Kelly.** For each alert acted on by the ticket (first leg at 5 s, second at 15 s, else sold
+back), the return per dollar staked R; the Kelly fraction maximises mean log(1 + f R) with
+no leverage (f <= 100 %). Skipped alerts count as R = 0:
+
+<!-- results:arb_backtest_kelly -->
+| tier | acted on | won | mean return per $ staked | worst | best | Kelly f* |
+|---|---|---|---|---|---|---|
+| BIG ARB | 47/73 | 34/47 | +3.02% | -41.2% | +35.6% | 100% |
+| ARB | 50/65 | 41/50 | -0.46% | -62.7% | +27.1% | 0% |
+| ARB SMALL | 40/57 | 27/40 | -1.97% | -27.1% | +8.9% | 0% |
+<!-- /results:arb_backtest_kelly -->
+
+Per-bet Kelly says "all in" on a BIG ARB and "nothing" on the smaller tiers. The first half
+is wrong for this book: Kelly assumes each stake comes back before the next bet, but a
+locked set holds its cost until the game ends (hours), so an all-in ticket makes you miss
+every arb until then. Simulated on one bankroll, each tier staked at a share of equity
+(cash plus locked sets awaiting payout):
+
+<!-- results:arb_backtest_tier_stakes -->
+| bankroll | BIG ARB stake | ARB stake | ARB SMALL stake | result | won/lost |
+|---|---|---|---|---|---|
+| $500 | 100% | 0% | 0% | +$91.51 | 14/3 |
+| $500 | 50% | 0% | 0% | +$110.71 | 16/3 |
+| $500 | 30% | 0% | 0% | +$148.80 | 20/8 |
+| $500 | 20% | 0% | 0% | +$186.52 | 24/10 |
+| $500 | 10% | 0% | 0% | +$127.70 | 32/12 |
+| $500 | 20% | 5% | 0% | +$169.30 | 40/10 |
+| $500 | 20% | 10% | 0% | +$154.37 | 32/5 |
+| $500 | 20% | 20% | 20% | +$80.38 | 28/6 |
+| $1000 | 100% | 0% | 0% | +$272.00 | 14/3 |
+| $1000 | 50% | 0% | 0% | +$272.00 | 14/3 |
+| $1000 | 30% | 0% | 0% | +$325.09 | 24/8 |
+| $1000 | 20% | 0% | 0% | +$353.09 | 25/9 |
+| $1000 | 10% | 0% | 0% | +$214.25 | 32/12 |
+| $1000 | 20% | 5% | 0% | +$350.11 | 41/10 |
+| $1000 | 20% | 10% | 0% | +$325.61 | 38/6 |
+| $1000 | 20% | 20% | 20% | +$164.80 | 27/4 |
+<!-- /results:arb_backtest_tier_stakes -->
+
+So: 20 % per BIG ARB (the peak at both bankrolls; Kelly's 100 % is what the lock-up turns
+into 20 %), and the 1-3c ARB at `arb_stake_fraction_arb` = 5 % - legged by hand it is a
+coin flip that ties up cash a BIG ARB could use (0 % is best in-sample; 5 % costs $17 of
+$187 on $500 and $3 of $353 on $1000, and keeps those alerts coming). ARB SMALL stays
+journal-only. The same caveats as above apply, more so: 15 games, and the stake optimum was
+picked on the data it is scored on.
 
 **LAG, then lock.** `strategy/laglock.py` watches every filled LAG position for ten minutes
 and buys the other outcome as soon as the pair costs <= $1 with fees (tie-safe pairs only:
