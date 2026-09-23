@@ -325,8 +325,8 @@ class LiveSlate:
             out.errors.append(f"paperlag: {e!r}")
         try:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
-                text = sig.text()
-                out.lags.append(f"{view.title}: {text}")
+                text = sig.text()   # starts with "NFL - DEN @ KC - LAG: ..."
+                out.lags.append(text)
                 self._counts.setdefault(me.event_key, {"lag": 0, "arb": 0})["lag"] += 1
                 try:
                     self.paper.open(sig, now)
@@ -337,12 +337,16 @@ class LiveSlate:
                         rec = self.lag_executor.on_signal(sig, me.quotes_by_venue, now)
                         if rec is not None:
                             out.paper.append(f"lag-exec {rec.get('status')}: {rec.get('ticker')} {rec.get('side')} {rec.get('count')} @ {rec.get('price')}" + (f" — {rec['reason']}" if rec.get("reason") else ""))
+                            line = self.lag_executor.describe(rec)
+                            if line:   # the LAG push below says what the bot did, not only what it saw
+                                text = f"{text}\n{line}"
                     except Exception as e:
                         out.errors.append(f"lag-exec: {e!r}")
                 # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in
                 # the observation's extra_json so the ladder can be split STEAL vs LAG.
                 extra = {"outcome": sig.outcome, "venue": sig.follower, "ask": sig.follower_ask, "all_in": sig.follower_all_in, "fair": sig.leader_mid, "edge": sig.edge, "market_p": sig.leader_mid, "suggested_contracts": sig.suggested_contracts, "period": view.game_state.get("period") if isinstance(view.game_state, dict) else None, "signal_kind": "lag", "leader": sig.leader, "lead_move": sig.lead_move, "follower_move": sig.follower_move, "ts": now}
-                _call_optional(self.alerts.alert, "LAG", f"{view.title}: {text}", event=view.event_key, **extra)
+                sport = ticket.SPORT_NAMES.get(str(me.event_key).split(":")[0], "")
+                _call_optional(self.alerts.alert, "LAG", text, event=view.event_key, ntfy_title=f"LAG {sport}".strip(), **extra)
         except Exception as e:
             out.errors.append(f"leadlag: {e!r}")
         try:

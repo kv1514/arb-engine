@@ -93,7 +93,10 @@ scripts/sunday.sh restart live                  # if the recorders are already r
 
 3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
    **ARB CLOSE** (within `arb_near_margin`, 3¢ per contract, of locking — the heads-up
-   before it crosses), **LAG** (one venue repriced, the other has not — buy the laggard),
+   before it crosses), **LAG** (one venue repriced, the other has not — buy the laggard; with
+   `--execute-lag` on, the push's last line says what the auto-trader did: `AUTO (demo): sent
+   IOC buy 50 x … -> filled 12.00`), **EXEC ERROR** (the auto-trader's order failed — loud on
+   purpose, one per game per minute),
    **HEDGE NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB
    counts, paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed
    unless you add them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL,FINAL`): the first live Sunday
@@ -175,7 +178,8 @@ python3 scripts/kalshi_connect.py
 A LAG lives ~23 s; reading a push and typing an order is slower. `live --execute-lag` sends
 an **immediate-or-cancel buy** of the laggard's own Kalshi market at the ask the signal saw,
 sized like the signal and capped (`--lag-max-contracts 50`, `--lag-max-per-game 100`,
-`--lag-daily 500`). Modes: `intent` writes what it would send to
+`--lag-daily 500`; the caps count what *filled*, so an order that found nothing does not use
+them up). Modes: `intent` writes what it would send to
 `out/orders/lag_intents.jsonl` (start here; no key needed), `demo` sends to Kalshi's demo
 exchange (`KALSHI_ENV=demo` + `KALSHI_API_KEY` + `KALSHI_PRIVATE_KEY_PATH`), `live` sends to
 production and also needs `ARB_LIVE_TRADING=1`. The launcher passes extras after `--`:

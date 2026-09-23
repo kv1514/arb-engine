@@ -297,6 +297,9 @@ class FastLaneTests(unittest.TestCase):
             arbs += ft.arbs
             errors += ft.errors
         self.assertTrue(any("KALSHI buy" in l and "Kansas City @ 0.60" in l for l in lags), lags)
+        self.assertTrue(all(l.startswith("NFL - DEN @ KC - LAG:") for l in lags), lags)   # sport first, title once
+        lag_alerts = [e for e in slate.alerts.events if e["kind"] == "alert" and e["title"] == "LAG"]
+        self.assertTrue(lag_alerts and lag_alerts[0]["msg"].startswith("NFL - DEN @ KC - LAG:"), lag_alerts)
         # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi),
         # and it is reported as an order ticket: sport, per-venue counts, prices, fees, totals.
         self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI buy 120 x KC YES @ 0.60" in a
@@ -430,6 +433,61 @@ class LagExecutorTests(unittest.TestCase):
         rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21"), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, meta={"ticker": "T-KC", "side": "yes"})]})
         self.assertEqual((rec4["status"], rec4["count"]), ("SUBMITTED", 50))
         self.assertAlmostEqual(ex.sent_notional, 75.0)
+
+    def _demo(self, create_order, alerter=None):
+        from arb_engine.execution.kalshi import KalshiExecutor
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        class Client:
+            env, base_url, has_credentials = "demo", "https://demo", True
+
+        c = Client()
+        c.create_order = create_order
+        return LagExecutor(mode="demo", executor=KalshiExecutor(c), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_x_{os.getpid()}.jsonl"),
+                           max_contracts=50, max_notional_per_game=100.0, daily_notional=500.0, alerter=alerter, clock=lambda: 1000.0)
+
+    def test_caps_count_what_filled_not_what_was_sent(self):
+        # An immediate-or-cancel order that finds nothing is no exposure: it must not eat the cap.
+        ex = self._demo(lambda payload: {"order_id": "o1", "fill_count": "0.00", "remaining_count": "0.00"})
+        rec = ex.on_signal(self._sig(), self._quotes())
+        self.assertEqual((rec["status"], rec["filled_notional"]), ("SUBMITTED", 0.0))
+        self.assertEqual(ex.sent_notional, 0.0)
+        ex2 = self._demo(lambda payload: {"order_id": "o2", "fill_count": "12.00", "remaining_count": "0.00"})
+        ex2.on_signal(self._sig(), self._quotes())
+        self.assertAlmostEqual(ex2.sent_notional, 12 * 0.60)
+        ex3 = self._demo(lambda payload: {"order_id": "o3"})           # no fill count reported: count it all
+        ex3.on_signal(self._sig(), self._quotes())
+        self.assertAlmostEqual(ex3.sent_notional, 50 * 0.60)
+
+    def test_a_failed_order_is_pushed_as_exec_error_and_described(self):
+        from arb_engine.venues.http import HttpError
+
+        pushed = []
+        alerts = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_err_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="t", transport=lambda url, body, headers: pushed.append((headers["Title"], body.decode())))
+
+        def reject(payload):
+            raise HttpError(400, "https://demo/portfolio/events/orders", '{"error":{"code":"invalid_parameters"}}')
+        ex = self._demo(reject, alerter=alerts)
+        rec = ex.on_signal(self._sig(), self._quotes())
+        self.assertEqual(rec["status"], "error")
+        self.assertEqual(len(pushed), 1)
+        self.assertEqual(pushed[0][0], "EXEC ERROR")
+        self.assertIn("LAG auto-trade (demo) failed", pushed[0][1])
+        self.assertIn("invalid_parameters", pushed[0][1])
+        self.assertTrue(ex.describe(rec).startswith("AUTO (demo): FAILED"))
+        # A second failure in the same game inside a minute is not a second buzz.
+        ex.on_signal(self._sig(ask=0.61), self._quotes())
+        self.assertEqual(len(pushed), 1)
+
+    def test_describe_says_what_the_bot_did(self):
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        ex = self._demo(lambda payload: {"order_id": "o1", "fill_count": "12.00", "remaining_count": "0.00"})
+        line = ex.describe(ex.on_signal(self._sig(), self._quotes()))
+        self.assertEqual(line, "AUTO (demo): sent IOC buy 50 x KXNFLGAME-26SEP21DENKC-KC @ 0.6 -> filled 12.00 ($7.20)")
+        intent = LagExecutor(mode="intent", intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_i3_{os.getpid()}.jsonl"))
+        self.assertTrue(intent.describe(intent.on_signal(self._sig(), self._quotes())).startswith("AUTO (intent): would send IOC buy 50"))
+        self.assertIsNone(LagExecutor(mode="off").describe({"status": "intent"}))
 
     def test_live_mode_needs_the_flag_and_no_row_is_skipped(self):
         from arb_engine.strategy.lagexec import LagExecutor

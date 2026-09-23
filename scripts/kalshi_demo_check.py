@@ -12,7 +12,9 @@ Steps (each prints PASS/FAIL and the HTTP status; the script refuses to run on p
                                                                   exchange-side backstop does not exist)
 4. DELETE it, then place two more and DELETE .../batched       -> single and batched cancel; each must report
                                                                   reduced_by > 0 (a 200 with "0.00" is an errored cancel)
-5. GET /portfolio/fills (page 1)                               -> fills read path
+5. POST an immediate_or_cancel buy at $0.01 x1                -> the order shape --execute-lag sends (no
+                                                                  expiry, no post_only) is accepted and rests nothing
+   GET /portfolio/fills (page 1)                               -> fills read path
 6. GET resting orders: must be zero at the end                 -> nothing orphaned
 
 ``--sweep`` only lists and batch-cancels every resting order (run it after a ``kill -9`` of
@@ -239,6 +241,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         res = chk.step(f"DELETE /portfolio/events/orders/batched x{len(more)}", lambda: client.cancel_orders_batched(entries), "cancel_batched")
         if res is not None:
             chk.expect_cancelled("batched cancel", res, more)
+    # The LAG executor's order is a different shape from the resting ones above: immediate-or-
+    # cancel, no post_only, no expiration_time (the gateway rejects an expiry on IOC). At $0.01
+    # nothing is offered, so it must be accepted and leave nothing resting.
+    ioc = ex.plan(ticker, "buy", "yes", 1, 0.01, post_only=False, exchange_index=0, time_in_force="immediate_or_cancel", note="demo check IOC").payload()
+    chk.expect("IOC payload (the LAG executor's) has no expiration_time and no post_only", "expiration_time" not in ioc and not ioc.get("post_only") and ioc.get("time_in_force") == "immediate_or_cancel", json.dumps(ioc))
+    r = chk.step("POST immediate_or_cancel buy $0.01 x1 (what --execute-lag sends)", lambda: client.create_order(ioc), "create_order_ioc")
+    if r is not None:
+        od = r.get("order") or r
+        io = str(od.get("order_id") or "")
+        print(f"  order_id={io}  fill_count={od.get('fill_count')}  remaining_count={od.get('remaining_count')}")
+        if io:
+            more.append(io)   # the final check proves it did not rest
     chk.step("GET /portfolio/fills", lambda: client.fills_v2(limit=5), "fills_v2")
     ids = {oid, *more}
     resting = chk.step("GET resting orders at the end (waits for the cancels to show)", lambda: settle(lambda: client.orders_v2(status="resting"), lambda r: not [o for o in r or [] if str(o.get("order_id") or o.get("id")) in ids])[0]) or []

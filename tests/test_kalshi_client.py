@@ -425,7 +425,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
 
     def _routes(self, order_row: dict) -> dict:
         oid = "0b3c7a2e-demo-4c1f-9a11-000000000001"
-        create = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"}]
+        create = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"},
+                  {"order_id": "i4", "fill_count": "0.00", "remaining_count": "0.00"}]   # the IOC: nothing at $0.01, nothing rests
         return {
             "GET /exchange/status": {"exchange_active": True, "trading_active": True},
             "GET /portfolio/balance": _fx("balance"),
@@ -457,7 +458,9 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertEqual(rc, 0, text)
         self.assertIn("ALL PASS", text)
         self.assertNotIn("FAIL", text)
-        self.assertEqual(set(written), {"balance.json", "create_order.json", "order.json", "orders_v2.json", "cancel_order.json", "cancel_batched.json", "fills_v2.json"})
+        self.assertEqual(set(written), {"balance.json", "create_order.json", "create_order_ioc.json", "order.json", "orders_v2.json", "cancel_order.json", "cancel_batched.json", "fills_v2.json"})
+        self.assertIn("PASS POST immediate_or_cancel buy $0.01 x1", text)
+        self.assertIn("PASS IOC payload (the LAG executor's) has no expiration_time and no post_only", text)
         self.assertIn("order", written["order.json"])  # the client unwraps; --record re-wraps
         self.assertEqual(written["order.json"]["order"]["outcome_side"], "yes")
         self.assertTrue(written["order.json"]["_fixture"].startswith("recorded, "))

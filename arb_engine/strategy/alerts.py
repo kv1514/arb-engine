@@ -34,13 +34,13 @@ STEAL_EXTRA_FIELDS = ("signal_kind", "leader", "lead_move", "follower_move")
 
 
 NTFY_DEFAULT_URL = "https://ntfy.sh"
-NTFY_DEFAULT_KINDS = ("ARB", "ARB CLOSE", "LAG", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
+NTFY_DEFAULT_KINDS = ("ARB", "ARB CLOSE", "LAG", "EXEC ERROR", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
 # Kinds throttled per game rather than per (game, side): the maker rates every spread and
 # total line of a game in one pass, and one push per game per minute (the best-margin line
 # comes first, the watches are ranked) beats eight in three seconds.
-NTFY_GAME_LEVEL = ("TAKER ARB", "ARB CLOSE")
-NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "ARB CLOSE": "3", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
-NTFY_TAGS = {"HEDGE NOW": "rotating_light", "ARB": "moneybag", "ARB CLOSE": "eyes", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
+NTFY_GAME_LEVEL = ("TAKER ARB", "ARB CLOSE", "EXEC ERROR")
+NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "EXEC ERROR": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "ARB CLOSE": "3", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
+NTFY_TAGS = {"HEDGE NOW": "rotating_light", "EXEC ERROR": "warning", "ARB": "moneybag", "ARB CLOSE": "eyes", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
 
 try:  # settings registry; the module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore

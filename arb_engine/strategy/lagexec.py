@@ -57,12 +57,30 @@ class LagExecutor:
             raise RuntimeError("live LAG execution requires ARB_LIVE_TRADING=1")
 
     # ---- helpers ------------------------------------------------------------------------
+    def describe(self, rec: Optional[dict[str, Any]]) -> Optional[str]:
+        """One line for the LAG push: what the auto-trader did with this signal."""
+        if not rec or self.mode == "off":
+            return None
+        tag = f"AUTO ({self.mode})"
+        st = rec.get("status")
+        if st == "intent":
+            return f"{tag}: would send IOC buy {rec.get('count')} x {rec.get('ticker')} @ {rec.get('price')}"
+        if st == "skipped":
+            return f"{tag}: skipped - {rec.get('reason')}"
+        if st == "SUBMITTED":
+            return (f"{tag}: sent IOC buy {rec.get('count')} x {rec.get('ticker')} @ {rec.get('price')} -> "
+                    f"filled {rec.get('fill_count')}" + (f" (${rec['filled_notional']:.2f})" if isinstance(rec.get("filled_notional"), (int, float)) else ""))
+        return f"{tag}: FAILED - {rec.get('reason') or st}"
+
     def _roll_day(self, now: float) -> None:
         day = time.strftime("%Y-%m-%d", time.localtime(now))
         if day != self.day:
             self.day, self.sent_notional, self.per_game = day, 0.0, {}
 
     def _journal(self, rec: dict[str, Any]) -> None:
+        """Append to the intents file; an order that errored (or that the executor did not
+        submit) also raises an EXEC ERROR alert, which is pushed: a broken auto-trader in the
+        middle of a game must not be a line in a file nobody is reading."""
         self.orders.append(rec)
         try:
             os.makedirs(os.path.dirname(self.intents_path) or ".", exist_ok=True)
@@ -70,6 +88,11 @@ class LagExecutor:
                 f.write(json.dumps(rec, default=str) + "\n")
         except OSError:
             pass
+        if self.alerter is not None and self.mode in ("demo", "live") and rec.get("status") not in ("SUBMITTED", "intent", "skipped", None):
+            try:
+                self.alerter.alert("EXEC ERROR", f"LAG auto-trade ({self.mode}) failed: {rec.get('ticker')} buy {rec.get('count')} @ {rec.get('price')} - {rec.get('reason') or rec.get('status')}", event=rec.get("event_key"))
+            except Exception:
+                pass
         if self.alerter is not None:
             try:
                 self.alerter.info(f"lag-exec {rec.get('status')}: {rec.get('ticker')} {rec.get('side')} {rec.get('count')} @ {rec.get('price')}" + (f" — {rec['reason']}" if rec.get("reason") else ""), event=rec.get("event_key"), lag_exec=rec)
@@ -150,7 +173,22 @@ class LagExecutor:
         rec["fill_count"] = od.get("fill_count", "unknown")
         rec["remaining_count"] = od.get("remaining_count", "unknown")
         if rec["status"] == "SUBMITTED":
-            self.sent_notional += cost
-            self.per_game[sig.event_key] = self.per_game.get(sig.event_key, 0.0) + cost
+            # The caps bound exposure, and an immediate-or-cancel order that did not fill is
+            # none: count what filled. A response without a fill count counts in full.
+            filled = _num(rec["fill_count"])
+            spent = filled * float(sig.follower_ask) if filled is not None else cost
+            rec["filled_notional"] = round(spent, 4)
+            self.sent_notional += spent
+            self.per_game[sig.event_key] = self.per_game.get(sig.event_key, 0.0) + spent
+        else:
+            rec.setdefault("reason", f"executor returned {rec['status']!r}")
         self._journal(rec)
         return rec
+
+
+def _num(x: Any) -> Optional[float]:
+    """Kalshi's fixed-point strings ("12.00") and numbers -> float; anything else -> None."""
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
