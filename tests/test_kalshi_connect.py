@@ -101,3 +101,56 @@ class ConnectCheckTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InstallKeyScriptTests(unittest.TestCase):
+    """scripts/kalshi_install_key.sh: file moved into ~/.kalshi with tight modes, env written."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(dir=os.environ.get("TMPDIR"))
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption())
+        self.dl = os.path.join(self.home, "ARB.txt")
+        Path(self.dl).write_bytes(self.pem)
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def _run(self, *args):
+        import subprocess
+
+        env = {**os.environ, "HOME": self.home, "KALSHI_INSTALL_NO_CHECK": "1"}
+        return subprocess.run(["bash", str(ROOT / "scripts" / "kalshi_install_key.sh"), *args], env=env, capture_output=True, text=True, timeout=30)
+
+    def test_installs_the_file_and_settings_with_owner_only_modes(self):
+        r = self._run(self.dl, "c2d58352-0000-4067-b38f-000000000000", "demo")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        dest = Path(self.home, ".kalshi", "demo.key")
+        self.assertFalse(os.path.exists(self.dl))                        # moved, not copied
+        self.assertEqual(dest.read_bytes(), self.pem)
+        self.assertEqual(os.stat(dest).st_mode & 0o777, 0o600)
+        self.assertEqual(os.stat(Path(self.home, ".kalshi")).st_mode & 0o777, 0o700)
+        envf = Path(self.home, ".kalshi", "env")
+        self.assertEqual(os.stat(envf).st_mode & 0o777, 0o600)
+        self.assertEqual(envf.read_text().splitlines(), ["export KALSHI_ENV=demo", "export KALSHI_API_KEY=c2d58352-0000-4067-b38f-000000000000", f"export KALSHI_PRIVATE_KEY_PATH={dest}"])
+        # Nothing the script prints contains the key.
+        self.assertNotIn(self.pem.decode().splitlines()[1], r.stdout + r.stderr)
+        # And the checker's reader loads exactly those settings.
+        env = {}
+        kc.load_env_file(envf, env)
+        self.assertEqual(env["KALSHI_PRIVATE_KEY_PATH"], str(dest))
+
+    def test_refuses_a_file_that_is_not_a_private_key_and_a_malformed_id(self):
+        notes = os.path.join(self.home, "notes.txt")
+        Path(notes).write_text("hello\n")
+        r = self._run(notes, "abc-123")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("PRIVATE KEY header", r.stderr)
+        self.assertTrue(os.path.exists(notes))                          # left where it was
+        r = self._run(self.dl, "abc 123; rm -rf ~")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("letters, digits and dashes", r.stderr)
+        self.assertTrue(os.path.exists(self.dl))
+        self.assertEqual(self._run(self.dl, "abc", "staging").returncode, 2)

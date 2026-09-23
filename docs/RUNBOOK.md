@@ -144,17 +144,20 @@ key must never be pasted into a chat, a commit or a file in this repo.
    play money) so the executor can be proven before real money is involved; do the same on
    kalshi.com later. Account → **API Keys** → **Create key**. Kalshi shows a **Key ID** and
    downloads a **private key file** once — it cannot be downloaded again.
-2. **Put the file somewhere only you can read it** and write the two settings into
-   `~/.kalshi/env` (the launcher and the checker read it; values here are the ID and a *path*,
-   not the key itself):
+2. **Install it with one command, in your own Terminal** (the downloaded file's name, the Key
+   ID Kalshi showed, and `demo` or `prod`). It moves the file into `~/.kalshi/` (mode 600),
+   writes `~/.kalshi/env` (the ID and a *path*, not the key) and runs the check below:
 
 ```bash
-mkdir -p ~/.kalshi && chmod 700 ~/.kalshi
-mv ~/Downloads/<the-downloaded-file> ~/.kalshi/demo.key && chmod 600 ~/.kalshi/demo.key
-printf 'export KALSHI_ENV=demo\nexport KALSHI_API_KEY=%s\nexport KALSHI_PRIVATE_KEY_PATH=~/.kalshi/demo.key\n' 'PASTE-KEY-ID' > ~/.kalshi/env
+scripts/kalshi_install_key.sh ~/Downloads/<the-downloaded-file> <key-id> demo
 ```
 
-3. **Check it** (read-only: one signed balance read, nothing placed or cancelled):
+   Never paste the key file's contents into a chat, an issue or a commit. If that happens,
+   delete the key on Kalshi (Account → API Keys) and create a new one: a pasted private key is
+   in that tool's logs for good, and deleting the key is the only thing that makes the copy
+   useless.
+
+3. **Check it again any time** (read-only: one signed balance read, nothing placed or cancelled):
 
 ```bash
 python3 scripts/kalshi_connect.py
