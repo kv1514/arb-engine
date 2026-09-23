@@ -133,6 +133,27 @@ def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB"
     return "\n".join(lines)
 
 
+def lag_grade_lines(sig: Any) -> list[str]:
+    """How strong the lag is, and how it becomes a locked set."""
+    out = []
+    lbid, hard = _g(sig, "leader_bid"), _g(sig, "hard_lag")
+    if hard is not None:
+        rel = "<" if hard else ">="
+        out.append(f"grade: {'HARD' if hard else 'soft'} lag (all-in {float(_g(sig, 'follower_all_in', 0)):.4f} {rel} "
+                   f"{_g(sig, 'leader', '?')} bid {float(lbid):.2f}); {int(_g(sig, 'agree', 0) or 0)} other venue(s) agree")
+    lv, la, lp = _g(sig, "lock_venue"), _g(sig, "lock_ask"), _g(sig, "lock_price")
+    who = _g(sig, "lock_label") or _g(sig, "lock_outcome") or "the other side"
+    if lv and la is not None:
+        tie = _g(sig, "lock_tie_sum")
+        tie_note = f"; on a tie the pair pays ${float(tie):.2f}" + (" - LOSES on a tie" if tie < 1 else "") if tie is not None else ""
+        if _g(sig, "lock_now"):
+            pair = float(_g(sig, "follower_all_in", 0)) + float(_g(sig, "lock_all_in", 0))
+            out.append(f"LOCK NOW: buy {who} on {str(lv).upper()} at the ask ${float(la):.2f} -> pair costs ${pair:.4f} < $1{tie_note}")
+        elif lp is not None:
+            out.append(f"lock later: {who} on {str(lv).upper()} at <= ${float(lp):.2f} (ask now ${float(la):.2f}){tie_note}")
+    return out
+
+
 def lag_ticket(sig: Any, fee_total: Optional[float] = None) -> str:
     """One-leg ticket for a LAG signal: the laggard's own order, with its order fee.
 
@@ -162,6 +183,7 @@ def lag_ticket(sig: Any, fee_total: Optional[float] = None) -> str:
     depth = _g(sig, "depth")
     if depth:
         lines[-1] += f"; depth {float(depth):g} ct"
+    lines += lag_grade_lines(sig)
     settlement_flags = tuple(_g(sig, "settlement_flags", ()) or ())
     if settlement_flags:
         lines.append("SIGNAL ONLY - this contract's settlement rule is unverified: " + ", ".join(settlement_flags))

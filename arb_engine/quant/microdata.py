@@ -472,3 +472,32 @@ def settlement_values(rows: Iterable[dict[str, Any]], finals: dict[str, tuple]) 
             yes = 1.0 if r.get("outcome") == winner else 0.0
             out[(ev, r.get("outcome"), side)] = yes
     return out
+
+
+def series_by_contract(rows: Iterable[dict[str, Any]]) -> dict[tuple, list[dict[str, Any]]]:
+    """Deduplicated observations per contract identity, time-ordered, each with its obs_ts."""
+    out: dict[tuple, list[dict[str, Any]]] = defaultdict(list)
+    for t, _, r in _dedupe(rows):
+        out[contract_key(r)].append(dict(r, obs_ts=t))
+    return dict(out)
+
+
+def tie_value(row: dict[str, Any]) -> Optional[float]:
+    """What this contract pays on a tie, from the settlement registry (None when unknown)."""
+    if row.get("tie_payout") is not None:
+        return _f(row.get("tie_payout"))
+    try:
+        from ..matching.settlement_rules import rule_for_quote
+        from ..models import OutcomeQuote
+
+        ev = str(row.get("event_key") or "")
+        mtype = "spread" if ":spread:" in ev else ("total" if ":total:" in ev else "moneyline")
+        meta = {"exchange": row.get("exchange")} if row.get("exchange") else {}
+        if row.get("side"):
+            meta["side"] = row["side"]
+        q = OutcomeQuote(str(row.get("venue")), str(row.get("venue_market_id") or ""), ev, str(row.get("outcome") or ""),
+                         fee_params=dict(row.get("fee_params") or {}), meta=meta, book_id=str(row.get("book_id") or row.get("venue")))
+        tv = {"half": 0.5, "no_winner": 0.0}.get((rule_for_quote(q, ev.split(":", 1)[0].lower(), mtype) or {}).get("tie"))
+    except Exception:
+        return None
+    return (1.0 - tv) if tv is not None and side_of(row) == "no" else tv

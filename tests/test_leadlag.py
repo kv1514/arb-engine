@@ -65,6 +65,43 @@ class LeadLagTests(unittest.TestCase):
         # Same poll again within the cooldown and no bigger edge: silent.
         self.assertEqual(tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(20, (0.59, 0.60), (0.66, 0.69)), now=20), [])
 
+    def test_signals_are_graded_hard_lag_agreement_and_lock(self):
+        """Rothera reprices KC to 0.66/0.69; Kalshi still offers KC at 0.60. Buying KC on Kalshi
+        costs 0.60 + fee, below Rothera's *bid* 0.66: a hard lag. The cheapest DEN is now on
+        Rothera itself (1 - 0.66 = 0.34), so the lag is already a lock - an arbitrage - though a
+        Kalshi YES + Rothera YES pair pays only $0.50 on a tie. Polymarket moving the same way
+        counts as agreement."""
+        tr = self._tracker()
+        tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.59, 0.60), (0.58, 0.61), kc_pm=(0.58, 0.62)), now=0)
+        s = tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(15, (0.59, 0.60), (0.66, 0.69), kc_pm=(0.65, 0.69)), now=15, bankroll=500)
+        s = [x for x in s if x.follower == "kalshi"][0]
+        self.assertAlmostEqual(s.leader_bid, 0.66)
+        self.assertTrue(s.hard_lag)
+        self.assertEqual(s.agree, 1)
+        self.assertEqual(s.lock_venue, "robinhood")
+        self.assertAlmostEqual(s.lock_ask, 0.34)
+        self.assertTrue(s.lock_now)
+        self.assertLess(s.follower_all_in + s.lock_all_in, 1.0)
+        self.assertEqual(s.lock_tie_sum, 0.5)              # Kalshi $0.50 + Rothera YES $0 on a tie
+        self.assertFalse(s.lock_now_tie_safe)              # Kalshi's own DEN (0.41) does not lock yet
+
+    def test_a_kalshi_only_lock_needs_the_other_side_to_get_cheaper(self):
+        """Executable on Kalshi only: DEN at 0.41 + fee does not lock yet. The lock price is
+        the most DEN may cost, fees in, for the pair to pay back its cost."""
+        from arb_engine.fees.kalshi import KalshiFees
+
+        tr = LeadLagTracker(move=0.05, window_s=30, min_edge=0.02, cooldown_s=60, fresh_s=60, executable={"kalshi"})
+        tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.59, 0.60), (0.58, 0.61)), now=0)
+        s = tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(15, (0.59, 0.60), (0.66, 0.69)), now=15, bankroll=500)[0]
+        self.assertEqual(s.lock_venue, "kalshi")
+        self.assertAlmostEqual(s.lock_ask, 0.41)
+        self.assertFalse(s.lock_now)
+        n = s.suggested_contracts
+        at = lambda p: p + float(KalshiFees().fee(p, n)) / n
+        self.assertLessEqual(s.follower_all_in + at(s.lock_price), 1.0 + 1e-9)          # locks at the lock price
+        self.assertGreater(s.follower_all_in + at(round(s.lock_price + 0.01, 2)), 1.0)  # and not a cent above it
+        self.assertEqual(s.lock_tie_sum, 1.0)              # Kalshi KC + Kalshi DEN pay $0.50 each on a tie
+
     def test_settlement_gate_is_the_contract_bought_not_the_leader(self):
         """LAG buys only the follower and holds or sells it on the follower's venue; the
         leader is never traded. A Rothera-led Kalshi buy must stay executable (Kalshi's rule
@@ -398,6 +435,51 @@ class FastLaneTests(unittest.TestCase):
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
 
+
+    def test_slate_lag_fill_then_lock_end_to_end(self):
+        """Through fast_step: a Rothera repricing -> LAG -> paper buy of KC on Kalshi fills ->
+        Kalshi's DEN falls -> the lock watch locks the pair (Rothera's cheaper DEN YES is
+        skipped: it pays nothing on a tie)."""
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo
+        from arb_engine.store import Store
+        from arb_engine.strategy.inplay import InplayView
+        from arb_engine.strategy.live import LiveSlate
+
+        info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
+        t0 = 1_800_000_000.0
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=0.60, bid=0.59, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"}), OutcomeQuote("kalshi", "T-DEN", KEY, "DEN", ask=0.41, bid=0.40, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-DEN", "side": "yes"})]
+        rq = [OutcomeQuote("robinhood", "c1", KEY, "KC", ask=0.61, bid=0.58, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c1", "side": "yes", "exchange": "rothera"}, book_id="rothera"), OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=0.42, bid=0.39, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
+        rh_prices = {"c1": {"yes_ask_price": "0.61", "yes_bid_price": "0.58", "ask_venue_timestamp": t0}, "c2": {"yes_ask_price": "0.42", "yes_bid_price": "0.39", "ask_venue_timestamp": t0}}
+        k_prices = {"T-KC": (0.59, 0.60), "T-DEN": (0.40, 0.41)}
+        client, _ = self._kalshi_client(k_prices)
+        rh = self._robinhood(rh_prices)
+        rh.client = None
+        st = Store(":memory:")
+        slate = LiveSlate([], settings={"executable_venues": "kalshi,robinhood"}, store=st, alerter=Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lock_e2e_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy=""), bankroll=500, fast=1.0, interval=5.0)
+        slate.fastlane.kalshi, slate.fastlane.robinhood = client, rh
+        view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
+        slate._live_priced = {KEY: (None, me, view)}
+        slate.fastlane.seed({KEY: me.quotes_by_venue})
+        slate.fast_step(t0 + 1)
+        rh_prices["c1"].update({"yes_ask_price": "0.69", "yes_bid_price": "0.66", "ask_venue_timestamp": t0 + 2})
+        rh_prices["c2"].update({"yes_ask_price": "0.34", "yes_bid_price": "0.31", "ask_venue_timestamp": t0 + 2})
+        lags = []
+        for t in (2, 3, 4):
+            rh_prices["c1"]["ask_venue_timestamp"] = rh_prices["c2"]["ask_venue_timestamp"] = t0 + t
+            lags += slate.fast_step(t0 + t).lags
+        self.assertTrue(lags)
+        self.assertTrue(any(o.filled_at is not None for o in slate.paper.orders))       # the paper buy filled
+        self.assertEqual([p.status for p in slate.laglock.positions], ["watching"])      # DEN still too dear
+        k_prices["T-DEN"] = (0.34, 0.35)                                                 # Kalshi's DEN drops
+        for t in (5, 6):
+            rh_prices["c1"]["ask_venue_timestamp"] = rh_prices["c2"]["ask_venue_timestamp"] = t0 + t
+            slate.fast_step(t0 + t)
+        p = slate.laglock.positions[0]
+        self.assertEqual((p.status, p.lock_venue), ("locked", "kalshi"))
+        self.assertGreater(p.lock_margin, 0)
+        self.assertEqual(st.conn.execute("select status from lag_locks").fetchone()[0], "locked")
 
     def test_production_fast_step_with_a_moving_clock_still_signals(self):
         """In production fast_step gets no pinned time: each quote is stamped when its answer
@@ -812,3 +894,89 @@ class NearArbAlertTests(unittest.TestCase):
         slate, me, view, t0 = self._slate(0.62, 0.45, arb_near_margin=0.15)   # 10.7c short, buffer 15c
         self._run(slate, me, view, t0 + 1)
         self.assertEqual([e["title"] for e in slate.alerts.events if e["kind"] == "alert"], ["ARB CLOSE"])
+
+
+class LagLockTests(unittest.TestCase):
+    """strategy/laglock.py: a filled LAG position watches the other outcome for a lock."""
+
+    def _q(self, venue, outcome, ask, t, size=500, side="yes", exch=None):
+        meta = {"ticker": f"T-{outcome}", "side": side}
+        if exch:
+            meta["exchange"] = exch
+        return OutcomeQuote(venue, f"{venue}-{outcome}", KEY, outcome, ask=ask, bid=round(ask - 0.01, 2), ask_size=size, ts=t,
+                            fee_params=KFEE if venue == "kalshi" else {"exchange": exch or "rothera"}, meta=meta,
+                            book_id="rothera" if venue == "robinhood" else venue)
+
+    def _book(self, **kw):
+        from arb_engine.strategy.laglock import LagLockBook
+
+        return LagLockBook(store=None, watch_s=600, executable={"kalshi", "robinhood"}, **kw)
+
+    def test_paper_position_locks_when_the_other_side_gets_cheap_enough(self):
+        from arb_engine.fees.kalshi import KalshiFees
+
+        b = self._book()
+        entry_all_in = 0.60 + float(KalshiFees().fee(0.60, 50)) / 50        # KC bought at 0.60 on Kalshi
+        b.open("p1", KEY, "KC", "DEN", "kalshi", 50, 0.60, entry_all_in, 0.0, "paper", entry_tie=0.5)
+        self.assertEqual(b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.41, 5.0)]}, 5.0), [])   # 0.617 + 0.417 > 1
+        # 0.37 is not enough: 0.6168 + 0.37 + fee 0.0164 = 1.0032 > $1.
+        self.assertEqual(b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.37, 30.0)]}, 30.0), [])
+        lines = b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 40.0)]}, 40.0)   # 0.6168 + 0.3762 = 0.993
+        p = b.positions[0]
+        self.assertEqual(p.status, "locked")
+        den_all_in = 0.36 + float(KalshiFees().fee(0.36, 50)) / 50
+        self.assertAlmostEqual(p.lock_margin, 1 - entry_all_in - den_all_in)
+        self.assertGreater(p.lock_margin, 0)
+        self.assertEqual(p.lock_tie_sum, 1.0)
+        self.assertIn("LAG LOCKED", lines[0])
+        self.assertIn(f"+${p.lock_margin * 50:.2f} locked", lines[0])
+        s = b.summary()
+        self.assertEqual((s["locked"], s["conversion"], s["median_seconds_to_lock"]), (1, 1.0, 40.0))
+
+    def test_a_pair_that_loses_on_a_tie_is_not_a_lock_and_positions_expire(self):
+        b = self._book()
+        b.open("p1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "paper", entry_tie=0.5)
+        # Rothera's DEN YES pays nothing on a tie: $0.50 + $0 < $1 -> not locked however cheap.
+        b.observe(KEY, {"robinhood": [self._q("robinhood", "DEN", 0.30, 5.0, exch="rothera")]}, 5.0)
+        self.assertEqual(b.positions[0].status, "watching")
+        b.observe(KEY, {}, 601.0)
+        self.assertEqual(b.positions[0].status, "expired")
+        self.assertEqual(b.summary()["conversion"], 0.0)
+        # Opting out of tie safety locks it (and reports the tie payout).
+        b2 = self._book(require_tie_safe=False)
+        b2.open("p2", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "paper", entry_tie=0.5)
+        b2.observe(KEY, {"robinhood": [self._q("robinhood", "DEN", 0.30, 5.0, exch="rothera")]}, 5.0)
+        self.assertEqual((b2.positions[0].status, b2.positions[0].lock_tie_sum), ("locked", 0.5))
+
+    def test_demo_position_sends_the_lock_leg_and_only_a_fill_locks(self):
+        from arb_engine.execution.kalshi import KalshiExecutor
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        fills = ["0.00", "10.00"]
+        sent = []
+
+        class Client:
+            env, base_url, has_credentials = "demo", "https://demo", True
+
+            def create_order(self, payload):
+                sent.append(payload)
+                return {"order_id": f"o{len(sent)}", "fill_count": fills.pop(0), "remaining_count": "0.00"}
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lock_{os.getpid()}.jsonl"),
+                         max_notional_per_game=0.01, clock=lambda: 0.0)   # caps exhausted: a lock leg must still go
+        b = self._book(executor=ex)
+        b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5)
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 5.0)]}, 5.0)          # IOC found nothing
+        self.assertEqual(b.positions[0].status, "watching")
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # filled: locked
+        self.assertEqual(b.positions[0].status, "locked")
+        self.assertEqual([(p["ticker"], p["time_in_force"], int(float(p["count"]))) for p in sent], [("T-DEN", "immediate_or_cancel", 10)] * 2)
+
+    def test_a_lock_only_on_robinhood_is_flagged_for_a_person(self):
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        ex = LagExecutor(mode="intent", intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lock2_{os.getpid()}.jsonl"))
+        b = self._book(executor=ex, require_tie_safe=False)
+        b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5)
+        lines = b.observe(KEY, {"robinhood": [self._q("robinhood", "DEN", 0.30, 5.0, exch="rothera")]}, 5.0)
+        self.assertEqual(b.positions[0].status, "lockable")
+        self.assertIn("needs a person on robinhood", lines[0])

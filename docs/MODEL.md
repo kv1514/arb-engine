@@ -759,6 +759,28 @@ Two-venue arbitrage (H4) on independent executable books, the Robinhood leg at a
 | 164 | 97 | 59% | +0.26c | [-0.84, +1.46]c | 40% |
 <!-- /results:micro_discovery_arb -->
 
+**LAG, then lock.** `strategy/laglock.py` watches every filled LAG position for ten minutes
+and buys the other outcome as soon as the pair costs <= $1 with fees (tie-safe pairs only:
+a Kalshi YES + a Rothera YES pays $0.50 on a tie). Replayed on the same games, the lock's
+own IOC facing the same latency:
+
+<!-- results:micro_discovery_lock -->
+| signals | entries filled | locked | median time to lock | lock or hold (10 min) | same entries held, never locked | locked ones only |
+|---|---|---|---|---|---|---|
+| 111 | 48 | 6 (12%) | 59 s | -0.0c [-4.7, +5.9] | -0.3c [-4.9, +5.1] | +13.6c [+7.1, +16.8] |
+<!-- /results:micro_discovery_lock -->
+
+Locking works mechanically - about one entry in eight became a guaranteed profit, a minute
+after entry - but it is not an edge by itself: a lock is mostly available *after* the entry
+has moved in its favour, so it turns winners into certainties and leaves the losers to lose.
+Against the fair baseline (the same entries held the same ten minutes, never locked) it adds
+a fraction of a cent. What would make LAG pay is a better entry, and that is what the
+signal grades are logged for: **hard lag** (the follower's all-in is below what the leader's
+book would *pay*, its bid - not its mid), **agreement** (other independent books moved the
+same way), and **lock now** (the other outcome is already cheap enough somewhere: a hard lag
+usually is, on the leader's own venue - which makes it an ARB, pushed as one). The
+validation games (fast lane, 1 s, observation times recorded) measure each grade.
+
 Fixture: `tests/fixtures/results/micro_discovery.json`. Descriptive only: these games
 designed the rule, so they can reject it but never validate it.
 

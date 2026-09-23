@@ -210,6 +210,17 @@ KALSHI_ENV=demo KALSHI_API_KEY=… KALSHI_PRIVATE_KEY_PATH=… scripts/sunday.sh
 Read `out/orders/lag_intents.jsonl` after a slate before considering `demo`; the paper book
 (`scripts/leadlag_study.py --date <day>`) tells you what those intents would have filled.
 
+
+**Grades and the lock watch (background).** Every LAG is logged with grades - *hard* (our
+all-in below the leader's bid, not only its mid), how many other books *agree*, and whether
+the other outcome already *locks* the pair (with the price it would need otherwise) - and
+every filled LAG position, paper or demo, is watched for `lag_lock_watch_s` (10 min): when
+the other outcome gets cheap enough that the pair costs <= $1 with fees, the paper book
+records the lock and the demo executor sends the lock leg itself when it is on Kalshi (an
+IOC exempt from the caps: it cuts exposure). A lock available only on Robinhood is logged as
+`lockable`. Pairs that lose on a tie are skipped (`lag_lock_tie_safe`). `lag_locks` holds
+every position; the FINAL line reports locks per game; `scripts/microstructure_eval.py`
+reports the conversion and compares locking with simply holding the same entries.
 ## 2. Reload the extension (12:35)
 
 1. `chrome://extensions` → the "Arb Engine Robinhood Overlay" card → the circular reload

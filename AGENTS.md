@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (794)
+python -m unittest discover -s tests -t .      # Python tests (802)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -155,6 +155,8 @@ When you declare a key, add its row here.
 | `inplay_frozen_s` | `INPLAY_FROZEN_S` | `None` | Seconds of identical ESPN state with the clock running and a venue mid moved ≥ 0.02 since, before STEAL/LOCK are gated `clock-frozen`; unset = `max(3 × poll interval, 30 s)`. |
 | `inplay_agreement_gap` | `INPLAY_AGREEMENT_GAP` | `0.12` | Model-vs-market gap above which a STEAL is gated `disagreement` when ESPN's win probability sides with the market (provisional; measure on the first recorded Sunday). |
 | `inplay_idle_every_s` | `INPLAY_IDLE_EVERY_S` | `60.0` | Live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can run all week). |
+| `lag_lock_watch_s` | `LAG_LOCK_WATCH_S` | `600.0` | LAG lock watch: seconds after a LAG position fills during which the other outcome is watched for a price that locks the pair. |
+| `lag_lock_tie_safe` | `LAG_LOCK_TIE_SAFE` | `True` | LAG lock watch: only lock pairs that pay at least $1 on a tie (a Kalshi YES + a Rothera YES pays $0.50). |
 | `arb_near_margin` | `ARB_NEAR_MARGIN` | `0.03` | Live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert — the buffer that says "this pair is about to cross". |
 | `arb_near_every_s` | `ARB_NEAR_EVERY_S` | `300.0` | Live slate: seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent. |
 | `leadlag_move` | `LEADLAG_MOVE` | `0.05` | Lead-lag: leader mid move (dollars) within the window that counts as a repricing. |

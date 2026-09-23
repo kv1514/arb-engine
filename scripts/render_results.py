@@ -413,7 +413,15 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     ar = a.get("mean_ret") or {}
     arb = table(["attempts", "completed", "fill rate", "mean per contract", "90 % CI", "games positive"],
                 [[str(a["attempts"]), str(a["trades"]), f"{a['fill_rate']:.0%}", f"{ar['point'] * 100:+.2f}c", f"[{ar['lo'] * 100:+.2f}, {ar['hi'] * 100:+.2f}]c", f"{a['positive_game_share']:.0%}"]])
-    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb}
+    lk = d.get("H3_lock") or {}
+    def m(x: dict) -> str:
+        mr = (x or {}).get("mean_ret") or {}
+        return f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}]" if mr.get("point") is not None else "-"
+    lock = table(["signals", "entries filled", "locked", "median time to lock", "lock or hold (10 min)", "same entries held, never locked", "locked ones only"],
+                 [[str(lk.get("attempts")), str(lk.get("entries_filled")), f"{lk.get('locked')} ({(lk.get('lock_conversion') or 0):.0%})",
+                   f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
+                   m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
+    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb, "micro_discovery_lock": lock}
 
 
 # ---- registry ---------------------------------------------------------------------------------

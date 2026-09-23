@@ -114,6 +114,38 @@ class LagExecutor:
                 return ticker, "yes", meta.get("exchange_index")
         return None
 
+    def buy_lock(self, quote: Any, count: int, price: float, event_key: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
+        """The lock leg of a filled LAG (strategy/laglock.py): an immediate-or-cancel buy of
+        the other outcome's Kalshi contract at ``price`` for the position's ``count``. Exempt
+        from the notional caps - it cuts exposure, and a cap that blocked it would leave the
+        position unhedged - but journalled and alerted like every order."""
+        if self.mode in ("off", "intent"):
+            return {"status": self.mode, "reason": "lock legs are only sent in demo / live"}
+        now = self.clock() if now is None else now
+        meta = getattr(quote, "meta", None) or {}
+        ticker = meta.get("ticker") or str(getattr(quote, "venue_market_id", "")).split("#")[0]
+        side = meta.get("side") or "yes"
+        rec: dict[str, Any] = {"ts": now, "mode": self.mode, "event_key": event_key, "kind": "lock", "ticker": ticker, "side": side,
+                               "price": price, "count": int(count), "status": None}
+        try:
+            plan = self.executor.plan(ticker, "buy", side, int(count), float(price), post_only=False, exchange_index=meta.get("exchange_index"),
+                                      note="LAG lock leg", time_in_force="immediate_or_cancel")
+            res = self.executor.execute(plan, confirm=True)
+        except Exception as e:
+            rec.update(status="error", reason=repr(e))
+            self._journal(rec)
+            return rec
+        rec["status"] = res.get("status")
+        resp = res.get("response") or {}
+        od = resp.get("order") or resp
+        rec["order_id"] = od.get("order_id") or od.get("id")
+        rec["fill_count"] = od.get("fill_count", "unknown")
+        rec["remaining_count"] = od.get("remaining_count", "unknown")
+        if rec["status"] != "SUBMITTED":
+            rec.setdefault("reason", f"executor returned {rec['status']!r}")
+        self._journal(rec)
+        return rec
+
     # ---- the one entry point ----------------------------------------------------------
     def on_signal(self, sig: Any, quotes_by_venue: dict[str, list[Any]], now: Optional[float] = None) -> Optional[dict[str, Any]]:
         """Consider one LagSignal. Returns the journal record (or None when mode is off)."""

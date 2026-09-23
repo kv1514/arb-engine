@@ -39,6 +39,7 @@ from .leadlag import LagSignal, LeadLagTracker
 from .lagexec import LagExecutor
 from . import ticket
 from .paperlag import LagPaperBook
+from .laglock import LagLockBook
 
 try:  # the settings registry (config.declare_setting); this module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore
@@ -49,6 +50,8 @@ if _declare_setting is not None:
         _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
         _declare_setting("inplay_idle_every_s", env="INPLAY_IDLE_EVERY_S", default=60.0, cast=float, doc="live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can then run all week)")
         _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
+        _declare_setting("lag_lock_watch_s", env="LAG_LOCK_WATCH_S", default=600.0, cast=float, doc="LAG lock watch: seconds after a LAG position fills during which the other outcome is watched for a price that locks the pair")
+        _declare_setting("lag_lock_tie_safe", env="LAG_LOCK_TIE_SAFE", default=True, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="LAG lock watch: only lock pairs that pay at least $1 on a tie (a Kalshi YES + Rothera YES pays $0.50)")
         _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=300.0, cast=float, doc="live slate: seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent")
     except Exception:  # pragma: no cover
         pass
@@ -111,6 +114,11 @@ class LiveSlate:
         # fill-adjusted P&L the replay cannot give. Rows in the store's lag_paper table.
         self.paper = LagPaperBook(store=self.store, alerter=self.alerts) if self.store is not None else LagPaperBook(store=None, alerter=self.alerts)
         self.lag_executor = lag_executor   # strategy/lagexec.py: off | intent | demo | live
+        # strategy/laglock.py: filled LAG positions (paper and executed) watch the other
+        # outcome for a price that locks the pair.
+        self.laglock = LagLockBook(store=self.store, watch_s=float(setting(self.settings, "lag_lock_watch_s", 600.0) or 600.0),
+                                   executable=self.executable_venues, executor=lag_executor, alerter=self.alerts, settings=self.settings,
+                                   require_tie_safe=bool(setting(self.settings, "lag_lock_tie_safe", True)), fresh_s=max(10.0, float(interval)))
         self.idle_every = float(setting(self.settings, "inplay_idle_every_s", 60.0) or 60.0)   # tick cadence with nothing to price
         self._final_seen: set[str] = set()
         self._counts: dict[str, dict[str, int]] = {}   # event_key -> {"lag": n, "arb": n}
@@ -319,8 +327,10 @@ class LiveSlate:
         c = self._counts.get(me.event_key, {"lag": 0, "arb": 0})
         ps = self.paper.summary(me.event_key)
         pnl = ps.get("pnl_settle") or {}
+        ls = self.laglock.summary(me.event_key)
         text = (f"FINAL {gs.away} {gs.away_score}-{gs.home_score} {gs.home}: {c['lag']} LAG, {c['arb']} ARB; paper LAG {ps.get('filled', 0)} filled / {ps.get('expired', 0)} expired"
-                + (f", settled {pnl.get('wins', 0)}/{pnl.get('n', 0)} wins, {pnl.get('mean', 0):+.3f}/ct" if pnl else ""))
+                + (f", settled {pnl.get('wins', 0)}/{pnl.get('n', 0)} wins, {pnl.get('mean', 0):+.3f}/ct" if pnl else "")
+                + (f"; LAG locks {ls['locked']}/{ls['positions']}" + (f" (+${ls['locked_dollars']:.2f}, median {ls['median_seconds_to_lock']:.0f}s)" if ls.get("locked") else "") if ls["positions"] else ""))
         try:
             _call_optional(self.alerts.alert, "FINAL", text, event=me.event_key)
         except Exception:
@@ -340,6 +350,16 @@ class LiveSlate:
                 out.paper.append(f"{view.title}: {line}")
         except Exception as e:
             out.errors.append(f"paperlag: {e!r}")
+        others = {o: [x for x in me.info.outcomes if x != o] for o in me.info.outcomes}
+        try:
+            for o in self.paper.orders:
+                if o.event_key == me.event_key and o.filled_at is not None and len(others.get(o.outcome, [])) == 1:
+                    self.laglock.open(f"paper:{o.key}", o.event_key, o.outcome, others[o.outcome][0], o.follower, o.contracts,
+                                      o.fill_price if o.fill_price is not None else o.price, o.all_in, now, "paper", getattr(o, "tie_value", None))
+            for line in self.laglock.observe(me.event_key, me.quotes_by_venue, now):
+                out.paper.append(f"{view.title}: {line}")
+        except Exception as e:
+            out.errors.append(f"laglock: {e!r}")
         try:
             for sig in self.leadlag.observe(me.event_key, view.title, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, self.settings, now, self.bankroll, self.kelly_fraction):
                 text = sig.text()   # starts with "NFL - DEN @ KC - LAG: ..."
@@ -357,6 +377,11 @@ class LiveSlate:
                             line = self.lag_executor.describe(rec)
                             if line:   # the LAG push below says what the bot did, not only what it saw
                                 text = f"{text}\n{line}"
+                            filled = _fill_count(rec)
+                            if rec.get("status") == "SUBMITTED" and filled and len(others.get(sig.outcome, [])) == 1:
+                                self.laglock.open(f"exec:{rec.get('order_id') or now}", sig.event_key, sig.outcome, others[sig.outcome][0], sig.follower,
+                                                  filled, sig.follower_ask, _all_in_at(sig, me.quotes_by_venue, filled, self.settings), now,
+                                                  self.lag_executor.mode, getattr(sig, "tie_value", None))
                     except Exception as e:
                         out.errors.append(f"lag-exec: {e!r}")
                 # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in
@@ -525,3 +550,23 @@ def format_tick(t: SlateTick, quiet: Optional[bool] = None) -> str:
     for e in t.errors:
         lines.append(f"    error: {e}")
     return "\n".join(lines)
+
+
+def _fill_count(rec: dict) -> int:
+    try:
+        return int(float(rec.get("fill_count")))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _all_in_at(sig: Any, quotes_by_venue: dict, n: int, settings: Optional[dict]) -> float:
+    """The executed LAG's per-contract cost at the size that filled (fees round per order)."""
+    from ..fees.registry import fee_model_for_quote
+
+    q = next((x for x in quotes_by_venue.get(sig.follower, []) if x.outcome == sig.outcome and (x.meta or {}).get("side") != "no"), None)
+    try:
+        if q is not None and n:
+            return float(sig.follower_ask) + float(fee_model_for_quote(q, settings).fee(sig.follower_ask, n, "taker")) / n
+    except Exception:
+        pass
+    return float(sig.follower_all_in)

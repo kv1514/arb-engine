@@ -75,6 +75,20 @@ class LagSignal:
     url: Optional[str] = None # the follower's market page, to act on it
     fee_total: Optional[float] = None  # the follower's fee for the whole order at ``suggested_contracts``
     fee_detail: tuple = ()              # that fee itemised (FeeModel.breakdown), for the alert
+    # Grades (logged on every signal; the validation fold says which ones pay).
+    leader_bid: Optional[float] = None  # what the leader's book would pay for ``outcome`` right now
+    hard_lag: Optional[bool] = None     # follower all-in < leader bid: dearer to buy here than to sell there
+    agree: int = 0                      # other independent books that moved >= half as far the same way
+    # Lock: the other outcome, bought now or later, turns this bet into a locked set.
+    lock_venue: Optional[str] = None    # cheapest executable venue for the other outcome
+    lock_ask: Optional[float] = None
+    lock_all_in: Optional[float] = None
+    lock_price: Optional[float] = None  # the most the other outcome may cost (fees in) to lock >= 0
+    lock_now: bool = False              # follower all-in + other outcome all-in < $1 already
+    lock_tie_sum: Optional[float] = None  # what the pair pays on a tie (< 1: the lock loses on a tie)
+    lock_outcome: Optional[str] = None
+    lock_label: Optional[str] = None
+    lock_now_tie_safe: bool = False     # a lock that also pays >= $1 on a tie is available now
     settlement_flags: tuple[str, ...] = ()  # the follower contract's own rule missing/unverified: blocks execution
     pair_flags: tuple[str, ...] = ()        # leader vs follower rule differences: informational only
     tie_value: Optional[float] = None
@@ -167,6 +181,79 @@ class LeadLagTracker:
             return True  # a venue that reports only a mid cannot be checked; keep the old behaviour
         db, da = b1 - b0, a1 - a0
         return db * lmove > 0 and da * lmove > 0 and abs(db) >= 0.4 * abs(lmove) and abs(da) >= 0.4 * abs(lmove)
+
+    def _grades(self, event_key: str, sport: str, market_type: str, home: str, away: str, outcome: str, leader: str, follower: str,
+                lmove: float, cur: dict[str, dict[str, OutcomeQuote]], sources: dict[str, OutcomeQuote], q: OutcomeQuote,
+                all_in: float, n: int, settings: Optional[dict[str, Any]], now: float) -> dict[str, Any]:
+        """How strong is this lag, and can it be turned into a locked set? Pure bookkeeping:
+        none of it changes whether the signal fires (the thresholds stay the pre-registered
+        ones); every grade is logged so the validation games can show which kinds pay."""
+        out: dict[str, Any] = {}
+        # Hard lag: the leader's *bid* for this outcome (what it pays now), not its mid.
+        lq = cur.get(leader, {})
+        comp = away if outcome == home else home
+        if lq.get(outcome) is not None and lq[outcome].bid is not None:
+            lbid = lq[outcome].bid
+        elif lq.get(comp) is not None and lq[comp].ask is not None:
+            lbid = 1.0 - lq[comp].ask
+        else:
+            lbid = None
+        out["leader_bid"] = lbid
+        out["hard_lag"] = (all_in < lbid) if lbid is not None else None
+        # Agreement: independent books other than leader and follower moving the same way.
+        agree = 0
+        for v in cur:
+            if v in (leader, follower) or v not in sources or sources[v].book_id in (sources[leader].book_id, sources[follower].book_id):
+                continue
+            h = self._hist.get((event_key, v))
+            mv = self._move_over_window(h, now) if h else None
+            if mv is not None and mv * lmove > 0 and abs(mv) >= 0.5 * abs(lmove):
+                agree += 1
+        out["agree"] = agree
+        # Lock: the cheapest executable other-outcome contract, fees in, at the same size
+        # (and separately the cheapest that also pays >= $1 on a tie).
+        tie = {"half": 0.5, "no_winner": 0.0}
+
+        def tie_of(x: OutcomeQuote) -> Optional[float]:
+            try:
+                tv = tie.get((rule_for_quote(x, sport, market_type) or {}).get("tie"))
+            except Exception:
+                return None
+            return (1.0 - tv) if tv is not None and (x.meta or {}).get("side") == "no" else tv
+
+        entry_tie = tie_of(q)
+        best, safe = None, None
+        for v, by in cur.items():
+            if self.executable is not None and v not in self.executable:
+                continue
+            c = by.get(comp)
+            if c is None or c.ask is None or not _fresh(c, now, self.fresh_s):
+                continue
+            try:
+                fm = fee_model_for_quote(c, settings)
+                c_all_in = float(D(c.ask) + fm.fee(c.ask, n, "taker") / n)
+            except Exception:
+                continue
+            if best is None or c_all_in < best[1]:
+                best = (v, c_all_in, c, fm)
+            tv = tie_of(c)
+            if entry_tie is not None and tv is not None and entry_tie + tv >= 1.0 - 1e-9 and (safe is None or c_all_in < safe):
+                safe = c_all_in
+        out["lock_now_tie_safe"] = safe is not None and all_in + safe < 1.0 - 1e-9
+        if best is not None:
+            v, c_all_in, c, fm = best
+            out.update(lock_venue=v, lock_ask=c.ask, lock_all_in=c_all_in, lock_now=all_in + c_all_in < 1.0 - 1e-9, lock_outcome=comp)
+            try:
+                from ..quant.arbitrage import Leg, max_price_for_leg
+
+                qfee = fee_model_for_quote(q, settings)
+                lp = max_price_for_leg([Leg(outcome, follower, float(q.ask), qfee, role="taker")], fm, n, 0.0, role="taker")
+                out["lock_price"] = float(lp) if lp is not None else None
+            except Exception:
+                out["lock_price"] = None
+            tb = tie_of(c)
+            out["lock_tie_sum"] = (entry_tie + tb) if entry_tie is not None and tb is not None else None
+        return out
 
     def observe(self, event_key: str, title: str, outcomes: list[str], labels: dict[str, str], quotes_by_venue: dict[str, list[OutcomeQuote]], settings: Optional[dict[str, Any]] = None, now: Optional[float] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25) -> list[LagSignal]:
         now = time.time() if now is None else float(now)
@@ -291,5 +378,8 @@ class LeadLagTracker:
                         fee_detail = tuple(bd(q.ask, contracts, "taker")) if bd else ()
                     except Exception:
                         fee_detail = ()
-                signals.append(LagSignal(fee_total=fee_total, fee_detail=fee_detail, settlement_flags=settlement_flags, pair_flags=pair, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
+                grades = self._grades(event_key, sport, market_type, home, away, outcome, leader, follower, lmove, cur, sources, q, all_in, contracts or 1, settings, now)
+                if grades.get("lock_outcome"):
+                    grades["lock_label"] = labels.get(grades["lock_outcome"], grades["lock_outcome"])
+                signals.append(LagSignal(**grades, fee_total=fee_total, fee_detail=fee_detail, settlement_flags=settlement_flags, pair_flags=pair, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

@@ -226,9 +226,7 @@ def hypothesis_trades(samples: list[dict[str, Any]], h: int) -> dict[str, tuple[
         "B1_buy_any": lambda s: s["kind"] == "unconditional",
         "H1_momentum": lambda s: s["kind"] == "trigger" and (s["dmid_30"] or 0) > 0,
         "H2_dip": lambda s: s["kind"] == "trigger" and (s["dmid_30"] or 0) < 0,
-        "H3_leadlag": lambda s: s["kind"] == "unconditional" and s.get("venue") in EXECUTABLE and s.get("leader_dmid_30") is not None
-        and abs(s["leader_dmid_30"]) >= .05 and s["leader_dmid_30"] > 0 and abs(s.get("dmid_30") or 0) < .5 * abs(s["leader_dmid_30"])
-        and (s.get("gap_leader") or 0) >= .02,
+        "H3_leadlag": lambda s: s.get("venue") in EXECUTABLE and _h3(s),
     }
     for name, rule in rules.items():
         rets: dict[str, list] = defaultdict(list)
@@ -241,6 +239,83 @@ def hypothesis_trades(samples: list[dict[str, Any]], h: int) -> dict[str, tuple[
             rets[g].append(s.get(f"ret_long_{h}"))
         out[name] = (dict(rets), dict(tries))
     return out
+
+
+def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fee_for_row: Callable, latency_s: float,
+                   watch_s: float = 600.0, n: int = 10, tie_safe: bool = True, settle: Optional[dict] = None) -> dict[str, Any]:
+    """H3 + lock (strategy/laglock.py replayed): buy the follower on an H3 signal (IOC at the
+    decision ask after the latency, fees in); then for ``watch_s`` watch the other outcome on
+    the executable venues and lock with the first observation whose all-in makes the pair
+    cost <= $1 *and* whose own IOC (same latency) fills - tie-safe pairs only when asked. An
+    unlocked position is sold to the bid at the end of the watch (or settled). Returns the
+    per-game per-contract P&L plus the lock conversion and the locked-only P&L."""
+    from arb_engine.quant.microdata import contract_key, series_by_contract, tie_value
+    from arb_engine.quant.paperexec import ioc_entry, ioc_round_trip
+
+    series = series_by_contract(rows)
+    rets: dict[str, list] = defaultdict(list)
+    tries: dict[str, int] = defaultdict(int)
+    locked_only: dict[str, list] = defaultdict(list)
+    hold: dict[str, list] = defaultdict(list)   # the same entries held for watch_s, never locked: the fair baseline
+    waits: list[float] = []
+    n_filled = n_locked = 0
+    for s in samples:
+        if s.get("venue") not in EXECUTABLE or not _h3(s):
+            continue
+        g = _game(s["event_key"])
+        tries[g] += 1
+        key = (s["event_key"], s["book_id"], s["outcome"], s["side"])
+        mine = [r for r in series.get(key, []) if r["obs_ts"] > s["t"]]
+        fee = fee_for_row(mine[0]) if mine else None
+        if fee is None:
+            rets[g].append(None)
+            continue
+        entry, erow = ioc_entry(mine, s["t"], s["ask"], n, fee, latency_s)
+        if entry.missed:
+            rets[g].append(None)
+            continue
+        n_filled += 1
+        sv = (settle or {}).get((s["event_key"], s["outcome"], s["side"]))
+        hold[g].append(ioc_round_trip(mine, s["t"], s["ask"], n, fee, latency_s, horizon_s=watch_s, settlement=sv).pnl_per_contract)
+        t_in = erow["obs_ts"]
+        entry_all_in = (entry.entry_price * entry.filled + float(entry.entry_fee)) / entry.filled
+        etie = tie_value(erow)
+        comp_keys = [k for k in series if k[0] == s["event_key"] and k[2] != s["outcome"] and k[3] == "yes"]
+        stream = sorted((r["obs_ts"], k, r) for k in comp_keys for r in series[k]
+                        if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE)
+        done = None
+        for tt, k, r in stream:
+            ask = r.get("ask")
+            cfee = fee_for_row(r)
+            if ask is None or cfee is None or (r.get("ask_size") is not None and float(r["ask_size"]) < entry.filled):
+                continue
+            c_all_in = float(ask) + float(cfee.fee(ask, entry.filled, "taker")) / entry.filled
+            if entry_all_in + c_all_in > 1.0:
+                continue
+            if tie_safe:
+                ct = tie_value(r)
+                if etie is None or ct is None or etie + ct < 1.0 - 1e-9:
+                    continue
+            leg, lrow = ioc_entry([x for x in series[k] if x["obs_ts"] > tt], tt, float(ask), entry.filled, cfee, latency_s)
+            if leg.missed or leg.filled < entry.filled:
+                continue
+            got = (leg.entry_price * leg.filled + float(leg.entry_fee)) / leg.filled
+            done = 1.0 - entry_all_in - got
+            waits.append(lrow["obs_ts"] - t_in)
+            break
+        if done is not None:
+            n_locked += 1
+            rets[g].append(done)
+            locked_only[g].append(done)
+            continue
+        rets[g].append(hold[g][-1])
+    return {"rets": dict(rets), "tries": dict(tries), "locked_only": dict(locked_only), "hold": dict(hold), "filled": n_filled, "locked": n_locked,
+            "median_seconds_to_lock": sorted(waits)[len(waits) // 2] if waits else None}
+
+
+def _h3(s: dict[str, Any]) -> bool:
+    return (s["kind"] == "unconditional" and s.get("leader_dmid_30") is not None and abs(s["leader_dmid_30"]) >= .05
+            and s["leader_dmid_30"] > 0 and abs(s.get("dmid_30") or 0) < .5 * abs(s["leader_dmid_30"]) and (s.get("gap_leader") or 0) >= .02)
 
 
 def forecast_skill(samples: list[dict[str, Any]], h: int, feature: str, seed: int, draws: int) -> dict[str, Any]:
@@ -341,6 +416,14 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
         report["horizons"][str(h)] = hr
     rets, tries = arb_scan(data["rows"], _default_fee, latency_s, spec.get("manual_leg_latency_s", 15))
     report["H4_arb"] = summarize(rets, tries, seed=seed, draws=draws)
+    lk = h3_lock_trades(samples, data["rows"], _default_fee, latency_s, watch_s=spec.get("lock_watch_s", 600), settle=settle)
+    report["H3_lock"] = {**summarize(lk["rets"], lk["tries"], seed=seed, draws=draws), "entries_filled": lk["filled"], "locked": lk["locked"],
+                         "lock_conversion": (lk["locked"] / lk["filled"]) if lk["filled"] else None,
+                         "median_seconds_to_lock": lk["median_seconds_to_lock"],
+                         "locked_only": summarize(lk["locked_only"], {g: len(v) for g, v in lk["locked_only"].items()}, seed=seed, draws=draws),
+                         "hold_no_lock": summarize(lk["hold"], {g: len(v) for g, v in lk["hold"].items()}, seed=seed, draws=draws)}
+    report["H3_lock"]["note"] = ("locking mostly happens after the entry has moved in its favour: it turns winners into sure "
+                                 "profit; compare with hold_no_lock (same entries, same watch, never locked)")
     report["holm_pass"] = holm(pvals)
     primary = spec.get("primary", "H3@30s").replace("s", "")
     report["primary"] = {"hypothesis": primary, "p_mean_le_0": pvals.get(primary.replace("H3", "H3_leadlag"))}

@@ -286,5 +286,32 @@ class EvaluationDisciplineTests(unittest.TestCase):
             self.assertGreater(h["B1_buy_any"]["attempts"], 0)
             self.assertIn("skill_ci", h["B3_ridge_dmid30"])
             self.assertIn("H4_arb", r)
+            lk = r["H3_lock"]
+            for k in ("entries_filled", "locked", "lock_conversion", "hold_no_lock", "locked_only"):
+                self.assertIn(k, lk)
             self.assertEqual(json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])["fold"], "validation")
+
+    def test_h3_lock_locks_a_winner_and_holds_a_loser(self):
+        """Replay of the lock watch: KC bought on Kalshi after a Rothera lead. In game g1 KC then
+        rises and Kalshi's DEN falls far enough to lock; in g2 KC falls and nothing locks, so the
+        position is sold to the bid at the end of the watch. The same entries held without
+        locking are the baseline."""
+        from arb_engine.fees.base import ZeroFees
+        from scripts.microstructure_eval import h3_lock_trades
+
+        rows, samples = [], []
+        for g, later_kc in (("g1", .80), ("g2", .45)):
+            ev = f"nfl:{g}:2026-09-27"
+            for t in range(0, 700):
+                kc = .60 if t < 100 else later_kc
+                for book, venue, o, mid in (("kalshi", "kalshi", "KC", kc), ("kalshi", "kalshi", "DEN", 1 - kc)):
+                    rows.append({"event_key": ev, "venue": venue, "book_id": book, "outcome": o, "side": "yes", "obs_ts": float(t), "refreshed": 1,
+                                 "venue_market_id": f"{o}", "bid": round(mid - .01, 2), "ask": round(mid + .01, 2), "bid_size": 50, "ask_size": 50, "tie_payout": .5})
+            samples.append({"kind": "unconditional", "t": 10.0, "event_key": ev, "book_id": "kalshi", "outcome": "KC", "side": "yes", "venue": "kalshi",
+                            "ask": .61, "dmid_30": 0.0, "leader_dmid_30": .08, "gap_leader": .06})
+        out = h3_lock_trades(samples, rows, lambda r: ZeroFees(), latency_s=1, watch_s=600, n=10)
+        self.assertEqual((out["filled"], out["locked"]), (2, 1))
+        self.assertAlmostEqual(out["locked_only"]["nfl:g1:2026-09-27"][0], 1 - .61 - .21)   # KC at 0.61 + DEN at 0.21 once KC is 0.80
+        self.assertAlmostEqual(out["rets"]["nfl:g2:2026-09-27"][0], .44 - .61)              # never locked: sold to the 0.44 bid
+        self.assertAlmostEqual(out["hold"]["nfl:g1:2026-09-27"][0], .79 - .61)              # held, not locked: the bid after the watch
 

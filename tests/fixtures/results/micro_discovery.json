@@ -1,4 +1,54 @@
 {
+  "H3_lock": {
+    "attempts": 111,
+    "entries_filled": 48,
+    "fill_rate": 0.35135,
+    "games": 9,
+    "hit_rate": 0.4359,
+    "hold_no_lock": {
+      "attempts": 48,
+      "fill_rate": 0.79167,
+      "games": 9,
+      "hit_rate": 0.42105,
+      "max_drawdown_per_contract": 0.932,
+      "mean_ret": {
+        "hi": 0.05129,
+        "lo": -0.049,
+        "point": -0.00337
+      },
+      "positive_game_share": 0.44444,
+      "top_game_share": 0.22103,
+      "trades": 38
+    },
+    "lock_conversion": 0.125,
+    "locked": 6,
+    "locked_only": {
+      "attempts": 6,
+      "fill_rate": 1.0,
+      "games": 3,
+      "hit_rate": 1.0,
+      "max_drawdown_per_contract": 0.0,
+      "mean_ret": {
+        "hi": 0.16837,
+        "lo": 0.07075,
+        "point": 0.13583
+      },
+      "positive_game_share": 1.0,
+      "top_game_share": 0.67362,
+      "trades": 6
+    },
+    "max_drawdown_per_contract": 0.932,
+    "mean_ret": {
+      "hi": 0.05896,
+      "lo": -0.0468,
+      "point": -8e-05
+    },
+    "median_seconds_to_lock": 58.83968,
+    "note": "locking mostly happens after the entry has moved in its favour: it turns winners into sure profit; compare with hold_no_lock (same entries, same watch, never locked)",
+    "positive_game_share": 0.44444,
+    "top_game_share": 0.26963,
+    "trades": 39
+  },
   "H4_arb": {
     "attempts": 164,
     "fill_rate": 0.59146,
