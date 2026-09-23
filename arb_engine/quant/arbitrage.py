@@ -103,6 +103,7 @@ class LegResult:
     tie_payout: float = DEFAULT_TIE_PAYOUT
     side: Optional[str] = None  # "yes" / "no" contract on the venue, when the adapter says
     ask_size: Optional[float] = None   # displayed size at the ask when the leg was priced
+    quote_ts: Optional[float] = None   # when we observed the quote (for "seen N s ago")
     fee_detail: list = field(default_factory=list)   # [{label, amount, formula[, price, contracts]}], sums to fee
 
 
@@ -171,6 +172,7 @@ def evaluate(legs: Sequence[Leg], contracts: float = 100) -> ArbResult:
                 tie_payout=float(leg.tie_payout),
                 side=leg.quote.meta.get("side") if leg.quote else None,
                 ask_size=leg.quote.ask_size if leg.quote else None,
+                quote_ts=leg.quote.ts if leg.quote else None,
                 fee_detail=fee_detail(leg, [(float(leg.price), float(c))]),
             )
         )
@@ -342,7 +344,7 @@ def size_from_books(legs: Sequence[Leg], max_contracts: Optional[float] = None, 
                     fee=float(fee), cost=float(cost), all_in_per_contract=float(cost / D(size)), role=leg.role,
                     label=leg.label or (q.outcome_label if q else ""), market_id=q.venue_market_id if q else "",
                     url=q.url if q else None, vwap=vwap, tie_payout=float(leg.tie_payout), side=q.meta.get("side") if q else None,
-                    ask_size=q.ask_size if q else None, fee_detail=fee_detail(leg, fills),
+                    ask_size=q.ask_size if q else None, quote_ts=q.ts if q else None, fee_detail=fee_detail(leg, fills),
                 )
             )
         profit = D(size) - total

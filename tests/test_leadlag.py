@@ -890,6 +890,46 @@ class NearArbAlertTests(unittest.TestCase):
         self.assertIn("KALSHI: buy", alerts[0]["msg"])
         self.assertIn("+ Kalshi taker fee:", alerts[0]["msg"])
 
+    def _pushed(self, slate):
+        sent = []
+        slate.alerts.ntfy = "https://ntfy.sh/t"
+        slate.alerts._post = lambda url, body, headers: sent.append((headers["Title"], headers["Priority"], body.decode()))
+        return sent
+
+    def test_arb_tiers_small_is_logged_normal_pushed_big_is_top_priority(self):
+        """Replayed by hand (a person on the Robinhood leg), arbs under 1c lost money and arbs of
+        3c+ made money: under arb_push_min_margin is journalled only, 3c+ is BIG ARB."""
+        for (k, r), kind, pushed in (((0.59, 0.365), "ARB SMALL", False), ((0.58, 0.36), "ARB", True), ((0.55, 0.36), "BIG ARB", True)):
+            slate, me, view, t0 = self._slate(k, r)
+            sent = self._pushed(slate)
+            self._run(slate, me, view, t0 + 1)
+            titles = [e["title"] for e in slate.alerts.events if e["kind"] == "alert"]
+            self.assertEqual(titles, [kind], (k, r))
+            self.assertEqual(bool(sent), pushed, (k, r, sent))
+            if kind == "BIG ARB":
+                self.assertEqual((sent[0][0], sent[0][1]), ("BIG ARB NFL", "5"))
+                self.assertIn("BIG ARB +5.3", sent[0][2])
+
+    def test_arb_ticket_says_which_leg_first_its_age_and_the_second_legs_limit(self):
+        """Rothera moved (DEN cheaper there); Kalshi's KC has not followed: Kalshi is the stale
+        price, so it goes first; the Robinhood leg shows the most it may cost and still lock."""
+        slate, me, view, t0 = self._slate(0.58, 0.40)
+        self._run(slate, me, view, t0)                       # history: no arb yet
+        slate2, me2, view2, _ = self._slate(0.58, 0.36)      # Rothera's DEN falls 4c, Kalshi's KC unchanged
+        from arb_engine.matching.matcher import MergedEvent
+        for qs in me2.quotes_by_venue.values():
+            for q in qs:
+                q.ts = q.quote_time = t0 + 15 if q.quote_time is not None else None
+                q.ts = t0 + 15
+        me2 = MergedEvent(me2.event_key, me2.info, me2.quotes_by_venue)
+        out = self._run(slate, me2, view, t0 + 15)
+        msg = [e for e in slate.alerts.events if e["kind"] == "alert" and "ARB" in e["title"]][-1]["msg"]
+        lines = msg.splitlines()
+        self.assertTrue(lines[1].startswith("1) KALSHI: buy"), msg)             # the stale leg first
+        self.assertIn("BUY THIS FIRST - KALSHI has not followed ROBINHOOD", msg)
+        self.assertIn("price seen 0s ago", msg)
+        self.assertRegex(msg, r"2\) ROBINHOOD: buy[\s\S]*still locks if you pay up to \$0\.3[0-9]")
+
     def test_the_buffer_is_a_setting(self):
         slate, me, view, t0 = self._slate(0.62, 0.45, arb_near_margin=0.15)   # 10.7c short, buffer 15c
         self._run(slate, me, view, t0 + 1)

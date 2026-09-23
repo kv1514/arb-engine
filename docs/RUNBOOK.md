@@ -91,7 +91,11 @@ scripts/sunday.sh ntfy arb-kv15-7q2x9m          # or a full https://ntfy.example
 scripts/sunday.sh restart live                  # if the recorders are already running
 ```
 
-3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
+3. What gets pushed, by default: **BIG ARB** (a lock of 3c+ per contract, top priority) and
+   **ARB** (1-3c) - a fresh two-leg lock, fees and depth checked; a lock under 1c is only
+   journalled as ARB SMALL, because replayed by hand (the Robinhood leg placed by a person)
+   those lost money at every leg speed tested (docs/MODEL.md; `ARB_PUSH_MIN_MARGIN=0` pushes
+   them anyway);
    **ARB CLOSE** (within `arb_near_margin`, 3¢ per contract, of locking — the heads-up
    before it crosses), **EXEC ERROR** (the auto-trader's order failed — loud on
    purpose, one per game per minute),
@@ -133,6 +137,12 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    tie: pays $340.00 = +$4.33
    340 ct; bankroll $500.00; fees are entry-only (held to settlement)
    ```
+
+   The legs are listed in the order to buy them. The first is the **stale** price - the venue
+   that has not yet followed the other's move, whose price is the one about to disappear -
+   marked `BUY THIS FIRST` with the reason; each leg says how long ago its price was seen;
+   and every later leg says `still locks if you pay up to $X`: if its price has moved by the
+   time you get there, anything up to that still locks, anything above it does not.
 
    The count is one number for both legs (a set pays $1 whoever wins) and is already capped
    by the thinner book *and* by the bankroll, fees included (`quant.arbitrage.size_for_budget`).

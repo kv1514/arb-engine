@@ -421,7 +421,18 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
                  [[str(lk.get("attempts")), str(lk.get("entries_filled")), f"{lk.get('locked')} ({(lk.get('lock_conversion') or 0):.0%})",
                    f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
                    m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
-    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb, "micro_discovery_lock": lock}
+    bym = (a.get("by_margin") or {})
+    def row(name: str, m: dict) -> list[str]:
+        mr = m.get("mean_ret") or {}
+        return [name, f"{m.get('trades', 0)}/{m.get('attempts', 0)}", f"{(m.get('hit_rate') or 0):.0%}",
+                f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}]" if mr.get("point") is not None else "-"]
+    arb_size = table(["arb size when it fired", "completed / attempted", "won", "mean per contract [90 % CI]"],
+                     [row(k, bym[k]) for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
+    g30 = (d["horizons"].get("30") or {}).get("H3_by_grade") or {}
+    grade = table(["H3 at 30 s", "completed / attempted", "won", "mean per contract [90 % CI]"],
+                  [row(k, g30[k]) for k in ("hard", "soft", "agree>=1", "agree=0") if k in g30]) if g30 else ""
+    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb, "micro_discovery_lock": lock,
+            "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade}
 
 
 # ---- registry ---------------------------------------------------------------------------------

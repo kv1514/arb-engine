@@ -286,6 +286,8 @@ class EvaluationDisciplineTests(unittest.TestCase):
             self.assertGreater(h["B1_buy_any"]["attempts"], 0)
             self.assertIn("skill_ci", h["B3_ridge_dmid30"])
             self.assertIn("H4_arb", r)
+            self.assertEqual(set(r["H4_arb"]["by_margin"]), {"<1c", "1-3c", ">=3c"})
+            self.assertEqual(set(h["H3_by_grade"]), {"hard", "soft", "agree>=1", "agree=0"})
             lk = r["H3_lock"]
             for k in ("entries_filled", "locked", "lock_conversion", "hold_no_lock", "locked_only"):
                 self.assertIn(k, lk)

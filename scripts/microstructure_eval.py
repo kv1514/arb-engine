@@ -313,6 +313,23 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
             "median_seconds_to_lock": sorted(waits)[len(waits) // 2] if waits else None}
 
 
+def h3_by_grade(samples: list[dict[str, Any]], h: int, seed: int, draws: int) -> dict[str, Any]:
+    """H3 split by the grades logged live: hard vs soft lag, agreement vs none."""
+    groups = {"hard": lambda s: s.get("hard_lag") is True, "soft": lambda s: s.get("hard_lag") is False,
+              "agree>=1": lambda s: (s.get("agree") or 0) >= 1, "agree=0": lambda s: (s.get("agree") or 0) == 0}
+    out = {}
+    for name, keep in groups.items():
+        rets: dict[str, list] = defaultdict(list)
+        tries: dict[str, int] = defaultdict(int)
+        for s in samples:
+            if s.get("venue") in EXECUTABLE and _h3(s) and keep(s):
+                g = _game(s["event_key"])
+                tries[g] += 1
+                rets[g].append(s.get(f"ret_long_{h}"))
+        out[name] = summarize(dict(rets), dict(tries), seed=seed, draws=draws)
+    return out
+
+
 def _h3(s: dict[str, Any]) -> bool:
     return (s["kind"] == "unconditional" and s.get("leader_dmid_30") is not None and abs(s["leader_dmid_30"]) >= .05
             and s["leader_dmid_30"] > 0 and abs(s.get("dmid_30") or 0) < .5 * abs(s["leader_dmid_30"]) and (s.get("gap_leader") or 0) >= .02)
@@ -354,6 +371,8 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
             by_event[r["event_key"]].append((observation_time(r)[0], r))
     rets: dict[str, list] = defaultdict(list)
     tries: dict[str, int] = defaultdict(int)
+    records: list[tuple[str, float, Optional[bool], Optional[float]]] = []   # (game, margin at signal, tie-safe, pnl/ct)
+    from arb_engine.quant.microdata import tie_value
     for ev, obs in by_event.items():
         obs.sort(key=lambda x: x[0])
         latest: dict[tuple, tuple[float, dict]] = {}
@@ -388,7 +407,11 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
                               float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb)
             g = _game(ev)
             tries[g] += 1
-            rets[g].append(float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None)
+            pnl = float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None
+            rets[g].append(pnl)
+            ta, tb = tie_value(ra), tie_value(rb)
+            records.append((g, 1.0 - best[0], (ta + tb >= 1.0 - 1e-9) if ta is not None and tb is not None else None, pnl))
+    arb_scan.records = records
     return dict(rets), dict(tries)
 
 
@@ -411,11 +434,29 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
             hr[name] = summarize(rets, tries, seed=seed, draws=draws)
             if name.startswith("H"):
                 pvals[f"{name}@{h}"] = boot_p({g: [x for x in v if x is not None] for g, v in rets.items()}, seed, draws)
+        hr["H3_by_grade"] = h3_by_grade(samples, h, seed, draws)
         hr["B3_ridge_dmid30"] = forecast_skill(samples, h, "dmid_30", seed, draws)
         hr["B4_ridge_gap"] = forecast_skill(samples, h, "gap_leader", seed, draws)
         report["horizons"][str(h)] = hr
     rets, tries = arb_scan(data["rows"], _default_fee, latency_s, spec.get("manual_leg_latency_s", 15))
     report["H4_arb"] = summarize(rets, tries, seed=seed, draws=draws)
+    report["H4_arb"]["by_margin"] = {}
+    for name, lo, hi in (("<1c", 0.0, 0.01), ("1-3c", 0.01, 0.03), (">=3c", 0.03, 9.0)):
+        rr: dict[str, list] = defaultdict(list)
+        tt: dict[str, int] = defaultdict(int)
+        for g, m, _, pnl in getattr(arb_scan, "records", []):
+            if lo <= m < hi:
+                tt[g] += 1
+                rr[g].append(pnl)
+        report["H4_arb"]["by_margin"][name] = summarize(dict(rr), dict(tt), seed=seed, draws=draws)
+    report["H4_arb"]["by_tie"] = {}
+    for name, want in (("tie-safe", True), ("loses-on-tie", False)):
+        rr, tt = defaultdict(list), defaultdict(int)
+        for g, _, safe, pnl in getattr(arb_scan, "records", []):
+            if safe is want:
+                tt[g] += 1
+                rr[g].append(pnl)
+        report["H4_arb"]["by_tie"][name] = summarize(dict(rr), dict(tt), seed=seed, draws=draws)
     lk = h3_lock_trades(samples, data["rows"], _default_fee, latency_s, watch_s=spec.get("lock_watch_s", 600), settle=settle)
     report["H3_lock"] = {**summarize(lk["rets"], lk["tries"], seed=seed, draws=draws), "entries_filled": lk["filled"], "locked": lk["locked"],
                          "lock_conversion": (lk["locked"] / lk["filled"]) if lk["filled"] else None,

@@ -50,6 +50,8 @@ if _declare_setting is not None:
         _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
         _declare_setting("inplay_idle_every_s", env="INPLAY_IDLE_EVERY_S", default=60.0, cast=float, doc="live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can then run all week)")
         _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
+        _declare_setting("arb_push_min_margin", env="ARB_PUSH_MIN_MARGIN", default=0.01, cast=float, doc="live slate: smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL. Replayed by hand (a person on the Robinhood leg), arbs under 1c lost money at every leg speed tested")
+        _declare_setting("arb_big_margin", env="ARB_BIG_MARGIN", default=0.03, cast=float, doc="live slate: ARB margin from which the push is titled BIG ARB at top priority (replayed: arbs of 3c+ made money when legged by hand)")
         _declare_setting("lag_lock_watch_s", env="LAG_LOCK_WATCH_S", default=600.0, cast=float, doc="LAG lock watch: seconds after a LAG position fills during which the other outcome is watched for a price that locks the pair")
         _declare_setting("lag_lock_tie_safe", env="LAG_LOCK_TIE_SAFE", default=True, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="LAG lock watch: only lock pairs that pay at least $1 on a tie (a Kalshi YES + Rothera YES pays $0.50)")
         _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=300.0, cast=float, doc="live slate: seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent")
@@ -101,6 +103,8 @@ class LiveSlate:
         self._near_last: dict[str, tuple[float, float]] = {}       # event_key -> (last ARB CLOSE time, margin then)
         self.near_margin = float(setting(self.settings, "arb_near_margin", 0.03) or 0.0)
         self.near_every = float(setting(self.settings, "arb_near_every_s", 300.0) or 300.0)
+        self.arb_push_min = float(setting(self.settings, "arb_push_min_margin", 0.01) or 0.0)
+        self.arb_big = float(setting(self.settings, "arb_big_margin", 0.03) or 0.03)
         # Fast lane: 1 s top-of-book refreshes of Kalshi + Robinhood for the live games between
         # full ticks (``fast`` seconds; 0 = off). Built from the adapters this slate already has.
         self.fast = float(fast or 0.0)
@@ -402,12 +406,18 @@ class LiveSlate:
             if arb.get("is_arb") and rep.fillable and not stale:
                 sized = rep.sized_arb or arb
                 note = (f"depth-capped" if not self.bankroll else f"bankroll {ticket.money(self.bankroll)}")
-                text = ticket.arb_ticket(view.title, sized, size_note=note, sport=rep.sport or me.event_key)
+                first, why, maxp = self._legging(me, rep, sized, now)
+                margin = float(sized.get("margin") or 0.0)
+                kind = "BIG ARB" if margin >= self.arb_big else ("ARB" if margin >= self.arb_push_min else "ARB SMALL")
+                text = ticket.arb_ticket(view.title, sized, size_note=note, sport=rep.sport or me.event_key, header=kind,
+                                         first=first, first_reason=why, max_prices=maxp, now=now)
                 out.arbs.append(text)
                 self._counts.setdefault(me.event_key, {"lag": 0, "arb": 0})["arb"] += 1
                 if now - self._arb_last.get(me.event_key, -1e18) >= 30.0:
                     self._arb_last[me.event_key] = now
-                    _call_optional(self.alerts.alert, "ARB", text, event=view.event_key, ntfy_title=f"ARB {ticket.SPORT_NAMES.get(rep.sport or '', (rep.sport or '').upper())}".strip(),
+                    # ARB SMALL is journalled, not pushed (not a default ntfy kind): replayed by
+                    # hand, arbs under arb_push_min_margin lost money.
+                    _call_optional(self.alerts.alert, kind, text, event=view.event_key, ntfy_title=f"{kind} {ticket.SPORT_NAMES.get(rep.sport or '', (rep.sport or '').upper())}".strip(),
                                    margin=sized.get("margin"), legs=sized.get("legs"), contracts=sized.get("contracts"), cost=sized.get("total_cost"), profit=sized.get("profit"))
             elif not stale and arb.get("margin") is not None and self.near_margin > 0 and -self.near_margin <= float(arb["margin"]) < 0:
                 # Nearly a lock: alert once per ``arb_near_every_s`` and again whenever the gap
@@ -421,6 +431,43 @@ class LiveSlate:
                     _call_optional(self.alerts.alert, "ARB CLOSE", text, event=view.event_key, ntfy_title=f"ARB CLOSE {ticket.SPORT_NAMES.get(rep.sport or '', (rep.sport or '').upper())}".strip(), margin=m)
         except Exception as e:
             out.errors.append(f"arb: {e!r}")
+
+    def _legging(self, me: MergedEvent, rep: Any, sized: dict, now: float) -> tuple[Optional[int], str, dict]:
+        """Which leg to buy first and how far each other leg may move and still lock.
+
+        First: the leg whose venue has moved least over the lead-lag window - the stale price,
+        the one about to catch up and disappear (on the first Sunday the lagging venue caught
+        up in a median 23 s). Without move history: the leg with the thinner displayed size.
+        Other legs: ``VenuePrice.max_buy_price`` - the most that leg may cost while the rest
+        stay at their asks and the set still locks."""
+        legs = list(sized.get("legs") or [])
+        if len(legs) < 2:
+            return None, "", {}
+        moves = []
+        for l in legs:
+            h = self.leadlag._hist.get((me.event_key, l.get("venue")))
+            mv = self.leadlag._move_over_window(h, now) if h else None
+            moves.append(abs(mv) if mv is not None else None)
+        first, why = None, ""
+        if all(m is not None for m in moves) and max(moves) - min(moves) >= 0.01:
+            first = min(range(len(legs)), key=lambda i: moves[i])
+            other = max(range(len(legs)), key=lambda i: moves[i])
+            why = (f"{str(legs[first].get('venue')).upper()} has not followed {str(legs[other].get('venue')).upper()}'s "
+                   f"{moves[other] * 100:.0f}c move yet: its price is the one about to go")
+        else:
+            sizes = [l.get("ask_size") for l in legs]
+            if all(x is not None for x in sizes) and len(set(sizes)) > 1:
+                first = min(range(len(legs)), key=lambda i: sizes[i])
+                why = f"thinner book ({float(sizes[first]):g} offered)"
+        maxp: dict[int, float] = {}
+        for i, l in enumerate(legs):
+            for o in rep.outcomes or []:
+                if o.outcome != l.get("outcome"):
+                    continue
+                for v in o.venues:
+                    if v.venue == l.get("venue") and v.market_id == l.get("market_id") and v.max_buy_price is not None:
+                        maxp[i] = v.max_buy_price
+        return first, why, maxp
 
     def run(self, interval: Optional[float] = None, duration: float = 6 * 3600, max_iterations: Optional[int] = None, printer=print) -> None:
         interval = self.interval if interval is None else float(interval)

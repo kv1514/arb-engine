@@ -308,13 +308,25 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
             if age > (2.0 if (ob.row or {}).get("venue") in FAST_VENUES else 6.0):
                 continue
             of = _book_features(ob, t)
-            cross[book] = {"gap": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age,
+            cross[book] = {"gap": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age, "bid": of["bid"], "ask": of["ask"],
                            "tie_mismatch": _f((ob.row or {}).get("tie_payout")) != s["tie_payout"]}
         s["cross"] = cross
         leader = max(cross.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
         s["leader_book"] = leader[0] if leader else None
         s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
         s["gap_leader"] = leader[1]["gap"] if leader else None
+        # Grades, as strategy/leadlag.py logs them live: our all-in against the leader's *bid*
+        # (hard lag) and how many other books agree with the leader's move.
+        fm = fee_for_row(r)
+        try:
+            s["all_in"] = f["ask"] + float(fm.fee(f["ask"], ref_contracts, "taker")) / ref_contracts if fm is not None else None
+        except Exception:
+            s["all_in"] = None
+        s["leader_bid"] = leader[1]["bid"] if leader else None
+        s["hard_lag"] = (s["all_in"] < s["leader_bid"]) if s["all_in"] is not None and s["leader_bid"] is not None else None
+        ld = s["leader_dmid_30"]
+        s["agree"] = sum(1 for b, c in cross.items() if leader and b != leader[0] and ld and c["dmid_30"] is not None
+                         and c["dmid_30"] * ld > 0 and abs(c["dmid_30"]) >= 0.5 * abs(ld))
         s.update(espn_idx.at(_game_key(key[0]), t, key[2]))
         if key[1] == "kalshi":
             ticker = str(r.get("venue_market_id") or "").split("#", 1)[0]

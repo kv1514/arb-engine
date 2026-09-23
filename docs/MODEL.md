@@ -759,6 +759,37 @@ Two-venue arbitrage (H4) on independent executable books, the Robinhood leg at a
 | 164 | 97 | 59% | +0.26c | [-0.84, +1.46]c | 40% |
 <!-- /results:micro_discovery_arb -->
 
+The same arbs split by how big the lock was when it fired - the part that decides whether
+acting on a push by hand pays:
+
+<!-- results:micro_discovery_arb_size -->
+| arb size when it fired | completed / attempted | won | mean per contract [90 % CI] |
+|---|---|---|---|
+| <1c | 30/48 | 37% | -1.6c [-3.0, -0.2] |
+| 1-3c | 34/56 | 50% | +0.2c [-1.3, +1.7] |
+| >=3c | 33/60 | 39% | +2.0c [+0.6, +3.6] |
+<!-- /results:micro_discovery_arb_size -->
+
+Small arbs evaporate in the seconds a person takes to place the Robinhood leg, and the
+unwound leg costs the spread and a fee; big ones survive. The pattern held with the manual
+leg at 5 s, 15 s and 30 s (under 1c: -0.9c, -1.6c, -0.1c; 3c+: +3.3c, +2.0c, +4.6c per
+contract), so the live slate journals arbs under `arb_push_min_margin` (1c) as ARB SMALL
+without pushing them and titles those from `arb_big_margin` (3c) BIG ARB. Every arb on these
+games was a Kalshi YES + Rothera YES pair (it pays $0.50 on a tie); the legacy recorder kept
+no Rothera NO rows, so tie-safe pairs could not be scored here.
+
+The LAG grades do not separate at the 5 s these games allow - hard and soft lags lose alike,
+and agreement from a third book almost never happens at this cadence:
+
+<!-- results:micro_discovery_grade -->
+| H3 at 30 s | completed / attempted | won | mean per contract [90 % CI] |
+|---|---|---|---|
+| hard | 22/49 | 9% | -5.9c [-9.5, -2.7] |
+| soft | 25/62 | 4% | -6.2c [-8.9, -3.0] |
+| agree>=1 | 1/2 | 0% | -8.0c [-8.0, -8.0] |
+| agree=0 | 46/109 | 7% | -6.1c [-9.1, -2.8] |
+<!-- /results:micro_discovery_grade -->
+
 **LAG, then lock.** `strategy/laglock.py` watches every filled LAG position for ten minutes
 and buys the other outcome as soon as the pair costs <= $1 with fees (tie-safe pairs only:
 a Kalshi YES + a Rothera YES pays $0.50 on a tie). Replayed on the same games, the lock's

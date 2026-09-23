@@ -51,6 +51,76 @@
   },
   "H4_arb": {
     "attempts": 164,
+    "by_margin": {
+      "1-3c": {
+        "attempts": 56,
+        "fill_rate": 0.60714,
+        "games": 10,
+        "hit_rate": 0.5,
+        "max_drawdown_per_contract": 0.232,
+        "mean_ret": {
+          "hi": 0.01688,
+          "lo": -0.01264,
+          "point": 0.00224
+        },
+        "positive_game_share": 0.6,
+        "top_game_share": 0.2761,
+        "trades": 34
+      },
+      "<1c": {
+        "attempts": 48,
+        "fill_rate": 0.625,
+        "games": 8,
+        "hit_rate": 0.36667,
+        "max_drawdown_per_contract": 0.498,
+        "mean_ret": {
+          "hi": -0.00245,
+          "lo": -0.02972,
+          "point": -0.01643
+        },
+        "positive_game_share": 0.375,
+        "top_game_share": 0.5399,
+        "trades": 30
+      },
+      ">=3c": {
+        "attempts": 60,
+        "fill_rate": 0.55,
+        "games": 9,
+        "hit_rate": 0.39394,
+        "max_drawdown_per_contract": 0.054,
+        "mean_ret": {
+          "hi": 0.03641,
+          "lo": 0.0061,
+          "point": 0.02018
+        },
+        "positive_game_share": 0.77778,
+        "top_game_share": 0.32794,
+        "trades": 33
+      }
+    },
+    "by_tie": {
+      "loses-on-tie": {
+        "attempts": 164,
+        "fill_rate": 0.59146,
+        "games": 10,
+        "hit_rate": 0.42268,
+        "max_drawdown_per_contract": 0.424,
+        "mean_ret": {
+          "hi": 0.0146,
+          "lo": -0.00845,
+          "point": 0.00257
+        },
+        "positive_game_share": 0.4,
+        "top_game_share": 0.27074,
+        "trades": 97
+      },
+      "tie-safe": {
+        "attempts": 0,
+        "fill_rate": null,
+        "games": 0,
+        "trades": 0
+      }
+    },
     "fill_rate": 0.59146,
     "games": 10,
     "hit_rate": 0.42268,
@@ -154,6 +224,68 @@
         "top_game_share": 0.21092,
         "trades": 122
       },
+      "H3_by_grade": {
+        "agree=0": {
+          "attempts": 109,
+          "fill_rate": 0.42202,
+          "games": 11,
+          "hit_rate": 0.06522,
+          "max_drawdown_per_contract": 2.56,
+          "mean_ret": {
+            "hi": -0.03023,
+            "lo": -0.07795,
+            "point": -0.05565
+          },
+          "positive_game_share": 0.09091,
+          "top_game_share": 0.2625,
+          "trades": 46
+        },
+        "agree>=1": {
+          "attempts": 2,
+          "fill_rate": 0.5,
+          "games": 1,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 0.07,
+          "mean_ret": {
+            "hi": -0.07,
+            "lo": -0.07,
+            "point": -0.07
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 1.0,
+          "trades": 1
+        },
+        "hard": {
+          "attempts": 49,
+          "fill_rate": 0.44898,
+          "games": 8,
+          "hit_rate": 0.13636,
+          "max_drawdown_per_contract": 1.052,
+          "mean_ret": {
+            "hi": -0.00779,
+            "lo": -0.07411,
+            "point": -0.04173
+          },
+          "positive_game_share": 0.25,
+          "top_game_share": 0.27653,
+          "trades": 22
+        },
+        "soft": {
+          "attempts": 62,
+          "fill_rate": 0.40323,
+          "games": 10,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 1.712,
+          "mean_ret": {
+            "hi": -0.05457,
+            "lo": -0.08243,
+            "point": -0.06848
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 0.22897,
+          "trades": 25
+        }
+      },
       "H3_leadlag": {
         "attempts": 111,
         "fill_rate": 0.42342,
@@ -240,6 +372,68 @@
         "positive_game_share": 0.1,
         "top_game_share": 0.25642,
         "trades": 121
+      },
+      "H3_by_grade": {
+        "agree=0": {
+          "attempts": 109,
+          "fill_rate": 0.42202,
+          "games": 11,
+          "hit_rate": 0.06522,
+          "max_drawdown_per_contract": 3.047,
+          "mean_ret": {
+            "hi": -0.02754,
+            "lo": -0.09104,
+            "point": -0.06057
+          },
+          "positive_game_share": 0.09091,
+          "top_game_share": 0.27207,
+          "trades": 46
+        },
+        "agree>=1": {
+          "attempts": 2,
+          "fill_rate": 0.5,
+          "games": 1,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 0.08,
+          "mean_ret": {
+            "hi": -0.08,
+            "lo": -0.08,
+            "point": -0.08
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 1.0,
+          "trades": 1
+        },
+        "hard": {
+          "attempts": 49,
+          "fill_rate": 0.44898,
+          "games": 8,
+          "hit_rate": 0.09091,
+          "max_drawdown_per_contract": 1.397,
+          "mean_ret": {
+            "hi": -0.0272,
+            "lo": -0.09453,
+            "point": -0.05941
+          },
+          "positive_game_share": 0.125,
+          "top_game_share": 0.27572,
+          "trades": 22
+        },
+        "soft": {
+          "attempts": 62,
+          "fill_rate": 0.40323,
+          "games": 10,
+          "hit_rate": 0.04,
+          "max_drawdown_per_contract": 1.73,
+          "mean_ret": {
+            "hi": -0.03043,
+            "lo": -0.08907,
+            "point": -0.06236
+          },
+          "positive_game_share": 0.1,
+          "top_game_share": 0.25776,
+          "trades": 25
+        }
       },
       "H3_leadlag": {
         "attempts": 111,
@@ -328,6 +522,68 @@
         "top_game_share": 0.21075,
         "trades": 124
       },
+      "H3_by_grade": {
+        "agree=0": {
+          "attempts": 109,
+          "fill_rate": 0.43119,
+          "games": 11,
+          "hit_rate": 0.04255,
+          "max_drawdown_per_contract": 2.562,
+          "mean_ret": {
+            "hi": -0.03717,
+            "lo": -0.06689,
+            "point": -0.05451
+          },
+          "positive_game_share": 0.09091,
+          "top_game_share": 0.23838,
+          "trades": 47
+        },
+        "agree>=1": {
+          "attempts": 2,
+          "fill_rate": 0.5,
+          "games": 1,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 0.07,
+          "mean_ret": {
+            "hi": -0.07,
+            "lo": -0.07,
+            "point": -0.07
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 1.0,
+          "trades": 1
+        },
+        "hard": {
+          "attempts": 49,
+          "fill_rate": 0.44898,
+          "games": 8,
+          "hit_rate": 0.09091,
+          "max_drawdown_per_contract": 0.894,
+          "mean_ret": {
+            "hi": -0.01863,
+            "lo": -0.05862,
+            "point": -0.04064
+          },
+          "positive_game_share": 0.125,
+          "top_game_share": 0.31217,
+          "trades": 22
+        },
+        "soft": {
+          "attempts": 62,
+          "fill_rate": 0.41935,
+          "games": 10,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 1.738,
+          "mean_ret": {
+            "hi": -0.05412,
+            "lo": -0.07948,
+            "point": -0.06685
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 0.25316,
+          "trades": 26
+        }
+      },
       "H3_leadlag": {
         "attempts": 111,
         "fill_rate": 0.43243,
@@ -414,6 +670,68 @@
         "positive_game_share": 0.1,
         "top_game_share": 0.24479,
         "trades": 120
+      },
+      "H3_by_grade": {
+        "agree=0": {
+          "attempts": 109,
+          "fill_rate": 0.3945,
+          "games": 11,
+          "hit_rate": 0.18605,
+          "max_drawdown_per_contract": 2.561,
+          "mean_ret": {
+            "hi": 0.01192,
+            "lo": -0.08514,
+            "point": -0.04191
+          },
+          "positive_game_share": 0.09091,
+          "top_game_share": 0.28494,
+          "trades": 43
+        },
+        "agree>=1": {
+          "attempts": 2,
+          "fill_rate": 0.5,
+          "games": 1,
+          "hit_rate": 0.0,
+          "max_drawdown_per_contract": 0.19,
+          "mean_ret": {
+            "hi": -0.19,
+            "lo": -0.19,
+            "point": -0.19
+          },
+          "positive_game_share": 0.0,
+          "top_game_share": 1.0,
+          "trades": 1
+        },
+        "hard": {
+          "attempts": 49,
+          "fill_rate": 0.42857,
+          "games": 8,
+          "hit_rate": 0.19048,
+          "max_drawdown_per_contract": 1.602,
+          "mean_ret": {
+            "hi": 0.0098,
+            "lo": -0.11067,
+            "point": -0.05157
+          },
+          "positive_game_share": 0.25,
+          "top_game_share": 0.23291,
+          "trades": 21
+        },
+        "soft": {
+          "attempts": 62,
+          "fill_rate": 0.37097,
+          "games": 10,
+          "hit_rate": 0.17391,
+          "max_drawdown_per_contract": 1.303,
+          "mean_ret": {
+            "hi": 0.01511,
+            "lo": -0.07963,
+            "point": -0.03952
+          },
+          "positive_game_share": 0.2,
+          "top_game_share": 0.24931,
+          "trades": 23
+        }
       },
       "H3_leadlag": {
         "attempts": 111,

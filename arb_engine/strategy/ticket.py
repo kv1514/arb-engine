@@ -104,7 +104,8 @@ def _urls(legs: Sequence[Any]) -> list[str]:
     return seen[:MAX_URLS]
 
 
-def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB", sport: Optional[str] = None) -> str:
+def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB", sport: Optional[str] = None,
+               first: Optional[int] = None, first_reason: str = "", max_prices: Optional[dict] = None, now: Optional[float] = None) -> str:
     """The whole two-leg (or n-leg) trade as an order ticket.
 
     ``result`` is an ``ArbResult`` sized the way it would actually be bought (depth and
@@ -119,8 +120,26 @@ def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB"
     margin = _g(result, "margin")
     roi = _g(result, "roi")
     lines = [f"{headline(title, sport)} - {header} {cents(margin)}/ct after fees"]
-    lines += [leg_line(l, i) for i, l in enumerate(legs, 1)]
-    parts = " + ".join(money(_g(l, "cost", 0) or 0) for l in legs)
+    # Legging by hand: the stale price goes first (it is the one about to move); every other
+    # leg shows the most it may cost and still lock, so a moved price is a decision, not a loss.
+    order = list(range(len(legs)))
+    if first is not None and 0 <= first < len(legs):
+        order = [first] + [i for i in order if i != first]
+    for n, i in enumerate(order, 1):
+        block = leg_line(legs[i], n)
+        extra = []
+        qts = _g(legs[i], "quote_ts")
+        if now is not None and qts is not None:
+            extra.append(f"price seen {max(0.0, now - float(qts)):.0f}s ago")
+        if n == 1 and first is not None:
+            extra.append("BUY THIS FIRST" + (f" - {first_reason}" if first_reason else ""))
+        mp = (max_prices or {}).get(i)
+        if n > 1 and mp is not None:
+            extra.append(f"still locks if you pay up to ${float(mp):.2f}")
+        if extra:
+            block += "\n   (" + "; ".join(extra) + ")"
+        lines.append(block)
+    parts = " + ".join(money(_g(legs[i], "cost", 0) or 0) for i in order)   # in the order the legs are shown
     lines.append(f"total: {parts} = {money(cost)} -> pays {money(payout)} whoever wins = {'+' if profit >= 0 else ''}{money(profit)}"
                  + (f" ({float(roi):+.2%} on cost)" if roi is not None else ""))
     tie_total, tie_margin = _g(result, "tie_payout_total"), _g(result, "tie_margin")
