@@ -124,7 +124,7 @@ class LagExecutor:
         rec: dict[str, Any] = {"ts": now, "mode": self.mode, "event_key": sig.event_key, "follower": sig.follower, "outcome": sig.outcome, "leader": sig.leader, "edge": round(sig.edge, 4), "price": sig.follower_ask, "count": None, "ticker": None, "side": None, "status": None}
         settlement_flags = tuple(getattr(sig, "settlement_flags", ()) or ())
         if settlement_flags:
-            rec.update(status="skipped", reason="settlement incompatible or unverified: " + ", ".join(settlement_flags))
+            rec.update(status="skipped", reason="the contract bought has an unverified settlement rule: " + ", ".join(settlement_flags))
             self._journal(rec)
             return rec
         if sig.follower != "kalshi":

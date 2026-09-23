@@ -671,7 +671,7 @@ class EventAnalyzer:
             return []
         return [{"leader": s.leader, "follower": s.follower, "outcome": s.outcome, "label": s.label, "lead_move": round(s.lead_move, 4), "follower_move": round(s.follower_move, 4), "leader_mid": round(s.leader_mid, 4), "ask": s.follower_ask, "all_in": round(s.follower_all_in, 4), "edge": round(s.edge, 4), "depth": s.depth, "suggested_contracts": s.suggested_contracts, "fee_total": (round(s.fee_total, 4) if s.fee_total is not None else None),
                  "cost_total": (round(s.follower_ask * s.suggested_contracts + (s.fee_total or 0.0), 2) if s.suggested_contracts else None),
-                 "settlement_flags": list(s.settlement_flags), "execution_safe": not bool(s.settlement_flags),
+                 "settlement_flags": list(s.settlement_flags), "pair_flags": list(getattr(s, "pair_flags", ()) or ()), "execution_safe": not bool(s.settlement_flags),
                  "url": s.url, "text": s.text()} for s in sigs]
 
     def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, emit_no_side: bool = False, executable_venues: Optional[set[str]] = None, fresh: bool = False) -> dict[str, Any]:

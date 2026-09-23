@@ -63,6 +63,30 @@ class LeadLagTests(unittest.TestCase):
         # Same poll again within the cooldown and no bigger edge: silent.
         self.assertEqual(tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(20, (0.59, 0.60), (0.66, 0.69)), now=20), [])
 
+    def test_settlement_gate_is_the_contract_bought_not_the_leader(self):
+        """LAG buys only the follower and holds or sells it on the follower's venue; the
+        leader is never traded. A Rothera-led Kalshi buy must stay executable (Kalshi's rule
+        is verbatim) with the Rothera/Kalshi tie difference kept as information; a buy on
+        Rothera (rule unverified) is signal-only."""
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        tr = self._tracker()
+        tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.59, 0.60), (0.58, 0.61)), now=0)
+        s = tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(15, (0.59, 0.60), (0.66, 0.69)), now=15, bankroll=500)[0]
+        self.assertEqual((s.leader, s.follower), ("robinhood", "kalshi"))
+        self.assertEqual(s.settlement_flags, ())
+        self.assertIn("settlement-mismatch:tie", s.pair_flags)
+        self.assertNotIn("SIGNAL ONLY", s.text())
+        ex = LagExecutor(mode="intent", intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_gate_{os.getpid()}.jsonl"))
+        self.assertEqual(ex.on_signal(s, _book(15, (0.59, 0.60), (0.66, 0.69)))["status"], "intent")
+        # Kalshi leads, Rothera lags: buying Rothera means holding an unverified contract.
+        tr2 = LeadLagTracker(move=0.05, window_s=30, min_edge=0.02, cooldown_s=60, fresh_s=60)
+        tr2.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.58, 0.61), (0.58, 0.61)), now=0)
+        s2 = tr2.observe(KEY, "DEN @ KC", OUT, LABELS, _book(15, (0.66, 0.69), (0.58, 0.61)), now=15, bankroll=500)   # (kalshi, robinhood)
+        rothera = [x for x in s2 if x.follower == "robinhood"]
+        self.assertTrue(rothera and rothera[0].settlement_flags, s2)
+        self.assertIn("SIGNAL ONLY", rothera[0].text())
+
     def test_follower_that_already_moved_is_not_a_lag(self):
         tr = self._tracker()
         tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(0, (0.59, 0.60), (0.58, 0.61)), now=0)
@@ -359,6 +383,49 @@ class FastLaneTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
+
+
+    def test_production_fast_step_with_a_moving_clock_still_signals(self):
+        """In production fast_step gets no pinned time: each quote is stamped when its answer
+        arrives, after the step began, and a venue clock may run slightly ahead of ours. The
+        signals must be judged when the quotes are in hand, or every fresh quote reads as
+        "from the future" and LAG never fires (a regression caught before merge)."""
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo
+        from arb_engine.strategy.inplay import InplayView
+        from arb_engine.strategy.leadlag import _fresh
+        from arb_engine.strategy.live import LiveSlate
+
+        self.assertTrue(_fresh(OutcomeQuote("robinhood", "c", KEY, "KC", ask=.6, bid=.59, ts=100.0, quote_time=100.05), 100.0, 10.0))
+        self.assertFalse(_fresh(OutcomeQuote("kalshi", "k", KEY, "KC", ask=.6, bid=.59, ts=106.0), 100.0, 10.0))
+        info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
+        t0 = 1_800_000_000.0
+        clock = {"t": t0}
+
+        def tick():   # every read advances 0.2 s: requests take time
+            clock["t"] += 0.2
+            return clock["t"]
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=0.60, bid=0.59, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"}), OutcomeQuote("kalshi", "T-DEN", KEY, "DEN", ask=0.41, bid=0.40, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-DEN", "side": "yes"})]
+        rq = [OutcomeQuote("robinhood", "c1", KEY, "KC", ask=0.61, bid=0.58, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c1", "side": "yes", "exchange": "rothera"}, book_id="rothera"), OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=0.42, bid=0.39, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
+        rh_prices = {"c1": {"yes_ask_price": "0.61", "yes_bid_price": "0.58", "ask_venue_timestamp": t0}, "c2": {"yes_ask_price": "0.42", "yes_bid_price": "0.39", "ask_venue_timestamp": t0}}
+        client, _ = self._kalshi_client({"T-KC": (0.59, 0.60), "T-DEN": (0.40, 0.41)})
+        rh = self._robinhood(rh_prices)
+        rh.client = None
+        slate = LiveSlate([], settings={"executable_venues": "kalshi,robinhood"}, alerter=Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"fastc_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy=""), bankroll=500, fast=1.0, interval=5.0)
+        slate.fastlane.kalshi, slate.fastlane.robinhood, slate.fastlane.clock = client, rh, tick
+        view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
+        slate._live_priced = {KEY: (None, me, view)}
+        slate.fastlane.seed({KEY: me.quotes_by_venue})
+        self.assertEqual(slate.fast_step().lags, [])
+        # Rothera reprices KC +8c, its venue clock 50 ms ahead of ours; Kalshi's book is unchanged.
+        rh_prices["c1"].update({"yes_ask_price": "0.69", "yes_bid_price": "0.66", "ask_venue_timestamp": clock["t"] + 1.05})
+        rh_prices["c2"].update({"yes_ask_price": "0.34", "yes_bid_price": "0.31", "ask_venue_timestamp": clock["t"] + 1.05})
+        lags = []
+        for _ in range(3):
+            clock["t"] += 1.0
+            lags += slate.fast_step().lags
+        self.assertTrue(any("KALSHI buy" in l and "Kansas City @ 0.60" in l for l in lags), lags)
 
 class PaperLagTests(unittest.TestCase):
     """strategy/paperlag.py: paper fills judged on the next quotes."""

@@ -16,7 +16,7 @@ from typing import Any, Deque, Iterable, Optional
 
 from ..fees.base import D
 from ..fees.registry import fee_model_for_quote
-from ..matching.settlement_rules import pair_flags, rule_for_quote
+from ..matching.settlement_rules import _status_flags, pair_flags, rule_for_quote
 from ..models import OutcomeQuote
 
 try:  # settings registry (config.declare_setting); the module must import without it
@@ -74,7 +74,8 @@ class LagSignal:
     ts: float
     url: Optional[str] = None # the follower's market page, to act on it
     fee_total: Optional[float] = None  # the follower's fee for the whole order at ``suggested_contracts``
-    settlement_flags: tuple[str, ...] = ()  # visible risk; blocks automated execution
+    settlement_flags: tuple[str, ...] = ()  # the follower contract's own rule missing/unverified: blocks execution
+    pair_flags: tuple[str, ...] = ()        # leader vs follower rule differences: informational only
     tie_value: Optional[float] = None
 
     def text(self) -> str:
@@ -90,8 +91,14 @@ def _mid(q: OutcomeQuote) -> Optional[float]:
     return (q.bid + q.ask) / 2.0
 
 
+# Timestamps may sit slightly *after* the decision time and still be real: a venue clock a
+# few milliseconds ahead of ours (Robinhood's ask_venue_timestamp), or a fast-lane quote
+# stamped when its answer arrived. Only a time further ahead than this is treated as bogus.
+CLOCK_SKEW_S = 2.0
+
+
 def _fresh(q: OutcomeQuote, now: float, fresh_s: float) -> bool:
-    return all(math.isfinite(t) and 0 <= now - t <= fresh_s
+    return all(math.isfinite(t) and -CLOCK_SKEW_S <= now - t <= fresh_s
                for t in (q.ts, q.quote_time) if t is not None)
 
 
@@ -227,13 +234,18 @@ class LeadLagTracker:
                 leader_mid_out = lmid if outcome == home else 1.0 - lmid
                 sport = event_key.split(":", 1)[0].lower()
                 market_type = "spread" if ":spread:" in event_key else ("total" if ":total:" in event_key else "moneyline")
+                # Only the contract we buy settles this trade: the leader is a price signal and
+                # is never traded, so a leader/follower rule difference (Rothera's tie rule vs
+                # Kalshi's) biases the gap by ~P(tie)/2 and is informational (pair_flags). What
+                # blocks execution is the follower's *own* rule being missing or unverified.
                 try:
-                    settlement_flags = tuple(pair_flags(sources[leader], q, sport, market_type))
-                    follower_rule = rule_for_quote(q, sport, market_type) or {}
-                    tie_value = {"half": 0.5, "no_winner": 0.0}.get(follower_rule.get("tie"))
+                    pair = tuple(pair_flags(sources[leader], q, sport, market_type))
+                    follower_rule = rule_for_quote(q, sport, market_type)
+                    settlement_flags = tuple(_status_flags(follower_rule)) if follower_rule else (f"settlement-rule-missing:{follower}",)
+                    settlement_flags = tuple(f for f in settlement_flags if not f.startswith("settlement-rule-derived:"))
+                    tie_value = {"half": 0.5, "no_winner": 0.0}.get((follower_rule or {}).get("tie"))
                 except Exception:
-                    settlement_flags = ("settlement-rules-error",)
-                    tie_value = None
+                    pair, settlement_flags, tie_value = (), ("settlement-rules-error",), None
                 depth = q.ask_size
                 if depth is not None and (not math.isfinite(depth) or depth < 1):
                     continue
@@ -271,5 +283,5 @@ class LeadLagTracker:
                     continue
                 self._last[key] = (now, edge)
                 fee_total = float(total) if contracts else None
-                signals.append(LagSignal(fee_total=fee_total, settlement_flags=settlement_flags, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
+                signals.append(LagSignal(fee_total=fee_total, settlement_flags=settlement_flags, pair_flags=pair, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

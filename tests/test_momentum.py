@@ -44,9 +44,11 @@ class DetectionIntegrityTests(unittest.TestCase):
         self.assertEqual(self.observe(book), [])
 
     def test_future_timestamp_rejected(self):
+        # A venue clock a little ahead of ours is tolerated (leadlag.CLOCK_SKEW_S = 2 s);
+        # a timestamp well in the future is bogus and never evidence.
         book = self.changed()
         for q in book['robinhood']:
-            q.quote_time = 11
+            q.quote_time = 13
         self.assertEqual(self.observe(book), [])
 
     def test_feed_gap_requires_new_history(self):

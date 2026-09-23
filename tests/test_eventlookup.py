@@ -628,8 +628,11 @@ class LagSignalTests(unittest.TestCase):
         self.assertEqual((l["leader"], l["follower"], l["outcome"], l["ask"]), ("robinhood", "kalshi", "KC", 0.60))
         self.assertGreater(l["edge"], 0.02)
         self.assertEqual(l["suggested_contracts"], 202)
-        self.assertFalse(l["execution_safe"])
-        self.assertIn("settlement-mismatch:tie", l["settlement_flags"])
+        # Buying Kalshi (rule verbatim) on a Rothera lead is executable: the tie difference
+        # between the two venues is information about the gap, not a risk to the position.
+        self.assertTrue(l["execution_safe"])
+        self.assertEqual(l["settlement_flags"], [])
+        self.assertIn("settlement-mismatch:tie", l["pair_flags"])
         # The overlay gets the structured fields *and* the order ticket (with the order fee).
         self.assertIn("KALSHI buy", l["text"])
         self.assertIn("Kansas City @ 0.60", l["text"])

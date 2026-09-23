@@ -192,8 +192,14 @@ class Store:
         with self.conn:
             for name, typ in cols.items():
                 if name not in have:
-                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
-                    added.append(name)
+                    try:
+                        self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
+                        added.append(name)
+                    except sqlite3.OperationalError as e:
+                        # The NFL and college recorders open one file at the same moment: the
+                        # other one may have just added it.
+                        if "duplicate column" not in str(e).lower():
+                            raise
         return added
 
     def _insert(self, table: str, row: dict[str, Any]) -> int:

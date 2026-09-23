@@ -203,6 +203,7 @@ class LiveSlate:
 
     # -- one pass ----------------------------------------------------------------------------
     def tick(self, now: Optional[float] = None) -> SlateTick:
+        pinned = now
         now = now or time.time()
         errors: list[str] = []
         games = self.wanted_games(self.feed.games(), now)
@@ -210,6 +211,11 @@ class LiveSlate:
         if not games:
             return out
         merged = self.merged_events(errors)
+        if pinned is None:
+            # The catalogue fetch takes seconds; quotes are stamped as they arrive, so the
+            # tick decides once they are all in hand, not when it started fetching.
+            now = max(now, time.time())
+            out.at = now
         priced: list[tuple[GameState, MergedEvent, InplayView, FeedFreshness]] = []
         for g in games:
             me = merged.get(g.event_key or "")
@@ -278,6 +284,11 @@ class LiveSlate:
         if not live:
             return out
         refreshed, errs = self.fastlane.step(list(live), pinned)
+        if pinned is None:
+            # Signals are decided when the quotes are in hand (their obs_ts), not when the
+            # step began; judging them at the start would call every fresh quote "future".
+            now = self.fastlane.clock()
+            out.at = now
         out.errors.extend(errs)
         if self.store is not None:
             try:   # one ticker per step (~150 ms): the 1 s quote refresh is never held up

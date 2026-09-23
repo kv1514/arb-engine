@@ -161,8 +161,13 @@ repriced ≥ 5¢ in the last 30 s and an executable venue has not followed (the 
 `strategy/leadlag.py` on every 1 s poll): "robinhood moved +8¢, kalshi has not: buy Kansas
 City on kalshi at 0.60 vs robinhood mid 0.675 — edge +5.8% → 202 contracts (300 offered)".
 The historical catch-up figures are a legacy measurement that predates exit fees and strict
-horizon/fill checks (docs/MODEL.md, "The first live Sunday"); they are not an instruction to
-trade. Settlement mismatches remain visible but are blocked from automated execution.
+horizon/fill checks, and the re-run with executable accounting does not support them
+(docs/MODEL.md, "The discovery set re-run with executable accounting"); a LAG box is not an
+instruction to trade. A LAG buys only the follower contract, so what can block automated
+execution is *that contract's* settlement rule being missing or unverified (a buy on
+Rothera, whose rule text is not yet captured); a difference between the leader's and the
+follower's rules (Rothera's tie rule vs Kalshi's) is shown as information only - it shifts
+the price comparison by about half the tie probability and never touches the position.
 The bankroll / Kelly fraction in the popup size the suggestion; without a bankroll only the
 depth is shown.
 

@@ -133,7 +133,7 @@ def lag_ticket(sig: Any, fee_total: Optional[float] = None) -> str:
         lines[-1] += f"; depth {float(depth):g} ct"
     settlement_flags = tuple(_g(sig, "settlement_flags", ()) or ())
     if settlement_flags:
-        lines.append("SIGNAL ONLY — settlement differs or is unverified: " + ", ".join(settlement_flags))
+        lines.append("SIGNAL ONLY - this contract's settlement rule is unverified: " + ", ".join(settlement_flags))
     url = _g(sig, "url")
     if url:
         lines.append(str(url))

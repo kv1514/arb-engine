@@ -45,6 +45,15 @@ class StoreTests(unittest.TestCase):
             if os.path.exists(self.path + suffix):
                 os.unlink(self.path + suffix)
 
+    def test_two_recorders_adding_the_same_column_do_not_crash(self):
+        a = Store(self.path)
+        b = Store(self.path)
+        a.conn.execute("ALTER TABLE inplay_ticks ADD COLUMN extra_probe TEXT")
+        a.conn.commit()
+        b.columns = lambda table: []   # b's view is stale: it thinks every column is missing
+        b._ensure_columns("inplay_ticks", {"extra_probe": "TEXT"})   # must not raise
+        self.assertIn("extra_probe", a.columns("inplay_ticks"))
+
     def test_file_store_uses_wal_so_a_reader_never_blocks_the_recorder(self):
         # Two recorders and the study scripts share one file all week: a second connection
         # holding a read transaction must not stop the store's insert (WAL), and the store's
