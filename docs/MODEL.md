@@ -790,6 +790,49 @@ and agreement from a third book almost never happens at this cadence:
 | agree=0 | 46/109 | 7% | -6.1c [-9.1, -2.8] |
 <!-- /results:micro_discovery_grade -->
 
+### Backtest of the arb alerts on the recorded week-2 slate
+
+`scripts/arb_backtest.py --date 2026-09-20 --date 2026-09-21` replays every recorded tick of the
+15 games through the production detector (`analyze_event`, the live tiers and the 30 s
+throttle) and then acts on each alert against the prices that were really there after it:
+*at the alert's prices* (the ceiling), *following the ticket* (the stale leg first 5 s later at
+or under its alert price, the second leg 15 s later at or under its "still locks" price, what
+cannot be matched sold back 5 s later), and *Robinhood first at any price* (no limits). One
+$500 bankroll; a locked set holds its cost until its game ends; liquidity we took is gone
+for two minutes; fees on every buy and sale back.
+
+<!-- results:arb_backtest_tiers -->
+| alerts fired | count | at the alert's prices | following the ticket | won/lost | Robinhood first, any price |
+|---|---|---|---|---|---|
+| BIG ARB | 73 | +$299.61 | +$91.51 | 14/3 | +$7.47 |
+| ARB | 65 | +$38.06 | +$26.77 | 8/2 | +$40.29 |
+| ARB SMALL | 57 | +$16.17 | -$25.45 | 8/4 | -$28.86 |
+<!-- /results:arb_backtest_tiers -->
+
+Following the ticket keeps most of what the big arbs promised and loses money on the small
+ones; buying the second leg at whatever it costs gives it back. The binding constraint is
+cash: a lock ties its cost up until the game ends, so an all-in ticket leaves nothing for the
+next arb. Sizing each ticket to a slice of the bankroll:
+
+<!-- results:arb_backtest_stakes -->
+| stake per arb | alerts acted on | result | won/lost | locked | undone | skipped (cash tied up) |
+|---|---|---|---|---|---|---|
+| $50 | BIG ARB only | +$125.46 | 35/12 | 31 | 16 | 26 |
+| $50 | every alert | +$70.48 | 55/21 | 47 | 29 | 119 |
+| $100 | BIG ARB only | +$180.01 | 26/9 | 23 | 12 | 38 |
+| $100 | every alert | +$80.30 | 27/4 | 25 | 7 | 163 |
+| $250 | BIG ARB only | +$112.55 | 14/3 | 12 | 5 | 56 |
+| $250 | every alert | +$68.49 | 15/2 | 14 | 3 | 178 |
+<!-- /results:arb_backtest_stakes -->
+
+Hence `arb_stake_fraction` = 0.20 (a ticket is sized to 20 % of the bankroll). All 195 alerts
+were Kalshi YES + Rothera YES pairs, which pay $0.50 on a tie: with an NFL tie rate of a few
+tenths of a percent that costs roughly 0.1-0.2c per set in expectation, and a tied game would
+turn each locked set into a ~$0.45 loss. Caveats: one Sunday and one Monday night; a 5 s
+recorder; a person acting on every alert within 5 s and 15 s; the displayed size taken as
+available to us (others may race for the same stale price); Robinhood's exchange fee at the
+assumed $0.01 per contract. Fixture: `tests/fixtures/results/arb_backtest_w2.json`.
+
 **LAG, then lock.** `strategy/laglock.py` watches every filled LAG position for ten minutes
 and buys the other outcome as soon as the pair costs <= $1 with fees (tie-safe pairs only:
 a Kalshi YES + a Rothera YES pays $0.50 on a tie). Replayed on the same games, the lock's

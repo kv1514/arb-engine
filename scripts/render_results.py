@@ -435,6 +435,24 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
             "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade}
 
 
+def render_arb_backtest(d: dict) -> dict[str, str]:
+    """scripts/arb_backtest.py on the recorded week-2 slate."""
+    def money(x: float) -> str:
+        return ("-$" if x < 0 else "+$") + f"{abs(x):,.2f}"
+    rows = []
+    for tier in ("BIG ARB", "ARB", "ARB SMALL"):
+        t = d["inplay"][tier]
+        rows.append([tier, str(t["alerts"]), money(t["instant"]["pnl"]), money(t["guided"]["pnl"]), f"{t['guided']['won']}/{t['guided']['lost']}", money(t["naive"]["pnl"])])
+    tiers = table(["alerts fired", "count", "at the alert's prices", "following the ticket", "won/lost", "Robinhood first, any price"], rows)
+    caps = []
+    for cap in sorted(d["inplay_stake_caps"], key=float):
+        for tier in ("BIG ARB", "all"):
+            g = d["inplay_stake_caps"][cap][tier]
+            caps.append([f"${float(cap):.0f}", "BIG ARB only" if tier == "BIG ARB" else "every alert", money(g["pnl"]), f"{g['won']}/{g['lost']}", str(g["locked"]), str(g["unwound"]), str(g["missed"])])
+    stakes = table(["stake per arb", "alerts acted on", "result", "won/lost", "locked", "undone", "skipped (cash tied up)"], caps)
+    return {"arb_backtest_tiers": tiers, "arb_backtest_stakes": stakes}
+
+
 # ---- registry ---------------------------------------------------------------------------------
 
 RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
@@ -450,6 +468,7 @@ RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
     "arb_fixture_p09": render_arb_fixture_p09,
     "micro_synthetic": render_micro_synthetic,
     "micro_discovery": render_micro_discovery,
+    "arb_backtest_w2": render_arb_backtest,
 }
 
 

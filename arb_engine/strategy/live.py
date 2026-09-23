@@ -50,6 +50,7 @@ if _declare_setting is not None:
         _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
         _declare_setting("inplay_idle_every_s", env="INPLAY_IDLE_EVERY_S", default=60.0, cast=float, doc="live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can then run all week)")
         _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
+        _declare_setting("arb_stake_fraction", env="ARB_STAKE_FRACTION", default=0.20, cast=float, doc="live slate: share of the bankroll one ARB ticket is sized to (fees in). A locked set holds its cost until the game ends, so an all-in ticket leaves nothing for the next arb; on the first recorded Sunday, 20 % per arb made about twice what all-in did")
         _declare_setting("arb_push_min_margin", env="ARB_PUSH_MIN_MARGIN", default=0.01, cast=float, doc="live slate: smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL. Replayed by hand (a person on the Robinhood leg), arbs under 1c lost money at every leg speed tested")
         _declare_setting("arb_big_margin", env="ARB_BIG_MARGIN", default=0.03, cast=float, doc="live slate: ARB margin from which the push is titled BIG ARB at top priority (replayed: arbs of 3c+ made money when legged by hand)")
         _declare_setting("lag_lock_watch_s", env="LAG_LOCK_WATCH_S", default=600.0, cast=float, doc="LAG lock watch: seconds after a LAG position fills during which the other outcome is watched for a price that locks the pair")
@@ -104,6 +105,7 @@ class LiveSlate:
         self.near_margin = float(setting(self.settings, "arb_near_margin", 0.03) or 0.0)
         self.near_every = float(setting(self.settings, "arb_near_every_s", 300.0) or 300.0)
         self.arb_push_min = float(setting(self.settings, "arb_push_min_margin", 0.01) or 0.0)
+        self.arb_stake_fraction = float(setting(self.settings, "arb_stake_fraction", 0.20) or 1.0)
         self.arb_big = float(setting(self.settings, "arb_big_margin", 0.03) or 0.03)
         # Fast lane: 1 s top-of-book refreshes of Kalshi + Robinhood for the live games between
         # full ticks (``fast`` seconds; 0 = off). Built from the adapters this slate already has.
@@ -400,12 +402,14 @@ class LiveSlate:
 
             # The bankroll is passed in as the budget so the sized legs (and their fees) are
             # the order that can be paid for, not a reference 100-lot scaled afterwards.
-            rep = analyze_event(me, self.settings, contracts=self.contracts, target_margin=self.target_margin, max_quote_age=max(10.0, float(self.interval)), now=now, executable_venues=self.executable_venues, budget=self.bankroll or None)
+            stake = (self.bankroll * min(1.0, self.arb_stake_fraction)) if self.bankroll else None
+            rep = analyze_event(me, self.settings, contracts=self.contracts, target_margin=self.target_margin, max_quote_age=max(10.0, float(self.interval)), now=now, executable_venues=self.executable_venues, budget=stake)
             arb = rep.arb or {}
             stale = "stale-quote" in (rep.flags or [])
             if arb.get("is_arb") and rep.fillable and not stale:
                 sized = rep.sized_arb or arb
-                note = (f"depth-capped" if not self.bankroll else f"bankroll {ticket.money(self.bankroll)}")
+                note = ("depth-capped" if not self.bankroll else
+                        f"stake {ticket.money(stake)} = {self.arb_stake_fraction:.0%} of your {ticket.money(self.bankroll)} (a lock holds its cost until the game ends)")
                 first, why, maxp = self._legging(me, rep, sized, now)
                 margin = float(sized.get("margin") or 0.0)
                 kind = "BIG ARB" if margin >= self.arb_big else ("ARB" if margin >= self.arb_push_min else "ARB SMALL")

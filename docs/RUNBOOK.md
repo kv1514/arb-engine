@@ -145,7 +145,11 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    time you get there, anything up to that still locks, anything above it does not.
 
    The count is one number for both legs (a set pays $1 whoever wins) and is already capped
-   by the thinner book *and* by the bankroll, fees included (`quant.arbitrage.size_for_budget`).
+   by the thinner book *and* by the stake, fees included (`quant.arbitrage.size_for_budget`).
+   The stake is `arb_stake_fraction` of the bankroll - 20 %, printed as "stake $100.00 = 20% of
+   your $500.00" (the example above is sized all-in for illustration) - because a locked set
+   holds its cost until the game ends: on the recorded week-2 slate a $100 stake per arb made
+   about twice what all-in tickets did (docs/MODEL.md, "Backtest of the arb alerts").
    Each fee line is the venue's rule at that exact count (`FeeModel.breakdown`, whose items
    sum to the fee): Kalshi's 0.07 x C x p x (1-p) rounded up per order; Robinhood's commission
    0.10 x C x p x (1-p) rounded up and capped at 1c per contract (0.05 with Gold), plus the

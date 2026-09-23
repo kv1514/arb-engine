@@ -429,8 +429,13 @@ class FastLaneTests(unittest.TestCase):
         self.assertTrue(lag_alerts and lag_alerts[0]["msg"].startswith("NFL - DEN @ KC - LAG:"), lag_alerts)
         # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi),
         # and it is reported as an order ticket: sport, per-venue counts, prices, fees, totals.
-        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI: buy 120 x KC YES at the ask $0.60" in a
-                            and "ROBINHOOD: buy 120 x DEN YES at the ask $0.34" in a and "+ Kalshi taker fee:" in a and "total: $" in a for a in arbs), arbs)
+        # Sized to arb_stake_fraction (20 %) of the $500 bankroll: 102 sets cost <= $100 with fees.
+        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI: buy 102 x KC YES at the ask $0.60" in a
+                            and "ROBINHOOD: buy 102 x DEN YES at the ask $0.34" in a and "+ Kalshi taker fee:" in a and "total: $" in a
+                            and "stake $100.00 = 20% of your $500.00" in a for a in arbs), arbs)
+        import re
+        total = float(re.search(r"= \$([0-9.]+) -> pays", arbs[0]).group(1))
+        self.assertLessEqual(total, 100.0)
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
