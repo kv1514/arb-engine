@@ -92,13 +92,48 @@ scripts/sunday.sh restart live                  # if the recorders are already r
 ```
 
 3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
-   **LAG** (one venue repriced, the other has not — buy the laggard, with the link), **HEDGE
-   NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB counts,
-   paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed unless
-   you add them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL,FINAL`): the first live Sunday lost on
-   STEAL. One push per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`); HEDGE NOW is
-   never throttled. The full text is in `out/live_journal.jsonl` (`"kind": "alert"`); pushes
-   are logged as `"kind": "ntfy"`, throttled ones as `ntfy_throttled`.
+   **ARB CLOSE** (within `arb_near_margin`, 3¢ per contract, of locking — the heads-up
+   before it crosses), **LAG** (one venue repriced, the other has not — buy the laggard),
+   **HEDGE NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB
+   counts, paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed
+   unless you add them (`ARB_ALERT_NTFY_KINDS=ARB,LAG,STEAL,FINAL`): the first live Sunday
+   lost on STEAL. One push per (kind, game, side) per 60 s (`ARB_ALERT_MIN_INTERVAL_S`);
+   TAKER ARB and ARB CLOSE collapse to one per *game* (a game has a dozen spread and total
+   lines), ARB CLOSE repeats only every `arb_near_every_s` (5 min) or when the gap shrank by
+   a cent, and HEDGE NOW is never throttled. The full text is in `out/live_journal.jsonl`
+   (`"kind": "alert"`); pushes are logged as `"kind": "ntfy"`, throttled ones as
+   `ntfy_throttled`.
+
+4. **Reading a push.** The phone's bold line is the kind and the sport (`ARB NFL`); the body
+   is an order ticket, one line per venue, and nothing in it needs arithmetic:
+
+   ```
+   NFL - ATL @ GB - ARB +1.3c/ct after fees
+   1) KALSHI buy 340 x Green Bay @ 0.56 -> $190.40 + $5.87 fee = $196.27 (0.5773/ct)
+   2) ROBINHOOD buy 340 x Atlanta @ 0.39 -> $132.60 + $6.80 fee = $139.40 (0.4100/ct)
+   stake $335.67 -> pays $340.00 = +$4.33 (+1.29% on cost)
+   tie: pays $340.00 = +$4.33
+   340 ct; bankroll $500.00; fees are entry-only (held to settlement)
+   ```
+
+   The count is one number for both legs (a set pays $1 whoever wins) and is already capped
+   by the thinner book *and* by the bankroll, fees included (`quant.arbitrage.size_for_budget`):
+   the dollars shown are the dollars the venues charge for that exact order, because the fee
+   is evaluated at that count — Kalshi rounds its fee up per order and Rothera has a per-order
+   floor, so 340 x (the fee on one contract) is the wrong number. "Entry-only" means a
+   contract held to settlement pays no exit fee; selling early pays the schedule again.
+   A `tie:` line that says **LOSES on a tie** is a Kalshi-YES + Rothera-YES pair, where a tie
+   pays $0.50 total — take the Rothera NO of the same side instead.
+
+   An **ARB CLOSE** body prints what each leg costs now and the price it has to reach, so the
+   limit order can be parked before the move:
+
+   ```
+   NFL - ATL @ GB - ARB CLOSE -3.7c/ct after fees (not yet a lock)
+   KALSHI Green Bay @ 0.62 (all-in 0.6371) - locks at 0.60, 2.0c away, depth 420
+   ROBINHOOD Atlanta @ 0.39 (all-in 0.4000) - locks at 0.37, 2.0c away, depth 150
+   set costs $1.04/ct with fees; needs $0.04/ct more of move; ready for 150 ct (depth)
+   ```
 
 ## 1c. Acting on LAG automatically (needs your Kalshi API key)
 

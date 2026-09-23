@@ -669,7 +669,9 @@ class EventAnalyzer:
                 sigs = self.leadlag.observe(me.event_key, (me.info.venues or {}).get("_teams", {}).get("title") or me.event_key, list(me.info.outcomes), dict(me.info.labels or {}), me.quotes_by_venue, settings, now, (settings or {}).get("bankroll"), float((settings or {}).get("kelly_fraction") or 0.25))
         except Exception:
             return []
-        return [{"leader": s.leader, "follower": s.follower, "outcome": s.outcome, "label": s.label, "lead_move": round(s.lead_move, 4), "follower_move": round(s.follower_move, 4), "leader_mid": round(s.leader_mid, 4), "ask": s.follower_ask, "all_in": round(s.follower_all_in, 4), "edge": round(s.edge, 4), "depth": s.depth, "suggested_contracts": s.suggested_contracts, "url": s.url, "text": s.text()} for s in sigs]
+        return [{"leader": s.leader, "follower": s.follower, "outcome": s.outcome, "label": s.label, "lead_move": round(s.lead_move, 4), "follower_move": round(s.follower_move, 4), "leader_mid": round(s.leader_mid, 4), "ask": s.follower_ask, "all_in": round(s.follower_all_in, 4), "edge": round(s.edge, 4), "depth": s.depth, "suggested_contracts": s.suggested_contracts, "fee_total": (round(s.fee_total, 4) if s.fee_total is not None else None),
+                 "cost_total": (round(s.follower_ask * s.suggested_contracts + (s.fee_total or 0.0), 2) if s.suggested_contracts else None),
+                 "url": s.url, "text": s.text()} for s in sigs]
 
     def analyze_url(self, url: str, settings: Optional[dict[str, Any]] = None, contracts: float = 100, target_margin: float = 0.0, emit_no_side: bool = False, executable_venues: Optional[set[str]] = None, fresh: bool = False) -> dict[str, Any]:
         """``emit_no_side`` adds the NO side of each Robinhood game contract as its own leg

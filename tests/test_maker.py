@@ -118,7 +118,13 @@ class LifecycleTests(unittest.TestCase):
         self.assertAlmostEqual(fill["margin_if_hedged_now"], evaluate([Leg("under", "kalshi", 0.91, KalshiFees(maker_fees=True), role="maker"), Leg("over", "robinhood", 0.04, RobinhoodFees())], 100).margin)
         alerts = [e for e in r.alerts.events if e["kind"] == "alert" and e["title"] == "HEDGE NOW"]
         self.assertEqual(len(alerts), 1)
-        self.assertIn("HEDGE NOW: buy 100 x Over 65.5 on robinhood at ≤ 0.07", alerts[0]["msg"])
+        # The alert is an order ticket: sport, the Kalshi fill, then the hedge order with the
+        # cash and the fee Robinhood charges for those 100 contracts.
+        msg = alerts[0]["msg"]
+        self.assertTrue(msg.startswith("NFL - "), msg)
+        self.assertIn("filled 100 x Under 65.5 @ 0.91 on KALSHI", msg)
+        self.assertIn("ROBINHOOD buy 100 x Over 65.5 @ <= 0.07", msg)
+        self.assertIn("ask now 0.04 -> $4.00 + $1.39 fee = $5.39", msg)
         # A filled watch gets a fresh order on the next reconcile (still priceable).
         self.assertEqual(len([x for x in r.orders if x.status == "resting"]), 1)
 

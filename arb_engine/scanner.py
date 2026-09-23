@@ -37,7 +37,7 @@ from typing import Any, Iterable, Optional
 from .fees.registry import fee_model_for_quote
 from .matching.matcher import MergedEvent, merge_snapshots
 from .models import OutcomeQuote, VenueSnapshot
-from .quant.arbitrage import ArbResult, Leg, best_leg_per_outcome, evaluate, max_price_for_leg, min_size_for_legs, size_from_books, tick_for_quote
+from .quant.arbitrage import ArbResult, Leg, best_leg_per_outcome, evaluate, max_price_for_leg, min_size_for_legs, size_for_budget, size_from_books, tick_for_quote
 from .quant.fairvalue import consensus_fair_value
 
 try:  # settings registry (P01); the scanner must import without it
@@ -302,7 +302,7 @@ def settlement_mismatches(info: Any, quotes_by_venue: dict) -> list[str]:
     return out
 
 
-def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None, min_size: float = 1.0, executable_venues: Optional[set[str]] = None) -> EventReport:
+def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None, min_size: float = 1.0, executable_venues: Optional[set[str]] = None, budget: Optional[float] = None) -> EventReport:
     """One merged event -> fee-aware report. ``allowed_venues`` drops other venues entirely;
     ``executable_venues`` (None = unrestricted) keeps the others as signal-only rows."""
     info = me.info
@@ -343,7 +343,9 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
     # Depth check: the largest size (book depth, else top-of-book size, else unlimited) that
     # still clears the target margin, on the legs' minimum-size floor. A tail quote backed by
     # 0.01 contracts is not an arb, nor is a 3-share Polymarket leg (5-share minimum).
-    sized = size_from_books(legs, min_margin=target_margin) if complete and arb and arb.is_arb else None
+    # ``budget`` (the operator's bankroll) caps the size in dollars, fees included, so the
+    # sized result an alert prints is the order that can actually be paid for.
+    sized = size_for_budget(legs, budget, min_margin=target_margin) if complete and arb and arb.is_arb else None
     fillable = sized is not None and sized.contracts >= min_size
     below_min = bool(arb and arb.is_arb) and any(l.min_size and (_available(l) is not None) and _available(l) < float(l.min_size) for l in legs)  # type: ignore[arg-type]
     fair = consensus_fair_value(fair_value_view(me.quotes_by_venue), info.outcomes, venue_weights=settings.get("venue_weights"))

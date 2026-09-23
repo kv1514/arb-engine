@@ -20,6 +20,7 @@
   const fmtP = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "¢");
   const fmtC = (x) => (x == null ? "–" : Math.round(x * 100) + "¢");  // whole cents for the small card badges
   const fmtPct = (x, signed) => (x == null ? "–" : (signed && x > 0 ? "+" : "") + (x * 100).toFixed(1) + "%");
+  const fmtD = (x) => (x == null ? "–" : "$" + Number(x).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));  // cash, for order tickets
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   // A value that may move between renders: `flashChanged` compares its text with the last render
   // and adds .arbe-flash (a one-shot CSS animation) when it differs. Keys are stable per page.
@@ -151,7 +152,7 @@
     // LAG: one venue has repriced and an executable one has not yet — the dip that is cheap
     // (docs/MODEL.md "The first live Sunday": the laggard caught up within ~23 s on 80% of moves).
     if (a.lags && a.lags.length) {
-      parts.arb += a.lags.map((l) => `<div class="arbe-arb arbe-good arbe-lag"><b>LAG</b> — ${esc(l.leader)} moved ${(l.lead_move * 100).toFixed(0) >= 0 ? "+" : ""}${(l.lead_move * 100).toFixed(0)}¢, ${esc(l.follower)} has not: <b>buy ${esc(l.label)} on ${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.follower)}</a>` : esc(l.follower)} at ${fmtP(l.ask)}</b> (all-in ${fmtP(l.all_in)}) vs ${esc(l.leader)} mid ${fmtP(l.leader_mid)} — edge <b>${fmtPct(l.edge, true)}</b>${l.suggested_contracts ? ` → ${l.suggested_contracts} contracts` : ""}${l.depth != null ? ` (${Math.floor(l.depth)} offered)` : ""}<div class="arbe-muted arbe-small">act within ~20 s; the laggard usually catches up, and a leader that reverses means the print was wrong</div></div>`).join("");
+      parts.arb += a.lags.map((l) => `<div class="arbe-arb arbe-good arbe-lag"><b>LAG</b> — ${esc(l.leader)} moved ${(l.lead_move * 100).toFixed(0) >= 0 ? "+" : ""}${(l.lead_move * 100).toFixed(0)}¢, ${esc(l.follower)} has not: <b>buy ${esc(l.label)} on ${l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.follower)}</a>` : esc(l.follower)} at ${fmtP(l.ask)}</b> (all-in ${fmtP(l.all_in)}) vs ${esc(l.leader)} mid ${fmtP(l.leader_mid)} — edge <b>${fmtPct(l.edge, true)}</b>${l.suggested_contracts ? ` → buy <b>${l.suggested_contracts}</b> ct = ${fmtD(l.suggested_contracts * l.ask)}${l.fee_total != null ? ` + ${fmtD(l.fee_total)} fee = <b>${fmtD(l.cost_total)}</b>` : ""}` : ""}${l.depth != null ? ` (${Math.floor(l.depth)} offered)` : ""}<div class="arbe-muted arbe-small">act within ~20 s; the laggard usually catches up, and a leader that reverses means the print was wrong</div></div>`).join("");
     }
     let html = "";
     for (const row of a.rows) {

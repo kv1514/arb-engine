@@ -34,13 +34,13 @@ STEAL_EXTRA_FIELDS = ("signal_kind", "leader", "lead_move", "follower_move")
 
 
 NTFY_DEFAULT_URL = "https://ntfy.sh"
-NTFY_DEFAULT_KINDS = ("ARB", "LAG", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
+NTFY_DEFAULT_KINDS = ("ARB", "ARB CLOSE", "LAG", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
 # Kinds throttled per game rather than per (game, side): the maker rates every spread and
 # total line of a game in one pass, and one push per game per minute (the best-margin line
 # comes first, the watches are ranked) beats eight in three seconds.
-NTFY_GAME_LEVEL = ("TAKER ARB",)
-NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
-NTFY_TAGS = {"HEDGE NOW": "rotating_light", "ARB": "moneybag", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
+NTFY_GAME_LEVEL = ("TAKER ARB", "ARB CLOSE")
+NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "ARB CLOSE": "3", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
+NTFY_TAGS = {"HEDGE NOW": "rotating_light", "ARB": "moneybag", "ARB CLOSE": "eyes", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
 
 try:  # settings registry; the module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore
@@ -111,6 +111,7 @@ class Alerter:
         """
         # A structured STEAL is identified by its (outcome, venue) pair; other alerts (maker
         # fills carry ``side``/``price``) keep every kwarg as plain journal data.
+        headline = data.pop("ntfy_title", None)   # what the phone shows in bold; ``title`` stays the kind
         steal = {k: data.pop(k) for k in STEAL_FIELDS + STEAL_EXTRA_FIELDS if k in data} if "outcome" in data and "venue" in data else {}
         if steal:
             ts = data.pop("ts", None)
@@ -141,10 +142,10 @@ class Alerter:
             except Exception as e:
                 self.journal("webhook_error", error=str(e))
         if self.ntfy:
-            self.push(title, msg, event=data.get("event") or data.get("event_key"), side=(steal.get("outcome") if steal else data.get("outcome")) or data.get("watch") or "")
+            self.push(title, msg, event=data.get("event") or data.get("event_key"), side=(steal.get("outcome") if steal else data.get("outcome")) or data.get("watch") or "", headline=headline)
 
     # ---- ntfy --------------------------------------------------------------------------------
-    def push(self, title: str, msg: str, event: Any = None, side: Any = None, force: bool = False) -> bool:
+    def push(self, title: str, msg: str, event: Any = None, side: Any = None, force: bool = False, headline: Optional[str] = None) -> bool:
         """One ntfy push for ``title`` unless its kind is not subscribed or the same
         (title, event, side) was pushed less than ``min_interval_s`` ago (HEDGE NOW always goes;
         ``NTFY_GAME_LEVEL`` kinds throttle per (title, event))."""
@@ -159,7 +160,7 @@ class Alerter:
             self.journal("ntfy_throttled", title=title, event=event, side=side)
             return False
         self._last_push[key] = now
-        headers = {"Title": title[:120], "Priority": NTFY_PRIORITY.get(kind, "3"), "Tags": NTFY_TAGS.get(kind, "bell"), "Content-Type": "text/plain; charset=utf-8"}
+        headers = {"Title": (headline or title)[:120], "Priority": NTFY_PRIORITY.get(kind, "3"), "Tags": NTFY_TAGS.get(kind, "bell"), "Content-Type": "text/plain; charset=utf-8"}
         try:
             self._post(self.ntfy, msg[:3500].encode("utf-8"), headers)
             self.journal("ntfy", title=title, event=event, side=side)

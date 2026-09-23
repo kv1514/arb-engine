@@ -50,6 +50,7 @@ from ..matching.normalize import game_event_key
 from ..models import OutcomeQuote
 from ..quant.arbitrage import Leg, evaluate, max_price_for_leg
 from .alerts import Alerter
+from . import ticket
 from .broker import Broker, PaperBroker, RestingOrder
 
 TICK = 0.01
@@ -439,7 +440,16 @@ class MakerRunner:
                     self.alerts.info(f"hedge-cash: not resting {w.kalshi_ticker} {w.kalshi_side} — hedge {w.hedge_label} on {w.hedge_venue} would need ${hedge_cost:.0f} on top of ${hedge_cash:.0f} already exposed (cap ${cfg.hedge_cash:g})", watch=w.key, reason="hedge-cash")
                 continue
             if w.taker_arb:
-                self.alerts.alert("TAKER ARB", f"{w.title}: buy {w.kalshi_label} on Kalshi at the ask {w.kalshi_ask:.2f} and {w.hedge_label} on {w.hedge_venue} at {w.hedge_ask:.2f} ({compliance.eligibility_note(w.hedge_venue, self.settings)}) — locks ≥ {w.margin_if_filled:.2%}", watch=w.key, event=game_event_key(w.event_key), kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=compliance.eligibility_note(w.hedge_venue, self.settings))
+                # Crossing both asks *now* is a different trade from the resting one this loop
+                # is about to place: taker fees on both legs, at the size the hedge can take.
+                size = min(float(cfg.size), float(w.hedge_size)) if w.hedge_size else float(cfg.size)
+                cross = evaluate([Leg(w.kalshi_outcome, "kalshi", w.kalshi_ask, w.kalshi_fee, role="taker", label=w.kalshi_label),
+                                  Leg(w.hedge_outcome, w.hedge_venue, w.hedge_ask, w.hedge_fee, role="taker", label=w.hedge_label)], size)
+                note = compliance.eligibility_note(w.hedge_venue, self.settings)
+                msg = ticket.arb_ticket(w.title, cross, size_note=f"{w.hedge_venue}: {note}", header="TAKER ARB", sport=w.event_key)
+                msg += f"\nkalshi {w.kalshi_ticker}" + (f"\n{w.hedge_url}" if w.hedge_url else "")
+                self.alerts.alert("TAKER ARB", msg, watch=w.key, event=game_event_key(w.event_key), ntfy_title=f"TAKER ARB {ticket.headline('', w.event_key).replace(' - ', '')}".strip(),
+                                  kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=note, contracts=size, margin=cross.margin, profit=cross.profit, cost=cross.total_cost)
             kwargs: dict[str, Any] = {"watch_key": w.key, "exchange_index": w.exchange_index}
             if self._place_accepts_resting:  # P12's SelfMatchGuard wants our own open orders on this ticker
                 kwargs["resting"] = [o for o in self._resting() if o.ticker == w.kalshi_ticker]
@@ -473,9 +483,14 @@ class MakerRunner:
             eligibility = compliance.eligibility_note(w.hedge_venue, self.settings)
             rec.update({"hedge_venue": w.hedge_venue, "hedge_label": w.hedge_label, "hedge_max_price": hedge_max, "hedge_ask_now": w.hedge_ask, "margin_if_hedged_now": now_margin, "hedge_url": w.hedge_url, "hedge_eligibility": eligibility})
             self.fills.append(rec)
-            msg = (f"filled {qty:g} x {w.kalshi_label} @ {price:.2f} on Kalshi ({o.ticker}). HEDGE NOW: buy {qty:g} x {w.hedge_label} on {w.hedge_venue} at ≤ {hedge_max if hedge_max is not None else float('nan'):.2f}"
-                   + (f" (ask now {w.hedge_ask:.2f} → margin {now_margin:.2%})" if w.hedge_ask is not None and now_margin is not None else " (hedge ask unknown)") + f" [{w.hedge_venue}: {eligibility}]" + (f"  {w.hedge_url}" if w.hedge_url else ""))
-            self.alerts.alert("HEDGE NOW", msg, **rec)
+            hedge_fee = float(w.hedge_fee.fee(w.hedge_ask, qty, "taker")) if w.hedge_ask is not None else None
+            msg = (f"{ticket.headline(w.title, w.event_key)} - HEDGE NOW\n"
+                   f"filled {qty:g} x {w.kalshi_label} @ {price:.2f} on KALSHI ({o.ticker})\n"
+                   f"{w.hedge_venue.upper()} buy {qty:g} x {w.hedge_label} @ <= {hedge_max if hedge_max is not None else float('nan'):.2f}"
+                   + (f" (ask now {w.hedge_ask:.2f} -> {ticket.money(w.hedge_ask * qty)} + {ticket.money(hedge_fee)} fee = {ticket.money(w.hedge_ask * qty + (hedge_fee or 0))}, locks {ticket.cents(now_margin)}/ct)"
+                      if w.hedge_ask is not None and now_margin is not None else " (hedge ask unknown)")
+                   + f"\n{w.hedge_venue}: {eligibility}" + (f"\n{w.hedge_url}" if w.hedge_url else ""))
+            self.alerts.alert("HEDGE NOW", msg, ntfy_title=f"HEDGE NOW {ticket.headline('', w.event_key).replace(' - ', '')}".strip(), **rec)
             if o.status != "resting":
                 w.order = None
 

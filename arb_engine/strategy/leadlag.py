@@ -89,11 +89,13 @@ class LagSignal:
     lag_s: float              # seconds since the leader's move completed
     ts: float
     url: Optional[str] = None # the follower's market page, to act on it
+    fee_total: Optional[float] = None  # the follower's fee for the whole order at ``suggested_contracts``
 
     def text(self) -> str:
-        size = f" → buy {self.suggested_contracts} ct" if self.suggested_contracts else ""
-        return (f"LAG: {self.leader} moved {self.lead_move:+.2f} on {self.title}, {self.follower} has not ({self.follower_move:+.2f}) — "
-                f"buy {self.label} on {self.follower} at {self.follower_ask:.2f} (all-in {self.follower_all_in:.3f}) vs {self.leader} mid {self.leader_mid:.3f} (+{self.edge:.1%}){size}")
+        """The signal as an order ticket (sport, venue, count, price, fee, cash)."""
+        from .ticket import lag_ticket
+
+        return lag_ticket(self, self.fee_total)
 
 
 def _mid(q: OutcomeQuote) -> Optional[float]:
@@ -219,9 +221,10 @@ class LeadLagTracker:
                     continue
                 leader_mid_out = lmid if outcome == home else 1.0 - lmid
                 try:
-                    fee = float(fee_model_for_quote(q, settings).per_contract(q.ask, 100))
+                    fee_model = fee_model_for_quote(q, settings)
+                    fee = float(fee_model.per_contract(q.ask, 100))   # gate on a size-independent fee
                 except Exception:
-                    fee = 0.0
+                    fee_model, fee = None, 0.0
                 all_in = q.ask + fee
                 edge = leader_mid_out - all_in
                 if edge < self.min_edge:
@@ -237,5 +240,11 @@ class LeadLagTracker:
                     cap = int(math.floor(bankroll * kelly_fraction / q.ask)) if q.ask > 0 else 0
                     contracts = min(cap, int(depth)) if depth is not None else cap
                     contracts = contracts if contracts > 0 else None
-                signals.append(LagSignal(event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
+                fee_total = None
+                if contracts and fee_model is not None:
+                    try:   # what the venue charges for *this* order (Kalshi rounds up per order)
+                        fee_total = float(fee_model.fee(q.ask, contracts, "taker"))
+                    except Exception:
+                        fee_total = None
+                signals.append(LagSignal(fee_total=fee_total, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

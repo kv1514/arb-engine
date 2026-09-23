@@ -628,5 +628,9 @@ class LagSignalTests(unittest.TestCase):
         self.assertEqual((l["leader"], l["follower"], l["outcome"], l["ask"]), ("robinhood", "kalshi", "KC", 0.60))
         self.assertGreater(l["edge"], 0.02)
         self.assertEqual(l["suggested_contracts"], min(300, int(500 * 0.25 / 0.60)))
-        self.assertIn("buy Kansas City on kalshi", l["text"])
+        # The overlay gets the structured fields *and* the order ticket (with the order fee).
+        self.assertIn("KALSHI buy", l["text"])
+        self.assertIn("Kansas City @ 0.60", l["text"])
+        self.assertGreater(l["fee_total"], 0)
+        self.assertAlmostEqual(l["cost_total"], round(0.60 * l["suggested_contracts"] + l["fee_total"], 2), places=2)
 

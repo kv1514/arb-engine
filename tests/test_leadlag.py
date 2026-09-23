@@ -50,7 +50,14 @@ class LeadLagTests(unittest.TestCase):
         self.assertAlmostEqual(s.follower_ask, 0.60)
         self.assertGreater(s.edge, 0.02)                      # 0.675 leader mid vs 0.60 + Kalshi fee
         self.assertEqual(s.suggested_contracts, min(500, int(500 * 0.25 / 0.60)))
-        self.assertIn("buy Kansas City on kalshi", s.text())
+        # The text is the order ticket: sport, venue, count, price, the fee for *that* order
+        # (Kalshi rounds up per order, so it is not 208 x the per-contract fee) and the cash.
+        txt = s.text()
+        self.assertTrue(txt.startswith("NFL - DEN @ KC - LAG:"), txt)
+        self.assertIn(f"KALSHI buy {s.suggested_contracts} x Kansas City @ 0.60", txt)
+        self.assertIn(f"fee = ${0.60 * s.suggested_contracts + s.fee_total:,.2f}", txt)
+        self.assertGreater(s.fee_total, 0)
+        self.assertIn("edge vs robinhood mid", txt)
         # Same poll again within the cooldown and no bigger edge: silent.
         self.assertEqual(tr.observe(KEY, "DEN @ KC", OUT, LABELS, _book(20, (0.59, 0.60), (0.66, 0.69)), now=20), [])
 
@@ -289,9 +296,11 @@ class FastLaneTests(unittest.TestCase):
             lags += ft.lags
             arbs += ft.arbs
             errors += ft.errors
-        self.assertTrue(any("buy Kansas City on kalshi at 0.60" in l for l in lags), lags)
-        # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi).
-        self.assertTrue(any("ARB +" in a and "KC on kalshi @ 0.60" in a for a in arbs), arbs)
+        self.assertTrue(any("KALSHI buy" in l and "Kansas City @ 0.60" in l for l in lags), lags)
+        # The same stale Kalshi book is also a fresh two-leg lock (DEN 0.34 on Rothera + KC 0.60 on Kalshi),
+        # and it is reported as an order ticket: sport, per-venue counts, prices, fees, totals.
+        self.assertTrue(any(a.startswith("NFL - ") and "ARB +" in a and "KALSHI buy 120 x KC YES @ 0.60" in a
+                            and "ROBINHOOD buy 120 x DEN YES @ 0.34" in a and "fee =" in a and "stake $" in a for a in arbs), arbs)
         self.assertEqual(errors, [])
         self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in slate.alerts.events))
 
@@ -432,3 +441,153 @@ class LagExecutorTests(unittest.TestCase):
         # Only a NO row for the outcome: nothing to buy on Kalshi's own market.
         q = {"kalshi": [OutcomeQuote("kalshi", "T-DEN#no", KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": "T-DEN", "side": "no"})]}
         self.assertEqual(ex.on_signal(self._sig(), q)["reason"], "no Kalshi YES row for this outcome")
+
+
+class TicketTests(unittest.TestCase):
+    """Alerts must be typeable into two order tickets without doing arithmetic on a phone."""
+
+    def _result(self, size=47.0):
+        from arb_engine.quant.arbitrage import Leg, evaluate
+        from arb_engine.fees.kalshi import KalshiFees
+        from arb_engine.fees.robinhood import RobinhoodFees
+
+        return evaluate([Leg("KC", "kalshi", 0.60, KalshiFees(), label="Kansas City"),
+                         Leg("DEN", "robinhood", 0.36, RobinhoodFees(), label="Denver")], size)
+
+    def test_arb_ticket_names_the_sport_venue_count_price_fee_and_cash(self):
+        from arb_engine.strategy import ticket
+
+        r = self._result()
+        txt = ticket.arb_ticket("DEN @ KC", r, size_note="bankroll $500.00", sport="nfl:DEN|KC:2026-09-24")
+        lines = txt.splitlines()
+        self.assertTrue(lines[0].startswith("NFL - DEN @ KC - ARB "), lines[0])
+        self.assertIn("KALSHI buy 47 x Kansas City @ 0.60", txt)
+        self.assertIn("ROBINHOOD buy 47 x Denver @ 0.36", txt)
+        # Per-leg cash: price x count, the venue's fee for that order, the sum; and the totals.
+        for leg in r.legs:
+            self.assertIn(f"${leg.price * leg.contracts:,.2f} + ${leg.fee:,.2f} fee = ${leg.cost:,.2f}", txt)
+        self.assertIn(f"stake ${r.total_cost:,.2f} -> pays ${r.payout:,.2f}", txt)
+        self.assertIn("fees are entry-only", txt)
+        self.assertIn("bankroll $500.00", txt)
+
+    def test_ticket_fees_are_the_order_fee_not_a_per_contract_fee_times_size(self):
+        from arb_engine.strategy import ticket
+
+        one, many = self._result(1.0), self._result(100.0)
+        self.assertLess(many.legs[0].fee, one.legs[0].fee * 100)      # Kalshi rounds up per order
+        self.assertIn(f"+ ${many.legs[0].fee:,.2f} fee", ticket.arb_ticket("t", many))
+
+    def test_a_ticket_that_loses_on_a_tie_says_so(self):
+        from arb_engine.quant.arbitrage import Leg, evaluate
+        from arb_engine.fees.kalshi import KalshiFees
+        from arb_engine.strategy import ticket
+
+        # Kalshi YES-A + a Rothera YES-B pays $0.50 on a tie: the "lock" loses.
+        r = evaluate([Leg("A", "kalshi", 0.50, KalshiFees(), tie_payout=0.5),
+                      Leg("B", "robinhood", 0.47, KalshiFees(), tie_payout=0.0)], 10)
+        self.assertIn("LOSES on a tie", ticket.arb_ticket("A @ B", r))
+
+    def test_near_arb_ticket_prints_the_price_each_leg_must_reach(self):
+        from arb_engine.strategy import ticket
+
+        rep = {"outcomes": [
+            {"outcome": "KC", "label": "Kansas City", "best_buy_venue": "kalshi",
+             "venues": [{"venue": "kalshi", "ask": 0.62, "all_in": 0.637, "max_buy_price": 0.61, "ask_size": 120}]},
+            {"outcome": "DEN", "label": "Denver", "best_buy_venue": "robinhood",
+             "venues": [{"venue": "robinhood", "ask": 0.38, "all_in": 0.39, "max_buy_price": 0.37, "ask_size": 45}]}]}
+        txt = ticket.near_arb_ticket("DEN @ KC", rep, -0.027, sport="nfl", bankroll=500)
+        self.assertTrue(txt.startswith("NFL - DEN @ KC - ARB CLOSE -2.7"), txt)
+        self.assertIn("KALSHI Kansas City @ 0.62 (all-in 0.6370) - locks at 0.61, 1.0\u00a2 away, depth 120", txt)
+        self.assertIn("ROBINHOOD Denver @ 0.38", txt)
+        self.assertIn("set costs $1.03/ct with fees", txt)
+        self.assertIn("ready for 45 ct (depth)", txt)   # $500 buys 486 sets; Robinhood only shows 45
+
+
+class BudgetSizingTests(unittest.TestCase):
+    def _legs(self):
+        from arb_engine.quant.arbitrage import Leg
+        from arb_engine.fees.kalshi import KalshiFees
+        from arb_engine.fees.robinhood import RobinhoodFees
+
+        return [Leg("KC", "kalshi", 0.60, KalshiFees()), Leg("DEN", "robinhood", 0.36, RobinhoodFees())]
+
+    def test_size_for_budget_fits_the_all_in_cost_not_the_gross_prices(self):
+        from arb_engine.quant.arbitrage import size_for_budget, size_from_books
+
+        legs = self._legs()
+        r = size_for_budget(legs, budget=100.0, max_contracts=500)
+        self.assertIsNotNone(r)
+        self.assertLessEqual(r.total_cost, 100.0)
+        # The gross set is 0.96, so a price-only cap would say 104 contracts and overspend.
+        self.assertLess(r.contracts, 100.0 / 0.96)
+        self.assertGreater(r.contracts, 90)
+        self.assertGreater(r.profit, 0)
+        # No budget = depth only (the old behaviour).
+        self.assertEqual(size_for_budget(legs, budget=None, max_contracts=50).contracts,
+                         size_from_books(legs, max_contracts=50).contracts)
+
+    def test_a_budget_too_small_for_one_contract_set_is_no_trade(self):
+        from arb_engine.quant.arbitrage import size_for_budget
+
+        self.assertIsNone(size_for_budget(self._legs(), budget=0.5, max_contracts=500))
+
+
+class NearArbAlertTests(unittest.TestCase):
+    """A pair that is close to locking is worth a heads-up before it crosses."""
+
+    def _slate(self, kalshi_ask, rh_ask, **kw):
+        from arb_engine.matching.matcher import MergedEvent
+        from arb_engine.models import EventInfo
+        from arb_engine.strategy.inplay import InplayView
+        from arb_engine.strategy.live import LiveSlate
+
+        t0 = 1_800_000_000.0
+        info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=kalshi_ask, bid=kalshi_ask - 0.01, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})]
+        rq = [OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=rh_ask, bid=rh_ask - 0.01, ask_size=120, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
+        view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
+        alerts = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"near_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="")
+        slate = LiveSlate([], settings={"executable_venues": "kalshi,robinhood", **kw}, alerter=alerts, bankroll=500, interval=5.0)
+        return slate, me, view, t0
+
+    def _run(self, slate, me, view, now):
+        from arb_engine.strategy.live import SlateTick
+
+        out = SlateTick(at=now, views=[], games=[])
+        slate._market_signals(me, view, out, now)
+        return out
+
+    def test_within_the_buffer_alerts_arb_close_with_the_prices_that_would_lock(self):
+        # 0.61 + 0.38 = 0.99 gross, 1.027 all-in with both fees: not a lock, 2.7c inside the buffer.
+        slate, me, view, t0 = self._slate(0.61, 0.38)
+        out = self._run(slate, me, view, t0 + 1)
+        alerts = [e for e in slate.alerts.events if e["kind"] == "alert"]
+        self.assertEqual([a["title"] for a in alerts], ["ARB CLOSE"])
+        msg = alerts[0]["msg"]
+        self.assertTrue(msg.startswith("NFL - DEN @ KC - ARB CLOSE -"), msg)
+        self.assertIn("KALSHI Kansas City @ 0.61", msg)
+        self.assertIn("ROBINHOOD Denver @ 0.38", msg)
+        self.assertIn("locks at", msg)
+        self.assertTrue(any("ARB CLOSE" in a for a in out.arbs), out.arbs)
+        # Same gap again inside arb_near_every_s: silent (a phone buzzing every 5 s is noise).
+        self._run(slate, me, view, t0 + 20)
+        self.assertEqual(len([e for e in slate.alerts.events if e["kind"] == "alert"]), 1)
+
+    def test_a_gap_wider_than_the_buffer_is_silent(self):
+        slate, me, view, t0 = self._slate(0.62, 0.45)     # ~7c over: not close
+        self._run(slate, me, view, t0 + 1)
+        self.assertEqual([e for e in slate.alerts.events if e["kind"] == "alert"], [])
+
+    def test_an_actual_lock_alerts_arb_not_arb_close(self):
+        slate, me, view, t0 = self._slate(0.58, 0.36)     # 0.94 gross: a real lock
+        self._run(slate, me, view, t0 + 1)
+        alerts = [e for e in slate.alerts.events if e["kind"] == "alert"]
+        self.assertEqual([a["title"] for a in alerts], ["ARB"])
+        self.assertIn("stake $", alerts[0]["msg"])
+        self.assertIn("KALSHI buy", alerts[0]["msg"])
+
+    def test_the_buffer_is_a_setting(self):
+        slate, me, view, t0 = self._slate(0.62, 0.45, arb_near_margin=0.15)   # 10.7c short, buffer 15c
+        self._run(slate, me, view, t0 + 1)
+        self.assertEqual([e["title"] for e in slate.alerts.events if e["kind"] == "alert"], ["ARB CLOSE"])

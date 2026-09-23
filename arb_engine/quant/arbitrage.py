@@ -345,3 +345,27 @@ def size_from_books(legs: Sequence[Leg], max_contracts: Optional[float] = None, 
         if r is not None and (best is None or r.profit > best.profit):
             best = r
     return best
+
+
+def size_for_budget(legs: Sequence[Leg], budget: Optional[float], min_margin: float = 0.0, step: float = 1.0, max_contracts: Optional[float] = None) -> Optional[ArbResult]:
+    """``size_from_books`` capped by the dollars on hand rather than only by depth.
+
+    A bankroll cap cannot be applied after the fact by scaling a per-contract margin: fees
+    round up per order and deeper fills cost more, so both the cost and the margin at 47
+    contracts differ from 100 x (the numbers at 100). Here the size is re-evaluated at each
+    candidate cap until the *all-in* cost (prices + fees) fits the budget, so every number a
+    ticket prints is the one the venue will charge. ``budget`` None = depth only.
+    """
+    cap = max_contracts
+    for _ in range(8):
+        r = size_from_books(legs, max_contracts=cap, min_margin=min_margin, step=step)
+        if r is None or budget is None or r.total_cost <= float(budget) + 1e-9:
+            return r
+        per_set = r.total_cost / r.contracts if r.contracts else None
+        if not per_set:
+            return None
+        nxt = float(int(float(budget) / per_set / step) * step)   # the most sets the budget buys at this cost
+        if nxt < step or nxt >= r.contracts:   # cannot shrink further: the smallest order is already too dear
+            return None
+        cap = nxt
+    return None

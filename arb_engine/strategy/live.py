@@ -37,6 +37,7 @@ from .inplay import FeedFreshness, InplayView, SideView, _call_optional, call_st
 from .fastlane import FastLane
 from .leadlag import LagSignal, LeadLagTracker
 from .lagexec import LagExecutor
+from . import ticket
 from .paperlag import LagPaperBook
 
 try:  # the settings registry (config.declare_setting); this module must import without it
@@ -47,6 +48,8 @@ if _declare_setting is not None:
     try:
         _declare_setting("inplay_quiet", env="INPLAY_QUIET", default=False, cast=lambda s: str(s).strip().lower() in ("1", "true", "yes", "on"), doc="live slate: print only STEAL / LOCK / GATED lines and a one-line summary per tick")
         _declare_setting("inplay_idle_every_s", env="INPLAY_IDLE_EVERY_S", default=60.0, cast=float, doc="live slate: seconds between ticks while no game is live or within the pre-game window (a recorder can then run all week)")
+        _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
+        _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=300.0, cast=float, doc="live slate: seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent")
     except Exception:  # pragma: no cover
         pass
 
@@ -92,6 +95,9 @@ class LiveSlate:
         # arbs (ARB) — both need no ESPN state, so they run on every priced event, in play or not.
         self.leadlag = LeadLagTracker.from_settings(self.settings, executable=self.executable_venues, fresh_s=max(10.0, float(interval)))
         self._arb_last: dict[str, float] = {}                     # event_key -> last ARB alert time
+        self._near_last: dict[str, tuple[float, float]] = {}       # event_key -> (last ARB CLOSE time, margin then)
+        self.near_margin = float(setting(self.settings, "arb_near_margin", 0.03) or 0.0)
+        self.near_every = float(setting(self.settings, "arb_near_every_s", 300.0) or 300.0)
         # Fast lane: 1 s top-of-book refreshes of Kalshi + Robinhood for the live games between
         # full ticks (``fast`` seconds; 0 = off). Built from the adapters this slate already has.
         self.fast = float(fast or 0.0)
@@ -342,23 +348,31 @@ class LiveSlate:
         try:
             from ..scanner import analyze_event
 
-            rep = analyze_event(me, self.settings, contracts=self.contracts, target_margin=self.target_margin, max_quote_age=max(10.0, float(self.interval)), now=now, executable_venues=self.executable_venues)
+            # The bankroll is passed in as the budget so the sized legs (and their fees) are
+            # the order that can be paid for, not a reference 100-lot scaled afterwards.
+            rep = analyze_event(me, self.settings, contracts=self.contracts, target_margin=self.target_margin, max_quote_age=max(10.0, float(self.interval)), now=now, executable_venues=self.executable_venues, budget=self.bankroll or None)
             arb = rep.arb or {}
-            if arb.get("is_arb") and rep.fillable and "stale-quote" not in (rep.flags or []):
-                legs = ", ".join(f"{l.get('label') or l.get('outcome')} on {l['venue']} @ {l['price']:.2f}" for l in arb.get("legs", []))
-                sized = dict(rep.sized_arb or {})
-                if sized.get("contracts") and self.bankroll:
-                    # Depth can be thousands of contracts; the operator's bankroll is the real cap.
-                    cost = sum(float(l["price"]) for l in arb.get("legs", [])) or 1.0
-                    cap = int(self.bankroll // cost)
-                    if cap < sized["contracts"]:
-                        sized = {**sized, "contracts": cap, "profit": round(float(arb.get("margin", 0)) * cap, 2), "capped_by": "bankroll"}
-                text = f"ARB {arb.get('margin', 0):+.2%} after fees: {legs}" + (f" → {int(sized['contracts'])} contracts, profit ${sized.get('profit', 0):.2f}" + (" (bankroll cap)" if sized.get("capped_by") else "") if sized.get("contracts") else "")
-                out.arbs.append(f"{view.title}: {text}")
+            stale = "stale-quote" in (rep.flags or [])
+            if arb.get("is_arb") and rep.fillable and not stale:
+                sized = rep.sized_arb or arb
+                note = (f"depth-capped" if not self.bankroll else f"bankroll {ticket.money(self.bankroll)}")
+                text = ticket.arb_ticket(view.title, sized, size_note=note, sport=rep.sport or me.event_key)
+                out.arbs.append(text)
                 self._counts.setdefault(me.event_key, {"lag": 0, "arb": 0})["arb"] += 1
                 if now - self._arb_last.get(me.event_key, -1e18) >= 30.0:
                     self._arb_last[me.event_key] = now
-                    _call_optional(self.alerts.alert, "ARB", f"{view.title}: {text}", event=view.event_key, margin=arb.get("margin"), legs=arb.get("legs"), contracts=sized.get("contracts"))
+                    _call_optional(self.alerts.alert, "ARB", text, event=view.event_key, ntfy_title=f"ARB {ticket.SPORT_NAMES.get(rep.sport or '', (rep.sport or '').upper())}".strip(),
+                                   margin=sized.get("margin"), legs=sized.get("legs"), contracts=sized.get("contracts"), cost=sized.get("total_cost"), profit=sized.get("profit"))
+            elif not stale and arb.get("margin") is not None and self.near_margin > 0 and -self.near_margin <= float(arb["margin"]) < 0:
+                # Nearly a lock: alert once per ``arb_near_every_s`` and again whenever the gap
+                # shrank by a cent, so the phone says "get ready" before the pair crosses.
+                m = float(arb["margin"])
+                last_t, last_m = self._near_last.get(me.event_key, (-1e18, -1.0))
+                if now - last_t >= self.near_every or m >= last_m + 0.01:
+                    self._near_last[me.event_key] = (now, m)
+                    text = ticket.near_arb_ticket(view.title, rep, m, sport=rep.sport or me.event_key, bankroll=self.bankroll or None)
+                    out.arbs.append(text)
+                    _call_optional(self.alerts.alert, "ARB CLOSE", text, event=view.event_key, ntfy_title=f"ARB CLOSE {ticket.SPORT_NAMES.get(rep.sport or '', (rep.sport or '').upper())}".strip(), margin=m)
         except Exception as e:
             out.errors.append(f"arb: {e!r}")
 
