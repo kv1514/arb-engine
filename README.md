@@ -315,7 +315,7 @@ repo, capped and journalled, and a per-call confirmation cannot be answered insi
 
 ## Status (2026-09-19)
 
-Live data verified for all three venues; **793 Python tests** and the JS suites
+Live data verified for all three venues; **794 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results

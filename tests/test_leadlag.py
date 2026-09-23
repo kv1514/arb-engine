@@ -147,11 +147,23 @@ class NtfyTests(unittest.TestCase):
         b.alert("STEAL", "y", event="nfl:PHI|TEN")
         self.assertEqual(len(self.sent), 2)
 
+    def test_lag_is_journalled_but_not_pushed_unless_opted_in(self):
+        # A LAG is a one-sided bet, not an arb, and failed the executable re-run: it runs in
+        # the background (journal, paper book, demo executor) and is pushed only on request.
+        a = self._alerter()
+        a.alert("LAG", "bet", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)
+        a.alert("ARB", "lock", event="e1")
+        self.assertEqual([b for _, b, _ in self.sent], ["lock"])
+        self.assertTrue(any(e["kind"] == "alert" and e["title"] == "LAG" for e in a.events))
+        b = self._alerter(ntfy_kinds=["ARB", "LAG"])
+        b.alert("LAG", "bet", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)
+        self.assertEqual(self.sent[-1][1], "bet")
+
     def test_throttle_per_title_event_side_but_never_hedge_now(self):
         a = self._alerter(min_interval_s=60)
-        a.alert("LAG", "one", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)
-        a.alert("LAG", "two", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)   # throttled
-        a.alert("LAG", "three", event="e1", outcome="DEN", venue="kalshi", ask=0.4, all_in=0.41, fair=0.5)  # other side: pushed
+        a.alert("ARB", "one", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)
+        a.alert("ARB", "two", event="e1", outcome="KC", venue="kalshi", ask=0.6, all_in=0.61, fair=0.68)   # throttled
+        a.alert("ARB", "three", event="e1", outcome="DEN", venue="kalshi", ask=0.4, all_in=0.41, fair=0.5)  # other side: pushed
         self.assertEqual([b for _, b, _ in self.sent], ["one", "three"])
         self.assertTrue(any(e["kind"] == "ntfy_throttled" for e in a.events))
         for i in range(3):

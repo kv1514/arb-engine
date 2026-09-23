@@ -34,7 +34,12 @@ STEAL_EXTRA_FIELDS = ("signal_kind", "leader", "lead_move", "follower_move")
 
 
 NTFY_DEFAULT_URL = "https://ntfy.sh"
-NTFY_DEFAULT_KINDS = ("ARB", "ARB CLOSE", "LAG", "EXEC ERROR", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
+# LAG is not pushed by default (2026-09-22): a LAG is a one-sided convergence bet, not an
+# arbitrage, and the discovery re-run with executable accounting lost ~6c/contract on it
+# (docs/MODEL.md). It still runs in the background - journalled, paper-traded, and
+# demo-executed with --execute-lag - until the validation fold shows it pays at 1 s.
+# Opt back in with ARB_ALERT_NTFY_KINDS=...,LAG.
+NTFY_DEFAULT_KINDS = ("ARB", "ARB CLOSE", "EXEC ERROR", "HEDGE NOW", "TAKER ARB", "EXCHANGE PAUSED", "HEDGE VENUE NOT EXECUTABLE", "FINAL")
 # Kinds throttled per game rather than per (game, side): the maker rates every spread and
 # total line of a game in one pass, and one push per game per minute (the best-margin line
 # comes first, the watches are ranked) beats eight in three seconds.

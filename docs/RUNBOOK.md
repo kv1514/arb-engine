@@ -93,9 +93,7 @@ scripts/sunday.sh restart live                  # if the recorders are already r
 
 3. What gets pushed, by default: **ARB** (a fresh two-leg lock, fees and depth checked),
    **ARB CLOSE** (within `arb_near_margin`, 3¢ per contract, of locking — the heads-up
-   before it crosses), **LAG** (one venue repriced, the other has not — buy the laggard; with
-   `--execute-lag` on, the push's last line says what the auto-trader did: `AUTO (demo): sent
-   IOC buy 50 x … -> filled 12.00`), **EXEC ERROR** (the auto-trader's order failed — loud on
+   before it crosses), **EXEC ERROR** (the auto-trader's order failed — loud on
    purpose, one per game per minute),
    **HEDGE NOW** (a paper maker fill), **FINAL** (one line per finished game: score, LAG/ARB
    counts, paper-book result), TAKER ARB, EXCHANGE PAUSED. STEAL and LOCK NOW are not pushed
@@ -106,6 +104,15 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    a cent, and HEDGE NOW is never throttled. The full text is in `out/live_journal.jsonl`
    (`"kind": "alert"`); pushes are logged as `"kind": "ntfy"`, throttled ones as
    `ntfy_throttled`.
+
+   **LAG is not pushed** (since 2026-09-22). A LAG is a one-sided bet that the slower venue
+   catches up, not an arbitrage, and the re-run of the first Sunday with executable
+   accounting lost ~6c per contract on it (docs/MODEL.md). It keeps running in the
+   background - every signal journalled, paper-traded and, with `--execute-lag demo`,
+   demo-executed - so the validation games can show whether it pays at the fast lane's 1 s.
+   To see LAG pushes anyway: `ARB_ALERT_NTFY_KINDS=ARB,ARB\ CLOSE,LAG,EXEC\ ERROR,HEDGE\ NOW,TAKER\ ARB,FINAL`
+   before `sunday.sh restart live`. Each LAG push ends with what the auto-trader did
+   (`AUTO (demo): sent IOC buy 50 x ... -> filled 12.00`).
 
 4. **Reading a push.** The phone's bold line is the kind and the sport (`ARB NFL`); the body
    is an order ticket, one line per venue, and nothing in it needs arithmetic:
