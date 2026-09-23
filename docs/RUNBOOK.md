@@ -135,6 +135,38 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    set costs $1.04/ct with fees; needs $0.04/ct more of move; ready for 150 ct (depth)
    ```
 
+## 1c0. Connect your Kalshi account (5 minutes, done once)
+
+Only you can do the first two steps — they happen while signed in to Kalshi, and the private
+key must never be pasted into a chat, a commit or a file in this repo.
+
+1. **Create a key.** Start on the demo exchange (https://demo.kalshi.co, a separate sign-up with
+   play money) so the executor can be proven before real money is involved; do the same on
+   kalshi.com later. Account → **API Keys** → **Create key**. Kalshi shows a **Key ID** and
+   downloads a **private key file** once — it cannot be downloaded again.
+2. **Put the file somewhere only you can read it** and write the two settings into
+   `~/.kalshi/env` (the launcher and the checker read it; values here are the ID and a *path*,
+   not the key itself):
+
+```bash
+mkdir -p ~/.kalshi && chmod 700 ~/.kalshi
+mv ~/Downloads/<the-downloaded-file> ~/.kalshi/demo.key && chmod 600 ~/.kalshi/demo.key
+printf 'export KALSHI_ENV=demo\nexport KALSHI_API_KEY=%s\nexport KALSHI_PRIVATE_KEY_PATH=~/.kalshi/demo.key\n' 'PASTE-KEY-ID' > ~/.kalshi/env
+```
+
+3. **Check it** (read-only: one signed balance read, nothing placed or cancelled):
+
+```bash
+python3 scripts/kalshi_connect.py
+```
+
+   `CONNECTED: cash $…` means the engine can sign as you. A `401` at the last step is almost
+   always a demo key on the production host (or the reverse) or a Key ID that belongs to a
+   different file; the checker says which. For the two Kalshi MCP servers in `.mcp.json` to see
+   the key too, add `[ -f ~/.kalshi/env ] && source ~/.kalshi/env` to `~/.zshrc` and restart
+   Claude Code. Those servers are for looking (markets, balance, positions, fills); orders go
+   through the engine's own capped executor below.
+
 ## 1c. Acting on LAG automatically (needs your Kalshi API key)
 
 A LAG lives ~23 s; reading a push and typing an order is slower. `live --execute-lag` sends

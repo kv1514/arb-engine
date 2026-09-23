@@ -2,7 +2,10 @@
   "mcpServers": {
     "kalshi": {
       "command": "python3",
-      "args": ["-c", "from mcp_server_kalshi.server import main; main()"],
+      "args": [
+        "-c",
+        "from mcp_server_kalshi.server import main; main()"
+      ],
       "env": {
         "KALSHI_ENV": "${KALSHI_ENV:-demo}",
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",
@@ -11,11 +14,14 @@
     },
     "kalshi-api": {
       "command": "/Users/kv15/Documents/GitHub/kalshi-mcp/.venv/bin/python",
-      "args": ["-m", "kalshi_mcp.server"],
+      "args": [
+        "-m",
+        "kalshi_mcp.server"
+      ],
       "cwd": "/Users/kv15/Documents/GitHub/kalshi-mcp",
       "env": {
         "KALSHI_ENV": "${KALSHI_ENV:-demo}",
-        "KALSHI_API_KEY_ID": "${KALSHI_API_KEY_ID}",
+        "KALSHI_API_KEY_ID": "${KALSHI_API_KEY}",
         "KALSHI_PRIVATE_KEY_PATH": "${KALSHI_PRIVATE_KEY_PATH}"
       }
     }

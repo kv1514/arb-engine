@@ -48,6 +48,18 @@ for _s in $(echo "$EXTRA_SPORTS" | tr ',' ' '); do [ -n "$_s" ] && [ "$_s" != "$
 # The ntfy topic persists in out/run/ntfy_topic.txt (`sunday.sh ntfy <topic>` sets it); an
 # exported ARB_ALERT_NTFY wins.
 if [ -z "${ARB_ALERT_NTFY:-}" ] && [ -f "$ROOT/out/run/ntfy_topic.txt" ]; then export ARB_ALERT_NTFY="$(cat "$ROOT/out/run/ntfy_topic.txt")"; fi
+# Kalshi credentials (the key ID and the *path* to the private-key file, never the key itself)
+# may live in ~/.kalshi/env as `export KALSHI_...=...` lines; an exported variable wins. The
+# file is parsed, not sourced, so nothing in it can run. Check with scripts/kalshi_connect.py.
+if [ -f "$HOME/.kalshi/env" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#export }"
+    case "$line" in KALSHI_[A-Z_]*=*) ;; *) continue ;; esac
+    name="${line%%=*}"; value="${line#*=}"; value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
+    case "$value" in "~/"*) value="$HOME/${value#\~/}" ;; esac
+    [ -z "$(printenv "$name")" ] && export "$name=$value"
+  done < "$HOME/.kalshi/env"
+fi
 
 usage() { sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
