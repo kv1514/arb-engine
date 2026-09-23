@@ -139,3 +139,23 @@ class WeekScanTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_run_sweeps_in_the_background_while_the_fast_watch_keeps_going(self):
+        """A slow sweep must not stop the fast watch: sweeps run on their own thread."""
+        import time as _t
+
+        near = _event("nfl:BUF|MIA:2026-09-27", 0.61, 0.38)
+        slow = _Scan([near])
+
+        def slow_scan(*a, **k):
+            _t.sleep(0.4)                                    # a sweep far slower than a fast step
+            return slow(*a, **k)
+        lane = _Lane()
+        ws = WeekScanner(["nfl"], [], self.alerts, {}, bankroll=500, scan_fn=slow_scan, fastlane=lane, full_every_s=0.5, fast_every_s=0.05)
+        lines = []
+        ws.run(duration=1.2, printer=lines.append)
+        self.assertGreaterEqual(ws.stats["sweeps"], 1)
+        self.assertGreater(lane.steps, 5)                    # fast checks ran during and between sweeps
+        self.assertTrue(any("fast checks since the last one" in l for l in lines), lines)
+        self.assertFalse(any("error" in l for l in lines), lines)
+

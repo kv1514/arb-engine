@@ -154,6 +154,32 @@ class RobinhoodAdapterTests(unittest.TestCase):
         self.http = FakeHttp({"/us/en/prediction-markets/nfl/": html, "/marketdata/event/contract/quotes/v1/": quotes})
         self.adapter = RobinhoodAdapter(http=self.http)
 
+    def test_prices_the_refresh_did_not_return_keep_the_catalogues_age(self):
+        """A refresh that fails - or silently drops contracts - must not pass the cached page's
+        prices off as fresh: they keep the page's own time, so max_quote_age drops them."""
+        cached_at = 1_700_000_000.0
+        pp = dict(self.pp, cached_at=cached_at)
+        ad = RobinhoodAdapter(http=self.http)
+        ad.category_page = lambda category, use_cache=True: pp
+
+        def boom(ids, *a, **k):
+            raise RuntimeError("429 Too Many Requests")
+        ad.quotes = boom
+        snap = ad.fetch("nfl")
+        self.assertTrue(snap.quotes)
+        self.assertTrue(all(q.ts == cached_at for q in snap.quotes))
+        self.assertTrue(any("quotes refresh" in e for e in snap.errors))
+        # A refresh that answers for some contracts only: those are fresh, the rest are not.
+        ids = [c for c in self.pp["quotes"]]
+        half = set(ids[: len(ids) // 2])
+        ad.quotes = lambda want, *a, **k: {i: self.pp["quotes"][i] for i in want if i in half}
+        snap = ad.fetch("nfl")
+        fresh = [q for q in snap.quotes if q.ts != cached_at]
+        stale = [q for q in snap.quotes if q.ts == cached_at]
+        self.assertTrue(fresh and stale)
+        self.assertTrue(all(q.venue_market_id.split("#")[0] in half for q in fresh))
+        self.assertTrue(any("not refreshed" in e for e in snap.errors))
+
     def test_extract_next_data(self):
         self.assertIn("events", extract_next_data('<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"events":[]}}}</script>')["props"]["pageProps"])
         with self.assertRaises(ValueError):

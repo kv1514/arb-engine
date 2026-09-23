@@ -172,6 +172,14 @@ class RobinhoodAdapter:
                 return extract_next_data(html)["props"]["pageProps"]
             raise
 
+    def _quote_ts(self, contract_id: Any, fetched_at: float) -> float:
+        """When this contract's price was really observed (see the refresh in snapshot)."""
+        fresh = getattr(self, "_fresh_ids", None)
+        if fresh is None or contract_id in fresh:
+            return fetched_at
+        stale = getattr(self, "_stale_ts", None)
+        return float(stale) if stale else fetched_at
+
     def category_page(self, category: str, use_cache: bool = True) -> dict:
         path = os.path.join(self.cache_dir, f"robinhood_{category}_catalogue.json") if self.cache_dir else None
         if use_cache and path and self.catalogue_ttl > 0 and os.path.exists(path) and time.time() - os.path.getmtime(path) < self.catalogue_ttl:
@@ -247,12 +255,24 @@ class RobinhoodAdapter:
         states: dict[str, dict] = dict(pp.get("eventStates") or {})
         events = self.select_game_events(sport, pp.get("events") or [])
         lines = self.select_line_contracts(sport, pp.get("events") or []) if self.with_lines else []
+        # Prices are only as fresh as their source: a contract the quotes API answered for is
+        # stamped now; one it did not (the refresh failed, or dropped a batch) keeps the
+        # catalogue page's own time, so a 30-minute-old cached price reads as 30 minutes old and
+        # the scanner's max_quote_age drops it instead of pricing an arb on it.
+        self._fresh_ids: Optional[set] = None
+        self._stale_ts = pp.get("cached_at")
         if self.refresh_quotes:
             ids = [c["id"] for ev in events for c in ev["contracts"]] + [x["contract"]["id"] for x in lines]
+            self._fresh_ids = set()
             try:
-                quotes.update(self.quotes(ids))
+                got = self.quotes(ids)
+                quotes.update(got)
+                self._fresh_ids = set(got)
             except Exception as e:
                 snap.errors.append(f"quotes refresh: {e}")
+            missing = len(set(ids) - self._fresh_ids)
+            if missing and ids:
+                snap.errors.append(f"quotes refresh: {missing} of {len(set(ids))} contracts not refreshed (their prices keep the catalogue's age)")
         self.ingest(snap, sport, category, events, quotes, states, emit_no_side=emit_no_side)
         if lines:
             self.ingest_lines(snap, sport, category, lines, quotes, states)
@@ -341,7 +361,7 @@ class RobinhoodAdapter:
                 meta = {"symbol": c.get("symbol"), "exchange": exch, "state": qd.get("state"), "last": _f(qd.get("last_trade_price")), "updated_at": qd.get("updated_at"), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price")), "side": "yes", "contract_id": c["id"]}
                 if tie_side is not None:
                     meta["tie_payout"] = tie_side
-                common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": c.get("symbol"), "exchange_enum": c.get("exchange")}, url=url, ts=snap.fetched_at, book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
+                common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": c.get("symbol"), "exchange_enum": c.get("exchange")}, url=url, ts=self._quote_ts(c.get("id"), snap.fetched_at), book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
                 q = OutcomeQuote(
                     venue_market_id=c["id"], outcome=codes[i], outcome_label=names[i],
                     ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), bid_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")),
@@ -433,7 +453,7 @@ class RobinhoodAdapter:
             info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=outcomes, labels=labels, start_time=start, line=line, tie_rule=push_rule_for_line(line), venues={self.venue: {"event_id": ev.get("id"), "contract_id": c["id"], "slug": slug, "url": url, "exchange": exch}, "_teams": {"title": _pair_title(pair, sport)}}, in_play=_in_play_from_progress(progress, st.get("eventStatus")))
             snap.events.setdefault(key, info)
             qd = quotes.get(c["id"]) or {}
-            common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": sym}, url=url, ts=snap.fetched_at, book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
+            common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": sym}, url=url, ts=self._quote_ts(c.get("id"), snap.fetched_at), book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
             snap.quotes.append(OutcomeQuote(venue_market_id=c["id"], outcome=yes_key, outcome_label=labels[yes_key], ask=_f(qd.get("yes_ask_price")), bid=_f(qd.get("yes_bid_price")), ask_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), bid_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), meta={"symbol": sym, "exchange": exch, "side": "yes", "line": line, "contract_id": c["id"]}, **common))
             snap.quotes.append(OutcomeQuote(venue_market_id=c["id"] + "#no", outcome=no_key, outcome_label=labels[no_key], ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), meta={"symbol": sym, "exchange": exch, "side": "no", "line": line, "contract_id": c["id"]}, **common))
 
