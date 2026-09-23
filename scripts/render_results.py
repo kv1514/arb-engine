@@ -389,6 +389,33 @@ def render_micro_synthetic(d: dict) -> dict[str, str]:
     return {"micro_synthetic": table(["candidate", "MAE", "persistence MAE", "skill", "decision"], [[d["candidate"], f3(d["mae"]), f3(d["persistence_mae"]), signed4(d["skill_vs_persistence"]), d["decision"]]])}
 
 
+def render_micro_discovery(d: dict) -> dict[str, str]:
+    """Discovery fold of scripts/microstructure_eval.py: per-contract net return (both fees,
+    IOC at the decision ask after the latency) with the game-bootstrap 90 % interval."""
+    def cell(m: dict) -> str:
+        mr = m.get("mean_ret") or {}
+        if mr.get("point") is None:
+            return "-"
+        return f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}] ({m['trades']}/{m['attempts']})"
+    rows = []
+    for h in ("5", "15", "30", "60"):
+        hr = d["horizons"][h]
+        rows.append([f"{h} s", cell(hr["B1_buy_any"]), cell(hr["H1_momentum"]), cell(hr["H2_dip"]), cell(hr["H3_leadlag"])])
+    trades = table(["horizon", "B1 buy at random", "H1 momentum", "H2 dip", "H3 lead-lag"], rows)
+    fc = []
+    for h in ("5", "15", "30", "60"):
+        for name, label in (("B3_ridge_dmid30", "B3 ridge on dmid_30"), ("B4_ridge_gap", "B4 ridge on leader gap")):
+            m = d["horizons"][h][name]
+            sk = m.get("skill_ci") or {}
+            fc.append([f"{h} s", label, f"{m['mae_model'] * 100:.3f}c", f"{m['mae_persistence'] * 100:.3f}c", f"[{sk['lo'] * 100:+.3f}, {sk['hi'] * 100:+.3f}]c"])
+    forecast = table(["horizon", "model", "MAE", "unchanged-price MAE", "skill 90 % CI"], fc)
+    a = d["H4_arb"]
+    ar = a.get("mean_ret") or {}
+    arb = table(["attempts", "completed", "fill rate", "mean per contract", "90 % CI", "games positive"],
+                [[str(a["attempts"]), str(a["trades"]), f"{a['fill_rate']:.0%}", f"{ar['point'] * 100:+.2f}c", f"[{ar['lo'] * 100:+.2f}, {ar['hi'] * 100:+.2f}]c", f"{a['positive_game_share']:.0%}"]])
+    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb}
+
+
 # ---- registry ---------------------------------------------------------------------------------
 
 RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
@@ -403,6 +430,7 @@ RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
     "lines_eval_p13": render_lines_eval_p13,
     "arb_fixture_p09": render_arb_fixture_p09,
     "micro_synthetic": render_micro_synthetic,
+    "micro_discovery": render_micro_discovery,
 }
 
 

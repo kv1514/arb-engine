@@ -1,0 +1,395 @@
+{
+  "H4_arb": {
+    "attempts": 164,
+    "fill_rate": 0.59146,
+    "games": 10,
+    "hit_rate": 0.42268,
+    "max_drawdown_per_contract": 0.424,
+    "mean_ret": {
+      "hi": 0.0146,
+      "lo": -0.00845,
+      "point": 0.00257
+    },
+    "positive_game_share": 0.4,
+    "top_game_share": 0.27074,
+    "trades": 97
+  },
+  "caveat": "discovery games designed the LAG rule: descriptive, not evidence; legacy 5 s timestamps",
+  "experiment": "microstructure",
+  "finals": 3,
+  "fold": "discovery",
+  "games": 15,
+  "holm_pass": {
+    "H1_momentum@15": false,
+    "H1_momentum@30": false,
+    "H1_momentum@5": false,
+    "H1_momentum@60": false,
+    "H2_dip@15": false,
+    "H2_dip@30": false,
+    "H2_dip@5": false,
+    "H2_dip@60": false,
+    "H3_leadlag@15": false,
+    "H3_leadlag@30": false,
+    "H3_leadlag@5": false,
+    "H3_leadlag@60": false
+  },
+  "horizons": {
+    "15": {
+      "B1_buy_any": {
+        "attempts": 31127,
+        "fill_rate": 0.58348,
+        "games": 13,
+        "hit_rate": 0.02665,
+        "max_drawdown_per_contract": 730.58972,
+        "mean_ret": {
+          "hi": -0.03614,
+          "lo": -0.04319,
+          "point": -0.04023
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.158,
+        "trades": 18162
+      },
+      "B3_ridge_dmid30": {
+        "beta_median": 0.02192,
+        "games": 14,
+        "mae_model": 0.00422,
+        "mae_persistence": 0.00403,
+        "n": 34371,
+        "skill_ci": {
+          "hi": -0.00015,
+          "lo": -0.00024,
+          "point": -0.0002
+        }
+      },
+      "B4_ridge_gap": {
+        "beta_median": 0.03604,
+        "games": 14,
+        "mae_model": 0.00543,
+        "mae_persistence": 0.0044,
+        "n": 32318,
+        "skill_ci": {
+          "hi": -0.00083,
+          "lo": -0.0013,
+          "point": -0.00103
+        }
+      },
+      "H1_momentum": {
+        "attempts": 194,
+        "fill_rate": 0.59794,
+        "games": 10,
+        "hit_rate": 0.02586,
+        "max_drawdown_per_contract": 5.02964,
+        "mean_ret": {
+          "hi": -0.03822,
+          "lo": -0.04668,
+          "point": -0.04336
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.23401,
+        "trades": 116
+      },
+      "H2_dip": {
+        "attempts": 232,
+        "fill_rate": 0.52586,
+        "games": 10,
+        "hit_rate": 0.02459,
+        "max_drawdown_per_contract": 6.206,
+        "mean_ret": {
+          "hi": -0.0466,
+          "lo": -0.05527,
+          "point": -0.05087
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.21092,
+        "trades": 122
+      },
+      "H3_leadlag": {
+        "attempts": 111,
+        "fill_rate": 0.42342,
+        "games": 11,
+        "hit_rate": 0.06383,
+        "max_drawdown_per_contract": 2.63,
+        "mean_ret": {
+          "hi": -0.03264,
+          "lo": -0.07787,
+          "point": -0.05596
+        },
+        "positive_game_share": 0.09091,
+        "top_game_share": 0.26904,
+        "trades": 47
+      },
+      "coverage": 0.62982
+    },
+    "30": {
+      "B1_buy_any": {
+        "attempts": 31127,
+        "fill_rate": 0.58142,
+        "games": 13,
+        "hit_rate": 0.04536,
+        "max_drawdown_per_contract": 732.9511,
+        "mean_ret": {
+          "hi": -0.03628,
+          "lo": -0.04352,
+          "point": -0.0405
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.16262,
+        "trades": 18098
+      },
+      "B3_ridge_dmid30": {
+        "beta_median": 0.0324,
+        "games": 14,
+        "mae_model": 0.00893,
+        "mae_persistence": 0.00877,
+        "n": 46838,
+        "skill_ci": {
+          "hi": -0.00013,
+          "lo": -0.00019,
+          "point": -0.00016
+        }
+      },
+      "B4_ridge_gap": {
+        "beta_median": 0.0851,
+        "games": 14,
+        "mae_model": 0.011,
+        "mae_persistence": 0.00881,
+        "n": 41981,
+        "skill_ci": {
+          "hi": -0.00182,
+          "lo": -0.00268,
+          "point": -0.00219
+        }
+      },
+      "H1_momentum": {
+        "attempts": 194,
+        "fill_rate": 0.59278,
+        "games": 10,
+        "hit_rate": 0.12174,
+        "max_drawdown_per_contract": 4.29664,
+        "mean_ret": {
+          "hi": -0.03057,
+          "lo": -0.04445,
+          "point": -0.03736
+        },
+        "positive_game_share": 0.1,
+        "top_game_share": 0.24251,
+        "trades": 115
+      },
+      "H2_dip": {
+        "attempts": 232,
+        "fill_rate": 0.52155,
+        "games": 10,
+        "hit_rate": 0.09917,
+        "max_drawdown_per_contract": 7.028,
+        "mean_ret": {
+          "hi": -0.04391,
+          "lo": -0.07034,
+          "point": -0.05808
+        },
+        "positive_game_share": 0.1,
+        "top_game_share": 0.25642,
+        "trades": 121
+      },
+      "H3_leadlag": {
+        "attempts": 111,
+        "fill_rate": 0.42342,
+        "games": 11,
+        "hit_rate": 0.06383,
+        "max_drawdown_per_contract": 3.127,
+        "mean_ret": {
+          "hi": -0.02862,
+          "lo": -0.09049,
+          "point": -0.06098
+        },
+        "positive_game_share": 0.09091,
+        "top_game_share": 0.26564,
+        "trades": 47
+      },
+      "coverage": 0.87963
+    },
+    "5": {
+      "B1_buy_any": {
+        "attempts": 31127,
+        "fill_rate": 0.58589,
+        "games": 14,
+        "hit_rate": 0.01014,
+        "max_drawdown_per_contract": 737.94402,
+        "mean_ret": {
+          "hi": -0.03644,
+          "lo": -0.04339,
+          "point": -0.04046
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.15756,
+        "trades": 18237
+      },
+      "B3_ridge_dmid30": {
+        "beta_median": 0.00609,
+        "games": 14,
+        "mae_model": 0.00158,
+        "mae_persistence": 0.00149,
+        "n": 26917,
+        "skill_ci": {
+          "hi": -8e-05,
+          "lo": -0.0001,
+          "point": -9e-05
+        }
+      },
+      "B4_ridge_gap": {
+        "beta_median": 0.00711,
+        "games": 13,
+        "mae_model": 0.00198,
+        "mae_persistence": 0.00167,
+        "n": 25799,
+        "skill_ci": {
+          "hi": -0.00026,
+          "lo": -0.00038,
+          "point": -0.0003
+        }
+      },
+      "H1_momentum": {
+        "attempts": 194,
+        "fill_rate": 0.60309,
+        "games": 10,
+        "hit_rate": 0.00855,
+        "max_drawdown_per_contract": 5.11964,
+        "mean_ret": {
+          "hi": -0.03992,
+          "lo": -0.04658,
+          "point": -0.04376
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.20861,
+        "trades": 117
+      },
+      "H2_dip": {
+        "attempts": 232,
+        "fill_rate": 0.53448,
+        "games": 10,
+        "hit_rate": 0.00806,
+        "max_drawdown_per_contract": 6.325,
+        "mean_ret": {
+          "hi": -0.04713,
+          "lo": -0.05439,
+          "point": -0.05101
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.21075,
+        "trades": 124
+      },
+      "H3_leadlag": {
+        "attempts": 111,
+        "fill_rate": 0.43243,
+        "games": 11,
+        "hit_rate": 0.04167,
+        "max_drawdown_per_contract": 2.632,
+        "mean_ret": {
+          "hi": -0.03898,
+          "lo": -0.06689,
+          "point": -0.05483
+        },
+        "positive_game_share": 0.09091,
+        "top_game_share": 0.24431,
+        "trades": 48
+      },
+      "coverage": 0.50093
+    },
+    "60": {
+      "B1_buy_any": {
+        "attempts": 31127,
+        "fill_rate": 0.57538,
+        "games": 13,
+        "hit_rate": 0.08023,
+        "max_drawdown_per_contract": 724.95188,
+        "mean_ret": {
+          "hi": -0.0361,
+          "lo": -0.04358,
+          "point": -0.04048
+        },
+        "positive_game_share": 0.0,
+        "top_game_share": 0.16727,
+        "trades": 17910
+      },
+      "B3_ridge_dmid30": {
+        "beta_median": 0.0299,
+        "games": 14,
+        "mae_model": 0.01561,
+        "mae_persistence": 0.01548,
+        "n": 48394,
+        "skill_ci": {
+          "hi": -0.0001,
+          "lo": -0.00017,
+          "point": -0.00013
+        }
+      },
+      "B4_ridge_gap": {
+        "beta_median": 0.16503,
+        "games": 14,
+        "mae_model": 0.01854,
+        "mae_persistence": 0.01556,
+        "n": 43604,
+        "skill_ci": {
+          "hi": -0.00252,
+          "lo": -0.00352,
+          "point": -0.00298
+        }
+      },
+      "H1_momentum": {
+        "attempts": 194,
+        "fill_rate": 0.59278,
+        "games": 10,
+        "hit_rate": 0.18261,
+        "max_drawdown_per_contract": 4.00689,
+        "mean_ret": {
+          "hi": -0.01983,
+          "lo": -0.04667,
+          "point": -0.03484
+        },
+        "positive_game_share": 0.1,
+        "top_game_share": 0.26427,
+        "trades": 115
+      },
+      "H2_dip": {
+        "attempts": 232,
+        "fill_rate": 0.51724,
+        "games": 10,
+        "hit_rate": 0.15833,
+        "max_drawdown_per_contract": 7.353,
+        "mean_ret": {
+          "hi": -0.03616,
+          "lo": -0.07624,
+          "point": -0.05906
+        },
+        "positive_game_share": 0.1,
+        "top_game_share": 0.24479,
+        "trades": 120
+      },
+      "H3_leadlag": {
+        "attempts": 111,
+        "fill_rate": 0.3964,
+        "games": 11,
+        "hit_rate": 0.18182,
+        "max_drawdown_per_contract": 2.751,
+        "mean_ret": {
+          "hi": 0.00885,
+          "lo": -0.08895,
+          "point": -0.04527
+        },
+        "positive_game_share": 0.09091,
+        "top_game_share": 0.26952,
+        "trades": 44
+      },
+      "coverage": 0.92057
+    }
+  },
+  "latency_s": 5,
+  "legacy_timestamps": true,
+  "primary": {
+    "hypothesis": "H3@30",
+    "p_mean_le_0": 0.997
+  },
+  "samples": 57876,
+  "spec_hash": "bf2ca294e1e7b445079002995138ab7e26e445717890366d2fe97749d422b1e4",
+  "triggers": 609
+}

@@ -705,6 +705,63 @@ The causal synthetic acceptance case deliberately rejects the momentum prototype
 Fixture: `tests/fixtures/results/micro_synthetic.json`. The frozen whole-game evaluation
 uses H3 at 30 seconds as primary; all other horizons/candidates receive Holm correction.
 
+### The discovery set re-run with executable accounting
+
+`scripts/microstructure_eval.py --fold discovery` replays the 15 games the LAG rule was
+designed on (2026-09-20 plus the Monday night game; `tests/fixtures/microstructure/
+manifest.json`) through `quant/microdata` and `quant/paperexec`: every trade is an
+immediate-or-cancel buy limited to the ask at decision time, meeting the book after the
+latency, filled only for the displayed size, sold to the bid at the horizon, **both fees
+paid**, unsold-and-unsettled trades excluded and missed fills counted. The recorder polled
+every 5 s that day, so the latency is 5 s: the book one second after a decision was never
+observed. Intervals are 90 % game-block bootstrap; cells read "mean per contract [interval]
+(completed / attempted)".
+
+<!-- results:micro_discovery_trades -->
+| horizon | B1 buy at random | H1 momentum | H2 dip | H3 lead-lag |
+|---|---|---|---|---|
+| 5 s | -4.0c [-4.3, -3.6] (18237/31127) | -4.4c [-4.7, -4.0] (117/194) | -5.1c [-5.4, -4.7] (124/232) | -5.5c [-6.7, -3.9] (48/111) |
+| 15 s | -4.0c [-4.3, -3.6] (18162/31127) | -4.3c [-4.7, -3.8] (116/194) | -5.1c [-5.5, -4.7] (122/232) | -5.6c [-7.8, -3.3] (47/111) |
+| 30 s | -4.0c [-4.4, -3.6] (18098/31127) | -3.7c [-4.4, -3.1] (115/194) | -5.8c [-7.0, -4.4] (121/232) | -6.1c [-9.0, -2.9] (47/111) |
+| 60 s | -4.0c [-4.4, -3.6] (17910/31127) | -3.5c [-4.7, -2.0] (115/194) | -5.9c [-7.6, -3.6] (120/232) | -4.5c [-8.9, +0.9] (44/111) |
+<!-- /results:micro_discovery_trades -->
+
+A buy at a random moment costs about 4c per contract round trip (spread plus both fees);
+momentum buys, dip buys and the LAG rule all do no better, and at 5-30 s their intervals lie
+below zero. None of H1-H3 survives the Holm correction; the primary H3 at 30 s has a
+one-sided p of 0.997 that it is positive. **The +$0.073 per contract claimed for LAG below
+does not survive executable accounting at the latency these data allow.** They cannot say
+how LAG does at the fast lane's ~1 s: that needs games recorded with observation times
+(from 2026-09-24 on) and is what the validation fold will measure.
+
+Forecasting the next move does no better than assuming the price stays put (leave-one-game-
+out; skill = unchanged-price MAE minus model MAE, negative = worse than unchanged):
+
+<!-- results:micro_discovery_forecast -->
+| horizon | model | MAE | unchanged-price MAE | skill 90 % CI |
+|---|---|---|---|---|
+| 5 s | B3 ridge on dmid_30 | 0.158c | 0.149c | [-0.010, -0.008]c |
+| 5 s | B4 ridge on leader gap | 0.198c | 0.167c | [-0.038, -0.026]c |
+| 15 s | B3 ridge on dmid_30 | 0.422c | 0.403c | [-0.024, -0.015]c |
+| 15 s | B4 ridge on leader gap | 0.543c | 0.440c | [-0.130, -0.083]c |
+| 30 s | B3 ridge on dmid_30 | 0.893c | 0.877c | [-0.019, -0.013]c |
+| 30 s | B4 ridge on leader gap | 1.100c | 0.881c | [-0.268, -0.182]c |
+| 60 s | B3 ridge on dmid_30 | 1.561c | 1.548c | [-0.017, -0.010]c |
+| 60 s | B4 ridge on leader gap | 1.854c | 1.556c | [-0.352, -0.252]c |
+<!-- /results:micro_discovery_forecast -->
+
+Two-venue arbitrage (H4) on independent executable books, the Robinhood leg at a person's
+15 s and the Kalshi leg at 5 s, failed legs unwound at the bid:
+
+<!-- results:micro_discovery_arb -->
+| attempts | completed | fill rate | mean per contract | 90 % CI | games positive |
+|---|---|---|---|---|---|
+| 164 | 97 | 59% | +0.26c | [-0.84, +1.46]c | 40% |
+<!-- /results:micro_discovery_arb -->
+
+Fixture: `tests/fixtures/results/micro_discovery.json`. Descriptive only: these games
+designed the rule, so they can reject it but never validate it.
+
 `live --record` ran through the first NFL Sunday with this code (14 games, 15,943 in-play
 ticks at 5 s; the laptop slept through part of the early window, so the coverage is partial).
 `scripts/leadlag_study.py --db out/history.db --date 2026-09-20` reproduces every number

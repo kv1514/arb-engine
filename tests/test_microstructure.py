@@ -7,7 +7,7 @@ from pathlib import Path
 from arb_engine.fees.base import ZeroFees
 from arb_engine.quant.microdata import features_at, lead_lag_label, trigger_events
 from arb_engine.quant.paperexec import ioc, two_leg_arb
-from scripts.microstructure_eval import game_block_bootstrap, guard_test_open, spec_hash, validate_manifest
+from scripts.microstructure_eval import decision, fold_of, game_block_bootstrap, guard_test_open, holm, spec_hash, summarize, validate_manifest
 
 
 def row(t, mid, book="kalshi", market="K", **kw):
@@ -220,3 +220,71 @@ class EvaluationDisciplineTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 guard_test_open(log, spec_hash({"v": 2}))
             guard_test_open(log, spec_hash({"v": 2}), "pre-registered correction")
+
+    def test_a_model_significantly_worse_than_unchanged_is_rejected(self):
+        # Codex's rule only rejected a CI that straddled 0; a CI wholly below 0 slipped through.
+        worse = {"skill_ci": {"lo": -.02, "hi": -.01}, "net_pnl_ci": {"lo": .01, "hi": .02}, "fill_rate": .9,
+                 "test_games": 40, "deduped_triggers": 400, "top_game_share": .1,
+                 "robust_l3_h05": {"net_pnl_ci": {"lo": .01}, "positive_game_share": .8}}
+        self.assertEqual(decision(worse), "reject")
+        good = dict(worse, skill_ci={"lo": .001, "hi": .01})
+        self.assertEqual(decision(good), "alert-only")
+        self.assertEqual(decision(dict(good, net_pnl_ci={"lo": -.03, "hi": -.01})), "shadow")   # P&L wholly negative
+        self.assertEqual(decision(dict(good, test_games=12)), "shadow")
+
+    def test_folds_are_whole_games_and_test_is_defined_by_date(self):
+        m = {"discovery": [{"event_key": "nfl:A|B:2026-09-20"}], "test_from": "2026-10-08"}
+        self.assertEqual(fold_of(m, "nfl:A|B:2026-09-20:spread:A-3.5"), "discovery")   # lines follow their game
+        self.assertEqual(fold_of(m, "nfl:C|D:2026-09-27"), "validation")
+        self.assertEqual(fold_of(m, "nfl:C|D:2026-10-08"), "test")
+        with self.assertRaises(ValueError):
+            validate_manifest({"discovery": [{"event_key": "nfl:C|D:2026-10-11"}], "test_from": "2026-10-08"})
+
+    def test_holm_and_summary_metrics(self):
+        self.assertEqual(holm({"a": .01, "b": .04, "c": .5}, alpha=.10), {"a": True, "b": True, "c": False})
+        m = summarize({"g1": [.02, None, .04], "g2": [-.05], "g3": [None]}, {"g1": 3, "g2": 1, "g3": 1}, draws=200)
+        self.assertEqual((m["attempts"], m["trades"], m["games"]), (5, 3, 2))
+        self.assertAlmostEqual(m["fill_rate"], .6)
+        self.assertAlmostEqual(m["top_game_share"], .06 / .11)
+        self.assertAlmostEqual(m["max_drawdown_per_contract"], .05)
+        self.assertAlmostEqual(m["positive_game_share"], .5)
+
+    def test_end_to_end_on_a_recorded_database(self):
+        import sqlite3
+        from scripts import microstructure_eval as ev
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "h.db"
+            con = sqlite3.connect(db)
+            con.execute("create table inplay_ticks (ts real, event_key text, live integer, l1_json text, source text)")
+            con.execute("create table espn_ticks (ts real, event_key text, status text, period integer, clock integer, home text, away text, home_score integer, away_score integer, last_play_type text)")
+            for g in ("nfl:A|B:2026-09-27", "nfl:C|D:2026-09-27"):
+                a, b = g.split(":")[1].split("|")
+                for t in range(0, 400):
+                    mid = .5 + .06 * ((t // 60) % 2)
+                    rows = [{"venue": v, "book_id": bk, "outcome": o, "side": "yes", "obs_ts": 1000.0 + t, "refreshed": 1,
+                             "venue_market_id": f"{bk}-{o}", "bid": round((mid if o == a else 1 - mid) - .01, 3),
+                             "ask": round((mid if o == a else 1 - mid) + .01, 3), "bid_size": 50, "ask_size": 50,
+                             "fee_params": {}, "exchange": "rothera" if bk == "rothera" else None}
+                            for v, bk in (("kalshi", "kalshi"), ("robinhood", "rothera")) for o in (a, b)]
+                    con.execute("insert into inplay_ticks values (?,?,?,?,?)", (1000.0 + t, g, 1, json.dumps({"rows": rows}), "fast"))
+                con.execute("insert into espn_ticks values (?,?,?,?,?,?,?,?,?,?)", (1000.0, g, "in", 1, 900, a, b, 0, 0, None))
+            con.commit()
+            con.close()
+            manifest = Path(tmp) / "m.json"
+            manifest.write_text(json.dumps({"discovery": [], "test_from": "2026-10-08", "spec": {"horizons": [30], "bootstrap": 200, "seed": 1}}))
+            out = Path(tmp) / "r.json"
+            import contextlib
+            import io
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = ev.main(["--db", str(db), "--fold", "validation", "--manifest", str(manifest), "--log", str(Path(tmp) / "log.jsonl"), "--results", str(out)])
+            self.assertEqual(rc, 0)
+            r = json.loads(out.read_text())
+            self.assertEqual((r["games"], r["latency_s"], r["legacy_timestamps"]), (2, 1, False))
+            h = r["horizons"]["30"]
+            self.assertGreater(h["B1_buy_any"]["attempts"], 0)
+            self.assertIn("skill_ci", h["B3_ridge_dmid30"])
+            self.assertIn("H4_arb", r)
+            self.assertEqual(json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])["fold"], "validation")
+
