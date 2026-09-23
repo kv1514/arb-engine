@@ -55,7 +55,7 @@ for the season) — see [docs/SPORTS.md](docs/SPORTS.md); tennis with per-venue 
 | `arb_engine/strategy` | **Maker runner**: rests post-only Kalshi orders (with an exchange-side expiry) at the price where a fill *creates* an arb against the cheapest *executable* hedge, re-prices/cancels as the hedge moves, fires a HEDGE-NOW alert (bell, macOS notification, webhook, JSONL journal) with the exact hedge instruction, and cancels everything on a pause or a kill. **In-play watcher / live slate**: fair per side from model + market + ESPN, STEAL / LOCK NOW behind feed-freshness gates (a stale or suspect feed downgrades the alert to `GATED`). Paper broker, demo and live Kalshi brokers. |
 | `arb_engine/backtest.py`, `tickreplay.py`, `store.py` | Replay a finished week against Kalshi candles under both alignments, Polymarket history, ESPN and the model with game-cluster intervals and placebo-checked STEAL/LOCK simulations; replay recorded ticks through the watcher with the gates on/off; SQLite recorder for scans, in-play ticks and STEAL observations. |
 | `extension/` | Chrome MV3 overlay for `robinhood.com/us/en/prediction-markets/…/events/…`: panel + badges with fair value, all-in cost, edge, max-buy; direct mode or via the bridge. |
-| `.mcp.json` | Wires the [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi) MCP server so Claude Code / Codex can browse and (with your keys) trade Kalshi. |
+| `.mcp.json` | Wires two Kalshi MCP servers so Claude Code / Codex can browse and (with your keys) trade Kalshi: [mcp-server-kalshi](https://github.com/9crusher/mcp-server-kalshi) and [spacegpu/kalshi-mcp](https://github.com/spacegpu/kalshi-mcp) (`kalshi-api`, 49 tools, needs its own checkout + venv). |
 
 ## Install
 
@@ -274,6 +274,23 @@ demo exchange). Set the variables in your shell; Claude Code picks the server up
 project and its tools cover markets, order books, rules PDFs, balance, positions and
 (with `confirm=true`) orders. For Codex add the same command to `~/.codex/config.toml` under
 `[mcp_servers.kalshi]`; if you use `uv`, `uvx mcp-server-kalshi` works too.
+
+A second entry, `kalshi-api`, runs [spacegpu/kalshi-mcp](https://github.com/spacegpu/kalshi-mcp)
+(49 tools: exchange, markets, order books, candlesticks, events, portfolio, orders, account
+limits, historical markets/trades/fills, RFQs) out of a checkout beside this repo with its own
+virtualenv, because it needs `fastmcp` + `httpx` + `cryptography` and this repo stays stdlib-only:
+
+```bash
+git clone https://github.com/spacegpu/kalshi-mcp ../kalshi-mcp
+cd ../kalshi-mcp && python3 -m venv .venv && .venv/bin/python -m pip install fastmcp httpx cryptography
+```
+
+It reads `KALSHI_API_KEY_ID` (not `KALSHI_API_KEY`) plus `KALSHI_PRIVATE_KEY_PATH`, defaults to
+the demo host, and its four write tools (`order_create`, `order_cancel`, `rfq_create`,
+`rfq_delete`) refuse to run unless you export `KALSHI_ENABLE_TRADING=true` *and* pass
+`confirm=true` on the call. Leave that variable unset for a read-only setup. The engine's own
+executor (`live --execute-lag`, `maker --mode`) is the path for automated orders — it is in this
+repo, capped and journalled, and a per-call confirmation cannot be answered inside a 23 s edge.
 
 ## What the numbers mean
 

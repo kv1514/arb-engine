@@ -8,6 +8,16 @@
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",
         "KALSHI_PRIVATE_KEY_PATH": "${KALSHI_PRIVATE_KEY_PATH}"
       }
+    },
+    "kalshi-api": {
+      "command": "/Users/kv15/Documents/GitHub/kalshi-mcp/.venv/bin/python",
+      "args": ["-m", "kalshi_mcp.server"],
+      "cwd": "/Users/kv15/Documents/GitHub/kalshi-mcp",
+      "env": {
+        "KALSHI_ENV": "${KALSHI_ENV:-demo}",
+        "KALSHI_API_KEY_ID": "${KALSHI_API_KEY_ID}",
+        "KALSHI_PRIVATE_KEY_PATH": "${KALSHI_PRIVATE_KEY_PATH}"
+      }
     }
   }
 }
