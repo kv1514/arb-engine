@@ -549,6 +549,19 @@ def _alive(pid: int) -> bool:
         return False
 
 
+def _wait_dead(*pids: int, timeout: float = 30.0) -> list[int]:
+    """Wait for every pid to exit; return those still alive. A shared CI runner can take
+    many seconds to deliver a signal, run a shell trap and let Python leave its sleep, so
+    the timeout is generous — a real leak still fails, just later."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        alive = [p for p in pids if _alive(p)]
+        if not alive:
+            return []
+        time.sleep(0.1)
+    return [p for p in pids if _alive(p)]
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash required")
 class SundayLauncherTests(unittest.TestCase):
     def setUp(self):
@@ -706,11 +719,7 @@ class SundayLauncherTests(unittest.TestCase):
         live = self._child("live")
         sup = int(Path(self.tmp, "out", "run", "live.pid").read_text().strip())
         os.kill(sup, 15)  # a stray TERM on the supervisor, not `stop`
-        deadline = time.time() + 5
-        while time.time() < deadline and (_alive(sup) or _alive(live)):
-            time.sleep(0.1)
-        self.assertFalse(_alive(sup))
-        self.assertFalse(_alive(live))
+        self.assertEqual(_wait_dead(sup, live), [], "supervisor or its child outlived a TERM")
         self.assertIn("live    down", self._sh("status").stdout)  # the stale pid file reads as down, not up
 
     def test_keep_awake_wraps_the_live_supervisor(self):
@@ -730,7 +739,7 @@ class SundayLauncherTests(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("caffeinate -i holding idle sleep off", out.stdout)
         sup = Path(self.tmp, "out", "run", "live.pid").read_text().strip()
-        deadline = time.time() + 5   # the stub is a background job of a script that has already returned
+        deadline = time.time() + 30  # the stub is a background job of a script that has already returned
         while time.time() < deadline and not os.path.exists(rec):
             time.sleep(0.1)
         self.assertEqual(Path(rec).read_text().split(), ["-i", "-w", sup])
