@@ -278,6 +278,11 @@ class LiveSlate:
             return out
         refreshed, errs = self.fastlane.step(list(live), now)
         out.errors.extend(errs)
+        if self.store is not None:
+            try:
+                self.fastlane.poll_trades(self.store, now)
+            except Exception as e:
+                out.errors.append(f"trade prints: {e!r}")
         for key, (gs, me, view) in live.items():
             by = refreshed.get(key)
             if not by:
@@ -286,7 +291,7 @@ class LiveSlate:
             self.market_signals(me2, view, out, now)
             if self.store is not None:
                 try:
-                    call_store(self.store, "record_tick", view, quotes_by_venue=by, freshness=None, ts=now)
+                    call_store(self.store, "record_tick", view, quotes_by_venue=by, freshness=None, ts=now, source="fast")
                 except Exception as e:
                     out.errors.append(f"record: {e!r}")
         if self.store is not None and (out.lags or out.arbs):

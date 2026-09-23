@@ -1,27 +1,9 @@
 """Lead-lag signals: buy the *lagging* venue when the leading one has already repriced.
 
-Measured on the first recorded NFL Sunday (2026-09-20, 14 games incl. the night game, 5 s
-ticks — see ``scripts/leadlag_study.py`` and docs/MODEL.md): when Robinhood/Rothera's mid
-moved ≥ 5¢ in play, Kalshi had moved first only 51/178 times and caught up within a median
-23 s (144/178 within five minutes); the reverse (Kalshi first) happened 25/157 times.
-Polymarket trailed both by minutes. Big moves did not revert over the next five minutes
-(the market under-reacts to drives, if anything) — so "buy the dip" against the move has
-no edge, while buying the side the leader just repriced *on the venue that has not moved
-yet* is the dip that is actually cheap. That is this module.
-
-The rule is market-vs-market, so it needs no ESPN state and none of the feed gates: the
-leader's quote must be fresh (its venue-reported ``quote_time`` within ``fresh_s``, when
-the venue reports one), the follower's mid must not have moved ≥ ``follow_fraction`` of the
-leader's move in the same direction over the same window, and the follower's all-in ask on
-the side the leader moved toward must sit ≥ ``min_edge`` below the leader's mid. The
-follower must be executable for this account; the leader may be any venue (Polymarket's
-print is a fine signal even though the account cannot trade there).
-
-Each signal is journalled as an observation through ``store.record_steal`` with
-``signal_kind="lag"`` so the +10 s … +15 min ladder measures convergence, exactly as for STEAL —
-today's convergence rate is the number the next Sunday should update. Sizing is by the
-follower's displayed depth and a fraction of bankroll (``bankroll * kelly_fraction / ask``),
-which is deliberately conservative: a convergence trade's payoff is the gap, not $1.
+A leader repricing is evidence of a possible convergence trade, not a guaranteed
+arbitrage or a calibrated win probability. Recorded results depend on fill assumptions,
+feed alignment and both entry and exit fees. Independent books, valid fresh quotes,
+comparable history and fee-inclusive capital/depth limits are required here.
 """
 
 from __future__ import annotations
@@ -32,7 +14,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Iterable, Optional
 
+from ..fees.base import D
 from ..fees.registry import fee_model_for_quote
+from ..matching.settlement_rules import pair_flags, rule_for_quote
 from ..models import OutcomeQuote
 
 try:  # settings registry (config.declare_setting); the module must import without it
@@ -90,6 +74,8 @@ class LagSignal:
     ts: float
     url: Optional[str] = None # the follower's market page, to act on it
     fee_total: Optional[float] = None  # the follower's fee for the whole order at ``suggested_contracts``
+    settlement_flags: tuple[str, ...] = ()  # visible risk; blocks automated execution
+    tie_value: Optional[float] = None
 
     def text(self) -> str:
         """The signal as an order ticket (sport, venue, count, price, fee, cash)."""
@@ -99,16 +85,15 @@ class LagSignal:
 
 
 def _mid(q: OutcomeQuote) -> Optional[float]:
-    if q.bid is None or q.ask is None:
+    if q.bid is None or q.ask is None or not all(math.isfinite(x) for x in (q.bid, q.ask)) or not 0 <= q.bid <= q.ask <= 1:
         return None
     return (q.bid + q.ask) / 2.0
 
 
 def _fresh(q: OutcomeQuote, now: float, fresh_s: float) -> bool:
-    qt = q.quote_time
-    if qt is None:
-        return True  # venues that do not report one are fetched per poll
-    return now - qt <= fresh_s
+    return all(math.isfinite(t) and 0 <= now - t <= fresh_s
+               for t in (q.ts, q.quote_time) if t is not None)
+
 
 
 @dataclass
@@ -123,7 +108,8 @@ class LeadLagTracker:
     history_s: float = 600.0
     executable: Optional[set[str]] = None
     leaders: Optional[set[str]] = None   # None = any venue may lead
-    _hist: dict[tuple[str, str], Deque[tuple[float, float]]] = field(default_factory=dict)
+    _hist: dict[tuple[str, str], Deque[tuple[float, float, Optional[float], Optional[float]]]] = field(default_factory=dict)
+    _identity: dict = field(default_factory=dict)
     _last: dict[tuple[str, str, str], tuple[float, float]] = field(default_factory=dict)  # (event, follower, outcome) -> (ts, edge)
 
     @classmethod
@@ -133,6 +119,8 @@ class LeadLagTracker:
 
     def _push(self, event_key: str, venue: str, ts: float, mid: float, bid: Optional[float] = None, ask: Optional[float] = None) -> Deque[tuple[float, float, Optional[float], Optional[float]]]:
         h = self._hist.setdefault((event_key, venue), deque())
+        if h and ts - h[-1][0] > max(self.window_s, 1.5 * self.fresh_s):
+            h.clear()  # a feed outage is not a price impulse
         h.append((ts, mid, bid, ask))
         while h and ts - h[0][0] > self.history_s:
             h.popleft()
@@ -174,7 +162,9 @@ class LeadLagTracker:
 
     def observe(self, event_key: str, title: str, outcomes: list[str], labels: dict[str, str], quotes_by_venue: dict[str, list[OutcomeQuote]], settings: Optional[dict[str, Any]] = None, now: Optional[float] = None, bankroll: Optional[float] = None, kelly_fraction: float = 0.25) -> list[LagSignal]:
         now = time.time() if now is None else float(now)
-        if len(outcomes) != 2:
+        if (len(outcomes) != 2 or len(set(outcomes)) != 2 or not math.isfinite(now)
+                or self.window_s <= 0 or self.fresh_s <= 0 or self.move <= 0
+                or not 0 <= self.follow_fraction <= 1):
             return []
         home = outcomes[1] if len(outcomes) == 2 else outcomes[0]  # event keys are AWAY|HOME; outcomes list is [away, home]
         away = outcomes[0]
@@ -182,10 +172,13 @@ class LeadLagTracker:
         cur: dict[str, dict[str, OutcomeQuote]] = {}
         for venue, qs in quotes_by_venue.items():
             for q in qs:
-                if (q.meta or {}).get("side") == "no":
+                if q.event_key != event_key or q.venue != venue or (q.meta or {}).get("side") == "no" or _mid(q) is None or not _fresh(q, now, self.fresh_s):
                     continue
-                cur.setdefault(venue, {})[q.outcome] = q
+                previous = cur.setdefault(venue, {}).get(q.outcome)
+                if previous is None or q.ts > previous.ts:
+                    cur[venue][q.outcome] = q
         mids: dict[str, float] = {}
+        sources: dict[str, OutcomeQuote] = {}
         for venue, by_out in cur.items():
             qh, qa = by_out.get(home), by_out.get(away)
             mh = _mid(qh) if qh is not None else None
@@ -195,10 +188,20 @@ class LeadLagTracker:
             elif qa is not None and _mid(qa) is not None:
                 mh = 1.0 - _mid(qa)  # type: ignore[operator]
                 bid, ask = (1.0 - qa.ask) if qa.ask is not None else None, (1.0 - qa.bid) if qa.bid is not None else None
-            if mh is None or not (_fresh(qh, now, self.fresh_s) if qh is not None else True):
+            source = qh if qh is not None else qa
+            if mh is None or source is None:
                 continue
+            key = (event_key, venue)
+            identity = (source.book_id, source.venue_market_id, source.outcome)
+            if self._identity.get(key) != identity:
+                self._hist.pop(key, None)
+                self._identity[key] = identity
+            h = self._hist.get(key)
+            if h and source.ts <= h[-1][0]:
+                continue  # cached or out-of-order observations cannot create a move
             mids[venue] = mh
-            self._push(event_key, venue, now, mh, bid, ask)
+            sources[venue] = source
+            self._push(event_key, venue, source.ts, mh, bid, ask)
         signals: list[LagSignal] = []
         for leader, lmid in mids.items():
             if self.leaders is not None and leader not in self.leaders:
@@ -207,25 +210,58 @@ class LeadLagTracker:
             if lmove is None or abs(lmove) < self.move or not self._repriced(self._hist[(event_key, leader)], now, lmove):
                 continue
             for follower, fmid in mids.items():
-                if follower == leader or (self.executable is not None and follower not in self.executable):
+                if follower == leader or sources[follower].book_id == sources[leader].book_id or (self.executable is not None and follower not in self.executable):
                     continue
                 fmove = self._move_over_window(self._hist[(event_key, follower)], now)
-                if fmove is None:
-                    fmove = 0.0
+                la = self._anchor(self._hist[(event_key, leader)], now)
+                fa = self._anchor(self._hist[(event_key, follower)], now)
+                if fmove is None or la is None or fa is None or abs(la[0] - fa[0]) > self.fresh_s:
+                    continue
                 if abs(fmove) >= self.follow_fraction * abs(lmove):
                     continue  # the follower already caught up (same way) or disagrees (moved the other way): no lag to buy
                 # The leader moved toward ``outcome``: buy it on the follower.
                 outcome = home if lmove > 0 else away
                 q = cur.get(follower, {}).get(outcome)
-                if q is None or q.ask is None or not _fresh(q, now, self.fresh_s):
+                if q is None or q.ask is None or q.book_id == sources[leader].book_id or not _fresh(q, now, self.fresh_s):
                     continue
                 leader_mid_out = lmid if outcome == home else 1.0 - lmid
+                sport = event_key.split(":", 1)[0].lower()
+                market_type = "spread" if ":spread:" in event_key else ("total" if ":total:" in event_key else "moneyline")
+                try:
+                    settlement_flags = tuple(pair_flags(sources[leader], q, sport, market_type))
+                    follower_rule = rule_for_quote(q, sport, market_type) or {}
+                    tie_value = {"half": 0.5, "no_winner": 0.0}.get(follower_rule.get("tie"))
+                except Exception:
+                    settlement_flags = ("settlement-rules-error",)
+                    tie_value = None
+                depth = q.ask_size
+                if depth is not None and (not math.isfinite(depth) or depth < 1):
+                    continue
+                contracts = None
                 try:
                     fee_model = fee_model_for_quote(q, settings)
-                    fee = float(fee_model.per_contract(q.ask, 100))   # gate on a size-independent fee
+                    if bankroll is not None:
+                        if not math.isfinite(bankroll) or bankroll <= 0 or not 0 < kelly_fraction <= 1 or depth is None or q.ask <= 0:
+                            continue
+                        budget = D(bankroll) * D(kelly_fraction)
+                        lo, hi = 0, min(int(depth), int(budget / D(q.ask)))
+                        while lo < hi:
+                            n = (lo + hi + 1) // 2
+                            if D(q.ask) * n + fee_model.fee(q.ask, n, "taker") <= budget:
+                                lo = n
+                            else:
+                                hi = n - 1
+                        if not lo:
+                            continue
+                        contracts = lo
+                    # Unfunded observations use a conservative one-contract fee.
+                    n = contracts or 1
+                    total = fee_model.fee(q.ask, n, "taker")
+                    if not total.is_finite() or total < 0:
+                        continue
+                    all_in = float(D(q.ask) + total / n)
                 except Exception:
-                    fee_model, fee = None, 0.0
-                all_in = q.ask + fee
+                    continue  # unknown fee is not zero fee
                 edge = leader_mid_out - all_in
                 if edge < self.min_edge:
                     continue
@@ -234,17 +270,6 @@ class LeadLagTracker:
                 if last is not None and now - last[0] < self.cooldown_s and edge <= last[1] + 0.005:
                     continue
                 self._last[key] = (now, edge)
-                depth = q.ask_size
-                contracts = None
-                if bankroll:
-                    cap = int(math.floor(bankroll * kelly_fraction / q.ask)) if q.ask > 0 else 0
-                    contracts = min(cap, int(depth)) if depth is not None else cap
-                    contracts = contracts if contracts > 0 else None
-                fee_total = None
-                if contracts and fee_model is not None:
-                    try:   # what the venue charges for *this* order (Kalshi rounds up per order)
-                        fee_total = float(fee_model.fee(q.ask, contracts, "taker"))
-                    except Exception:
-                        fee_total = None
-                signals.append(LagSignal(fee_total=fee_total, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
+                fee_total = float(total) if contracts else None
+                signals.append(LagSignal(fee_total=fee_total, settlement_flags=settlement_flags, tie_value=tie_value, event_key=event_key, title=title, leader=leader, follower=follower, outcome=outcome, label=labels.get(outcome, outcome), lead_move=lmove, follower_move=fmove, leader_mid=leader_mid_out, follower_ask=q.ask, follower_all_in=all_in, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=now, url=q.url))
         return signals

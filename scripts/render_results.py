@@ -385,6 +385,10 @@ def render_arb_fixture_p09(d: dict) -> dict[str, str]:
     return {"arb_fixture_p09": table(["metric"] + [f"{s.upper()} fixture" for s in sports] + ["definition"], rows)}
 
 
+def render_micro_synthetic(d: dict) -> dict[str, str]:
+    return {"micro_synthetic": table(["candidate", "MAE", "persistence MAE", "skill", "decision"], [[d["candidate"], f3(d["mae"]), f3(d["persistence_mae"]), signed4(d["skill_vs_persistence"]), d["decision"]]])}
+
+
 # ---- registry ---------------------------------------------------------------------------------
 
 RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
@@ -398,6 +402,7 @@ RENDERERS: dict[str, Callable[[dict], dict[str, str]]] = {
     "eligibility_p11": render_eligibility_p11,
     "lines_eval_p13": render_lines_eval_p13,
     "arb_fixture_p09": render_arb_fixture_p09,
+    "micro_synthetic": render_micro_synthetic,
 }
 
 

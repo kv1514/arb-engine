@@ -1,7 +1,7 @@
 """Paper fills for LAG signals, judged on the fast lane's next quotes.
 
-A replayed LAG looks good (docs/MODEL.md: 120 W / 12 L selling to the bid a minute later)
-only if the follower's ask is still there when the order arrives. This book answers that
+A replayed LAG only matters if the follower's ask is still there when the order arrives.
+This book answers that
 with the data the fast lane already produces: every LAG opens a paper order at the
 follower's ask for the suggested size; on each later step the order fills if the follower
 still shows an ask ≤ the order price with size, expires after ``fill_window_s`` otherwise;
@@ -11,9 +11,9 @@ same final ticks). Nothing is sent anywhere — it is a fill-probability and P&L
 whose rows live in ``lag_paper``.
 
 What it deliberately does not model: queue position (a taker order at the ask trades
-immediately if the size is there, so none), partial fills (the size shown is taken as
-available in full), and Kalshi's order latency (~100 ms; the fast lane's 1 s step is the
-coarser clock, so a fill measured here is at least as slow as a real one).
+immediately if the full displayed size is there), partial fills (a smaller displayed size
+does not count as a fill), and sub-second order latency. Early-exit marks deduct the
+venue's taker fee at the marked bid.
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..models import OutcomeQuote
+from ..fees.registry import fee_model_for_quote
+from .leadlag import _fresh, _mid
 
 MARK_OFFSETS = (30, 60, 300)
 
@@ -46,6 +48,7 @@ class PaperOrder:
     marks: dict[str, Optional[float]] = field(default_factory=dict)   # "bid_30" -> bid at +30 s
     settled: bool = False
     settle_value: Optional[float] = None
+    tie_value: Optional[float] = None
 
     @property
     def open(self) -> bool:
@@ -95,7 +98,9 @@ class LagPaperBook:
         if any(o.open and o.event_key == sig.event_key and o.follower == sig.follower and o.outcome == sig.outcome for o in self.orders):
             return None
         qty = int(sig.suggested_contracts or 0) or int(min(sig.depth or 10, 10))
-        o = PaperOrder(key=key, event_key=sig.event_key, follower=sig.follower, outcome=sig.outcome, price=float(sig.follower_ask), all_in=float(sig.follower_all_in), contracts=qty, opened=now, leader=sig.leader, edge=float(sig.edge))
+        if qty <= 0:
+            return None
+        o = PaperOrder(key=key, event_key=sig.event_key, follower=sig.follower, outcome=sig.outcome, price=float(sig.follower_ask), all_in=float(sig.follower_all_in), contracts=qty, opened=now, leader=sig.leader, edge=float(sig.edge), tie_value=getattr(sig, "tie_value", None))
         self.orders.append(o)
         self._save(o)
         return o
@@ -106,7 +111,11 @@ class LagPaperBook:
         for o in self.orders:
             if o.event_key != event_key:
                 continue
-            q = next((x for x in quotes_by_venue.get(o.follower, []) if x.outcome == o.outcome and (x.meta or {}).get("side") != "no"), None)
+            candidates = [x for x in quotes_by_venue.get(o.follower, [])
+                          if x.event_key == event_key and x.venue == o.follower
+                          and x.outcome == o.outcome and (x.meta or {}).get("side") != "no"
+                          and _mid(x) is not None and _fresh(x, now, self.fill_window_s)]
+            q = max(candidates, key=lambda x: x.ts, default=None)
             if o.open:
                 if now - o.opened > self.fill_window_s:
                     o.expired_at = now
@@ -114,7 +123,7 @@ class LagPaperBook:
                     out.append(f"paper LAG expired unfilled after {self.fill_window_s:.0f}s: {o.outcome} on {o.follower} @ {o.price:.2f}")
                     if self.alerter is not None:
                         self.alerter.info(out[-1], event=o.event_key, paper_lag=o.key)
-                elif q is not None and q.ask is not None and q.ask <= o.price + 1e-9 and (q.ask_size is None or q.ask_size > 0):
+                elif q is not None and q.ask is not None and q.ask <= o.price + 1e-9 and q.ask_size is not None and q.ask_size >= o.contracts:
                     o.filled_at, o.fill_price = now, q.ask
                     self._save(o)
                     out.append(f"paper LAG filled {o.contracts} x {o.outcome} on {o.follower} @ {q.ask:.2f} after {now - o.opened:.1f}s")
@@ -125,6 +134,10 @@ class LagPaperBook:
                     k = f"bid_{off}"
                     if k not in o.marks and now - o.filled_at >= off:
                         o.marks[k] = q.bid
+                        try:
+                            o.marks[f"exit_fee_{off}"] = fee_model_for_quote(q).per_contract(q.bid, o.contracts, "taker")
+                        except Exception:
+                            o.marks[f"exit_fee_{off}"] = None
                         self._save(o)
         return out
 
@@ -133,7 +146,9 @@ class LagPaperBook:
         n = 0
         for o in self.orders:
             if o.event_key == event_key and o.filled_at is not None and not o.settled:
-                o.settled, o.settle_value = True, (0.5 if winner is None else (1.0 if o.outcome == winner else 0.0))
+                if winner is None and o.tie_value is None:
+                    continue
+                o.settled, o.settle_value = True, (o.tie_value if winner is None else (1.0 if o.outcome == winner else 0.0))
                 self._save(o)
                 n += 1
         return n
@@ -146,7 +161,9 @@ class LagPaperBook:
         if filled:
             out["fill_latency_median_s"] = sorted(o.filled_at - o.opened for o in filled)[len(filled) // 2]
             for off in MARK_OFFSETS:
-                xs = [o.marks[f"bid_{off}"] - o.all_in for o in filled if o.marks.get(f"bid_{off}") is not None]
+                xs = [o.marks[f"bid_{off}"] - o.marks[f"exit_fee_{off}"] - o.all_in
+                      for o in filled if o.marks.get(f"bid_{off}") is not None
+                      and o.marks.get(f"exit_fee_{off}") is not None]
                 if xs:
                     out[f"pnl_bid_{off}"] = {"n": len(xs), "wins": sum(1 for x in xs if x > 0), "mean": round(sum(xs) / len(xs), 4)}
             st = [o.settle_value - o.all_in for o in filled if o.settled and o.settle_value is not None]

@@ -1,8 +1,8 @@
 """Execute LAG signals on Kalshi: an immediate-or-cancel buy at the laggard's ask.
 
-The lead-lag edge lives ~23 s (docs/MODEL.md, "The first live Sunday"); a person reading a
-push, opening the market and typing an order is slower than that, so this is the path that
-turns the signal into a fill. Modes, from safest up:
+This is the gated path from a LAG observation to an immediate-or-cancel order. Historical
+latency and P&L measurements are legacy results until re-run with the current strict
+horizon, two-sided fee and fill accounting. Modes, from safest up:
 
 * ``off``    — nothing (the default; the paper book still records what would have happened).
 * ``intent`` — every order the executor *would* send is appended to
@@ -122,6 +122,11 @@ class LagExecutor:
         now = self.clock() if now is None else now
         self._roll_day(now)
         rec: dict[str, Any] = {"ts": now, "mode": self.mode, "event_key": sig.event_key, "follower": sig.follower, "outcome": sig.outcome, "leader": sig.leader, "edge": round(sig.edge, 4), "price": sig.follower_ask, "count": None, "ticker": None, "side": None, "status": None}
+        settlement_flags = tuple(getattr(sig, "settlement_flags", ()) or ())
+        if settlement_flags:
+            rec.update(status="skipped", reason="settlement incompatible or unverified: " + ", ".join(settlement_flags))
+            self._journal(rec)
+            return rec
         if sig.follower != "kalshi":
             rec.update(status="skipped", reason="follower is not kalshi")
             self._journal(rec)

@@ -689,10 +689,31 @@ harness applies; the model itself is unchanged.
 
 ## The first live Sunday: momentum, lead-lag and the LAG rule (NFL 2026-09-20)
 
+The earlier LAG profitability claims are **unverified**. They predate observation-time
+recording, lossless YES/NO rows, strict forward-label windows, independent-book identity,
+two-sided fees, latency, partial fills and failed-leg unwind. They are retained below only
+as a description of the legacy discovery data and must not be used as evidence for alerts.
+
+The causal synthetic acceptance case deliberately rejects the momentum prototype:
+
+<!-- results:micro_synthetic -->
+| candidate | MAE | persistence MAE | skill | decision |
+|---|---|---|---|---|
+| H1_momentum_prototype | 0.030 | 0.017 | -0.0128 | reject |
+<!-- /results:micro_synthetic -->
+
+Fixture: `tests/fixtures/results/micro_synthetic.json`. The frozen whole-game evaluation
+uses H3 at 30 seconds as primary; all other horizons/candidates receive Holm correction.
+
 `live --record` ran through the first NFL Sunday with this code (14 games, 15,943 in-play
 ticks at 5 s; the laptop slept through part of the early window, so the coverage is partial).
 `scripts/leadlag_study.py --db out/history.db --date 2026-09-20` reproduces every number
 below from the recorded per-venue L1 (`tests/fixtures/results/leadlag_nfl_2026_w2.json`).
+
+> **Legacy measurement:** that committed fixture predates strict horizon matching, exit-fee
+> deductions, full-depth paper-fill checks and settlement-risk execution gates. Its tables
+> describe the original experiment and must not be read as net executable performance.
+> Re-run the current script on the source database before using any figure below.
 
 **Do big moves revert ("odds inflated by momentum") or continue?** Every Kalshi mid move of
 ≥ 5¢ between polls ≤ 30 s apart was followed for five minutes. Without a score change (a
@@ -729,7 +750,8 @@ venue's mid moves ≥ `leadlag_move` (5¢) within `leadlag_window_s` (30 s) and 
 follower's mid has moved less than half of that (or the other way), buy the side the leader
 moved toward on the follower, provided its all-in ask sits ≥ `leadlag_min_edge` (2¢) below
 the leader's mid and both quotes are fresh. Replayed over the same ticks (fills at the
-recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid):
+recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid but exit fee
+not paid in this legacy fixture):
 
 | exit | signals | wins | losses | mean P&L per contract |
 |---|---|---|---|---|

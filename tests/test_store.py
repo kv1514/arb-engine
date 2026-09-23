@@ -142,6 +142,30 @@ class TickRecordingTests(unittest.TestCase):
         self.assertIsNone(bare["l1_json"])
         self.assertIsNotNone(bare["market_p"])
 
+    def test_lossless_rows_keep_yes_and_normalized_no_and_provenance(self):
+        from arb_engine.models import OutcomeQuote
+        yes = OutcomeQuote("robinhood", "YES-A", "nfl:A|B:2026-09-21", "A", bid=.4, ask=.42, ts=99,
+                           book_id="rothera", meta={"side": "yes", "tie_payout": 0})
+        no = OutcomeQuote("robinhood", "NO-B#no", "nfl:A|B:2026-09-21", "A", bid=.39, ask=.41, ts=99,
+                          book_id="rothera", meta={"side": "no", "no_of": "B", "tie_payout": 1})
+        l1 = self.st.l1_from_quotes({"robinhood": [yes, no]}, req_ts=98, obs_ts=99, refreshed=False)
+        self.assertEqual([(r["venue_market_id"], r["side"]) for r in l1["rows"]], [("NO-B#no", "no"), ("YES-A", "yes")])
+        self.assertEqual([r["tie_payout"] for r in l1["rows"]], [1.0, 0.0])
+        self.assertTrue(all(r["obs_ts"] <= 100 and r["refreshed"] == 0 for r in l1["rows"]))
+
+    def test_trade_print_pages_are_idempotent(self):
+        root = os.path.join(os.path.dirname(__file__), "fixtures", "trades")
+        pages = []
+        for i in (1, 2):
+            with open(os.path.join(root, f"kalshi_trades_page{i}.json"), encoding="utf-8") as fh:
+                pages.append(json.load(fh)["trades"])
+        self.assertGreater(self.st.record_trade_prints(pages[0]), 0)
+        total = self.st.record_trade_prints(pages[1])
+        self.assertEqual(self.st.record_trade_prints(pages[0] + pages[1]), 0)
+        count = self.st.conn.execute("select count(*) from trade_prints").fetchone()[0]
+        self.assertEqual(count, len({r["trade_id"] for page in pages for r in page}))
+        self.assertGreaterEqual(total, 0)
+
     def test_live_slate_with_fixture_adapters_records_l1_per_priced_game(self):
         """The slate's record call site (``record_tick``) plus the per-venue L1 / ESPN plumbing
         this item adds, driven by the fixture adapters: one inplay tick and one espn tick per

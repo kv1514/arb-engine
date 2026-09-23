@@ -147,6 +147,10 @@ The recorded slate the open questions kept pointing at ran two days after this s
 (NFL 2026-09-20; the numbers and their reproduction are in `docs/MODEL.md`, "The first live
 Sunday", from `tests/fixtures/results/leadlag_nfl_2026_w2.json`). Against the clusters:
 
+The fixture is now classified as a legacy measurement: it predates strict horizon matching,
+two-sided fee accounting, full-depth paper-fill checks and settlement-risk execution gates.
+The figures below describe the original experiment, not validated executable returns.
+
 * **Question 5 (lead-lag, quote lifetimes) is answered, and it is the trade.** Of Rothera's
   178 ≥ 5¢ moves, Kalshi had moved first on only 51 and caught up within five minutes on
   144, median 23 s; Polymarket trails both by minutes. Every two-leg ARB the day showed was
@@ -157,7 +161,8 @@ Sunday", from `tests/fixtures/results/leadlag_nfl_2026_w2.json`). Against the cl
   Kalshi ≥ 5¢ moves without a score change continued rather than reverted at +30 s, +2 min
   and +5 min (buying the dip after a move lost). What the same mechanism *does* produce is the
   laggard's stale ask: buying the follower venue as soon as the leader has repriced replayed
-  149 W / 22 L (+$0.073 per contract selling to the bid 60 s later; 23 W / 9 L, +$0.207 held
+  149 W / 22 L in the legacy entry-fee-only replay (+$0.073 per contract selling to the bid
+  60 s later; 23 W / 9 L, +$0.207 held
   to settlement on the three games that finished inside the recording). Fill-adjusted
   numbers wait on the paper book (`lag_paper`).
 * **Question 3 (slow vs mispriced) now has data on the taker side**: the 3 % STEAL lost live

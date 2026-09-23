@@ -53,7 +53,8 @@ def _epoch(x: Any) -> Optional[float]:
 def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float] = None) -> list[OutcomeQuote]:
     """Fresh top of book for Kalshi ``quotes`` via one batched ``/markets?tickers=`` call
     (chunks of 50). Quotes whose ticker is missing from the answer are returned unchanged."""
-    now = now or time.time()
+    req_ts = now or time.time()
+    now = req_ts
     tickers = sorted({q.meta.get("ticker") or q.venue_market_id.split("#")[0] for q in quotes})
     if not tickers:
         return list(quotes)
@@ -67,7 +68,9 @@ def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float]
     for q in quotes:
         m = fresh.get(q.meta.get("ticker") or q.venue_market_id.split("#")[0])
         if not m:
-            out.append(q)
+            meta = dict(q.meta or {})
+            meta.update({"req_ts": req_ts, "obs_ts": now, "refreshed": False})
+            out.append(dataclasses.replace(q, meta=meta))
             continue
         yes_ask = _f(m.get("yes_ask_dollars")) or ((_f(m.get("yes_ask")) or 0) / 100.0 or None)
         yes_bid = _f(m.get("yes_bid_dollars")) or ((_f(m.get("yes_bid")) or 0) / 100.0 or None)
@@ -81,14 +84,15 @@ def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float]
             bid = yes_bid if yes_bid and yes_bid > 0.0 else None
             ask_size, bid_size = _f(m.get("yes_ask_size_fp")), _f(m.get("yes_bid_size_fp"))
         meta = dict(q.meta or {})
-        meta.update({"last": _f(m.get("last_price_dollars")) or meta.get("last"), "volume": _f(m.get("volume_fp")) or meta.get("volume")})
+        meta.update({"last": _f(m.get("last_price_dollars")) or meta.get("last"), "volume": _f(m.get("volume_fp")) or meta.get("volume"), "req_ts": req_ts, "obs_ts": now, "refreshed": True})
         out.append(dataclasses.replace(q, ask=ask, bid=bid, ask_size=ask_size if ask_size is not None else q.ask_size, bid_size=bid_size if bid_size is not None else q.bid_size, ts=now, meta=meta))
     return out
 
 
 def refresh_robinhood(adapter: Any, quotes: list[OutcomeQuote], now: Optional[float] = None) -> list[OutcomeQuote]:
     """Fresh top of book for Robinhood ``quotes`` via the quotes API (20 ids per call)."""
-    now = now or time.time()
+    req_ts = now or time.time()
+    now = req_ts
     ids = sorted({(q.meta or {}).get("contract_id") or q.venue_market_id.split("#")[0] for q in quotes})
     if not ids:
         return list(quotes)
@@ -98,11 +102,13 @@ def refresh_robinhood(adapter: Any, quotes: list[OutcomeQuote], now: Optional[fl
         cid = (q.meta or {}).get("contract_id") or q.venue_market_id.split("#")[0]
         qd = fresh.get(cid)
         if not qd:
-            out.append(q)
+            meta = dict(q.meta or {})
+            meta.update({"req_ts": req_ts, "obs_ts": now, "refreshed": False})
+            out.append(dataclasses.replace(q, meta=meta))
             continue
         qt = _epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at"))
         meta = dict(q.meta or {})
-        meta.update({"state": qd.get("state", meta.get("state")), "last": _f(qd.get("last_trade_price")) if qd.get("last_trade_price") is not None else meta.get("last"), "updated_at": qd.get("updated_at", meta.get("updated_at")), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price"))})
+        meta.update({"state": qd.get("state", meta.get("state")), "last": _f(qd.get("last_trade_price")) if qd.get("last_trade_price") is not None else meta.get("last"), "updated_at": qd.get("updated_at", meta.get("updated_at")), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price")), "req_ts": req_ts, "obs_ts": now, "refreshed": True})
         if meta.get("side") == "no":
             out.append(dataclasses.replace(q, ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), ts=now, quote_time=qt, meta=meta))
         else:
@@ -125,10 +131,21 @@ class FastLane:
         self.last: dict[str, dict[str, list[OutcomeQuote]]] = {}
         self.steps = 0
         self.errors: list[str] = []
+        self.trade_cursor: dict[str, int] = {}
+        self.last_trade_poll = -float("inf")
 
     def seed(self, events: dict[str, dict[str, list[OutcomeQuote]]]) -> None:
         """Adopt the latest full snapshot's quotes (called after every full tick)."""
-        self.last = {k: {v: list(qs) for v, qs in by.items()} for k, by in events.items()}
+        self.last = {}
+        for key, by in events.items():
+            self.last[key] = {}
+            for venue, quotes in by.items():
+                seeded = []
+                for q in quotes:
+                    meta = dict(q.meta or {})
+                    meta["refreshed"] = False
+                    seeded.append(dataclasses.replace(q, meta=meta))
+                self.last[key][venue] = seeded
 
     def step(self, keys: Optional[Iterable[str]] = None, now: Optional[float] = None) -> tuple[dict[str, dict[str, list[OutcomeQuote]]], list[str]]:
         now = now or self.clock()
@@ -159,3 +176,30 @@ class FastLane:
         self.steps += 1
         self.errors = errors
         return {k: self.last[k] for k in keys if k in self.last}, errors
+
+    def poll_trades(self, store: Any, now: Optional[float] = None, every_s: float = 5.0) -> int:
+        """Persist only Kalshi's public trade-print feed, at most once per five seconds."""
+        now = self.clock() if now is None else float(now)
+        if self.kalshi is None or store is None or now - self.last_trade_poll < every_s:
+            return 0
+        tickers = sorted({(q.meta or {}).get("ticker") or q.venue_market_id.split("#")[0]
+                          for by in self.last.values() for q in by.get("kalshi", [])})
+        inserted = 0
+        for ticker in tickers:
+            trades = self.kalshi.trades(ticker, limit=100, min_ts=self.trade_cursor.get(ticker))
+            inserted += store.record_trade_prints(trades, ticker)
+            stamps = []
+            for trade in trades:
+                raw = trade.get("created_time") or trade.get("ts")
+                try:
+                    stamps.append(int(float(raw)))
+                except (TypeError, ValueError):
+                    try:
+                        from datetime import datetime
+                        stamps.append(int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()))
+                    except (TypeError, ValueError):
+                        pass
+            if stamps:
+                self.trade_cursor[ticker] = max(stamps) + 1
+        self.last_trade_poll = now
+        return inserted

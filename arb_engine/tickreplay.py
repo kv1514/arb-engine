@@ -97,22 +97,26 @@ def merged_event_from(tick: dict[str, Any], sport: str = "nfl") -> Optional[Merg
         l1 = json.loads(tick.get("l1_json") or "{}")
     except json.JSONDecodeError:
         return None
+    venue_l1 = {venue: per for venue, per in l1.items()
+                if venue != "rows" and isinstance(per, dict)}
     home, away = tick.get("home"), tick.get("away")
-    outcomes = sorted({o for per in l1.values() for o in per} | {o for o in (home, away) if o})
+    outcomes = sorted({o for per in venue_l1.values() for o in per} | {o for o in (home, away) if o})
     if len(outcomes) != 2:
         return None
     key = tick["event_key"]
     sport = key.split(":", 1)[0] if ":" in key else sport
     info = EventInfo(event_key=key, sport=sport, market_type="moneyline", outcomes=outcomes, labels={o: o for o in outcomes}, in_play=bool(tick.get("live")))
     qbv: dict[str, list[OutcomeQuote]] = {}
-    for venue, per in l1.items():
+    for venue, per in venue_l1.items():
         for outcome, d in per.items():
+            if d.get("refreshed") in (False, 0):
+                continue
             fee_params = dict(d.get("fee_params") or {})
             if venue == "kalshi" and not fee_params:
                 fee_params = dict(DEFAULT_KALSHI_FEES)
             if venue == "robinhood" and d.get("exchange") and "exchange" not in fee_params:
                 fee_params["exchange"] = d["exchange"]
-            qbv.setdefault(venue, []).append(OutcomeQuote(venue=venue, venue_market_id=str(d.get("venue_market_id") or f"{venue}-{outcome}"), event_key=key, outcome=outcome, outcome_label=outcome, ask=d.get("ask"), bid=d.get("bid"), ask_size=d.get("ask_size"), bid_size=d.get("bid_size"), fee_params=fee_params, ts=float(tick["ts"]), meta={"exchange": d.get("exchange")} if d.get("exchange") else {}, book_id=d.get("book_id") or venue, quote_time=d.get("quote_time")))
+            qbv.setdefault(venue, []).append(OutcomeQuote(venue=venue, venue_market_id=str(d.get("venue_market_id") or f"{venue}-{outcome}"), event_key=key, outcome=outcome, outcome_label=outcome, ask=d.get("ask"), bid=d.get("bid"), ask_size=d.get("ask_size"), bid_size=d.get("bid_size"), fee_params=fee_params, ts=float(d.get("obs_ts") or tick["ts"]), meta={"exchange": d.get("exchange")} if d.get("exchange") else {}, book_id=d.get("book_id") or venue, quote_time=d.get("quote_time")))
     return MergedEvent(key, info, qbv)
 
 

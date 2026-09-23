@@ -1,0 +1,14 @@
+{
+  "forecasts": 144,
+  "interpretation": "Diagnostic replay only; no fills, fees, profit or calibrated probabilities",
+  "mean_absolute_error": 0.03000000000000001,
+  "missing_marks": 4,
+  "persistence_mean_absolute_error": 0.017214285714285717,
+  "scored": 140,
+  "statuses": {
+    "dip-watch": 33,
+    "flat": 76,
+    "rebound-watch": 8,
+    "rising": 27
+  }
+}

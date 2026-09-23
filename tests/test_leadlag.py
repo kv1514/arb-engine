@@ -49,7 +49,9 @@ class LeadLagTests(unittest.TestCase):
         self.assertAlmostEqual(s.lead_move, 0.08, places=6)
         self.assertAlmostEqual(s.follower_ask, 0.60)
         self.assertGreater(s.edge, 0.02)                      # 0.675 leader mid vs 0.60 + Kalshi fee
-        self.assertEqual(s.suggested_contracts, min(500, int(500 * 0.25 / 0.60)))
+        self.assertEqual(s.suggested_contracts, 202)
+        self.assertLessEqual(s.suggested_contracts * s.follower_ask + s.fee_total, 125)
+        self.assertAlmostEqual(s.follower_all_in, s.follower_ask + s.fee_total / s.suggested_contracts)
         # The text is the order ticket: sport, venue, count, price, the fee for *that* order
         # (Kalshi rounds up per order, so it is not 208 x the per-contract fee) and the cash.
         txt = s.text()
@@ -340,7 +342,7 @@ class PaperLagTests(unittest.TestCase):
         self.assertEqual(book.settle(KEY, "KC"), 1)
         s = book.summary()
         self.assertEqual((s["orders"], s["filled"], s["expired"]), (1, 1, 0))
-        self.assertAlmostEqual(s["pnl_bid_60"]["mean"], 0.68 - 0.617, places=6)
+        self.assertAlmostEqual(s["pnl_bid_60"]["mean"], 0.68 - o.marks["exit_fee_60"] - 0.617, places=6)
         self.assertAlmostEqual(s["pnl_settle"]["mean"], 1.0 - 0.617, places=6)
         row = book.store.conn.execute("select filled_at, fill_price, bid_60, settled, settle_value, pnl_settle from lag_paper").fetchone()
         self.assertEqual((row[1], row[2], row[3], row[4]), (0.60, 0.68, 1, 1.0))
@@ -360,6 +362,14 @@ class PaperLagTests(unittest.TestCase):
         # A zero-size ask does not fill either.
         book.open(self._sig(ask=0.60, t=1020.0), 1020.0)
         self.assertEqual(book.observe(KEY, self._quotes(1021.0, 0.60, 0.59, size=0), 1021.0), [])
+
+    def test_shallow_or_unknown_depth_does_not_claim_a_full_fill(self):
+        from arb_engine.strategy.paperlag import LagPaperBook
+
+        for size in (None, 99):
+            book = LagPaperBook(store=None, fill_window_s=10)
+            book.open(self._sig(contracts=100), 1000.0)
+            self.assertEqual(book.observe(KEY, self._quotes(1001.0, 0.60, 0.59, size=size), 1001.0), [])
 
 
 class RepricingTests(unittest.TestCase):
@@ -400,6 +410,16 @@ class LagExecutorTests(unittest.TestCase):
         self.assertEqual(ex.on_signal(self._sig(follower="robinhood"), self._quotes())["reason"], "follower is not kalshi")
         self.assertIn("edge", ex.on_signal(self._sig(edge=0.01), self._quotes())["reason"])
         self.assertIsNone(LagExecutor(mode="off").on_signal(self._sig(), self._quotes()))
+
+    def test_settlement_mismatch_is_observable_but_never_executed(self):
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_settlement_{os.getpid()}.jsonl")
+        sig = self._sig()
+        sig.settlement_flags = ("settlement-mismatch:tie",)
+        rec = LagExecutor(mode="intent", intents_path=path).on_signal(sig, self._quotes())
+        self.assertEqual(rec["status"], "skipped")
+        self.assertIn("settlement-mismatch:tie", rec["reason"])
 
     def test_demo_mode_sends_an_ioc_buy_and_respects_caps(self):
         from arb_engine.execution.kalshi import KalshiExecutor

@@ -1,0 +1,10 @@
+{
+  "candidate": "H1_momentum_prototype",
+  "decision": "reject",
+  "experiment": "microstructure",
+  "fold": "synthetic",
+  "mae": 0.03,
+  "note": "price-forecast diagnostic only; no fills or P&L",
+  "persistence_mae": 0.017,
+  "skill_vs_persistence": -0.012785714285714293
+}

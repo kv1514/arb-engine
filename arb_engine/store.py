@@ -74,6 +74,11 @@ CREATE INDEX IF NOT EXISTS steal_event ON steal_observations(event_key, ts);
 CREATE TABLE IF NOT EXISTS pregame_lines (
   event_key TEXT PRIMARY KEY, ts REAL, sportsbook_ml_home REAL, sportsbook_ml_away REAL, kalshi_mid REAL
 );
+CREATE TABLE IF NOT EXISTS trade_prints (
+  trade_id TEXT PRIMARY KEY, ticker TEXT NOT NULL, ts REAL NOT NULL, price REAL NOT NULL,
+  count REAL NOT NULL, taker_side TEXT
+);
+CREATE INDEX IF NOT EXISTS trade_prints_ticker_ts ON trade_prints(ticker, ts);
 """
 
 # Venues with flat L1 columns on inplay_ticks (others still land in l1_json).
@@ -93,7 +98,7 @@ def _l1_columns() -> dict[str, str]:
     return cols
 
 
-TICK_EXTRA_COLUMNS = {**_l1_columns(), "home": "TEXT", "away": "TEXT", "gated_reasons": "TEXT", "state_hash": "TEXT", "freshness_json": "TEXT", "l1_json": "TEXT"}
+TICK_EXTRA_COLUMNS = {**_l1_columns(), "home": "TEXT", "away": "TEXT", "gated_reasons": "TEXT", "state_hash": "TEXT", "freshness_json": "TEXT", "l1_json": "TEXT", "source": "TEXT"}
 
 
 def _ladder_columns(offsets: Iterable[int]) -> dict[str, str]:
@@ -222,11 +227,13 @@ class Store:
 
     # ---- in-play ticks ---------------------------------------------------------------------
     @staticmethod
-    def l1_from_quotes(quotes_by_venue: Any) -> dict[str, dict[str, dict[str, Any]]]:
+    def l1_from_quotes(quotes_by_venue: Any, req_ts: Optional[float] = None,
+                       obs_ts: Optional[float] = None, refreshed: bool = True) -> dict[str, Any]:
         """``{venue: [OutcomeQuote]}`` (or ``{venue: {outcome: quote}}``) -> plain nested dict
         ``{venue: {outcome: {bid, ask, bid_size, ask_size, quote_time, book_id, venue_market_id,
         fee_params, exchange}}}`` — everything the tick replay needs to rebuild the quote."""
-        out: dict[str, dict[str, dict[str, Any]]] = {}
+        out: dict[str, Any] = {}
+        rows: list[dict[str, Any]] = []
         for venue, qs in (quotes_by_venue or {}).items():
             items = qs.values() if isinstance(qs, dict) else (qs if isinstance(qs, (list, tuple)) else [qs])
             for q in items:
@@ -236,16 +243,29 @@ class Store:
                     continue
                 meta = g("meta") or {}
                 fee_params = dict(g("fee_params") or {})
-                out.setdefault(venue, {})[outcome] = {
+                side = str(meta.get("side") or "yes").lower()
+                row = {
                     "bid": _f(g("bid")), "ask": _f(g("ask")), "bid_size": _f(g("bid_size")), "ask_size": _f(g("ask_size")), "quote_time": _f(g("quote_time")),
                     "book_id": g("book_id") or venue, "venue_market_id": g("venue_market_id"), "fee_params": fee_params,
                     "exchange": (meta.get("exchange") if isinstance(meta, dict) else None) or fee_params.get("exchange"),
+                    "venue": venue, "outcome": outcome, "side": side,
+                    "tie_payout": _f(meta.get("tie_payout")),
+                    "req_ts": _f(meta.get("req_ts")) if meta.get("req_ts") is not None else req_ts,
+                    "obs_ts": _f(meta.get("obs_ts")) if meta.get("obs_ts") is not None else (_f(g("ts")) or obs_ts),
+                    "refreshed": int(bool(meta.get("refreshed", refreshed))),
                 }
+                rows.append(row)
+                # Compatibility map: prefer YES when a normalized NO row names the same outcome.
+                prior = out.setdefault(venue, {}).get(outcome)
+                if prior is None or (prior.get("side") != "yes" and side == "yes"):
+                    out[venue][outcome] = dict(row)
+        if rows:
+            out["rows"] = sorted(rows, key=lambda r: (r["venue"], str(r.get("venue_market_id") or ""), r["side"]))
         return out
 
-    def _tick_row(self, ts: float, event_key: str, live: Optional[bool], game_state: Any, l1: dict[str, dict[str, dict[str, Any]]], home: Optional[str], away: Optional[str], freshness: Any = None, gated_reasons: Any = None) -> dict[str, Any]:
+    def _tick_row(self, ts: float, event_key: str, live: Optional[bool], game_state: Any, l1: dict[str, Any], home: Optional[str], away: Optional[str], freshness: Any = None, gated_reasons: Any = None, source: str = "full") -> dict[str, Any]:
         g = _get(game_state) if game_state is not None else (lambda k, d=None: d)
-        row: dict[str, Any] = {"ts": ts, "event_key": event_key, "live": None if live is None else int(live), "home_score": g("home_score"), "away_score": g("away_score"), "period": g("period"), "home": home, "away": away, "state_hash": state_hash(game_state) if game_state is not None else None, "l1_json": json.dumps(l1, default=str) if l1 else None, "freshness_json": json.dumps(freshness, default=str) if freshness is not None else None}
+        row: dict[str, Any] = {"ts": ts, "event_key": event_key, "live": None if live is None else int(live), "home_score": g("home_score"), "away_score": g("away_score"), "period": g("period"), "home": home, "away": away, "state_hash": state_hash(game_state) if game_state is not None else None, "l1_json": json.dumps(l1, default=str) if l1 else None, "freshness_json": json.dumps(freshness, default=str) if freshness is not None else None, "source": source}
         if gated_reasons:
             row["gated_reasons"] = ",".join(sorted({str(r) for r in gated_reasons})) if not isinstance(gated_reasons, str) else gated_reasons
         for v in L1_VENUES:
@@ -258,7 +278,7 @@ class Store:
         return row
 
     @_locked
-    def record_tick(self, view: Any, quotes_by_venue: Any = None, freshness: Any = None, ts: Optional[float] = None) -> int:
+    def record_tick(self, view: Any, quotes_by_venue: Any = None, freshness: Any = None, ts: Optional[float] = None, source: str = "full") -> int:
         """One row per priced game per poll. ``view`` is an ``InplayView`` (or a dict of one);
         ``quotes_by_venue`` is the merged event's ``{venue: [OutcomeQuote]}`` for the per-venue
         L1 columns; ``freshness`` the plain dict described in the module docstring."""
@@ -274,8 +294,9 @@ class Store:
             home, away = (outcomes[0] if outcomes else None), (outcomes[1] if len(outcomes) > 1 else None)
         side = next((s for s in sd if s["outcome"] == home), sd[0] if sd else None)
         gated = sorted({r for s in sd for r in (s.get("gated_reasons") or [])})
-        l1 = self.l1_from_quotes(quotes_by_venue)
-        row = self._tick_row(ts or time.time(), gv("event_key"), bool(gv("live")), gs or None, l1, home, away, freshness, gated)
+        tick_ts = ts or time.time()
+        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts, refreshed=(source == "full"))
+        row = self._tick_row(tick_ts, gv("event_key"), bool(gv("live")), gs or None, l1, home, away, freshness, gated, source)
         row.update({"game_line": gv("game_line"), "model_p": side.get("model_p") if side else None, "market_p": side.get("market_p") if side else None, "espn_p": side.get("espn_p") if side else None, "blend_p": side.get("fair") if side else None, "disagreement": gv("disagreement"), "actions": "\n".join(gv("actions") or []), "view": json.dumps(asdict(view) if is_dataclass(view) else view, default=str)})
         with self.conn:
             return self._insert("inplay_ticks", row)
@@ -286,14 +307,41 @@ class Store:
         state but ran no strategy — also how fixtures are loaded for the tick replay."""
         g = _get(game_state) if game_state is not None else (lambda k, d=None: d)
         home, away = home or g("home"), away or g("away")
-        l1 = self.l1_from_quotes(quotes_by_venue)
+        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=ts, obs_ts=ts)
         if home is None or away is None:
-            outs = sorted({o for per in l1.values() for o in per})
+            outs = sorted({r["outcome"] for r in l1.get("rows", [])})
             home, away = home or (outs[0] if outs else None), away or (outs[1] if len(outs) > 1 else None)
         if live is None and game_state is not None:
             live = g("status") == "live"
         with self.conn:
             return self._insert("inplay_ticks", self._tick_row(ts, event_key, live, game_state, l1, home, away, freshness))
+
+    @_locked
+    def record_trade_prints(self, trades: Iterable[dict[str, Any]], ticker: Optional[str] = None) -> int:
+        """Insert genuine Kalshi prints idempotently. L1 changes are never treated as trades."""
+        n = 0
+        with self.conn:
+            for trade in trades:
+                trade_id = trade.get("trade_id") or trade.get("id")
+                symbol = trade.get("ticker") or ticker
+                raw_ts = trade.get("created_time") or trade.get("ts") or trade.get("timestamp")
+                ts = _f(raw_ts)
+                if ts is None and raw_ts:
+                    try:
+                        from datetime import datetime
+                        ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00")).timestamp()
+                    except (TypeError, ValueError):
+                        ts = None
+                price = _f(trade.get("yes_price_dollars") or trade.get("price_dollars") or trade.get("yes_price"))
+                if price is not None and price > 1:
+                    price /= 100.0
+                count = _f(trade.get("count_fp") or trade.get("count") or trade.get("quantity"))
+                side = trade.get("taker_side") or trade.get("side")
+                if not trade_id or not symbol or ts is None or price is None or count is None:
+                    continue
+                cur = self.conn.execute("INSERT OR IGNORE INTO trade_prints (trade_id,ticker,ts,price,count,taker_side) VALUES (?,?,?,?,?,?)", (str(trade_id), str(symbol), ts, price, count, side))
+                n += cur.rowcount
+        return n
 
     @_locked
     def record_espn_tick(self, gs: Any, ts: Optional[float] = None, state_source: Optional[str] = None) -> int:

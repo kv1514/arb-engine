@@ -1,4 +1,6 @@
 {
+ "accounting_status": "legacy_entry_fee_only_unbounded_horizons",
+ "warning": "Historical experiment only; rerun current scripts/leadlag_study.py before quoting executable performance",
  "date": "2026-09-20",
  "games": 14,
  "lag_replay": {

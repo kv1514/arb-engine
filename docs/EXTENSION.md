@@ -159,9 +159,10 @@ mode applies the same rule in `background.js`. If your account really can trade 
 **LAG boxes.** Below the arb line the panel shows a **LAG** box whenever one venue has
 repriced ≥ 5¢ in the last 30 s and an executable venue has not followed (the bridge runs
 `strategy/leadlag.py` on every 1 s poll): "robinhood moved +8¢, kalshi has not: buy Kansas
-City on kalshi at 0.60 vs robinhood mid 0.675 — edge +5.8% → 208 contracts (300 offered)".
-Sunday's replay put the laggard's catch-up at ~80 % within a minute (median 23 s) (docs/MODEL.md, "The
-first live Sunday"); act within ~20 s, and treat a leader that snaps back as a bad print.
+City on kalshi at 0.60 vs robinhood mid 0.675 — edge +5.8% → 202 contracts (300 offered)".
+The historical catch-up figures are a legacy measurement that predates exit fees and strict
+horizon/fill checks (docs/MODEL.md, "The first live Sunday"); they are not an instruction to
+trade. Settlement mismatches remain visible but are blocked from automated execution.
 The bankroll / Kelly fraction in the popup size the suggestion; without a bankroll only the
 depth is shown.
 
@@ -199,4 +200,3 @@ capped by the contracts offered at that ask; the slate-wide cap in `live` scales
 stake on a tick so their sum stays under `--slate-cap`. Nothing is placed; the counts are what the
 engine would do at those exact prices — and the replays say the STEAL edge itself is not yet
 demonstrated on the NFL (`docs/MODEL.md`), so treat the count as a ceiling, not a recommendation.
-
