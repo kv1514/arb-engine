@@ -163,7 +163,14 @@ class MomentumTests(unittest.TestCase):
         data = json.loads((root/'ticks/synthetic_40.json').read_text())
         actual = replay(data)
         expected = json.loads((root/'results/momentum_synthetic_40.json').read_text())
-        self.assertEqual(actual, expected)
+        # Floats compared to 1e-12, not exactly: sum() is compensated from Python 3.12 on, so
+        # 3.10/3.11 differ in the last digits (CI runs 3.10-3.13).
+        self.assertEqual(set(actual), set(expected))
+        for k, v in expected.items():
+            if isinstance(v, float):
+                self.assertAlmostEqual(actual[k], v, places=12, msg=k)
+            else:
+                self.assertEqual(actual[k], v, k)
         # Deliberately preserve a negative result, rather than select winning predictions.
         self.assertGreater(actual['mean_absolute_error'], actual['persistence_mean_absolute_error'])
 
