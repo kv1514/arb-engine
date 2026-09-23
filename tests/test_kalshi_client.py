@@ -192,7 +192,8 @@ class ClientOrderPathTests(unittest.TestCase):
         res = _fx("cancel_batched")
         res["orders"].append({"order_id": "z", "client_order_id": None, "reduced_by": "0.00", "ts_ms": None})
         reduced = batch_cancel_reduced([res, {"orders": [{"order_id": "y", "reduced_by": "2.50"}]}, {}])
-        self.assertEqual(reduced, {"0b3c7a2e-demo-4c1f-9a11-000000000001": 1.0, "0b3c7a2e-demo-4c1f-9a11-000000000002": 1.0, "z": 0.0, "y": 2.5})
+        ids = [o["order_id"] for o in _fx("cancel_batched")["orders"]]   # recorded on demo 2026-09-22
+        self.assertEqual(reduced, {ids[0]: 1.0, ids[1]: 1.0, "z": 0.0, "y": 2.5})
 
     def test_read_paths_are_portfolio_orders_and_fills(self):
         """Reads never moved to /portfolio/events/: the documented paths are GET
@@ -221,8 +222,9 @@ class ClientOrderPathTests(unittest.TestCase):
 
     def test_create_and_cancel_single(self):
         """V2 create returns a flat ``{order_id, client_order_id, fill_count, remaining_count,
-        ts_ms}``; V2 cancel returns ``{order_id, client_order_id, reduced_by, ts_ms}``."""
-        c = _client({"POST /portfolio/events/orders": _fx("create_order"), "DELETE /portfolio/events/orders/0b3c": _fx("cancel_order")})
+        ts_ms}``; V2 cancel returns ``{order_id, reduced_by, ts_ms}`` (recorded on demo: the
+        cancel does not echo ``client_order_id``)."""
+        c = _client({"POST /portfolio/events/orders": _fx("create_order"), f"DELETE /portfolio/events/orders/{_fx('create_order')['order_id']}": _fx("cancel_order")})
         res = c.create_order(build_order_payload("KXNFLGAME-26SEP20PHITEN-PHI", "buy", "yes", 1, 0.01, post_only=True))
         self.assertNotIn("order", res)
         self.assertEqual(res["remaining_count"], "1.00")
@@ -268,7 +270,7 @@ class SelfMatchGuardTests(unittest.TestCase):
             kb.place("T", "yes", 0.41, 10, resting=[first], hedge_book_id="rothera")
         self.assertEqual(kb.client.http.calls, [])  # refused before any request
         placed = kb.place("T", "yes", 0.39, 10, resting=[first], hedge_book_id="rothera")
-        self.assertEqual((placed.order_id, placed.status), ("0b3c7a2e-demo-4c1f-9a11-000000000001", "resting"))  # flat V2 create response
+        self.assertEqual((placed.order_id, placed.status), (_fx("create_order")["order_id"], "resting"))  # flat V2 create response
         self.assertIs(type(placed.payload["expiration_time"]), int)
 
 
@@ -431,18 +433,18 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "POST /portfolio/events/orders": create,
             f"GET /portfolio/orders/{oid}": {"order": order_row},
             "GET /portfolio/orders?status=resting": [{"orders": [order_row], "cursor": ""}, {"orders": [], "cursor": ""}],
-            f"DELETE /portfolio/events/orders/{oid}": _fx("cancel_order"),
+            f"DELETE /portfolio/events/orders/{oid}": dict(_fx("cancel_order"), order_id=oid),
             "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "b2", "reduced_by": "1.00"}, {"order_id": "b3", "reduced_by": "1.00"}]},
             "GET /portfolio/fills": _fx("fills_v2"),
         }
 
-    def _run(self, routes: dict, argv: list[str]) -> tuple[int, str]:
+    def _run(self, routes: dict, argv: list[str], mod=None) -> tuple[int, str]:
         import contextlib
         import io
         import tempfile
         from pathlib import Path
 
-        mod = self._script()
+        mod = mod or self._script()
         client = _client(routes)
         out = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(mod, "KalshiClient", lambda: client), mock.patch.object(mod, "FIXTURES", Path(tmp)), mock.patch.object(mod, "load_dotenv", lambda: None), contextlib.redirect_stdout(out):
@@ -462,6 +464,37 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertNotIn("user_id", written["order.json"]["order"])
         self.assertEqual(written["cancel_batched.json"]["orders"][0]["reduced_by"], "1.00")
         self.assertEqual(written["orders_v2.json"]["cursor"], "")
+
+    def test_read_side_lag_is_waited_out_not_failed(self):
+        """What demo did on 2026-09-22: the read-back 404s right after the create, the resting
+        listing shows the new order only on a later read, and after the cancels the listing
+        still shows it once. Each read now waits for the write to show (READ_SETTLE_S)."""
+        row = _fx("order")["order"]
+        routes = self._routes(row)
+        oid = row["order_id"]
+        routes[f"GET /portfolio/orders/{oid}"] = [HttpError(404, "u", '{"error":{"code":"not_found"}}'), {"order": row}]
+        routes["GET /portfolio/orders?status=resting"] = [
+            {"orders": [], "cursor": ""},       # not visible yet
+            {"orders": [row], "cursor": ""},    # visible
+            {"orders": [row], "cursor": ""},    # end: the cancel not visible yet
+            {"orders": [], "cursor": ""},       # end: cleared
+        ]
+        mod = self._script()
+        with mock.patch.object(mod.time, "sleep", lambda s: None):
+            rc, text, _ = self._run(routes, [], mod=mod)
+        self.assertEqual(rc, 0, text)
+        self.assertNotIn("FAIL", text)
+        self.assertIn("resting orders: 0 total, 0 from this run  (PASS)", text)
+
+    def test_a_404_that_never_clears_still_fails(self):
+        row = _fx("order")["order"]
+        routes = self._routes(row)
+        routes[f"GET /portfolio/orders/{row['order_id']}"] = HttpError(404, "u", "not found")
+        mod = self._script()
+        with mock.patch.object(mod, "READ_SETTLE_S", 0.0):
+            rc, text, _ = self._run(routes, [], mod=mod)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL GET /portfolio/orders/{id}", text)
 
     def test_null_expiration_and_zero_reduced_by_fail(self):
         """A 200 is not a PASS: the read-back order must echo the expiry and every cancel must
@@ -495,8 +528,9 @@ class FixtureShapeTests(unittest.TestCase):
         # The documented shapes: flat create/cancel responses, enveloped single order, rows
         # with outcome_side/book_side + *_price_dollars.
         self.assertEqual(set(_fx("create_order")) - {"_fixture"}, {"order_id", "client_order_id", "fill_count", "remaining_count", "ts_ms"})
-        self.assertEqual(set(_fx("cancel_order")) - {"_fixture"}, {"order_id", "client_order_id", "reduced_by", "ts_ms"})
-        self.assertEqual(set(_fx("cancel_batched")["orders"][0]), {"order_id", "client_order_id", "reduced_by", "ts_ms"})
+        # Recorded on demo 2026-09-22: cancels do not echo client_order_id.
+        self.assertEqual(set(_fx("cancel_order")) - {"_fixture"}, {"order_id", "reduced_by", "ts_ms"})
+        self.assertEqual(set(_fx("cancel_batched")["orders"][0]), {"order_id", "reduced_by", "ts_ms"})
         od = _fx("order")["order"]
         self.assertLessEqual({"order_id", "ticker", "outcome_side", "book_side", "status", "yes_price_dollars", "no_price_dollars", "remaining_count_fp", "expiration_time"}, set(od))
         self.assertLessEqual({"fill_id", "order_id", "ticker", "outcome_side", "book_side", "count_fp", "yes_price_dollars", "is_taker"}, set(_fx("fills_v2")["fills"][0]))

@@ -1,8 +1,8 @@
 {
- "_fixture": "assumed from docs.kalshi.com api-reference (2026-09-19), replaced by scripts/kalshi_demo_check.py --record",
- "order_id": "0b3c7a2e-demo-4c1f-9a11-000000000001",
- "client_order_id": "arb-demo-check-1",
+ "_fixture": "recorded, 2026-09-22 demo external-api.demo.kalshi.co",
+ "client_order_id": "22a6012f-2330-4622-b032-287bd20b5519",
  "fill_count": "0.00",
+ "order_id": "01a0cc76-5048-77ac-83a7-9feea42d55bc",
  "remaining_count": "1.00",
- "ts_ms": 1789858600123
+ "ts_ms": 1790136701188
 }

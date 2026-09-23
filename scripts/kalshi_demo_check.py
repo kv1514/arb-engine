@@ -74,6 +74,36 @@ def _reduced_by(res: Any) -> dict[str, float]:
     return batch_cancel_reduced(res or [])
 
 
+# Kalshi's read side trails its write side (measured on demo 2026-09-22): GET
+# /portfolio/orders/{id} answered 404 ~150 ms after the create returned the id, the resting
+# listing did not show the order yet, and after a successful cancel (reduced_by 1.0) the
+# listing still showed it resting. Seconds later every read was right. So a read that checks
+# a write polls until it agrees, for up to READ_SETTLE_S, before it counts as a FAIL.
+READ_SETTLE_S = 10.0
+
+
+def settle(fn, ok, timeout: Optional[float] = None, every: float = 0.5):
+    """Call ``fn`` until ``ok(result)`` or ``timeout`` (default READ_SETTLE_S); a 404 counts as
+    "not visible yet". Returns (result, seconds waited); the last result (or the last
+    HttpError) on timeout."""
+    timeout = READ_SETTLE_S if timeout is None else timeout
+    t0 = time.time()
+    while True:
+        try:
+            res, err = fn(), None
+        except HttpError as e:
+            if e.status != 404:
+                raise
+            res, err = None, e
+        if err is None and ok(res):
+            return res, time.time() - t0
+        if time.time() - t0 >= timeout:
+            if err is not None:
+                raise err
+            return res, time.time() - t0
+        time.sleep(every)
+
+
 class Check:
     def __init__(self, client: KalshiClient, record: bool):
         self.client = client
@@ -185,12 +215,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("no order_id in the create response; check the fixture shape")
         return 1
     print(f"  order_id={oid}  remaining_count={(created or {}).get('remaining_count')}")
-    od = chk.step("GET /portfolio/orders/{id} (KalshiBroker.poll reads this)", lambda: client.order(oid), "order")
+    od = chk.step("GET /portfolio/orders/{id} (KalshiBroker.poll reads this; waits for the read side)", lambda: settle(lambda: client.order(oid), lambda r: bool(r))[0], "order")
     if od is not None:
         # The exchange-side backstop only exists if the order actually carries the expiry.
         chk.expect("read-back order echoes a non-null expiration_time", bool(od.get("expiration_time")), f"expiration_time={od.get('expiration_time')!r} status={od.get('status')!r}")
         chk.expect("read-back order carries outcome_side/book_side + yes_price_dollars", od.get("outcome_side") in ("yes", "no") and od.get("book_side") in ("bid", "ask") and bool(od.get("yes_price_dollars")), f"outcome_side={od.get('outcome_side')!r} book_side={od.get('book_side')!r} yes_price_dollars={od.get('yes_price_dollars')!r}")
-    listed = chk.step("GET /portfolio/orders?status=resting", lambda: client.orders_v2(status="resting"), "orders_v2")
+    listed = chk.step("GET /portfolio/orders?status=resting (waits for the new order)", lambda: settle(lambda: client.orders_v2(status="resting"), lambda r: any(str(o.get("order_id")) == oid for o in r or []))[0], "orders_v2")
     if listed is not None:
         chk.expect("the new order is in the resting listing", any(str(o.get("order_id")) == oid for o in listed), f"{len(listed)} resting")
     res = chk.step("DELETE /portfolio/events/orders/{id}", lambda: client.cancel_order(oid), "cancel_order")
@@ -210,7 +240,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         if res is not None:
             chk.expect_cancelled("batched cancel", res, more)
     chk.step("GET /portfolio/fills", lambda: client.fills_v2(limit=5), "fills_v2")
-    resting = chk.step("GET resting orders at the end", lambda: client.orders_v2(status="resting")) or []
+    ids = {oid, *more}
+    resting = chk.step("GET resting orders at the end (waits for the cancels to show)", lambda: settle(lambda: client.orders_v2(status="resting"), lambda r: not [o for o in r or [] if str(o.get("order_id") or o.get("id")) in ids])[0]) or []
     ours = [o for o in resting if str(o.get("order_id") or o.get("id")) in {oid, *more}]
     print(f"  resting orders: {len(resting)} total, {len(ours)} from this run  ({'PASS' if not ours else 'FAIL'})")
     if ours:

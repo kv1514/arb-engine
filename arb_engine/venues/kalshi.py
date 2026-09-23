@@ -312,7 +312,7 @@ class KalshiClient:
         return self.post("/portfolio/events/orders", payload)
 
     def cancel_order(self, order_id: str) -> dict:
-        """``DELETE /portfolio/events/orders/{id}`` -> flat ``{order_id, client_order_id,
+        """``DELETE /portfolio/events/orders/{id}`` -> flat ``{order_id,
         reduced_by, ts_ms}`` (not an order object; ``reduced_by`` is the count taken off the
         book). 404 when the id is unknown."""
         return self.delete(f"/portfolio/events/orders/{order_id}")
@@ -326,7 +326,7 @@ class KalshiClient:
         holds the order (``market_ticker`` lets the gateway auto-route when it is unknown).
         One round trip per chunk is what makes a shutdown sweep of a full maker book fast
         enough to finish before a supervisor kills the process. Returns one response per
-        chunk, each ``{"orders": [{order_id, client_order_id, reduced_by, ts_ms}]}`` where
+        chunk, each ``{"orders": [{order_id, reduced_by, ts_ms}]}`` (no client_order_id: recorded on demo) where
         ``reduced_by`` is ``"0.00"`` when that cancel errored — see
         :func:`batch_cancel_reduced`. An empty list makes no request."""
         entries = [e for e in (_cancel_entry(o) for o in orders) if e]

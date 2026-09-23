@@ -1,17 +1,15 @@
 {
- "_fixture": "assumed from docs.kalshi.com api-reference (2026-09-19), replaced by scripts/kalshi_demo_check.py --record",
+ "_fixture": "recorded, 2026-09-22 demo external-api.demo.kalshi.co",
  "orders": [
   {
-   "order_id": "0b3c7a2e-demo-4c1f-9a11-000000000001",
-   "client_order_id": "arb-demo-check-1",
+   "order_id": "01a0cc76-5048-7493-bb9e-c58b206c1698",
    "reduced_by": "1.00",
-   "ts_ms": 1789858660456
+   "ts_ms": 1790136702100
   },
   {
-   "order_id": "0b3c7a2e-demo-4c1f-9a11-000000000002",
-   "client_order_id": "arb-demo-check-2",
+   "order_id": "01a0cc76-5048-7b17-828c-86d9a2d91dfb",
    "reduced_by": "1.00",
-   "ts_ms": 1789858660789
+   "ts_ms": 1790136702101
   }
  ]
 }
