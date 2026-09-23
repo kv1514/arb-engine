@@ -270,17 +270,18 @@ class LiveSlate:
         the last full tick, run the market-vs-market signals (LAG, ARB) on the fresh quotes
         and record the L1 so the observation ladder gets 1 s resolution. The ESPN state,
         model and STEAL logic are the full tick's business."""
+        pinned = now   # None in production: the lane then reads the clock around each request
         now = now or time.time()
         with self._sig_lock:
             live = dict(self._live_priced)
         out = SlateTick(at=now, views=[], games=len(live), quiet=True)
         if not live:
             return out
-        refreshed, errs = self.fastlane.step(list(live), now)
+        refreshed, errs = self.fastlane.step(list(live), pinned)
         out.errors.extend(errs)
         if self.store is not None:
-            try:
-                self.fastlane.poll_trades(self.store, now)
+            try:   # one ticker per step (~150 ms): the 1 s quote refresh is never held up
+                self.fastlane.poll_trades(self.store, now, per_step=1)
             except Exception as e:
                 out.errors.append(f"trade prints: {e!r}")
         for key, (gs, me, view) in live.items():

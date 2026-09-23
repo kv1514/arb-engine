@@ -50,27 +50,43 @@ def _epoch(x: Any) -> Optional[float]:
         return None
 
 
-def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float] = None) -> list[OutcomeQuote]:
+def _clock_for(now: Optional[float], clock: Optional[Callable[[], float]]) -> Callable[[], float]:
+    """An explicit ``now`` pins every timestamp (tests, replays); otherwise the real clock is
+    read before the request (``req_ts``) and again when the answer is in (``obs_ts``)."""
+    if clock is not None:
+        return clock
+    return (lambda: float(now)) if now is not None else time.time
+
+
+def carried(q: OutcomeQuote) -> OutcomeQuote:
+    """A quote this step did not refresh: it keeps the time it was *actually* observed (a
+    carried quote stamped "now" would look fresh and could fake a move) and is flagged."""
+    meta = dict(q.meta or {})
+    meta.setdefault("obs_ts", q.ts)
+    meta["refreshed"] = False
+    return dataclasses.replace(q, meta=meta)
+
+
+def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float] = None, clock: Optional[Callable[[], float]] = None) -> list[OutcomeQuote]:
     """Fresh top of book for Kalshi ``quotes`` via one batched ``/markets?tickers=`` call
-    (chunks of 50). Quotes whose ticker is missing from the answer are returned unchanged."""
-    req_ts = now or time.time()
-    now = req_ts
+    (chunks of 50). Quotes whose ticker is missing from the answer are carried unchanged."""
+    tick = _clock_for(now, clock)
     tickers = sorted({q.meta.get("ticker") or q.venue_market_id.split("#")[0] for q in quotes})
     if not tickers:
         return list(quotes)
+    req_ts = tick()
     fresh: dict[str, dict] = {}
     for i in range(0, len(tickers), 50):
         chunk = tickers[i : i + 50]
         data = client.get("/markets", {"tickers": ",".join(chunk), "limit": 100})
         for m in data.get("markets", []) or []:
             fresh[m.get("ticker", "")] = m
+    now = tick()   # obs_ts: when the answer was in hand
     out: list[OutcomeQuote] = []
     for q in quotes:
         m = fresh.get(q.meta.get("ticker") or q.venue_market_id.split("#")[0])
         if not m:
-            meta = dict(q.meta or {})
-            meta.update({"req_ts": req_ts, "obs_ts": now, "refreshed": False})
-            out.append(dataclasses.replace(q, meta=meta))
+            out.append(carried(q))
             continue
         yes_ask = _f(m.get("yes_ask_dollars")) or ((_f(m.get("yes_ask")) or 0) / 100.0 or None)
         yes_bid = _f(m.get("yes_bid_dollars")) or ((_f(m.get("yes_bid")) or 0) / 100.0 or None)
@@ -89,22 +105,21 @@ def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float]
     return out
 
 
-def refresh_robinhood(adapter: Any, quotes: list[OutcomeQuote], now: Optional[float] = None) -> list[OutcomeQuote]:
+def refresh_robinhood(adapter: Any, quotes: list[OutcomeQuote], now: Optional[float] = None, clock: Optional[Callable[[], float]] = None) -> list[OutcomeQuote]:
     """Fresh top of book for Robinhood ``quotes`` via the quotes API (20 ids per call)."""
-    req_ts = now or time.time()
-    now = req_ts
+    tick = _clock_for(now, clock)
     ids = sorted({(q.meta or {}).get("contract_id") or q.venue_market_id.split("#")[0] for q in quotes})
     if not ids:
         return list(quotes)
+    req_ts = tick()
     fresh = adapter.quotes(ids)
+    now = tick()   # obs_ts: when the answer was in hand
     out: list[OutcomeQuote] = []
     for q in quotes:
         cid = (q.meta or {}).get("contract_id") or q.venue_market_id.split("#")[0]
         qd = fresh.get(cid)
         if not qd:
-            meta = dict(q.meta or {})
-            meta.update({"req_ts": req_ts, "obs_ts": now, "refreshed": False})
-            out.append(dataclasses.replace(q, meta=meta))
+            out.append(carried(q))
             continue
         qt = _epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at"))
         meta = dict(q.meta or {})
@@ -132,7 +147,7 @@ class FastLane:
         self.steps = 0
         self.errors: list[str] = []
         self.trade_cursor: dict[str, int] = {}
-        self.last_trade_poll = -float("inf")
+        self._trade_rr = 0
 
     def seed(self, events: dict[str, dict[str, list[OutcomeQuote]]]) -> None:
         """Adopt the latest full snapshot's quotes (called after every full tick)."""
@@ -148,16 +163,16 @@ class FastLane:
                 self.last[key][venue] = seeded
 
     def step(self, keys: Optional[Iterable[str]] = None, now: Optional[float] = None) -> tuple[dict[str, dict[str, list[OutcomeQuote]]], list[str]]:
-        now = now or self.clock()
+        clock = (lambda: float(now)) if now is not None else self.clock
         keys = list(keys) if keys is not None else list(self.last)
         errors: list[str] = []
         k_quotes = [q for k in keys for q in self.last.get(k, {}).get("kalshi", [])]
         r_quotes = [q for k in keys for q in self.last.get(k, {}).get("robinhood", [])]
         jobs: dict[str, Callable[[], list[OutcomeQuote]]] = {}
         if self.kalshi is not None and k_quotes:
-            jobs["kalshi"] = lambda: refresh_kalshi(self.kalshi, k_quotes, now)
+            jobs["kalshi"] = lambda: refresh_kalshi(self.kalshi, k_quotes, clock=clock)
         if self.robinhood is not None and r_quotes:
-            jobs["robinhood"] = lambda: refresh_robinhood(self.robinhood, r_quotes, now)
+            jobs["robinhood"] = lambda: refresh_robinhood(self.robinhood, r_quotes, clock=clock)
         results: dict[str, list[OutcomeQuote]] = {}
         if jobs:
             with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
@@ -167,6 +182,10 @@ class FastLane:
                         results[v] = fut.result(timeout=self.timeout)
                     except Exception as e:  # a slow or failing venue keeps its previous quotes
                         errors.append(f"fastlane {v}: {e!r}")
+        for k in keys:
+            for v, qs in self.last.get(k, {}).items():
+                if v not in results:
+                    self.last[k][v] = [carried(q) for q in qs]
         for v, qs in results.items():
             by_key: dict[str, list[OutcomeQuote]] = {}
             for q in qs:
@@ -177,29 +196,34 @@ class FastLane:
         self.errors = errors
         return {k: self.last[k] for k in keys if k in self.last}, errors
 
-    def poll_trades(self, store: Any, now: Optional[float] = None, every_s: float = 5.0) -> int:
-        """Persist only Kalshi's public trade-print feed, at most once per five seconds."""
-        now = self.clock() if now is None else float(now)
-        if self.kalshi is None or store is None or now - self.last_trade_poll < every_s:
+    def poll_trades(self, store: Any, now: Optional[float] = None, per_step: int = 2, max_pages: int = 5) -> int:
+        """Record Kalshi's public trade prints for the live tickers (L1 changes are never read
+        as trades). Called once per lane step, it polls only ``per_step`` tickers round-robin,
+        so the 1 s quote refresh is never held up by a request per ticker. Each ticker is
+        paged back to its cursor (newest-first pages; a busy second can exceed one page) and
+        the cursor is the newest print's second, not one past it: prints stamped in that same
+        second after the poll still arrive, and the trade_id primary key drops the repeats."""
+        if self.kalshi is None or store is None:
             return 0
         tickers = sorted({(q.meta or {}).get("ticker") or q.venue_market_id.split("#")[0]
                           for by in self.last.values() for q in by.get("kalshi", [])})
+        if not tickers:
+            return 0
         inserted = 0
-        for ticker in tickers:
-            trades = self.kalshi.trades(ticker, limit=100, min_ts=self.trade_cursor.get(ticker))
+        for i in range(min(per_step, len(tickers))):
+            ticker = tickers[(self._trade_rr + i) % len(tickers)]
+            trades: list[dict] = []
+            cursor = None
+            for _ in range(max_pages):
+                params = {"ticker": ticker, "limit": 1000, "min_ts": self.trade_cursor.get(ticker), "cursor": cursor}
+                page = self.kalshi.get("/markets/trades", {k: v for k, v in params.items() if v is not None}) or {}
+                trades.extend(page.get("trades") or [])
+                cursor = page.get("cursor")
+                if not cursor:
+                    break
             inserted += store.record_trade_prints(trades, ticker)
-            stamps = []
-            for trade in trades:
-                raw = trade.get("created_time") or trade.get("ts")
-                try:
-                    stamps.append(int(float(raw)))
-                except (TypeError, ValueError):
-                    try:
-                        from datetime import datetime
-                        stamps.append(int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()))
-                    except (TypeError, ValueError):
-                        pass
+            stamps = [t for t in (_epoch(tr.get("created_time") or tr.get("ts")) for tr in trades) if t is not None]
             if stamps:
-                self.trade_cursor[ticker] = max(stamps) + 1
-        self.last_trade_poll = now
+                self.trade_cursor[ticker] = int(max(stamps))
+        self._trade_rr = (self._trade_rr + per_step) % len(tickers)
         return inserted

@@ -210,6 +210,56 @@ class FastLaneTests(unittest.TestCase):
                 return {i: quotes[i] for i in ids if i in quotes}
         return R()
 
+    def test_request_and_observation_times_bracket_the_call_and_carried_quotes_keep_theirs(self):
+        """obs_ts is when the answer was in hand and req_ts when the request left; a quote the
+        venue did not answer (or a venue that failed) keeps the time it was really seen."""
+        from arb_engine.strategy.fastlane import FastLane
+
+        ticks = iter([100.0, 100.4, 101.0, 101.3])     # req, obs of step 1; req, obs of step 2
+        client, _ = self._kalshi_client({"T-KC": (0.59, 0.60)})
+        kq = OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=0.60, bid=0.59, ts=90.0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})
+        gone = OutcomeQuote("kalshi", "T-XX", KEY, "DEN", ask=0.41, bid=0.40, ts=90.0, fee_params=KFEE, meta={"ticker": "T-XX", "side": "yes"})
+        pq = OutcomeQuote("polymarket", "tok", KEY, "KC", ask=0.62, bid=0.60, ts=85.0)
+        lane = FastLane(kalshi_client=client, clock=lambda: next(ticks))
+        lane.seed({KEY: {"kalshi": [kq, gone], "polymarket": [pq]}})
+        by, _ = lane.step()
+        k = {q.venue_market_id: q for q in by[KEY]["kalshi"]}
+        self.assertEqual((k["T-KC"].meta["req_ts"], k["T-KC"].meta["obs_ts"], k["T-KC"].ts), (100.0, 100.4, 100.4))
+        self.assertTrue(k["T-KC"].meta["refreshed"])
+        self.assertEqual((k["T-XX"].meta["obs_ts"], k["T-XX"].meta["refreshed"]), (90.0, False))   # not answered: carried
+        self.assertEqual((by[KEY]["polymarket"][0].meta["obs_ts"], by[KEY]["polymarket"][0].meta["refreshed"]), (85.0, False))
+        by, _ = lane.step()
+        self.assertEqual(by[KEY]["polymarket"][0].meta["obs_ts"], 85.0)   # still the real time, step after step
+        self.assertEqual({q.venue_market_id: q.meta["obs_ts"] for q in by[KEY]["kalshi"]}["T-KC"], 101.3)
+
+    def test_trade_prints_page_back_keep_same_second_prints_and_poll_round_robin(self):
+        from arb_engine.store import Store
+        from arb_engine.strategy.fastlane import FastLane
+        from tests.helpers import load
+
+        pages = [load("trades/kalshi_trades_page1.json"), load("trades/kalshi_trades_page2.json")]
+        calls = []
+
+        class C:
+            def get(self, path, params=None, **kw):
+                calls.append(dict(params or {}))
+                if params.get("ticker") != "T-A":
+                    return {"trades": [], "cursor": ""}
+                return pages[1] if params.get("cursor") == pages[0]["cursor"] else pages[0]
+        st = Store(":memory:")
+        lane = FastLane(kalshi_client=C())
+        lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", "T-A", KEY, "KC", ask=0.6, bid=0.59, meta={"ticker": "T-A"}),
+                                    OutcomeQuote("kalshi", "T-B", KEY, "DEN", ask=0.41, bid=0.4, meta={"ticker": "T-B"})]}})
+        n = lane.poll_trades(st, per_step=1)                      # T-A: both pages
+        self.assertEqual(n, len(pages[0]["trades"]) + len(pages[1]["trades"]))
+        self.assertEqual([c.get("cursor") for c in calls], [None, "abc123"])
+        newest = max(pages[0]["trades"], key=lambda t: t["created_time"])["created_time"]
+        from arb_engine.strategy.fastlane import _epoch
+        self.assertEqual(lane.trade_cursor["T-A"], int(_epoch(newest)))   # that second, not one past it
+        lane.poll_trades(st, per_step=1)                          # round-robin: T-B next
+        self.assertEqual(calls[-1]["ticker"], "T-B")
+        self.assertEqual(lane.poll_trades(st, per_step=1), 0)      # T-A again: repeats dropped by trade_id
+
     def test_refresh_kalshi_updates_prices_keeps_fee_params_and_no_rows(self):
         from arb_engine.strategy.fastlane import refresh_kalshi
 
