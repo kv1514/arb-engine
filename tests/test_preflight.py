@@ -519,7 +519,7 @@ case "$*" in
   *) exec @PY@ - "$INT_LOG" <<'PYEOF'
 # a long-running child that logs every SIGINT and spends 1 s "cleaning up" inside the first
 # one, the way the maker's cancel-all does: a second SIGINT in that window is the bug
-import signal, sys, time
+import os, signal, sys, time
 log = sys.argv[1]
 state = {"n": 0}
 def on_int(sig, frame):
@@ -532,6 +532,8 @@ def on_int(sig, frame):
     sys.exit(0)
 signal.signal(signal.SIGINT, on_int)
 signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+if os.environ.get("STUB_IGNORE_INT") == "1":   # the start-up window: SIGINT still ignored
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 with open(log, "a") as f:  # handlers installed: the test waits for this before signalling
     f.write("READY\\n")
 time.sleep(60)
@@ -745,6 +747,20 @@ class SundayLauncherTests(unittest.TestCase):
         os.kill(sup, 15)  # a stray TERM on the supervisor, not `stop`
         self.assertEqual(_wait_dead(sup, live), [], "supervisor or its child outlived a TERM")
         self.assertIn("live    down", self._sh("status").stdout)  # the stale pid file reads as down, not up
+
+    def test_a_child_that_ignores_sigint_is_still_taken_down(self):
+        """The CI orphan: TERM reached the supervisor while its fresh child still ignored
+        SIGINT, so the forwarded SIGINT was lost. The trap now escalates to TERM (then KILL)."""
+        env = {**self.env, "STUB_IGNORE_INT": "1"}
+        out = self._sh("start", env=env)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        live = self._child("live")
+        self._wait_ready(2)
+        sup = int(Path(self.tmp, "out", "run", "live.pid").read_text().strip())
+        t0 = time.time()
+        os.kill(sup, 15)
+        self.assertEqual(_wait_dead(sup, live), [], "a child ignoring SIGINT outlived its supervisor")
+        self.assertLess(time.time() - t0, 15)   # INT, 5 s grace, then TERM
 
     def test_keep_awake_wraps_the_live_supervisor(self):
         """With KEEP_AWAKE unset the launcher runs `caffeinate -i -w <live supervisor pid>`;

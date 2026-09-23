@@ -115,8 +115,19 @@ supervise() {
     child=""
     # TERM (from `stop`, or a stray kill) ends the loop and takes the child with it, so a
     # killed supervisor never orphans a Python process; the backoff sleep is a background
-    # job under `wait` so the trap runs at once instead of after the sleep.
-    trap '[ -n "$child" ] && kill -INT "$child" 2>/dev/null; exit 0' TERM
+    # job under `wait` so the trap runs at once instead of after the sleep. SIGINT first (the
+    # recorder flushes and the maker cancels its orders on it), then escalate: a child that
+    # has only just started still ignores SIGINT - background jobs begin with it ignored until
+    # RESET_SIGINT runs - and a lost SIGINT would orphan it (CI caught one on 2026-09-23).
+    stop_child() {
+      [ -n "$child" ] || exit 0
+      kill -INT "$child" 2>/dev/null
+      for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$child" 2>/dev/null || exit 0; sleep 0.5; done
+      kill -TERM "$child" 2>/dev/null; sleep 1
+      kill -0 "$child" 2>/dev/null && kill -KILL "$child" 2>/dev/null
+      exit 0
+    }
+    trap stop_child TERM
     while :; do
       echo "[$(date '+%F %T')] sunday.sh: starting $name: $cmd" >> "$log"
       # shellcheck disable=SC2086  # $cmd is a command line; word-splitting it is the point
