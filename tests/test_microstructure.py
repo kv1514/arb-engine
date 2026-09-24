@@ -249,6 +249,12 @@ class PaperExecutionTests(unittest.TestCase):
         self.assertEqual(two_leg_arb(a, b, 0, .40, .50, 10, ZeroFees(), ZeroFees(), latency_b_s=1,
                                      settlement_compatible=False).excluded, "settlement-mismatch")
 
+    def test_same_book_identity_is_known_even_when_future_quotes_are_missing(self):
+        r = two_leg_arb([], [], 0, .40, .50, 10, ZeroFees(), ZeroFees(),
+                        book_id_a="kalshi", book_id_b="kalshi")
+        self.assertEqual(r.excluded, "same-book")
+        self.assertEqual((r.legs[0].filled, r.legs[1].filled), (0, 0))
+
     def test_short_is_an_ioc_purchase_on_the_complement_book(self):
         complement = [row(1, .39, ask=.40, ask_size=3, outcome="AWAY")]
         t = ioc_short_via_complement(complement, 0, .40, 5, ZeroFees(), latency_s=1, settlement=1)

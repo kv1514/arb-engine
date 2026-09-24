@@ -233,12 +233,17 @@ def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any
                 latency_a_s: float = 1.0, latency_b_s: float = 15.0, haircut: float = 1.0,
                 tie_payouts: Optional[tuple[Optional[float], Optional[float]]] = None,
                 unwind_latency_s: float = 1.0, entry_tol_s: float = 2.0, max_rolls: int = 3,
-                unwind_window_s: float = 60.0, settlement_compatible: Optional[bool] = None) -> ArbResult:
+                unwind_window_s: float = 60.0, settlement_compatible: Optional[bool] = None,
+                book_id_a: Optional[str] = None, book_id_b: Optional[str] = None) -> ArbResult:
     """Both legs IOC after their own latency. ``tie_payouts`` = (leg a, leg b) dollars per
     contract on a tie; an unknown value excludes the pair (ties settle differently by venue)."""
     rows_a, rows_b = _dedupe_observations(rows_a), _dedupe_observations(rows_b)
     books_a = {str(r.get("book_id")) for r in rows_a if r.get("book_id")}
     books_b = {str(r.get("book_id")) for r in rows_b if r.get("book_id")}
+    if book_id_a:
+        books_a.add(str(book_id_a))
+    if book_id_b:
+        books_b.add(str(book_id_b))
     if books_a & books_b:
         empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
         return ArbResult(legs=empty, excluded="same-book")
