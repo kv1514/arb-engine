@@ -29,6 +29,22 @@ Each lossless row contains:
 Carried rows retain their original `req_ts`/`obs_ts`; a later tick does not make them fresh.
 Consumers must exclude `refreshed=0` from decisions and labels. Legacy rows without measured
 times fall back to their tick time with `approx_time=1` and must be reported separately.
+Rows sharing an exact `obs_ts` form one response-time information batch: all are installed
+before any feature at that timestamp is computed.
+
+## Settlement-value contract
+
+`quant.microdata.settlement_values()` returns exact values keyed by
+`(event_key, book_id, normalized_outcome, side)`, the same tuple as `contract_key(row)`.
+The normalized outcome is already what the purchase pays on a win: for example, Robinhood
+`NO Detroit` has `outcome=Buffalo`, `side=no`, and `no_of=Detroit`; a Buffalo win pays it $1
+and must not be inverted again. `no_of` is used as a consistency check.
+
+For compatibility, an old `(event_key, outcome, side)` alias is emitted only when every
+book has the same value. Consumers should call `settlement_for(values, contract_key(row))`
+or use the exact four-field key. This prevents Kalshi's $0.50 tie payout and Rothera's
+book-specific tie payout from overwriting each other. Claude's H3-lock replay must migrate
+its direct three-field lookup to `settlement_for`.
 
 ## Kalshi print contract
 
