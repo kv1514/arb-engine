@@ -1,0 +1,75 @@
+{
+  "coef": {
+    "B3_ridge_dmid30": {
+      "15": [
+        -9e-05,
+        0.02186
+      ],
+      "30": [
+        -3e-05,
+        0.03233
+      ],
+      "5": [
+        -7e-05,
+        0.00607
+      ],
+      "60": [
+        -3e-05,
+        0.02955
+      ]
+    },
+    "B4_ridge_gap": {
+      "15": [
+        0.0,
+        0.0
+      ],
+      "30": [
+        0.0,
+        0.0
+      ],
+      "5": [
+        0.0,
+        0.0
+      ],
+      "60": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "folds": [
+    "discovery"
+  ],
+  "n_train": {
+    "B3_ridge_dmid30": {
+      "15": 34371,
+      "30": 46838,
+      "5": 26917,
+      "60": 48394
+    },
+    "B4_ridge_gap": {
+      "15": 0,
+      "30": 0,
+      "5": 0,
+      "60": 0
+    }
+  },
+  "note": "fitted once on every discovery game; validation and test read it, never refit",
+  "trained_on": [
+    "nfl:ARI|SEA:2026-09-20",
+    "nfl:ATL|CAR:2026-09-20",
+    "nfl:BAL|NO:2026-09-20",
+    "nfl:CHI|MIN:2026-09-20",
+    "nfl:CIN|HOU:2026-09-20",
+    "nfl:CLE|TB:2026-09-20",
+    "nfl:DAL|WAS:2026-09-20",
+    "nfl:DEN|JAX:2026-09-20",
+    "nfl:GB|NYJ:2026-09-20",
+    "nfl:IND|KC:2026-09-20",
+    "nfl:LAC|LV:2026-09-20",
+    "nfl:LAR|NYG:2026-09-21",
+    "nfl:MIA|SF:2026-09-20",
+    "nfl:NE|PIT:2026-09-20",
+    "nfl:PHI|TEN:2026-09-20"
+  ]
+}

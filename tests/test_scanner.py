@@ -216,8 +216,13 @@ class TieAwareTests(unittest.TestCase):
         self.assertAlmostEqual(cheap_tie, 0.5)                    # ... but paid $0.50 a set on a tie
         self.assertNotIn("loses-on-tie", rep.flags)
         from arb_engine.strategy.arbalert import guarantee_line
-        self.assertIn("guaranteed: pays in every result, a tie included (tie-proof pair; the cheapest pair locked 3.0c more",
-                      guarantee_line(rep, rep.sized_arb or rep.arb))
+        # Rothera's tie clause is unverified in the settlement registry: never "guaranteed".
+        line = guarantee_line(rep, rep.sized_arb or rep.arb)
+        self.assertTrue(line.startswith("tie-proof on paper (Robinhood's tie rule is read from its terms, not yet verified)"), line)
+        self.assertIn("(tie-proof pair; the cheapest pair locked 3.0c more", line)
+        self.assertNotIn("guaranteed", line)
+        verified = type(rep)(**{**rep.__dict__, "flags": [f for f in rep.flags if "unverified" not in f]})
+        self.assertTrue(guarantee_line(verified, rep.sized_arb or rep.arb).startswith("guaranteed: pays in every result"))
 
     def test_the_cheaper_lock_stays_when_no_tie_proof_pair_locks(self):
         for kw, settings in (({"rothera_no_a": 0.49}, {}),                       # NO-A pair does not lock

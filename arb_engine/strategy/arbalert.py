@@ -69,10 +69,16 @@ def guarantee_line(rep: Any, sized: dict) -> str:
     if rep.sport not in TIE_SPORTS or (getattr(rep, "market_type", None) or "moneyline") != "moneyline":
         return ""
     flags = list(rep.flags or [])
+    # A rule the settlement registry holds only as unverified (Rothera's NFL tie clause is read
+    # from its terms, not captured) cannot back a guarantee: say "on paper".
+    unverified = any(f.startswith(("settlement-rule-unverified", "settlement-rule-provisional", "tie-rule-unverified",
+                                   "settlement-rule-missing")) for f in flags)
+    head = ("tie-proof on paper (Robinhood's tie rule is read from its terms, not yet verified): pays in every result, a tie included"
+            if unverified else "guaranteed: pays in every result, a tie included")
     pref = next((f for f in flags if f.startswith("tie-safe-preferred:")), None)
     if pref:
         _, give_up, cheap_tie = pref.split(":")
-        return (f"guaranteed: pays in every result, a tie included (tie-proof pair; the cheapest pair locked "
+        return (f"{head} (tie-proof pair; the cheapest pair locked "
                 f"{float(give_up) * 100:.1f}c more but paid only ${float(cheap_tie):.2f} a set on a tie)")
     tie_total, tie_margin = sized.get("tie_payout_total"), sized.get("tie_margin")
     if "loses-on-tie" in flags or (tie_margin is not None and float(tie_margin) < 0):
@@ -80,7 +86,7 @@ def guarantee_line(rep: Any, sized: dict) -> str:
         loss = f" = {ticket.money(float(tie_margin) * n)}" if tie_margin is not None and n else ""
         return (f"NOT tie-proof: a tied game pays ${float(tie_total or 0):.2f} a set{loss}; NFL ties are rare "
                 f"(1-2 a season) and no tie-proof pair locks right now")
-    return "guaranteed: pays in every result, a tie included"
+    return head
 
 
 def _setting(settings: Optional[dict[str, Any]], key: str, default: Any) -> Any:

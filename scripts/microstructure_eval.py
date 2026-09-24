@@ -24,11 +24,14 @@ the bid at h, both fees; missed, filled, closed, settled and unresolved counted 
   independent fresh book moved >= 5c in 30 s, the follower < half as much, the leader's mid
   >= 2c above), and M_prototype (strategy/momentum.MomentumTracker at its defaults: buy when
   it says ``rising``). Unconditional-sample rules fire once per contract per 60 s.
-* B3 ridge dmid_h ~ dmid_30 and B4 ridge dmid_h ~ leader gap: fitted chronologically (the
-  earlier games of the fold, or the earlier folds) and frozen before they are scored; the
-  test fold only ever reads a frozen artifact (``--frozen``), never refits.
+* B3 ridge dmid_h ~ dmid_30 and B4 ridge dmid_h ~ leader gap: on discovery, each scored game
+  is forecast by a fit on the games that *ended before it started* (never a later or
+  concurrent game); ``--freeze`` then fits all discovery games once and writes the frozen
+  artifact that validation and test read - neither refits.
 * H4 arbitrage: executable books whose all-in asks for both outcomes sum below $1; each leg
-  meets its own book after its own latency; scored win case, tie case and worst case.
+  meets its own book after its own latency. Only a pair with verified, compatible settlement
+  rules and a tie payout of >= $1 is *guaranteed* (scored on its worse of win and tie); every
+  other pair is *speculation*, scored on its win case and never called an arbitrage.
 
 Uncertainty: whole-game block bootstrap (2000 draws, fixed seed). H3 at 30 s is primary; the
 secondary family (``spec.secondary``) is Holm-corrected. Every run appends an audit record
@@ -57,7 +60,8 @@ sys.path.insert(0, str(ROOT))
 
 DEFAULT_MANIFEST = ROOT / "tests/fixtures/microstructure/manifest.json"
 DEFAULT_LOG = ROOT / "out/eval_log.jsonl"
-DEFAULT_FROZEN = ROOT / "out/micro_frozen_models.json"
+DEFAULT_FROZEN = ROOT / "tests/fixtures/microstructure/frozen_models.json"
+DEFAULT_FROZEN_SPEC = ROOT / "tests/fixtures/microstructure/frozen_spec.json"
 EXECUTABLE = ("kalshi", "robinhood")
 CODE_FILES = ("arb_engine/quant/microdata.py", "arb_engine/quant/paperexec.py", "arb_engine/strategy/momentum.py",
               "scripts/microstructure_eval.py")
@@ -291,6 +295,14 @@ def _git_head() -> Optional[str]:
 
 
 # ---- candidates ---------------------------------------------------------------------
+def _h3_diag(level: str) -> Callable[[dict[str, Any]], bool]:
+    """The H3 rule on a looser leader (``leader_diag``): not registered, never tested."""
+    def rule(s: dict[str, Any]) -> bool:
+        ld = (s.get("leader_diag") or {}).get(level)
+        return bool(ld) and _h3({**s, "leader_dmid_30": ld["dmid_30"], "gap_leader": ld["gap"]})
+    return rule
+
+
 def _h3(s: dict[str, Any]) -> bool:
     return (s["kind"] == "unconditional" and s.get("leader_dmid_30") is not None and abs(s["leader_dmid_30"]) >= .05
             and s["leader_dmid_30"] > 0 and abs(s.get("dmid_30") or 0) < .5 * abs(s["leader_dmid_30"]) and (s.get("gap_leader") or 0) >= .02)
@@ -377,23 +389,34 @@ def forecast_pairs(samples: list[dict[str, Any]], h: int, feature: str) -> list[
             if s["kind"] == "unconditional" and s.get(f"dmid_{h}_fwd") is not None and s.get(feature) is not None]
 
 
-def chrono_split(samples: list[dict[str, Any]], share: float = 2 / 3) -> tuple[list[str], list[str]]:
-    """Games in kickoff order (first decision time); the first ``share`` train, the rest score."""
-    first: dict[str, float] = {}
+def chrono_training(samples: list[dict[str, Any]], min_train_games: int = 3) -> dict[str, list[str]]:
+    """Scored game -> the games it may be trained on: those whose last observation came
+    before its first. A game is never trained on a later or concurrent game (the 1 pm games
+    of a Sunday cannot train each other); a game with fewer than ``min_train_games`` earlier
+    games is not scored."""
+    span: dict[str, list[float]] = {}
     for s in samples:
         g = _game(s["event_key"])
-        first[g] = min(first.get(g, math.inf), s["t"])
-    order = sorted(first, key=lambda g: (first[g], g))
-    k = max(1, min(len(order) - 1, int(math.ceil(share * len(order))))) if len(order) > 1 else len(order)
-    return order[:k], order[k:]
+        a = span.setdefault(g, [math.inf, -math.inf])
+        a[0], a[1] = min(a[0], s["t"]), max(a[1], s["t"])
+    out = {}
+    for g, (first, _) in sorted(span.items(), key=lambda kv: (kv[1][0], kv[0])):
+        train = sorted(h for h, (_, last) in span.items() if h != g and last < first)
+        if len(train) >= min_train_games:
+            out[g] = train
+    return out
 
 
-def fit_models(samples: list[dict[str, Any]], horizons: Iterable[int]) -> dict[str, Any]:
+def fit_models(samples: list[dict[str, Any]], horizons: Iterable[int], counts: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Ridge coefficients per model and horizon; ``counts`` (if given) receives the number of
+    training pairs - a model with none is [0, 0], i.e. no forecast (the unchanged price)."""
     coef: dict[str, dict[str, list[float]]] = {"B3_ridge_dmid30": {}, "B4_ridge_gap": {}}
     for h in horizons:
         for name, feat in (("B3_ridge_dmid30", "dmid_30"), ("B4_ridge_gap", "gap_leader")):
             p = forecast_pairs(samples, h, feat)
             coef[name][str(h)] = list(ridge_fit([x for _, _, x, _ in p], [y for _, _, _, y in p]))
+            if counts is not None:
+                counts.setdefault(name, {})[str(h)] = len(p)
     return coef
 
 
@@ -429,14 +452,33 @@ def score_forecast(pairs: list[tuple[str, float, float, float]], predict: Callab
 
 def forecast_skill(samples: list[dict[str, Any]], h: int, feature: str, seed: int, draws: int,
                    coef: Optional[list[float]] = None, train: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
-    """Chronological: coefficients from ``coef`` (frozen) or fitted on ``train`` (earlier data),
-    scored on ``samples``. Never fitted on the samples it scores."""
+    """Coefficients from ``coef`` (frozen) or fitted on ``train`` (earlier data), scored on
+    ``samples``. Never fitted on the samples it scores."""
     if coef is None:
         p = forecast_pairs(train or [], h, feature)
         coef = list(ridge_fit([x for _, _, x, _ in p], [y for _, _, _, y in p])) if p else [0.0, 0.0]
     a, b = coef
     out = score_forecast(forecast_pairs(samples, h, feature), lambda x: a + b * x, seed, draws)
     out["coef"] = [a, b]
+    return out
+
+
+def forecast_skill_rolling(samples: list[dict[str, Any]], h: int, feature: str, seed: int, draws: int,
+                           plan: dict[str, list[str]]) -> dict[str, Any]:
+    """Discovery: each scored game forecast by a fit on its own earlier games (``plan``)."""
+    by_game: dict[str, list] = defaultdict(list)
+    for p in forecast_pairs(samples, h, feature):
+        by_game[p[0]].append(p)
+    preds, coefs = [], {}
+    for g, train in plan.items():
+        tp = [p for t in train for p in by_game.get(t, [])]
+        if not tp or not by_game.get(g):
+            continue
+        a, b = ridge_fit([x for _, _, x, _ in tp], [y for _, _, _, y in tp])
+        coefs[g] = [a, b]
+        preds.extend((gg, t, a + b * x, y) for gg, t, x, y in by_game[g])
+    out = score_forecast([(g, t, f, y) for g, t, f, y in preds], lambda x: x, seed, draws)
+    out["coef_by_game"] = coefs
     return out
 
 
@@ -573,7 +615,7 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
     (each quote fresh: <= 2 s on the fast-lane venues, <= 6 s elsewhere). Each leg meets its
     own book after its own latency; the win-case, tie-case and worst-case P&L are recorded
     (a pair whose tie payout is unknown is excluded, not guessed)."""
-    from arb_engine.quant.microdata import TIE_PRIOR, contract_key, fresh_limit, is_observation, observation_time, tie_value
+    from arb_engine.quant.microdata import TIE_PRIOR, contract_key, fresh_limit, is_observation, observation_time, settlement_relation, tie_value
     from arb_engine.quant.paperexec import two_leg_arb
 
     by_event: dict[str, list] = defaultdict(list)
@@ -612,19 +654,38 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
             la = latency_rh if ra.get("venue") == "robinhood" else latency_k
             lb = latency_rh if rb.get("venue") == "robinhood" else latency_k
             ties = (tie_value(ra), tie_value(rb))
+            rel = settlement_relation(ra, rb)          # every case but the tie (the tie is priced by ``ties``)
+            compat = True if rel == "identical" else (False if rel == "mismatch" else None)
             res = two_leg_arb([x for x in series[ka] if x["obs_ts"] > t], [x for x in series[kb] if x["obs_ts"] > t], t,
                               float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb, haircut=haircut,
-                              tie_payouts=ties)
+                              tie_payouts=ties, settlement_compatible=compat)
             legs_filled = sum(1 for l in res.legs if l.filled)
             win = float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None
             tie = float(res.pnl_tie) / seed_n if res.pnl_tie is not None and (res.matched or res.unwound) else None
             p_tie = TIE_PRIOR.get(ev.split(":", 1)[0].lower(), 0.0)
-            records.append({"game": _game(ev), "t": t, "margin": 1.0 - cost, "tie_safe": (sum(ties) >= 1.0 - 1e-9) if None not in ties else None,
+            tie_safe = (sum(ties) >= 1.0 - 1e-9) if None not in ties else None
+            records.append({"game": _game(ev), "t": t, "margin": 1.0 - cost, "tie_safe": tie_safe, "settlement": rel,
+                            "class": "guaranteed-eligible" if compat is True and tie_safe is True else "speculation",
+                            "guaranteed_result": bool(res.guaranteed),
                             "excluded": res.excluded or None, "legs_filled": legs_filled, "matched": res.matched, "unwound": res.unwound,
                             "unresolved": res.unresolved, "pnl_win": win, "pnl_tie": tie,
                             "pnl_worst": min(win, tie) if win is not None and tie is not None else win,
                             "pnl_ev": (1 - p_tie) * win + p_tie * tie if win is not None and tie is not None else win})
     return records
+
+
+def h4_report(records: list[dict[str, Any]], seed: int, draws: int) -> dict[str, Any]:
+    """Guaranteed-eligible pairs on their worst case; everything else as speculation on its
+    win case (plus the tie case and the tie-odds expectation, for scale) - never mixed."""
+    elig = [r for r in records if r["class"] == "guaranteed-eligible"]
+    spec = [r for r in records if r["class"] == "speculation"]
+    return {"signals": len(records), "by_settlement": dict(Counter(r["settlement"] for r in records)),
+            "by_tie": dict(Counter("tie-safe" if r["tie_safe"] else ("loses-on-tie" if r["tie_safe"] is False else "unknown") for r in records)),
+            "excluded": dict(Counter(r["excluded"] for r in records if r["excluded"])),
+            "guaranteed": arb_metrics(elig, seed, draws, "pnl_worst"),
+            "speculation": {**arb_metrics(spec, seed, draws, "pnl_win"),
+                            "tie_case": arb_metrics(spec, seed, draws, "pnl_tie").get("mean_ret"),
+                            "expected_with_tie_prior": arb_metrics(spec, seed, draws, "pnl_ev").get("mean_ret")}}
 
 
 def arb_metrics(records: list[dict[str, Any]], seed: int, draws: int, field: str = "pnl_worst") -> dict[str, Any]:
@@ -680,24 +741,25 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
                               "baselines": {"B0": "B0_persistence (unchanged price)", "B1": "B1_buy_any (cost hurdle)",
                                             "B2": ["H1_momentum", "H2_dip", "H2_recovery", "H3_leadlag", "M_prototype"],
                                             "B3": "B3_ridge_dmid30", "B4": "B4_ridge_gap"}}
-    # Forecast models: frozen, else fitted on earlier data only.
+    # Forecast models: the discovery-frozen artifact, else (discovery itself) per game on the
+    # games that ended before it.
+    plan = None
     if frozen is not None:
         coef, fit_note, scored = frozen["coef"], {"from": "frozen", "trained_on": frozen.get("trained_on")}, samples
-    elif train_samples is not None:
-        coef, fit_note, scored = fit_models(train_samples, horizons), {"from": "earlier folds", "trained_on": sorted({_game(s["event_key"]) for s in train_samples})}, samples
     else:
-        tr, sc = chrono_split(samples, float(spec["train_share"]))
-        trs, scs = set(tr), set(sc)
-        coef = fit_models([s for s in samples if _game(s["event_key"]) in trs], horizons)
-        fit_note, scored = {"from": "earlier games of this fold", "trained_on": tr, "scored_on": sc}, [s for s in samples if _game(s["event_key"]) in scs]
+        plan = chrono_training(samples, int(spec.get("min_train_games", 3)))
+        coef = None
+        fit_note = {"from": "games that ended before each scored game", "plan": plan}
+        scored = [s for s in samples if _game(s["event_key"]) in plan]
     report["model_fit"] = {**fit_note, "coef": coef}
+    report["prints"] = dict(getattr(build, "print_counts", {}) or {})
     pvals: dict[str, float] = {}
     decisions: dict[str, Any] = {}
     for h in horizons:
         unc = [s for s in samples if s["kind"] == "unconditional"]
         cover = sum(1 for s in unc if s.get(f"dmid_{h}_fwd") is not None) / len(unc) if unc else None
         hr: dict[str, Any] = {"coverage": cover, "missing_labels_unconditional": sum(1 for s in unc if s.get(f"dmid_{h}_fwd") is None)}
-        b0 = forecast_pairs(scored, h, "dmid_30")
+        b0 = forecast_pairs(scored if plan is None else [s for s in samples if _game(s["event_key"]) in plan], h, "dmid_30")
         hr["B0_persistence"] = {"n": len(b0), "mae": (sum(abs(y) for _, _, _, y in b0) / len(b0)) if b0 else None}
         for name, (rule, cool) in RULES.items():
             m = candidate_metrics(select(samples, rule, cd if cool else 0.0), h, seed, draws)
@@ -713,8 +775,15 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
                     per_game[_game(s["event_key"])].append(e["pnl"] / e["filled"])
             pvals[f"{name}@{h}"] = boot_p(dict(per_game), seed, draws)
         hr["H3_by_grade"] = h3_by_grade(samples, h, seed, draws, cd)
-        hr["B3_ridge_dmid30"] = forecast_skill(scored, h, "dmid_30", seed, draws, coef=coef["B3_ridge_dmid30"][str(h)])
-        hr["B4_ridge_gap"] = forecast_skill(scored, h, "gap_leader", seed, draws, coef=coef["B4_ridge_gap"][str(h)])
+        if plan is None:
+            hr["B3_ridge_dmid30"] = forecast_skill(scored, h, "dmid_30", seed, draws, coef=coef["B3_ridge_dmid30"][str(h)])
+            hr["B4_ridge_gap"] = forecast_skill(scored, h, "gap_leader", seed, draws, coef=coef["B4_ridge_gap"][str(h)])
+        else:
+            hr["B3_ridge_dmid30"] = forecast_skill_rolling(samples, h, "dmid_30", seed, draws, plan)
+            hr["B4_ridge_gap"] = forecast_skill_rolling(samples, h, "gap_leader", seed, draws, plan)
+        # H3 under looser settlement rules: diagnostics, outside the decisions and every test.
+        hr["H3_diagnostics"] = {lvl: candidate_metrics(select(samples, _h3_diag(lvl), cd), h, seed, draws)
+                                for lvl in ("tie_matched", "any_settlement")}
         for name in ("B3_ridge_dmid30", "B4_ridge_gap"):
             decisions[f"{name}@{h}"] = decision({"skill_ci": hr[name].get("skill_ci")})   # no orders: at best shadow
         report["horizons"][str(h)] = hr
@@ -723,20 +792,15 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     manual = arb_scan(data["rows"], _default_fee, latency_s, spec["manual_leg_latency_s"])
     fast = arb_scan(data["rows"], _default_fee, latency_s, latency_s)
     stressed = arb_scan(data["rows"], _default_fee, max(float(rob["latency_s"]), latency_s), spec["manual_leg_latency_s"], haircut=float(rob["haircut"]))
-    h4 = arb_metrics(manual, seed, draws)                                  # worst case: the guaranteed P&L
-    h4["win_case"] = arb_metrics(manual, seed, draws, "pnl_win").get("mean_ret")
-    h4["expected_with_tie_prior"] = arb_metrics(manual, seed, draws, "pnl_ev").get("mean_ret")
-    h4["both_legs_fast"] = {**arb_metrics(fast, seed, draws), "win_case": arb_metrics(fast, seed, draws, "pnl_win").get("mean_ret"),
-                            "expected_with_tie_prior": arb_metrics(fast, seed, draws, "pnl_ev").get("mean_ret")}
-    h4["stressed_l3_h05"] = {**arb_metrics(stressed, seed, draws), "win_case": arb_metrics(stressed, seed, draws, "pnl_win").get("mean_ret")}
-    h4["by_margin"] = {name: {**arb_metrics(sub, seed, draws), "win_case": arb_metrics(sub, seed, draws, "pnl_win").get("mean_ret")}
-                       for name, lo, hi in (("<1c", 0.0, 0.01), ("1-3c", 0.01, 0.03), (">=3c", 0.03, 9.0))
-                       for sub in [[r for r in manual if lo <= r["margin"] < hi]]}
-    h4["by_tie"] = {name: arb_metrics([r for r in manual if r["tie_safe"] is want], seed, draws) for name, want in (("tie-safe", True), ("loses-on-tie", False))}
+    h4 = h4_report(manual, seed, draws)
+    h4["both_legs_fast"] = h4_report(fast, seed, draws)
+    h4["stressed_l3_h05"] = h4_report(stressed, seed, draws)
+    h4["by_margin"] = {name: h4_report([r for r in manual if lo <= r["margin"] < hi], seed, draws)
+                       for name, lo, hi in (("<1c", 0.0, 0.01), ("1-3c", 0.01, 0.03), (">=3c", 0.03, 9.0))}
     report["H4_arb"] = h4
-    pv4 = defaultdict(list)
+    pv4 = defaultdict(list)                   # H4 is tested on guaranteed-eligible pairs only
     for r in manual:
-        if r["pnl_worst"] is not None:
+        if r["class"] == "guaranteed-eligible" and r["pnl_worst"] is not None:
             pv4[r["game"]].append(r["pnl_worst"])
     pvals["H4_arb"] = boot_p(dict(pv4), seed, draws)
     lk = h3_lock_trades(samples, data["rows"], _default_fee, latency_s, watch_s=spec.get("lock_watch_s", 600), settle=settle, cooldown_s=cd)
@@ -751,8 +815,9 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     alpha = float(spec["alpha"])
     report["primary"] = {"hypothesis": primary, "p_mean_le_0": pvals.get(primary), "alpha": alpha,
                          "passes": (pvals.get(primary, 1.0) <= alpha)}
-    fam = {k: pvals[k] for k in spec["secondary"] if k in pvals}
-    report["secondary"] = {"family": list(spec["secondary"]), "p": fam, "holm_pass": holm(fam, alpha)}
+    family = [k for k in spec["secondary"] if k != primary]      # the primary is tested alone, never in the family
+    fam = {k: pvals[k] for k in family if k in pvals}
+    report["secondary"] = {"family": family, "p": fam, "holm_pass": holm(fam, alpha)}
     report["decisions"] = decisions
     report["fold_role"] = {"discovery": "descriptive: these games shaped the rules; not evidence",
                            "validation": "chronological check before the test; not the test",
@@ -798,23 +863,45 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--reopen-test")
     ap.add_argument("--log", type=Path, default=DEFAULT_LOG)
     ap.add_argument("--results", type=Path)
-    ap.add_argument("--freeze", type=Path, help="write the forecast models fitted on this fold and every earlier one (not with --fold test)")
-    ap.add_argument("--frozen", type=Path, help="frozen forecast models for the test fold (required there)")
+    ap.add_argument("--freeze", type=Path, help="discovery only: fit the forecast models on every discovery game and write the frozen artifact")
+    ap.add_argument("--frozen", type=Path, help="the discovery-frozen forecast models (validation and test read them; default the fixture)")
+    ap.add_argument("--freeze-spec", type=Path, nargs="?", const=DEFAULT_FROZEN_SPEC,
+                    help="record the current effective spec hash (with the frozen models) as frozen: the test fold opens only under it")
+    ap.add_argument("--frozen-spec", type=Path, default=DEFAULT_FROZEN_SPEC, help="the frozen spec record the test fold checks")
     args = ap.parse_args(argv)
     manifest = json.loads(args.manifest.read_text()) if args.manifest.exists() else {"discovery": [], "test_from": "2026-10-08"}
     validate_manifest(manifest)
     spec = _spec_with_defaults(manifest.get("spec") or DEFAULT_SPEC)
+    if args.reopen_test is not None and not args.reopen_test.strip():
+        raise ValueError("--reopen-test requires a non-empty reason")
     frozen = None
-    if args.fold == "test":
-        if args.freeze:
-            raise SystemExit("--freeze is not allowed on the test fold (models are frozen before it is opened)")
+    if args.freeze and args.fold != "discovery":
+        raise SystemExit("--freeze is discovery only: the models are fitted on discovery and frozen before validation and test")
+    if args.fold in ("validation", "test") or args.freeze_spec:
         path = args.frozen or DEFAULT_FROZEN
         if not path.exists():
-            raise SystemExit(f"the test fold needs frozen models ({path}); freeze them on the validation fold first")
+            raise SystemExit(f"no frozen models at {path}: run --fold discovery --freeze {path} first")
         frozen = json.loads(path.read_text())
     eff = effective_spec(manifest, frozen)
     digest = spec_hash(eff)
-    exploratory = guard_test_open(args.log, digest, args.reopen_test) if args.fold == "test" else False
+    if args.freeze_spec:
+        if args.fold == "test":
+            raise SystemExit("--freeze-spec cannot be combined with --fold test")
+        rec = {"spec_hash": digest, "hashes": component_hashes(eff), "frozen_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "git_head": _git_head(), "note": "the test fold opens only under this hash; a different one needs --reopen-test and is exploratory"}
+        args.freeze_spec.parent.mkdir(parents=True, exist_ok=True)
+        args.freeze_spec.write_text(json.dumps(rec, indent=2, sort_keys=True) + "\n")
+        print(json.dumps(rec, indent=2, sort_keys=True))
+        return 0
+    exploratory = False
+    if args.fold == "test":
+        if not args.frozen_spec.exists():
+            raise SystemExit(f"the test fold is closed until the discovery implementation and spec hash are frozen ({args.frozen_spec}; --freeze-spec)")
+        fz = json.loads(args.frozen_spec.read_text())
+        changed = fz.get("spec_hash") != digest
+        if changed and not (args.reopen_test or "").strip():
+            raise SystemExit("the effective spec differs from the frozen one; the test fold stays closed (a change after opening needs --reopen-test)")
+        exploratory = guard_test_open(args.log, digest, args.reopen_test) or changed
     if args.fold == "synthetic":
         report = synthetic_report()
     else:
@@ -827,18 +914,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             data = load_db(args.db, event_keys=keys)
             legacy = all(r.get("approx_time") for r in data["rows"][:2000])
             latency = args.latency if args.latency is not None else (spec.get("legacy_latency_s", 5) if legacy else (spec.get("latencies_s") or [1])[0])
-            train = None
-            if args.fold == "validation":
-                dkeys = _fold_keys(args.db, manifest, "discovery")
-                if dkeys:
-                    d = load_db(args.db, event_keys=dkeys)
-                    train = build(d["rows"], sample="unconditional", horizons=spec["horizons"], fee_for_row=lambda r: None)
             report = {"experiment": "microstructure", "fold": args.fold,
-                      **evaluate(data, spec, latency, legacy, fold=args.fold, frozen=frozen, train_samples=train)}
+                      **evaluate(data, spec, latency, legacy, fold=args.fold, frozen=frozen)}
             if args.freeze:
-                fit_on = (train or []) + [s for s in build(data["rows"], sample="unconditional", horizons=spec["horizons"], fee_for_row=lambda r: None)]
-                art = {"coef": fit_models(fit_on, spec["horizons"]), "trained_on": sorted({_game(s["event_key"]) for s in fit_on}),
-                       "folds": ["discovery"] + (["validation"] if args.fold == "validation" else []), "spec_hash_at_freeze": digest}
+                fit_on = build(data["rows"], sample="unconditional", horizons=spec["horizons"], fee_for_row=lambda r: None)
+                n_train: dict[str, Any] = {}
+                art = {"coef": fit_models(fit_on, spec["horizons"], n_train), "n_train": n_train, "trained_on": sorted({_game(s["event_key"]) for s in fit_on}),
+                       "folds": ["discovery"], "note": "fitted once on every discovery game; validation and test read it, never refit"}
                 args.freeze.parent.mkdir(parents=True, exist_ok=True)
                 args.freeze.write_text(json.dumps(_round(art), indent=2, sort_keys=True) + "\n")
                 report["frozen_models_written"] = {"path": str(args.freeze), "sha256": spec_hash(_round(art))}

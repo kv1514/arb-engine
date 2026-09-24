@@ -1001,7 +1001,7 @@ class NearArbAlertTests(unittest.TestCase):
         out = self._run(slate, me2, view, t0 + 15)
         msg = [e for e in slate.alerts.events if e["kind"] == "alert" and "ARB" in e["title"]][-1]["msg"]
         lines = msg.splitlines()
-        self.assertTrue(lines[1].startswith("guaranteed: pays in every result"), msg)   # these quotes carry the default $0.50 tie payouts
+        self.assertTrue(lines[1].startswith("tie-proof on paper (Robinhood's tie rule"), msg)   # default $0.50 tie payouts; Rothera's rule unverified
         self.assertTrue(lines[2].startswith("window: arbs this size lasted a median"), msg)   # how long it will last
         self.assertTrue(lines[3].startswith("1) KALSHI: buy"), msg)             # the stale leg first
         self.assertIn("BUY THIS FIRST - KALSHI has not followed ROBINHOOD", msg)

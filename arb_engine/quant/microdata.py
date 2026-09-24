@@ -26,17 +26,24 @@ Rules (docs/MODEL.md, "Microstructure experiment"):
   once per contract per 60 s. H2 *dip* is the down ``trigger`` (buying into the fall).
 * **Cross-book comparisons** (H3's leader, the gap) use another book's observation of the
   same event, market, outcome and side only while it is fresh (<= 2 s on the fast-lane
-  venues, <= 6 s elsewhere) and only when both books' tie payouts are known; the gap is
-  put on one footing by ``TIE_PRIOR`` x the tie-payout difference (Kalshi YES pays $0.50 on
-  an NFL tie, a Rothera YES $0) and the mismatch is recorded.
+  venues, <= 6 s elsewhere). The registered comparison also needs **settlement identity**:
+  equal, known tie payouts (in a sport that can tie) and settlement-registry rules that are
+  verbatim on both books and state nothing different or one-sided (postponement,
+  cancellation, overtime...). A Kalshi YES and a Rothera YES of one NFL team are not the same
+  contract (a tie pays $0.50 vs $0; Rothera's terms are unverified), nor are Kalshi and
+  Polymarket (different postponement and cancellation rules). Looser leaders are kept only
+  as labelled diagnostics (``leader_diag``: tie-matched; any settlement, tie-prior adjusted).
 * **Labels.** For h in 5 / 15 / 30 / 60 s, the first refreshed observation of the same
   contract in [t+h, t+h+max(1, 0.2 h)]: dbid / dask / dmid, never carried forward (missing =
   excluded and counted). ``ret_long_h`` is the executable round trip from
   ``quant.paperexec`` (IOC at the decision ask after 1 s, sold to the bid at h, both fees);
   ``exec_h`` keeps that order's accounting (status missed / closed / settled / unresolved,
   requested and filled contracts, fees, dollars) so fills and resolutions are counted apart.
-* **Prints** are visible from their receipt time (``recv_ts``) when recorded, else one second
-  after the exchange's stamp (``PRINT_RECEIPT_LAG_S``); ESPN rows from our receipt ``ts``.
+* **Prints** are visible from their receipt time ``obs_ts`` (docs/MICROSTRUCTURE_INTERFACES.md):
+  a print whose exchange stamp is before t but that arrived after t is a future input. Legacy
+  prints without ``obs_ts`` are approximate (``approx_time = 1``) and excluded unless the
+  caller opts in (``prints_approx``), in which case they count from stamp + one second
+  (``PRINT_RECEIPT_LAG_S``) and the sample says so. ESPN rows count from our receipt ``ts``.
 """
 from __future__ import annotations
 
@@ -55,7 +62,7 @@ VENUE_LAG_MAX_S = 10.0
 HISTORY_S = 130.0
 REF_CONTRACTS = 10
 FRESH_FAST_S, FRESH_OTHER_S = 2.0, 6.0          # how old another book's observation may be when compared
-PRINT_RECEIPT_LAG_S = 1.0                       # a print without a receipt time is visible this long after its stamp
+PRINT_RECEIPT_LAG_S = 1.0                       # opt-in approximation for legacy prints without a receipt time
 TIE_PRIOR = {"nfl": 0.004}                      # P(tie) that prices a tie-payout difference between two books
 RECOVERY_DROP, RECOVERY_REBOUND, RECOVERY_COOLDOWN_S = 0.05, 0.01, 60.0
 
@@ -66,6 +73,8 @@ def effective_constants() -> dict[str, Any]:
             "trigger": {"move": TRIGGER_MOVE, "share": TRIGGER_SHARE, "cooldown_s": TRIGGER_COOLDOWN_S},
             "unconditional_every_s": UNCONDITIONAL_EVERY_S, "venue_lag_max_s": VENUE_LAG_MAX_S, "history_s": HISTORY_S,
             "fresh_s": {"fast": FRESH_FAST_S, "other": FRESH_OTHER_S}, "print_receipt_lag_s": PRINT_RECEIPT_LAG_S,
+            "prints": "visible at obs_ts <= t; legacy prints without obs_ts excluded unless prints_approx",
+            "cross_book_identity": "same event/market/outcome/side, equal known tie payouts, verbatim registry rules with no stated or one-sided difference",
             "tie_prior": dict(TIE_PRIOR), "recovery": {"drop_60": RECOVERY_DROP, "rebound": RECOVERY_REBOUND,
                                                        "cooldown_s": RECOVERY_COOLDOWN_S, "confirm": "bid and ask both up over 5 s"},
             "label_window": "first refreshed mark in [t+h, t+h+max(1, 0.2h)]"}
@@ -245,33 +254,50 @@ class _Espn:
 
 
 class _Prints:
-    """Kalshi public prints per ticker, indexed by when *we* could have seen them: the
-    receipt time ``recv_ts`` when recorded, else the exchange stamp + PRINT_RECEIPT_LAG_S. A
-    print stamped before t but received after it (a late page) is a future input at t."""
+    """Kalshi public prints per ticker, indexed by when *we* had them: ``obs_ts``, the local
+    receipt time. Exchange ``ts`` alone is not causal (an old print can arrive in a later
+    page), so a print without ``obs_ts`` is excluded - unless ``approx`` is set, when it
+    counts from ts + PRINT_RECEIPT_LAG_S and every sample that used one is marked."""
 
-    def __init__(self, rows: Iterable[dict[str, Any]]) -> None:
+    def __init__(self, rows: Iterable[dict[str, Any]], approx: bool = False) -> None:
         by: dict[str, list] = defaultdict(list)
+        self.loaded = self.exact = self.approximate = self.excluded = 0
         for r in rows or []:
             ts, n = _f(r.get("ts")), _f(r.get("count"))
-            if ts is not None and n is not None:
-                seen = _f(r.get("recv_ts"))
-                seen = seen if seen is not None else ts + PRINT_RECEIPT_LAG_S
-                s = 1 if str(r.get("taker_side")).lower() == "yes" else -1 if str(r.get("taker_side")).lower() == "no" else 0
-                by[str(r.get("ticker"))].append((seen, s * n, _f(r.get("price"))))
+            if ts is None or n is None:
+                continue
+            self.loaded += 1
+            seen = _f(r.get("obs_ts"))
+            is_approx = seen is None or bool(r.get("approx_time"))
+            if seen is None:
+                if not approx:
+                    self.excluded += 1
+                    continue
+                seen = ts + PRINT_RECEIPT_LAG_S
+            self.exact += not is_approx
+            self.approximate += is_approx
+            s = 1 if str(r.get("taker_side")).lower() == "yes" else -1 if str(r.get("taker_side")).lower() == "no" else 0
+            by[str(r.get("ticker"))].append((seen, s * n, _f(r.get("price")), is_approx))
         self.by = {k: sorted(v, key=lambda x: x[0]) for k, v in by.items()}
         self.times = {k: [x[0] for x in v] for k, v in self.by.items()}
+
+    def counts(self) -> dict[str, int]:
+        return {"loaded": self.loaded, "exact_receipt": self.exact, "approximate_receipt": self.approximate, "excluded_no_receipt": self.excluded}
 
     def at(self, ticker: str, t: float, side: str, mid: float) -> dict[str, Any]:
         times = self.times.get(ticker)
         if not times:
             return {}
-        hi = bisect.bisect_right(times, t)
+        hi = bisect.bisect_right(times, t)          # obs_ts <= t
         rows = self.by[ticker][:hi]
         sgn = -1 if side == "no" else 1
-        out = {}
+        out: dict[str, Any] = {}
+        used_approx = False
         for w in (30, 60):
             lo = bisect.bisect_left(times, t - w, 0, hi)
             out[f"flow_{w}"] = sgn * sum(x[1] for x in rows[lo:])
+            used_approx = used_approx or any(x[3] for x in rows[lo:])
+        out["prints_approx_time"] = int(used_approx)
         last = next((x for x in reversed(rows) if x[2] is not None), None)
         out["last_print_minus_mid"] = ((last[2] if sgn == 1 else 1 - last[2]) - mid) if last else None
         return out
@@ -310,7 +336,7 @@ def features_at(rows: Iterable[dict[str, Any]], t: float) -> dict[tuple, dict[st
 def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), prints: Iterable[dict[str, Any]] = (),
           horizons: Iterable[int] = HORIZONS, sample: str = "trigger", settlement: Optional[dict[tuple, float]] = None,
           fee_for_row: Any = None, ref_contracts: int = REF_CONTRACTS, latency_s: float = 1.0,
-          entry_tol_s: float = 2.0, haircut: float = 1.0) -> list[dict[str, Any]]:
+          entry_tol_s: float = 2.0, haircut: float = 1.0, prints_approx: bool = False) -> list[dict[str, Any]]:
     """Samples (``trigger``, ``unconditional``, ``recovery`` or ``all``) with causal features
     and forward labels. ``haircut`` scales the displayed sizes the paper orders may take.
 
@@ -321,7 +347,8 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     a 5 s recorder cannot show the book 1 s after a decision, so legacy data needs
     latency_s >= its poll interval, or every executable return is (rightly) a missed fill."""
     obs = _dedupe(rows)
-    espn_idx, prints_idx = _Espn(espn), _Prints(prints)
+    espn_idx, prints_idx = _Espn(espn), _Prints(prints, approx=prints_approx)
+    build.print_counts = prints_idx.counts()
     books: dict[tuple, _Book] = defaultdict(_Book)
     by_contract: dict[tuple, list[tuple[float, dict[str, Any]]]] = defaultdict(list)
     for t, _, r in obs:
@@ -357,25 +384,41 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
         bs, as_ = _f(r.get("bid_size")), _f(r.get("ask_size"))
         s["imbalance"] = (bs - as_) / (bs + as_) if bs is not None and as_ is not None and bs + as_ > 0 else None   # displayed; may be cancelled
         # cross-book: the same contract on independent books, as last observed and still fresh
-        cross = {}
+        cross, diag = {}, {}
         my_tie = _tie_cached(r)
-        prior = TIE_PRIOR.get(key[0].split(":", 1)[0].lower(), 0.0)
+        sport = key[0].split(":", 1)[0].lower()
+        can_tie = sport in TIE_PRIOR and _is_moneyline(key[0])
+        prior = TIE_PRIOR.get(sport, 0.0)
+        excluded: dict[str, int] = defaultdict(int)
         for (ev, book, oc, sd), ob in books.items():
             if ev != key[0] or oc != key[2] or sd != key[3] or book == key[1] or not ob.hist:
                 continue
             age = t - ob.hist[-1][0]
             if age > fresh_limit(ob.row or {}):
                 continue
-            # Settlement check: both tie payouts must be known (a line market has none on
-            # either side); a known difference is priced at the tie prior, not ignored.
             their_tie = _tie_cached(ob.row or {})
-            if (my_tie is None) != (their_tie is None) or (my_tie is None and _is_moneyline(ev)):
-                continue
-            tie_adj = prior * ((their_tie or 0.0) - (my_tie or 0.0))
+            if can_tie and (my_tie is None or their_tie is None):
+                excluded["unknown_tie"] += 1
+                continue                       # not even comparable: what a tie pays is unknown
+            tie_match = (not can_tie) or abs(their_tie - my_tie) < 1e-9
+            settle = settlement_relation(r, ob.row or {})
             of = _book_features(ob, t)
-            cross[book] = {"gap": of["mid"] - f["mid"] - tie_adj, "gap_raw": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age,
-                           "bid": of["bid"], "ask": of["ask"], "tie_mismatch": abs((their_tie or 0.0) - (my_tie or 0.0)) > 1e-9}
-        s["cross"] = cross
+            entry = {"gap": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age, "bid": of["bid"], "ask": of["ask"],
+                     "tie_match": tie_match, "settlement": settle}
+            if tie_match and settle == "identical":
+                cross[book] = entry
+            else:
+                excluded["tie_mismatch" if not tie_match else f"settlement_{settle}"] += 1
+            adj = prior * ((their_tie or 0.0) - (my_tie or 0.0)) if can_tie else 0.0
+            diag[book] = dict(entry, gap_tie_adjusted=entry["gap"] - adj)
+        s["cross"], s["cross_excluded"] = cross, dict(excluded)
+        # Diagnostics only (not the registered hypothesis): the leader among tie-matched books
+        # whatever their other rules, and among all fresh books with the tie priced in.
+        def _lead(items: dict[str, dict], gap_key: str = "gap") -> Optional[dict[str, Any]]:
+            b = max(items.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+            return {"book": b[0], "dmid_30": b[1]["dmid_30"], "gap": b[1][gap_key]} if b else None
+        s["leader_diag"] = {"tie_matched": _lead({k: v for k, v in diag.items() if v["tie_match"]}),
+                            "any_settlement": _lead(diag, "gap_tie_adjusted")}
         leader = max(cross.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
         s["leader_book"] = leader[0] if leader else None
         s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
@@ -393,6 +436,7 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
         s["agree"] = sum(1 for b, c in cross.items() if leader and b != leader[0] and ld and c["dmid_30"] is not None
                          and c["dmid_30"] * ld > 0 and abs(c["dmid_30"]) >= 0.5 * abs(ld))
         s.update(espn_idx.at(_game_key(key[0]), t, key[2]))
+        s.setdefault("prints_approx_time", 0)
         if key[1] == "kalshi":
             ticker = str(r.get("venue_market_id") or "").split("#", 1)[0]
             s.update(prints_idx.at(ticker, t, key[3], f["mid"]))
@@ -548,7 +592,11 @@ def load_db(path: str, event_keys: Optional[Iterable[str]] = None, date: Optiona
         tickers = sorted({str(r.get("venue_market_id") or "").split("#", 1)[0] for r in rows if r.get("book_id") == "kalshi"})
         if tickers:
             tq = ",".join("?" * len(tickers))
-            prints = [dict(r) for r in con.execute(f"select ticker, ts, price, count, taker_side from trade_prints where ticker in ({tq})", tickers)]
+            pcols = {r[1] for r in con.execute("pragma table_info(trade_prints)")}
+            extra = ", ".join(c if c in pcols else f"null as {c}" for c in ("req_ts", "obs_ts"))
+            prints = [dict(r) for r in con.execute(f"select ticker, ts, price, count, taker_side, {extra} from trade_prints where ticker in ({tq})", tickers)]
+            for p in prints:   # a print without a local receipt time is approximate (and excluded by default)
+                p["approx_time"] = 0 if p.get("obs_ts") is not None else 1
     finals = {}
     for g in games:
         r = con.execute("select home, away, home_score, away_score from espn_ticks where event_key = ? and status = 'final' order by ts desc limit 1", (g,)).fetchone()
@@ -585,6 +633,50 @@ def series_by_contract(rows: Iterable[dict[str, Any]]) -> dict[tuple, list[dict[
     for t, _, r in _dedupe(rows):
         out[contract_key(r)].append(dict(r, obs_ts=t))
     return dict(out)
+
+
+_RULE_REL: dict[tuple, str] = {}
+NON_TIE_FIELDS = ("postponed", "cancelled", "walkover", "retirement", "ot_included")
+
+
+def _market_type(event_key: str) -> str:
+    return "spread" if ":spread:" in event_key else ("total" if ":total:" in event_key else "moneyline")
+
+
+def settlement_relation(row_a: dict[str, Any], row_b: dict[str, Any]) -> str:
+    """How two books settle the same contract, from the settlement registry, tie aside (the
+    tie is compared through the rows' tie payouts): ``identical`` (same book, or both rules
+    verbatim with no field stated differently or by one side only), ``mismatch`` (both
+    verbatim, a field stated differently), ``unverified`` (a rule missing, not verbatim, or a
+    field stated by one side only)."""
+    book_a, book_b = str(row_a.get("book_id") or row_a.get("venue")), str(row_b.get("book_id") or row_b.get("venue"))
+    if book_a == book_b:
+        return "identical"
+    ev = str(row_a.get("event_key") or row_b.get("event_key") or "")
+    sport, mt = ev.split(":", 1)[0].lower(), _market_type(ev)
+    ka = (str(row_a.get("venue")), str(row_a.get("exchange") or ""))
+    kb = (str(row_b.get("venue")), str(row_b.get("exchange") or ""))
+    k = (min(ka, kb), max(ka, kb), sport, mt)
+    if k in _RULE_REL:
+        return _RULE_REL[k]
+    try:
+        from ..matching.settlement_rules import compare_rules, lookup
+
+        ra = lookup(ka[0], sport, mt, ka[1] or None)
+        rb = lookup(kb[0], sport, mt, kb[1] or None)
+        flags = compare_rules(ra, rb, ka[0], kb[0])
+    except Exception:
+        flags = ["settlement-rule-missing:?"]
+    if any(f.startswith(("settlement-rule-", "tie-rule-")) for f in flags):
+        rel = "unverified"            # a rule missing or not verbatim: nothing is known for sure
+    elif any(f"settlement-mismatch:{x}" in flags for x in NON_TIE_FIELDS):
+        rel = "mismatch"              # both verbatim and a case is settled differently
+    elif any(f"settlement-unstated:{x}" in flags for x in NON_TIE_FIELDS):
+        rel = "unverified"            # one side states a case the other is silent on
+    else:
+        rel = "identical"
+    _RULE_REL[k] = rel
+    return rel
 
 
 def _is_moneyline(event_key: str) -> bool:

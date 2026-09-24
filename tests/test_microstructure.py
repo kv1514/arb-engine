@@ -78,17 +78,27 @@ class BuilderTests(unittest.TestCase):
     def test_planted_twenty_second_lead_is_convergence_on_the_follower(self):
         from arb_engine.quant.microdata import build
 
-        # Rothera jumps 0.40 -> 0.48 at t=30; Kalshi follows at t=50. NFL tie rules: a Kalshi YES
-        # pays $0.50 on a tie, a Rothera YES $0.
-        lead = [row(t, .40 if t < 30 else .48, book="rothera", market="R", venue="robinhood", event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=0.0) for t in range(0, 90)]
+        from unittest import mock
+
+        # Book "other" jumps 0.40 -> 0.48 at t=30; Kalshi follows at t=50. Both pay $0.50 on a
+        # tie and (patched) settle every other case identically: a registered comparison.
+        lead = [row(t, .40 if t < 30 else .48, book="other", market="R", venue="otherx", event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=0.5) for t in range(0, 90)]
         follow = [row(t, .40 if t < 50 else .48, book="kalshi", market="K", event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=0.5) for t in range(0, 90)]
-        out = build(lead + follow, sample="unconditional", horizons=(30,), fee_for_row=lambda r: None)
+        with mock.patch("arb_engine.quant.microdata.settlement_relation", return_value="identical"):
+            out = build(lead + follow, sample="unconditional", horizons=(30,), fee_for_row=lambda r: None)
         k = next(s for s in out if s["book_id"] == "kalshi" and 35 <= s["t"] < 40)   # after the lead, before the catch-up
-        self.assertEqual(k["leader_book"], "rothera")
+        self.assertEqual(k["leader_book"], "other")
         self.assertGreater(k["gap_leader"], .05)
-        self.assertAlmostEqual(k["gap_leader"], k["cross"]["rothera"]["gap_raw"] + .004 * .5)   # the tie difference, priced
-        self.assertTrue(k["cross"]["rothera"]["tie_mismatch"])
         self.assertGreater(k["dmid_30_fwd"], .05)          # the follower converged within 30 s
+        # Adversarial: a Rothera YES pays $0 on an NFL tie, a Kalshi YES $0.50 - not the same
+        # contract, so no registered comparison; it survives only as a labelled diagnostic.
+        rh = [dict(r, book_id="rothera", venue="robinhood", exchange="rothera", tie_payout=0.0) for r in lead]
+        out = build(rh + follow, sample="unconditional", horizons=(), fee_for_row=lambda r: None)
+        k = next(s for s in out if s["book_id"] == "kalshi" and 35 <= s["t"] < 40)
+        self.assertIsNone(k["leader_book"])
+        self.assertEqual(k["cross_excluded"], {"tie_mismatch": 1})
+        self.assertEqual(k["leader_diag"]["any_settlement"]["book"], "rothera")
+        self.assertIsNone(k["leader_diag"]["tie_matched"])
         # Adversarial: with no settlement rule on record for either book, no comparison is made.
         blind = build([dict(r, event_key="xyz:A|B:2026-09-27", tie_payout=None) for r in lead + follow], sample="unconditional",
                       horizons=(), fee_for_row=lambda r: None)
@@ -127,14 +137,18 @@ class BuilderTests(unittest.TestCase):
         rows = [dict(x, obs_ts=float(t), approx_time=1) for t in range(90, 131) for x in r]
         espn = [{"ts": 110.0, "event_key": "nfl:A|B:2026-09-20", "home": "A", "away": "B", "home_score": 0, "away_score": 0},
                 {"ts": 125.0, "event_key": "nfl:A|B:2026-09-20", "home": "A", "away": "B", "home_score": 7, "away_score": 0}]
-        prints = [{"ticker": "K-A", "ts": 118.5, "count": 10, "taker_side": "yes", "price": .6},
-                  {"ticker": "K-A", "ts": 119.5, "count": 99, "taker_side": "yes", "price": .9}]
+        prints = [{"ticker": "K-A", "ts": 118.5, "count": 10, "taker_side": "yes", "price": .6, "approx_time": 1},
+                  {"ticker": "K-A", "ts": 119.5, "count": 99, "taker_side": "yes", "price": .9, "approx_time": 1}]
         out = {s["t"]: s for s in build(rows, espn=espn, prints=prints, sample="unconditional", horizons=())}
         self.assertEqual(out[120.0]["score_diff"], 0)       # the 7-0 row arrives at 125
         self.assertEqual(out[125.0]["score_diff"], 7)
-        self.assertEqual(out[120.0]["flow_30"], 10)         # prints stamped <= t - 1: the 119.5 one is not visible yet
+        self.assertNotIn("flow_30", out[120.0])             # legacy prints have no receipt time: excluded by default
+        self.assertEqual(build.print_counts["excluded_no_receipt"], 2)
+        # Opted in, they count from stamp + 1 s and the sample says it used an approximation.
+        out = {s["t"]: s for s in build(rows, espn=espn, prints=prints, sample="unconditional", horizons=(), prints_approx=True)}
+        self.assertEqual(out[120.0]["flow_30"], 10)         # the 119.5 print is not visible until 120.5
         self.assertAlmostEqual(out[120.0]["last_print_minus_mid"], .6 - .51)
-        self.assertEqual(out[120.0]["approx_time"], 1)
+        self.assertEqual((out[120.0]["approx_time"], out[120.0]["prints_approx_time"]), (1, 1))
 
     def test_a_full_game_day_builds_in_seconds(self):
         import time as _time
@@ -307,13 +321,21 @@ class EvaluationDisciplineTests(unittest.TestCase):
             con.commit()
             con.close()
             manifest = Path(tmp) / "m.json"
-            manifest.write_text(json.dumps({"discovery": [], "test_from": "2026-10-08", "spec": {"horizons": [30], "bootstrap": 200, "seed": 1}}))
+            manifest.write_text(json.dumps({"discovery": [], "test_from": "2026-10-08",
+                                            "spec": {"horizons": [30], "bootstrap": 200, "seed": 1, "primary": "H3@30s",
+                                                     "secondary": ["H3_leadlag@30", "H1_momentum@30"]}}))
             out = Path(tmp) / "r.json"
             import contextlib
             import io
 
+            frozen = Path(tmp) / "frozen.json"
+            frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, .1]}, "B4_ridge_gap": {"30": [0, .2]}}, "trained_on": ["nfl:X|Y:2026-09-20"]}))
             with contextlib.redirect_stdout(io.StringIO()):
-                rc = ev.main(["--db", str(db), "--fold", "validation", "--manifest", str(manifest), "--log", str(Path(tmp) / "log.jsonl"), "--results", str(out)])
+                with self.assertRaises(SystemExit):                                   # validation reads the discovery-frozen models
+                    ev.main(["--db", str(db), "--fold", "validation", "--manifest", str(manifest), "--log", str(Path(tmp) / "log.jsonl"),
+                             "--frozen", str(Path(tmp) / "none.json")])
+                rc = ev.main(["--db", str(db), "--fold", "validation", "--manifest", str(manifest), "--log", str(Path(tmp) / "log.jsonl"),
+                              "--results", str(out), "--frozen", str(frozen)])
             self.assertEqual(rc, 0)
             r = json.loads(out.read_text())
             self.assertEqual((r["games"], r["latency_s"], r["legacy_timestamps"]), (2, 1, False))
@@ -326,16 +348,22 @@ class EvaluationDisciplineTests(unittest.TestCase):
             for name in ("H1_momentum", "H2_dip", "H2_recovery", "H3_leadlag", "M_prototype", "B0_persistence"):
                 self.assertIn(name, h)
             self.assertIn("skill_ci", h["B3_ridge_dmid30"])
-            self.assertEqual(r["model_fit"]["from"], "earlier games of this fold")   # no discovery data here
+            self.assertEqual(r["model_fit"]["from"], "frozen")
+            self.assertEqual(h["B3_ridge_dmid30"]["coef"], [0, .1])                 # used as frozen, not refitted
             self.assertIn("H4_arb", r)
             self.assertEqual(set(r["H4_arb"]["by_margin"]), {"<1c", "1-3c", ">=3c"})
             self.assertIn("both_legs_fast", r["H4_arb"])
+            for k in ("guaranteed", "speculation", "by_settlement", "signals"):
+                self.assertIn(k, r["H4_arb"])
+            self.assertEqual(set(h["H3_diagnostics"]), {"tie_matched", "any_settlement"})
+            self.assertNotIn("H3_diagnostics", " ".join(r["decisions"]) + " ".join(r["secondary"]["family"]))
             self.assertEqual(set(h["H3_by_grade"]), {"hard", "soft", "agree>=1", "agree=0"})
             lk = r["H3_lock"]
             for k in ("entries_filled", "locked", "lock_conversion", "hold_no_lock", "locked_only"):
                 self.assertIn(k, lk)
             self.assertIn("H3_leadlag@30", r["decisions"])
             self.assertEqual(r["primary"]["hypothesis"], "H3_leadlag@30")
+            self.assertEqual(r["secondary"]["family"], ["H1_momentum@30"])      # listed by mistake: still tested alone
             self.assertFalse(r["exploratory"])
             self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "code", "frozen_models"})
             audit = json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])
@@ -424,12 +452,23 @@ class SpecComplianceTests(unittest.TestCase):
         validate_manifest(json.loads((Path(__file__).parent / "fixtures/microstructure/manifest.json").read_text()))
 
     def test_the_forecast_models_never_score_the_data_they_were_fitted_on(self):
-        from scripts.microstructure_eval import chrono_split, forecast_skill
+        from scripts.microstructure_eval import chrono_training, forecast_skill, forecast_skill_rolling
 
-        samples = [{"kind": "unconditional", "event_key": f"nfl:G{g}|H:2026-09-27", "t": 100.0 * g + i, "dmid_30": x, "dmid_30_fwd": 2 * x}
-                   for g in range(6) for i, x in enumerate((-.2, -.1, .1, .2))]
-        train, scored = chrono_split(samples, 2 / 3)
-        self.assertEqual((train, scored), ([f"nfl:G{g}|H:2026-09-27" for g in range(4)], [f"nfl:G{g}|H:2026-09-27" for g in (4, 5)]))
+        g = lambda i: f"nfl:G{i}|H:2026-09-27"   # noqa: E731
+        samples = [{"kind": "unconditional", "event_key": g(i), "t": 100.0 * i + k, "dmid_30": x, "dmid_30_fwd": 2 * x}
+                   for i in range(6) for k, x in enumerate((-.2, -.1, .1, .2))]
+        # G5b plays at the same time as G5: concurrent games never train each other.
+        samples += [dict(x, event_key="nfl:G5b|H:2026-09-27") for x in samples if x["event_key"] == g(5)]
+        plan = chrono_training(samples, 3)
+        self.assertEqual(set(plan), {g(3), g(4), g(5), "nfl:G5b|H:2026-09-27"})
+        self.assertEqual(plan[g(3)], [g(0), g(1), g(2)])
+        self.assertEqual(plan[g(5)], [g(i) for i in range(5)])
+        self.assertNotIn("nfl:G5b|H:2026-09-27", plan[g(5)])
+        self.assertTrue(all(max(s["t"] for s in samples if s["event_key"] == t) < min(s["t"] for s in samples if s["event_key"] == sc)
+                            for sc, tr in plan.items() for t in tr))                  # every training game ended first
+        m = forecast_skill_rolling(samples, 30, "dmid_30", 1, 200, plan)
+        self.assertEqual(set(m["coef_by_game"]), set(plan))
+        self.assertLess(m["mae_model"], m["mae_persistence"])
         # Frozen coefficients are used as given: a zero model equals unchanged price even though
         # the scored data follow y = 2x exactly (refitting on them would score perfectly).
         m = forecast_skill(samples, 30, "dmid_30", 1, 200, coef=[0.0, 0.0])
@@ -447,6 +486,12 @@ class SpecComplianceTests(unittest.TestCase):
                 _run(base + ["--fold", "test", "--frozen", str(Path(tmp) / "missing.json")])
             with self.assertRaises(SystemExit):
                 _run(base + ["--fold", "test", "--freeze", str(Path(tmp) / "f.json")])
+            with self.assertRaises(SystemExit):
+                _run(base + ["--fold", "validation", "--freeze", str(Path(tmp) / "f.json")])   # models are frozen on discovery only
+            frozen = Path(tmp) / "frozen.json"
+            frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, 0]}, "B4_ridge_gap": {"30": [0, 0]}}}))
+            with self.assertRaises(SystemExit):                             # closed until the spec hash is frozen
+                _run(base + ["--fold", "test", "--frozen", str(frozen), "--frozen-spec", str(Path(tmp) / "no-spec.json")])
             self.assertFalse((Path(tmp) / "log.jsonl").exists())            # refused before anything was opened or logged
 
     def test_a_changed_test_spec_is_refused_then_visibly_exploratory(self):
@@ -457,14 +502,20 @@ class SpecComplianceTests(unittest.TestCase):
             frozen = Path(tmp) / "frozen.json"
             frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, 0]}, "B4_ridge_gap": {"30": [0, 0]}}, "trained_on": []}))
             out = Path(tmp) / "r.json"
-            base = ["--db", str(db), "--manifest", str(man), "--log", str(Path(tmp) / "log.jsonl"), "--fold", "test", "--frozen", str(frozen), "--results", str(out)]
+            fspec = Path(tmp) / "frozen_spec.json"
+            common = ["--db", str(db), "--manifest", str(man), "--log", str(Path(tmp) / "log.jsonl"), "--frozen", str(frozen), "--frozen-spec", str(fspec)]
+            self.assertEqual(_run(common + ["--fold", "discovery", "--freeze-spec", str(fspec)]), 0)   # freeze the implementation + spec
+            base = common + ["--fold", "test", "--results", str(out)]
             self.assertEqual(_run(base), 0)
             first = json.loads(out.read_text())
             self.assertFalse(first["exploratory"])
             self.assertEqual(first["model_fit"]["from"], "frozen")
             frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, .1]}, "B4_ridge_gap": {"30": [0, 0]}}, "trained_on": []}))
+            with self.assertRaises(SystemExit):
+                _run(base)                                                       # a different model than the frozen spec
+            self.assertEqual(_run(common + ["--fold", "discovery", "--freeze-spec", str(fspec)]), 0)   # re-freezing after opening ...
             with self.assertRaises(RuntimeError):
-                _run(base)                                                       # a different model after opening
+                _run(base)                                                       # ... does not reopen the test: the first opening's hash rules
             with self.assertRaises(ValueError):
                 _run(base + ["--reopen-test", "  "])
             self.assertEqual(_run(base + ["--reopen-test", "coefficient typo found after opening"]), 0)
@@ -472,8 +523,9 @@ class SpecComplianceTests(unittest.TestCase):
             self.assertTrue(again["exploratory"])
             self.assertTrue(again["decisions"] and all(v.startswith("exploratory:") for v in again["decisions"].values()))
             log = [json.loads(x) for x in (Path(tmp) / "log.jsonl").read_text().splitlines()]
-            self.assertEqual([x["exploratory"] for x in log], [False, True])
-            self.assertEqual(log[1]["reopen_reason"], "coefficient typo found after opening")
+            tests_run = [x for x in log if x["fold"] == "test"]
+            self.assertEqual([x["exploratory"] for x in tests_run], [False, True])
+            self.assertEqual(tests_run[1]["reopen_reason"], "coefficient typo found after opening")
 
     def test_the_spec_hash_covers_constants_folds_code_and_frozen_models(self):
         from arb_engine.quant import microdata
@@ -568,22 +620,39 @@ class H2AndCausalityTests(unittest.TestCase):
     def test_a_print_received_late_is_a_future_input(self):
         from arb_engine.quant.microdata import _Prints
 
-        p = _Prints([{"ticker": "K", "ts": 95.0, "recv_ts": 103.0, "count": 10, "taker_side": "yes", "price": .5},
-                     {"ticker": "K", "ts": 99.5, "count": 7, "taker_side": "yes", "price": .5}])
-        self.assertEqual(p.at("K", 100.0, "yes", .5)["flow_30"], 0)          # stamped 95 but in hand only at 103; 99.5 not until 100.5
-        self.assertEqual(p.at("K", 101.0, "yes", .5)["flow_30"], 7)
-        self.assertEqual(p.at("K", 103.0, "yes", .5)["flow_30"], 17)
+        rows = [{"ticker": "K", "ts": 95.0, "obs_ts": 103.0, "count": 10, "taker_side": "yes", "price": .5},   # an old print, a late page
+                {"ticker": "K", "ts": 99.5, "obs_ts": 100.2, "count": 7, "taker_side": "yes", "price": .5},
+                {"ticker": "K", "ts": 90.0, "count": 50, "taker_side": "yes", "price": .5}]                    # legacy: no receipt time
+        p = _Prints(rows)
+        self.assertEqual(p.at("K", 100.0, "yes", .5)["flow_30"], 0)          # exchange stamps before 100 are not enough
+        self.assertEqual(p.at("K", 100.2, "yes", .5)["flow_30"], 7)
+        self.assertEqual(p.at("K", 103.0, "yes", .5)["flow_30"], 17)         # the stamp-95 print only now, and never the legacy one
+        self.assertEqual(p.counts(), {"loaded": 3, "exact_receipt": 2, "approximate_receipt": 0, "excluded_no_receipt": 1})
+        self.assertEqual(_Prints(rows, approx=True).at("K", 103.0, "yes", .5)["prints_approx_time"], 1)
 
     def test_cross_book_freshness_by_venue(self):
         from arb_engine.quant.microdata import build
 
         ev = "nfl:A|B:2026-09-27"
+        from unittest import mock
+
         me = [row(t, .40, event_key=ev, outcome="A", tie_payout=.5) for t in range(0, 40)]
-        rh = [row(29, .50, book="rothera", market="R", venue="robinhood", event_key=ev, outcome="A", tie_payout=0.0)]
+        rh = [row(29, .50, book="rothera", market="R", venue="robinhood", event_key=ev, outcome="A", tie_payout=.5)]
         pm = [row(29, .50, book="polymarket", market="P", venue="polymarket", event_key=ev, outcome="A", tie_payout=.5)]
-        out = {s["t"]: s for s in build(me + rh + pm, sample="unconditional", horizons=(), fee_for_row=lambda r: None) if s["book_id"] == "kalshi"}
+        with mock.patch("arb_engine.quant.microdata.settlement_relation", return_value="identical"):   # freshness is the point here
+            out = {s["t"]: s for s in build(me + rh + pm, sample="unconditional", horizons=(), fee_for_row=lambda r: None) if s["book_id"] == "kalshi"}
         self.assertEqual(set(out[30.0]["cross"]), {"rothera", "polymarket"})   # both 1 s old
         self.assertEqual(set(out[35.0]["cross"]), {"polymarket"})            # 6 s old: > 2 s for the fast-lane Rothera, <= 6 s for Polymarket
+
+    def test_settlement_identity_from_the_registry(self):
+        from arb_engine.quant.microdata import settlement_relation
+
+        ev = "nfl:A|B:2026-09-27"
+        k = {"venue": "kalshi", "book_id": "kalshi", "event_key": ev}
+        self.assertEqual(settlement_relation(k, {"venue": "robinhood", "book_id": "rothera", "exchange": "rothera", "event_key": ev}), "unverified")
+        self.assertEqual(settlement_relation(k, {"venue": "polymarket", "book_id": "polymarket", "event_key": ev}), "mismatch")   # postponement / cancellation differ
+        self.assertEqual(settlement_relation(k, {"venue": "robinhood", "book_id": "kalshi", "exchange": "kalshi", "event_key": ev}), "identical")   # KX route: one book
+        self.assertEqual(settlement_relation(k, {"venue": "nowhere", "book_id": "x", "event_key": ev}), "unverified")        # no rule on record
 
     def test_a_persistent_lag_is_one_decision_per_minute(self):
         from scripts.microstructure_eval import _h3, select
@@ -607,11 +676,44 @@ class H2AndCausalityTests(unittest.TestCase):
                 else:
                     out.append(row(t, .44, book="rothera", market="RB", venue="robinhood", event_key=ev, outcome="B", tie_payout=0.0))
             return out
-        unsafe = arb_scan(rows(False), lambda r: ZeroFees(), 1, 5)[0]
+        from unittest import mock
+
+        with mock.patch("arb_engine.quant.microdata.settlement_relation", return_value="identical"):
+            unsafe = arb_scan(rows(False), lambda r: ZeroFees(), 1, 5)[0]
+            safe = arb_scan(rows(True), lambda r: ZeroFees(), 1, 5)[0]
         self.assertEqual(unsafe["tie_safe"], False)
         self.assertAlmostEqual(unsafe["pnl_win"], .10)
         self.assertAlmostEqual(unsafe["pnl_tie"], .5 - .90)
         self.assertAlmostEqual(unsafe["pnl_worst"], -.40)                     # a tie turns this "lock" into a loss
-        safe = arb_scan(rows(True), lambda r: ZeroFees(), 1, 5)[0]
+        self.assertEqual(unsafe["class"], "speculation")
         self.assertEqual(safe["tie_safe"], True)
         self.assertAlmostEqual(safe["pnl_worst"], .10)
+        self.assertEqual((safe["class"], safe["guaranteed_result"]), ("guaranteed-eligible", True))
+        # With the real registry a Rothera leg is unverified: even the tie-proof pair is
+        # speculation, and a stated settlement mismatch is not traded at all.
+        real = arb_scan(rows(True), lambda r: ZeroFees(), 1, 5)[0]
+        self.assertEqual((real["settlement"], real["class"], real["guaranteed_result"]), ("unverified", "speculation", False))
+        with mock.patch("arb_engine.quant.microdata.settlement_relation", return_value="mismatch"):
+            mm = arb_scan(rows(True), lambda r: ZeroFees(), 1, 5)[0]
+        self.assertEqual((mm["excluded"], mm["pnl_win"], mm["class"]), ("settlement-mismatch", None, "speculation"))
+
+    def test_load_db_reads_print_receipt_times_and_marks_legacy_ones(self):
+        import sqlite3
+        from arb_engine.quant.microdata import load_db
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for with_obs in (True, False):
+                db = Path(tmp) / f"p{int(with_obs)}.db"
+                con = sqlite3.connect(db)
+                con.execute("create table inplay_ticks (ts real, event_key text, live integer, l1_json text, source text)")
+                con.execute("create table espn_ticks (ts real, event_key text, status text, period integer, clock integer, home text, away text, home_score integer, away_score integer, last_play_type text)")
+                cols = "trade_id text, ticker text, ts real, price real, count real, taker_side text" + (", req_ts real, obs_ts real" if with_obs else "")
+                con.execute(f"create table trade_prints ({cols})")
+                rows = [{"venue": "kalshi", "book_id": "kalshi", "outcome": "A", "side": "yes", "obs_ts": 10.0, "refreshed": 1, "venue_market_id": "K-A", "bid": .5, "ask": .52}]
+                con.execute("insert into inplay_ticks values (?,?,?,?,?)", (10.0, "nfl:A|B:2026-09-27", 1, json.dumps({"rows": rows}), "fast"))
+                vals = ("t1", "K-A", 5.0, .5, 3, "yes") + ((6.0, 9.5) if with_obs else ())
+                con.execute(f"insert into trade_prints values ({','.join('?' * len(vals))})", vals)
+                con.commit()
+                con.close()
+                p = load_db(str(db), event_keys=["nfl:A|B:2026-09-27"])["prints"][0]
+                self.assertEqual((p["obs_ts"], p["approx_time"]), (9.5, 0) if with_obs else (None, 1))

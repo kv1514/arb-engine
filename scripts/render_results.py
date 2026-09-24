@@ -422,6 +422,9 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     for h in ("5", "15", "30", "60"):
         for name, label in (("B3_ridge_dmid30", "B3 ridge on dmid_30"), ("B4_ridge_gap", "B4 ridge on leader gap")):
             m = d["horizons"][h][name]
+            if not m.get("n"):
+                fc.append([f"{h} s", label, "-", "-", "no data (no registered leader)", "-", "-"])
+                continue
             cal = (m.get("calibration") or {}).get("slope")
             fc.append([f"{h} s", label, f"{m['mae_model'] * 100:.3f}c", f"{m['mae_persistence'] * 100:.3f}c", ci(m.get("skill_ci"), p=3),
                        pct(m.get("directional_hit")), f"{cal:.2f}" if cal is not None else "-"])
@@ -433,9 +436,13 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     forecast = table(["horizon", "model", "MAE", "unchanged-price MAE (B0)", "skill 90 % CI", "direction right", "calibration slope"], fc)
     a = d["H4_arb"]
     def arb_row(label: str, m: dict) -> list[str]:
-        return [label, str(m["attempts"]), str(m.get("both_legs_filled", "-")), str(m.get("one_leg_filled", "-")), str(m.get("no_leg_filled", "-")),
-                ci(m.get("win_case"), p=2), ci(m.get("expected_with_tie_prior"), p=2), ci(m.get("mean_ret"), p=2)]
-    arb = table(["H4 two-leg arb", "signals", "both legs filled", "one leg (unwound)", "neither", "win case per set", "with NFL tie odds", "guaranteed (tie case)"],
+        g, sp = m.get("guaranteed") or {}, m.get("speculation") or {}
+        settle = ", ".join(f"{v} {k}" for k, v in sorted((m.get("by_settlement") or {}).items()))
+        return [label, str(m.get("signals", 0)), settle or "-", f"{g.get('attempts', 0)}: {ci(g.get('mean_ret'), p=2)}",
+                f"{sp.get('both_legs_filled', 0)} / {sp.get('one_leg_filled', 0)} / {sp.get('no_leg_filled', 0)}",
+                ci(sp.get("mean_ret"), p=2), ci(sp.get("tie_case"), p=2), ci(sp.get("expected_with_tie_prior"), p=2)]
+    arb = table(["H4 two-leg arb", "signals", "settlement rules", "guaranteed: pairs, worst case per set",
+                 "speculation: both legs / one leg / none", "win case per set", "tie case", "with NFL tie odds"],
                 [arb_row("Kalshi leg at the latency, Robinhood by hand (15 s)", a), arb_row("both legs at the latency", a["both_legs_fast"])])
     lk = d.get("H3_lock") or {}
     def m(x: dict) -> str:
@@ -445,9 +452,17 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
                    f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
                    m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
     bym = a.get("by_margin") or {}
-    arb_size = table(["arb size when it fired", "completed / signals", "win case per set [90 % CI]", "guaranteed (tie case)"],
-                     [[k, f"{bym[k].get('trades', 0)}/{bym[k].get('attempts', 0)}", ci(bym[k].get("win_case"), p=1), ci(bym[k].get("mean_ret"), p=1)]
-                      for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
+    def size_row(k: str) -> list[str]:
+        sp = (bym[k].get("speculation") or {})
+        return [k, f"{sp.get('trades', 0)}/{bym[k].get('signals', 0)}", str((bym[k].get("guaranteed") or {}).get("attempts", 0)),
+                ci(sp.get("mean_ret"), p=1), ci(sp.get("tie_case"), p=1)]
+    arb_size = table(["arb size when it fired", "completed / signals", "guaranteed-eligible", "speculation: win case per set [90 % CI]", "tie case"],
+                     [size_row(k) for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
+    h3r = [["registered: identical settlement, equal tie payout", str(h30["H3_leadlag"]["attempted_orders"]), ci(h30["H3_leadlag"].get("mean_ret")), "tested (primary)"]]
+    for lvl, label in (("tie_matched", "diagnostic: equal tie payout, other rules may differ"), ("any_settlement", "diagnostic: any settlement, tie priced in")):
+        m = (h30.get("H3_diagnostics") or {}).get(lvl) or {}
+        h3r.append([label, str(m.get("attempted_orders", 0)), ci(m.get("mean_ret")), "never tested"])
+    h3_settle = table(["H3 at 30 s, leader counted when", "decisions", "mean per contract [90 % CI]", "role"], h3r)
     g30 = h30.get("H3_by_grade") or {}
     grade = table(["H3 at 30 s", "filled / orders", "won", "mean per contract [90 % CI]"],
                   [[k, f"{g30[k].get('filled_orders', 0)}/{g30[k].get('attempted_orders', 0)}", pct(g30[k].get("hit_rate")), ci(g30[k].get("mean_ret"))]
@@ -460,7 +475,7 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
                      for k in sec.get("family") or []])
     return {"micro_discovery_trades": trades, "micro_discovery_accounting": accounting, "micro_discovery_forecast": forecast,
             "micro_discovery_arb": arb, "micro_discovery_lock": lock, "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade,
-            "micro_discovery_tests": tests}
+            "micro_discovery_tests": tests, "micro_discovery_h3_settlement": h3_settle}
 
 
 def render_arb_backtest(d: dict) -> dict[str, str]:
