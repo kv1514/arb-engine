@@ -1,6 +1,7 @@
 """Lead-lag signals (strategy/leadlag.py) and the ntfy alert sink (strategy/alerts.py)."""
 
 import os
+import threading
 import unittest
 
 from arb_engine.models import OutcomeQuote
@@ -335,6 +336,74 @@ class FastLaneTests(unittest.TestCase):
         lane.poll_trades(st, per_step=1)                          # round-robin: T-B next
         self.assertEqual(calls[-1]["ticker"], "T-B")
         self.assertEqual(lane.poll_trades(st, per_step=1), 0)      # T-A again: repeats dropped by trade_id
+
+    def test_trade_backlog_is_not_committed_past_until_last_page_and_restart_is_inclusive(self):
+        from arb_engine.store import Store
+        from arb_engine.strategy.fastlane import FastLane, _epoch
+        from tests.helpers import load
+
+        pages = [load("trades/kalshi_trades_page1.json"), load("trades/kalshi_trades_page2.json")]
+        ticker = pages[0]["trades"][0]["ticker"]
+        calls = []
+        class C:
+            def get(self, path, params=None, **kw):
+                calls.append(dict(params or {}))
+                return pages[1] if params.get("cursor") == pages[0]["cursor"] else pages[0]
+        st = Store(":memory:")
+        lane = FastLane(kalshi_client=C())
+        lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", ticker, KEY, "KC", meta={"ticker": ticker})]}})
+        self.assertEqual(lane.poll_trades(st, now=10, max_pages=1), 0)
+        self.assertEqual(st.conn.execute("select count(*) from trade_prints").fetchone()[0], 0)
+        self.assertTrue(lane.trade_poll_status(10)[ticker]["backlog"])
+        self.assertGreater(lane.poll_trades(st, now=11, max_pages=1), 0)
+        self.assertFalse(lane.trade_poll_status(11)[ticker]["backlog"])
+
+        restart_calls = []
+        class Restart:
+            def get(self, path, params=None, **kw):
+                restart_calls.append(dict(params or {})); return {"trades": [], "cursor": ""}
+        restarted = FastLane(kalshi_client=Restart())
+        restarted.seed(lane.last)
+        restarted.poll_trades(st, now=20)
+        newest = int(max(_epoch(t["created_time"]) for p in pages for t in p["trades"]))
+        self.assertEqual(restart_calls[0]["min_ts"], newest)       # inclusive, never newest + 1
+
+    def test_trade_poll_cadence_is_measured_and_all_due_tickers_are_polled(self):
+        from arb_engine.store import Store
+        from arb_engine.strategy.fastlane import FastLane
+        calls = []
+        class C:
+            def get(self, path, params=None, **kw):
+                calls.append((params["ticker"], params.get("min_ts"))); return {"trades": [], "cursor": ""}
+        lane = FastLane(kalshi_client=C())
+        lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", "T-A", KEY, "KC", meta={"ticker": "T-A"}),
+                                    OutcomeQuote("kalshi", "T-B", KEY, "DEN", meta={"ticker": "T-B"})]}})
+        st = Store(":memory:")
+        lane.poll_trades(st, now=1, cadence_s=5)
+        lane.poll_trades(st, now=5, cadence_s=5)
+        self.assertEqual([t for t, _ in calls], ["T-A", "T-B"])
+        lane.poll_trades(st, now=6, cadence_s=5)
+        self.assertEqual([t for t, _ in calls], ["T-A", "T-B", "T-A", "T-B"])
+        self.assertEqual({v["last_gap_s"] for v in lane.trade_poll_status(6).values()}, {5.0})
+
+    def test_background_trade_poll_can_be_flushed_before_store_close(self):
+        from arb_engine.store import Store
+        from arb_engine.strategy.fastlane import FastLane
+        entered, release = threading.Event(), threading.Event()
+        class C:
+            def get(self, path, params=None, **kw):
+                entered.set()
+                release.wait(1)
+                return {"trades": [], "cursor": ""}
+        lane = FastLane(kalshi_client=C())
+        lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", "T-A", KEY, "KC", meta={"ticker": "T-A"})]}})
+        store = Store(":memory:")
+        lane.poll_trades(store, background=True)
+        self.assertTrue(entered.wait(1))
+        self.assertFalse(lane.wait_for_trade_polls(timeout=0))
+        release.set()
+        self.assertTrue(lane.wait_for_trade_polls(timeout=1))
+        store.close()
 
     def test_refresh_kalshi_updates_prices_keeps_fee_params_and_no_rows(self):
         from arb_engine.strategy.fastlane import refresh_kalshi

@@ -109,6 +109,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("start_time", st.columns("scans"))
         self.assertTrue({"bid_10", "mid_60", "ts_300", "bid_900", "last_bid", "pnl_settle"} <= set(st.columns("steal_observations")))
         self.assertIn("espn_ticks", {r[0] for r in st.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")})
+        self.assertTrue({"req_ts", "obs_ts"} <= set(st.columns("trade_prints")))
         old = st.tick_rows()[0]
         self.assertEqual((old["event_key"], old["kalshi_home_bid"], old["l1_json"]), ("nfl:A|B:2026-09-13", None, None))
         # Reopening is idempotent (no duplicate-column error).
@@ -151,6 +152,17 @@ class TickRecordingTests(unittest.TestCase):
         self.assertIsNone(bare["l1_json"])
         self.assertIsNotNone(bare["market_p"])
 
+    def test_tick_timestamp_cannot_precede_exact_observation(self):
+        me = _me()
+        quote = me.quotes_by_venue["kalshi"][0]
+        quote.meta.update({"req_ts": 129.5, "obs_ts": 130.0, "approx_time": False})
+        view = evaluate_inplay(me, [], game_state=_gs())
+        self.st.record_tick(view, quotes_by_venue=me.quotes_by_venue, ts=123.0)
+        row = self.st.tick_rows()[0]
+        recorded = json.loads(row["l1_json"])
+        exact = next(r for r in recorded["rows"] if r["venue_market_id"] == quote.venue_market_id)
+        self.assertEqual((exact["obs_ts"], row["ts"]), (130.0, 130.0))
+
     def test_lossless_rows_keep_yes_and_normalized_no_and_provenance(self):
         from arb_engine.models import OutcomeQuote
         yes = OutcomeQuote("robinhood", "YES-A", "nfl:A|B:2026-09-21", "A", bid=.4, ask=.42, ts=99,
@@ -161,6 +173,18 @@ class TickRecordingTests(unittest.TestCase):
         self.assertEqual([(r["venue_market_id"], r["side"]) for r in l1["rows"]], [("NO-B#no", "no"), ("YES-A", "yes")])
         self.assertEqual([r["tie_payout"] for r in l1["rows"]], [1.0, 0.0])
         self.assertTrue(all(r["obs_ts"] <= 100 and r["refreshed"] == 0 for r in l1["rows"]))
+
+    def test_exact_fast_times_and_approximate_full_times_are_explicit(self):
+        from arb_engine.models import OutcomeQuote
+        exact = OutcomeQuote("kalshi", "K", "nfl:A|B:2026-09-21", "A", bid=.4, ask=.42, ts=12,
+                             meta={"side": "yes", "req_ts": 10, "obs_ts": 12, "refreshed": True})
+        full = OutcomeQuote("robinhood", "R", "nfl:A|B:2026-09-21", "B", bid=.5, ask=.52, ts=8,
+                            meta={"side": "yes"})
+        rows = self.st.l1_from_quotes({"kalshi": [exact], "robinhood": [full]}, req_ts=13, obs_ts=13, source="fast")["rows"]
+        by_market = {r["venue_market_id"]: r for r in rows}
+        self.assertEqual((by_market["K"]["req_ts"], by_market["K"]["obs_ts"], by_market["K"]["approx_time"]), (10.0, 12.0, 0))
+        self.assertEqual((by_market["R"]["req_ts"], by_market["R"]["obs_ts"], by_market["R"]["approx_time"]), (13, 13, 1))
+        self.assertEqual({r["source"] for r in rows}, {"fast"})
 
     def test_trade_print_pages_are_idempotent(self):
         root = os.path.join(os.path.dirname(__file__), "fixtures", "trades")
@@ -174,6 +198,13 @@ class TickRecordingTests(unittest.TestCase):
         count = self.st.conn.execute("select count(*) from trade_prints").fetchone()[0]
         self.assertEqual(count, len({r["trade_id"] for page in pages for r in page}))
         self.assertGreaterEqual(total, 0)
+        self.st.conn.execute("delete from trade_prints")
+        self.st.record_trade_prints(pages[0], req_ts=100, obs_ts=101)
+        receipt = self.st.conn.execute("select req_ts, obs_ts from trade_prints limit 1").fetchone()
+        self.assertEqual(tuple(receipt), (100.0, 101.0))
+        ticker = pages[0][0]["ticker"]
+        expected = int(max(__import__("datetime").datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp() for t in pages[0]))
+        self.assertEqual(self.st.latest_trade_ts(ticker), expected)
 
     def test_live_slate_with_fixture_adapters_records_l1_per_priced_game(self):
         """The slate's record call site (``record_tick``) plus the per-venue L1 / ESPN plumbing

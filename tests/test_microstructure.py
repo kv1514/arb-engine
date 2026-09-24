@@ -6,7 +6,7 @@ from pathlib import Path
 
 from arb_engine.fees.base import ZeroFees
 from arb_engine.quant.microdata import features_at, lead_lag_label, trigger_events
-from arb_engine.quant.paperexec import ioc, two_leg_arb
+from arb_engine.quant.paperexec import ioc, ioc_short_via_complement, two_leg_arb
 from scripts.microstructure_eval import decision, fold_of, game_block_bootstrap, guard_test_open, holm, spec_hash, summarize, validate_manifest
 
 
@@ -155,6 +155,20 @@ class PaperExecutionTests(unittest.TestCase):
         t = ioc(rows, 0, .51, 10, ZeroFees(), latency_s=1, horizon_s=30, settlement=1)
         self.assertEqual((t.filled, [n for *_, n, _ in t.exits], t.settled, t.unresolved), (4, [2, 1], 1, 0))
         self.assertAlmostEqual(float(t.pnl), .54 * 2 + .55 + 1.0 - .51 * 4)
+        self.assertEqual((t.partial, t.cancelled), (True, 6))
+
+    def test_exit_horizon_is_decision_plus_latency_not_late_fill_time(self):
+        # Arrival at t=1, but the first usable observation is t=3 inside its tolerance. The
+        # frozen +30 s mark remains t=31, rather than drifting to t=33.
+        rows = [row(3, .50, ask=.51, ask_size=2), row(31, .55, bid=.54, bid_size=2), row(33, .70, bid=.69, bid_size=2)]
+        t = ioc(rows, 0, .51, 2, ZeroFees(), latency_s=1, entry_tol_s=2, horizon_s=30)
+        self.assertEqual(t.exits[0][0:3], (31.0, .54, 2))
+
+    def test_duplicate_marks_cannot_reuse_the_same_displayed_depth(self):
+        duplicate = row(33, .56, bid=.55, bid_size=2)
+        rows = [row(1, .50, ask=.51, ask_size=5), row(31, .55, bid=.54, bid_size=0), duplicate, dict(duplicate)]
+        t = ioc(rows, 0, .51, 5, ZeroFees(), horizon_s=30, settlement=1)
+        self.assertEqual(([n for *_, n, _ in t.exits], t.settled), ([2], 3))
 
     def test_limit_is_respected_and_misses_are_counted(self):
         rows = [row(1, .55, ask=.56, ask_size=50)]
@@ -204,6 +218,20 @@ class PaperExecutionTests(unittest.TestCase):
         r = two_leg_arb(a, b, 0, .40, .50, 10, ZeroFees(), ZeroFees(), latency_b_s=1, tie_payouts=(.5, 0.0))
         self.assertAlmostEqual(float(r.pnl), 1.0)
         self.assertAlmostEqual(float(r.pnl_tie), 5.0 - 9.0)
+        self.assertFalse(r.guaranteed)
+
+    def test_same_book_and_settlement_mismatch_are_not_guaranteed_arbs(self):
+        a = [row(1, .40, ask=.40, ask_size=10, book="kalshi", market="K-A")]
+        b = [row(1, .50, ask=.50, ask_size=10, book="kalshi", market="K-B", outcome="AWAY")]
+        self.assertEqual(two_leg_arb(a, b, 0, .40, .50, 10, ZeroFees(), ZeroFees(), latency_b_s=1).excluded, "same-book")
+        b[0]["book_id"] = "rothera"
+        self.assertEqual(two_leg_arb(a, b, 0, .40, .50, 10, ZeroFees(), ZeroFees(), latency_b_s=1,
+                                     settlement_compatible=False).excluded, "settlement-mismatch")
+
+    def test_short_is_an_ioc_purchase_on_the_complement_book(self):
+        complement = [row(1, .39, ask=.40, ask_size=3, outcome="AWAY")]
+        t = ioc_short_via_complement(complement, 0, .40, 5, ZeroFees(), latency_s=1, settlement=1)
+        self.assertEqual((t.filled, t.cancelled, t.entry_price), (3, 2, .40))
 
 
 class EvaluationDisciplineTests(unittest.TestCase):
@@ -316,4 +344,3 @@ class EvaluationDisciplineTests(unittest.TestCase):
         self.assertAlmostEqual(out["locked_only"]["nfl:g1:2026-09-27"][0], 1 - .61 - .21)   # KC at 0.61 + DEN at 0.21 once KC is 0.80
         self.assertAlmostEqual(out["rets"]["nfl:g2:2026-09-27"][0], .44 - .61)              # never locked: sold to the 0.44 bid
         self.assertAlmostEqual(out["hold"]["nfl:g1:2026-09-27"][0], .79 - .61)              # held, not locked: the bid after the watch
-

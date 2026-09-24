@@ -22,6 +22,7 @@ whose refresh fails keeps its previous quotes and the failure is reported once p
 from __future__ import annotations
 
 import dataclasses
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Iterable, Optional
@@ -62,7 +63,9 @@ def carried(q: OutcomeQuote) -> OutcomeQuote:
     """A quote this step did not refresh: it keeps the time it was *actually* observed (a
     carried quote stamped "now" would look fresh and could fake a move) and is flagged."""
     meta = dict(q.meta or {})
-    meta.setdefault("obs_ts", q.ts)
+    if meta.get("obs_ts") is None:
+        meta["obs_ts"] = q.ts
+        meta["approx_time"] = True
     meta["refreshed"] = False
     return dataclasses.replace(q, meta=meta)
 
@@ -100,7 +103,7 @@ def refresh_kalshi(client: Any, quotes: list[OutcomeQuote], now: Optional[float]
             bid = yes_bid if yes_bid and yes_bid > 0.0 else None
             ask_size, bid_size = _f(m.get("yes_ask_size_fp")), _f(m.get("yes_bid_size_fp"))
         meta = dict(q.meta or {})
-        meta.update({"last": _f(m.get("last_price_dollars")) or meta.get("last"), "volume": _f(m.get("volume_fp")) or meta.get("volume"), "req_ts": req_ts, "obs_ts": now, "refreshed": True})
+        meta.update({"last": _f(m.get("last_price_dollars")) or meta.get("last"), "volume": _f(m.get("volume_fp")) or meta.get("volume"), "req_ts": req_ts, "obs_ts": now, "approx_time": False, "refreshed": True})
         out.append(dataclasses.replace(q, ask=ask, bid=bid, ask_size=ask_size if ask_size is not None else q.ask_size, bid_size=bid_size if bid_size is not None else q.bid_size, ts=now, meta=meta))
     return out
 
@@ -123,7 +126,7 @@ def refresh_robinhood(adapter: Any, quotes: list[OutcomeQuote], now: Optional[fl
             continue
         qt = _epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at"))
         meta = dict(q.meta or {})
-        meta.update({"state": qd.get("state", meta.get("state")), "last": _f(qd.get("last_trade_price")) if qd.get("last_trade_price") is not None else meta.get("last"), "updated_at": qd.get("updated_at", meta.get("updated_at")), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price")), "req_ts": req_ts, "obs_ts": now, "refreshed": True})
+        meta.update({"state": qd.get("state", meta.get("state")), "last": _f(qd.get("last_trade_price")) if qd.get("last_trade_price") is not None else meta.get("last"), "updated_at": qd.get("updated_at", meta.get("updated_at")), "no_ask": _f(qd.get("no_ask_price")), "no_bid": _f(qd.get("no_bid_price")), "req_ts": req_ts, "obs_ts": now, "approx_time": False, "refreshed": True})
         if meta.get("side") == "no":
             out.append(dataclasses.replace(q, ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), ts=now, quote_time=qt, meta=meta))
         else:
@@ -147,6 +150,14 @@ class FastLane:
         self.steps = 0
         self.errors: list[str] = []
         self.trade_cursor: dict[str, int] = {}
+        self.trade_last_poll: dict[str, float] = {}
+        self.trade_poll_gaps: dict[str, float] = {}
+        self.trade_errors: list[str] = []
+        self._trade_page_cursor: dict[str, str] = {}
+        self._trade_pending: dict[str, list[dict]] = {}
+        self._trade_min_ts: dict[str, Optional[int]] = {}
+        self._trade_thread: Optional[threading.Thread] = None
+        self._trade_lock = threading.Lock()
         self._trade_rr = 0
 
     def seed(self, events: dict[str, dict[str, list[OutcomeQuote]]]) -> None:
@@ -196,34 +207,107 @@ class FastLane:
         self.errors = errors
         return {k: self.last[k] for k in keys if k in self.last}, errors
 
-    def poll_trades(self, store: Any, now: Optional[float] = None, per_step: int = 2, max_pages: int = 5) -> int:
+    def _poll_one_ticker(self, store: Any, ticker: str, now: Optional[float], max_pages: int) -> int:
+        clock = (lambda: float(now)) if now is not None else self.clock
+        if ticker not in self.trade_cursor and ticker not in self._trade_min_ts and hasattr(store, "latest_trade_ts"):
+            self.trade_cursor[ticker] = store.latest_trade_ts(ticker)
+        minimum = self._trade_min_ts.setdefault(ticker, self.trade_cursor.get(ticker))
+        cursor = self._trade_page_cursor.get(ticker)
+        trades = list(self._trade_pending.get(ticker, []))
+        req_ts = clock()
+        complete = False
+        for _ in range(max_pages):
+            params = {"ticker": ticker, "limit": 1000, "min_ts": minimum, "cursor": cursor}
+            page = self.kalshi.get("/markets/trades", {k: v for k, v in params.items() if v is not None}) or {}
+            trades.extend(page.get("trades") or [])
+            cursor = page.get("cursor")
+            if not cursor:
+                complete = True
+                break
+        obs_ts = clock()
+        previous = self.trade_last_poll.get(ticker)
+        if previous is not None:
+            self.trade_poll_gaps[ticker] = obs_ts - previous
+        self.trade_last_poll[ticker] = obs_ts
+        if not complete:
+            # Do not advance the durable watermark over an unfinished newest-first backlog.
+            # A restart sees the old DB watermark and safely re-fetches these buffered pages.
+            self._trade_pending[ticker] = trades
+            self._trade_page_cursor[ticker] = str(cursor)
+            return 0
+        inserted = store.record_trade_prints(trades, ticker, req_ts=req_ts, obs_ts=obs_ts)
+        stamps = [t for t in (_epoch(tr.get("created_time") or tr.get("ts")) for tr in trades) if t is not None]
+        if stamps:
+            self.trade_cursor[ticker] = int(max(stamps))  # inclusive: same-second late prints survive
+        self._trade_pending.pop(ticker, None)
+        self._trade_page_cursor.pop(ticker, None)
+        self._trade_min_ts.pop(ticker, None)
+        return inserted
+
+    def _poll_trades_sync(self, store: Any, tickers: list[str], now: Optional[float], max_pages: int) -> int:
+        inserted = 0
+        for ticker in tickers:
+            try:
+                inserted += self._poll_one_ticker(store, ticker, now, max_pages)
+            except Exception as exc:
+                self.trade_errors.append(f"trade prints {ticker}: {exc!r}")
+        return inserted
+
+    def poll_trades(self, store: Any, now: Optional[float] = None, per_step: Optional[int] = None,
+                    max_pages: int = 5, cadence_s: float = 5.0, background: bool = False) -> int:
         """Record Kalshi's public trade prints for the live tickers (L1 changes are never read
-        as trades). Called once per lane step, it polls only ``per_step`` tickers round-robin,
-        so the 1 s quote refresh is never held up by a request per ticker. Each ticker is
-        paged back to its cursor (newest-first pages; a busy second can exceed one page) and
-        the cursor is the newest print's second, not one past it: prints stamped in that same
-        second after the poll still arrive, and the trade_id primary key drops the repeats."""
+        as trades). By default every ticker whose five-second cadence is due is polled; an
+        explicit ``per_step`` provides the older round-robin mode. ``background=True`` keeps
+        that HTTP pagination off the L1 loop. Each ticker is paged back to its cursor
+        (newest-first pages; a busy second can exceed one page) and the cursor is the newest
+        print's second, not one past it: prints stamped in that same second after the poll
+        still arrive, and the trade_id primary key drops the repeats."""
         if self.kalshi is None or store is None:
             return 0
         tickers = sorted({(q.meta or {}).get("ticker") or q.venue_market_id.split("#")[0]
                           for by in self.last.values() for q in by.get("kalshi", [])})
         if not tickers:
             return 0
-        inserted = 0
-        for i in range(min(per_step, len(tickers))):
-            ticker = tickers[(self._trade_rr + i) % len(tickers)]
-            trades: list[dict] = []
-            cursor = None
-            for _ in range(max_pages):
-                params = {"ticker": ticker, "limit": 1000, "min_ts": self.trade_cursor.get(ticker), "cursor": cursor}
-                page = self.kalshi.get("/markets/trades", {k: v for k, v in params.items() if v is not None}) or {}
-                trades.extend(page.get("trades") or [])
-                cursor = page.get("cursor")
-                if not cursor:
-                    break
-            inserted += store.record_trade_prints(trades, ticker)
-            stamps = [t for t in (_epoch(tr.get("created_time") or tr.get("ts")) for tr in trades) if t is not None]
-            if stamps:
-                self.trade_cursor[ticker] = int(max(stamps))
-        self._trade_rr = (self._trade_rr + per_step) % len(tickers)
-        return inserted
+        decision_now = float(now) if now is not None else self.clock()
+        due = [t for t in tickers if decision_now - self.trade_last_poll.get(t, -float("inf")) >= cadence_s
+               or t in self._trade_page_cursor]
+        if per_step is not None and due:
+            ordered = [tickers[(self._trade_rr + i) % len(tickers)] for i in range(len(tickers))]
+            due_set = set(due)
+            due = [t for t in ordered if t in due_set][:per_step]
+            self._trade_rr = (self._trade_rr + per_step) % len(tickers)
+        if not due:
+            return 0
+        if background:
+            with self._trade_lock:
+                if self._trade_thread is not None and self._trade_thread.is_alive():
+                    return 0
+                self._trade_thread = threading.Thread(target=self._poll_trades_sync,
+                    args=(store, due, None, max_pages), name="kalshi-trade-prints", daemon=True)
+                self._trade_thread.start()
+            return 0
+        return self._poll_trades_sync(store, due, now, max_pages)
+
+    def wait_for_trade_polls(self, timeout: Optional[float] = None) -> bool:
+        """Wait for the current background page walk before its Store can be closed.
+
+        Returns false only when the bounded wait expires. No new poll can replace the
+        captured thread while it is alive because ``poll_trades`` uses ``_trade_lock``.
+        """
+        with self._trade_lock:
+            thread = self._trade_thread
+        if thread is None:
+            return True
+        thread.join(timeout=timeout)
+        return not thread.is_alive()
+
+    def trade_poll_status(self, now: Optional[float] = None, cadence_s: float = 5.0) -> dict[str, dict[str, Any]]:
+        """Observable cadence health for the recorder and post-run diagnostics."""
+        at = self.clock() if now is None else float(now)
+        tickers = sorted({(q.meta or {}).get("ticker") or q.venue_market_id.split("#")[0]
+                          for by in self.last.values() for q in by.get("kalshi", [])})
+        return {ticker: {"last_poll_ts": self.trade_last_poll.get(ticker),
+                         "last_gap_s": self.trade_poll_gaps.get(ticker),
+                         "overdue": at - self.trade_last_poll.get(ticker, -float("inf")) > cadence_s,
+                         "backlog": ticker in self._trade_page_cursor}
+                for ticker in tickers}
