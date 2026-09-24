@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS pregame_lines (
 );
 CREATE TABLE IF NOT EXISTS trade_prints (
   trade_id TEXT PRIMARY KEY, ticker TEXT NOT NULL, ts REAL NOT NULL, price REAL NOT NULL,
-  count REAL NOT NULL, taker_side TEXT
+  count REAL NOT NULL, taker_side TEXT, req_ts REAL, obs_ts REAL
 );
 CREATE INDEX IF NOT EXISTS trade_prints_ticker_ts ON trade_prints(ticker, ts);
 """
@@ -181,6 +181,7 @@ class Store:
         self._ensure_columns("quotes", {"bid_size": "REAL", "venue_ts": "REAL", "is_mm": "INTEGER"})
         self._ensure_columns("inplay_ticks", TICK_EXTRA_COLUMNS)
         self._ensure_columns("steal_observations", _ladder_columns(LADDER_OFFSETS))
+        self._ensure_columns("trade_prints", {"req_ts": "REAL", "obs_ts": "REAL"})
 
     # ---- schema helpers ------------------------------------------------------------------
     def columns(self, table: str) -> list[str]:
@@ -234,7 +235,8 @@ class Store:
     # ---- in-play ticks ---------------------------------------------------------------------
     @staticmethod
     def l1_from_quotes(quotes_by_venue: Any, req_ts: Optional[float] = None,
-                       obs_ts: Optional[float] = None, refreshed: bool = True) -> dict[str, Any]:
+                       obs_ts: Optional[float] = None, refreshed: bool = True,
+                       source: str = "full") -> dict[str, Any]:
         """``{venue: [OutcomeQuote]}`` (or ``{venue: {outcome: quote}}``) -> plain nested dict
         ``{venue: {outcome: {bid, ask, bid_size, ask_size, quote_time, book_id, venue_market_id,
         fee_params, exchange}}}`` — everything the tick replay needs to rebuild the quote."""
@@ -250,16 +252,27 @@ class Store:
                 meta = g("meta") or {}
                 fee_params = dict(g("fee_params") or {})
                 side = str(meta.get("side") or "yes").lower()
+                exact_obs = _f(meta.get("obs_ts"))
+                observed = exact_obs if exact_obs is not None else obs_ts
+                requested = _f(meta.get("req_ts")) if meta.get("req_ts") is not None else req_ts
+                if requested is None:
+                    requested = observed
+                if requested is not None and observed is not None and requested > observed:
+                    requested = observed
                 row = {
                     "bid": _f(g("bid")), "ask": _f(g("ask")), "bid_size": _f(g("bid_size")), "ask_size": _f(g("ask_size")), "quote_time": _f(g("quote_time")),
                     "book_id": g("book_id") or venue, "venue_market_id": g("venue_market_id"), "fee_params": fee_params,
                     "exchange": (meta.get("exchange") if isinstance(meta, dict) else None) or fee_params.get("exchange"),
                     "venue": venue, "outcome": outcome, "side": side,
                     "tie_payout": _f(meta.get("tie_payout")),
-                    "req_ts": _f(meta.get("req_ts")) if meta.get("req_ts") is not None else req_ts,
-                    "obs_ts": _f(meta.get("obs_ts")) if meta.get("obs_ts") is not None else (_f(g("ts")) or obs_ts),
+                    "req_ts": requested, "obs_ts": observed,
                     "refreshed": int(bool(meta.get("refreshed", refreshed))),
+                    "approx_time": int(bool(meta.get("approx_time", exact_obs is None))),
+                    "source": source,
                 }
+                for identity_key in ("ticker", "contract_id", "no_of", "mirror_of"):
+                    if meta.get(identity_key) is not None:
+                        row[identity_key] = meta[identity_key]
                 rows.append(row)
                 # Compatibility map: prefer YES when a normalized NO row names the same outcome.
                 prior = out.setdefault(venue, {}).get(outcome)
@@ -301,7 +314,11 @@ class Store:
         side = next((s for s in sd if s["outcome"] == home), sd[0] if sd else None)
         gated = sorted({r for s in sd for r in (s.get("gated_reasons") or [])})
         tick_ts = ts or time.time()
-        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts, refreshed=(source == "full"))
+        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts,
+                                 refreshed=(source == "full"), source=source)
+        exact_obs = [r["obs_ts"] for r in l1.get("rows", []) if not r.get("approx_time") and r.get("obs_ts") is not None]
+        if exact_obs:
+            tick_ts = max(tick_ts, max(exact_obs))
         row = self._tick_row(tick_ts, gv("event_key"), bool(gv("live")), gs or None, l1, home, away, freshness, gated, source)
         row.update({"game_line": gv("game_line"), "model_p": side.get("model_p") if side else None, "market_p": side.get("market_p") if side else None, "espn_p": side.get("espn_p") if side else None, "blend_p": side.get("fair") if side else None, "disagreement": gv("disagreement"), "actions": "\n".join(gv("actions") or []), "view": json.dumps(asdict(view) if is_dataclass(view) else view, default=str)})
         with self.conn:
@@ -313,7 +330,7 @@ class Store:
         state but ran no strategy — also how fixtures are loaded for the tick replay."""
         g = _get(game_state) if game_state is not None else (lambda k, d=None: d)
         home, away = home or g("home"), away or g("away")
-        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=ts, obs_ts=ts)
+        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=ts, obs_ts=ts, source="full")
         if home is None or away is None:
             outs = sorted({r["outcome"] for r in l1.get("rows", [])})
             home, away = home or (outs[0] if outs else None), away or (outs[1] if len(outs) > 1 else None)
@@ -323,8 +340,10 @@ class Store:
             return self._insert("inplay_ticks", self._tick_row(ts, event_key, live, game_state, l1, home, away, freshness))
 
     @_locked
-    def record_trade_prints(self, trades: Iterable[dict[str, Any]], ticker: Optional[str] = None) -> int:
-        """Insert genuine Kalshi prints idempotently. L1 changes are never treated as trades."""
+    def record_trade_prints(self, trades: Iterable[dict[str, Any]], ticker: Optional[str] = None,
+                            req_ts: Optional[float] = None, obs_ts: Optional[float] = None) -> int:
+        """Insert genuine Kalshi prints idempotently, including when this process received
+        them. Exchange ``ts`` alone is not a causal observation timestamp."""
         n = 0
         with self.conn:
             for trade in trades:
@@ -345,9 +364,16 @@ class Store:
                 side = trade.get("taker_side") or trade.get("side")
                 if not trade_id or not symbol or ts is None or price is None or count is None:
                     continue
-                cur = self.conn.execute("INSERT OR IGNORE INTO trade_prints (trade_id,ticker,ts,price,count,taker_side) VALUES (?,?,?,?,?,?)", (str(trade_id), str(symbol), ts, price, count, side))
+                cur = self.conn.execute("INSERT OR IGNORE INTO trade_prints (trade_id,ticker,ts,price,count,taker_side,req_ts,obs_ts) VALUES (?,?,?,?,?,?,?,?)", (str(trade_id), str(symbol), ts, price, count, side, req_ts, obs_ts))
                 n += cur.rowcount
         return n
+
+    @_locked
+    def latest_trade_ts(self, ticker: str) -> Optional[int]:
+        """Inclusive restart cursor. Re-reading that second is intentional: trade_id drops
+        repeats while prints that arrived later in the same exchange second still land."""
+        row = self.conn.execute("SELECT MAX(ts) FROM trade_prints WHERE ticker=?", (ticker,)).fetchone()
+        return int(row[0]) if row and row[0] is not None else None
 
     @_locked
     def record_espn_tick(self, gs: Any, ts: Optional[float] = None, state_source: Optional[str] = None) -> int:

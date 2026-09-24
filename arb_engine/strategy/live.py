@@ -298,11 +298,6 @@ class LiveSlate:
             now = self.fastlane.clock()
             out.at = now
         out.errors.extend(errs)
-        if self.store is not None:
-            try:   # one ticker per step (~150 ms): the 1 s quote refresh is never held up
-                self.fastlane.poll_trades(self.store, now, per_step=1)
-            except Exception as e:
-                out.errors.append(f"trade prints: {e!r}")
         for key, (gs, me, view) in live.items():
             by = refreshed.get(key)
             if not by:
@@ -314,6 +309,15 @@ class LiveSlate:
                     call_store(self.store, "record_tick", view, quotes_by_venue=by, freshness=None, ts=now, source="fast")
                 except Exception as e:
                     out.errors.append(f"record: {e!r}")
+        if self.store is not None:
+            try:
+                # L1 is already durable. Public prints run separately so a paged trade tape
+                # cannot delay the next one-second quote observation.
+                self.fastlane.poll_trades(self.store, now, cadence_s=5.0, background=True)
+                out.errors.extend(self.fastlane.trade_errors)
+                self.fastlane.trade_errors.clear()
+            except Exception as e:
+                out.errors.append(f"trade prints: {e!r}")
         if self.store is not None and (out.lags or out.arbs):
             try:
                 call_store(self.store, "update_ladder", now)
@@ -434,6 +438,9 @@ class LiveSlate:
         self._stop.set()
         if fast_thread is not None:
             fast_thread.join(timeout=self.fast * 3 + 5)
+        # The public-print request runs independently so it cannot delay L1 recording. Flush
+        # the final page walk before the caller closes the shared Store on normal shutdown.
+        self.fastlane.wait_for_trade_polls(timeout=max(5.0, self.fast * 3 + 5))
 
     def _fast_loop(self, printer=print) -> None:
         """The fast lane's own thread: a step every ``self.fast`` seconds while there are live

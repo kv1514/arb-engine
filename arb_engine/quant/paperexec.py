@@ -70,6 +70,19 @@ def first_obs(rows: Sequence[dict[str, Any]], lo: float, hi: float) -> Optional[
     return best
 
 
+def _dedupe_observations(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One displayed-liquidity observation may be recorded twice by overlapping consumers.
+    It may supply size once, keyed by contract identity and receipt time."""
+    unique: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        t = _t(row)
+        if t is None:
+            continue
+        key = (t, row.get("book_id"), row.get("venue_market_id"), row.get("side", "yes"))
+        unique.setdefault(key, row)
+    return sorted(unique.values(), key=lambda r: _t(r) or -math.inf)
+
+
 def _size(row: dict[str, Any], key: str, haircut: float) -> int:
     s = _num(row.get(key))
     return max(0, int(math.floor(s * haircut + 1e-9))) if s is not None else 0
@@ -88,6 +101,15 @@ class PaperTrade:
     unresolved: int = 0
     missed: bool = False
     reason: str = ""
+
+    @property
+    def cancelled(self) -> int:
+        """IOC entry remainder; it never becomes later inventory."""
+        return max(0, self.requested - self.filled)
+
+    @property
+    def partial(self) -> bool:
+        return 0 < self.filled < self.requested
 
     @property
     def exit_fee(self) -> Decimal:
@@ -137,12 +159,14 @@ def ioc_round_trip(rows: Iterable[dict[str, Any]], decision_ts: float, limit: fl
                    max_rolls: int = 3, roll_window_s: float = 60.0) -> PaperTrade:
     """Buy ``order`` contracts IOC at ``limit`` after ``latency_s``; sell to the bid after
     ``horizon_s`` (see the module docstring for every rule)."""
-    rows = [r for r in rows if _t(r) is not None]
+    rows = _dedupe_observations(rows)
     trade, entry = ioc_entry(rows, decision_ts, limit, order, fee_model, latency_s, haircut, entry_tol_s)
     if trade.missed:
         return trade
     held = trade.filled
-    t_out = _t(entry) + horizon_s
+    # The registered horizon is measured from the decision plus the assumed latency. A late
+    # observation inside the arrival window must not silently move the label later.
+    t_out = decision_ts + latency_s + horizon_s
     tol = max(1.0, 0.2 * horizon_s)
     mark = first_obs(rows, t_out, t_out + tol)
     candidates = [mark] if mark is not None else []
@@ -176,6 +200,12 @@ class ArbResult:
     unresolved: int = 0
     excluded: str = ""
     tie_payouts: Optional[tuple[float, float]] = None
+    settlement_compatible: Optional[bool] = None
+
+    @property
+    def guaranteed(self) -> bool:
+        """A positive win-case P&L is a lock only with verified settlement and tie cases."""
+        return self.settlement_compatible is True and self.tie_payouts is not None and self.pnl is not None and self.pnl > 0 and self.pnl_tie is not None and self.pnl_tie >= 0
 
     @property
     def leg_failure(self) -> bool:
@@ -202,23 +232,35 @@ def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any
                 limit_a: float, limit_b: float, count: int, fee_a: Any, fee_b: Any,
                 latency_a_s: float = 1.0, latency_b_s: float = 15.0, haircut: float = 1.0,
                 tie_payouts: Optional[tuple[Optional[float], Optional[float]]] = None,
-                unwind_latency_s: float = 1.0, entry_tol_s: float = 2.0, max_rolls: int = 3) -> ArbResult:
+                unwind_latency_s: float = 1.0, entry_tol_s: float = 2.0, max_rolls: int = 3,
+                unwind_window_s: float = 60.0, settlement_compatible: Optional[bool] = None) -> ArbResult:
     """Both legs IOC after their own latency. ``tie_payouts`` = (leg a, leg b) dollars per
     contract on a tie; an unknown value excludes the pair (ties settle differently by venue)."""
-    rows_a, rows_b = list(rows_a), list(rows_b)
+    rows_a, rows_b = _dedupe_observations(rows_a), _dedupe_observations(rows_b)
+    books_a = {str(r.get("book_id")) for r in rows_a if r.get("book_id")}
+    books_b = {str(r.get("book_id")) for r in rows_b if r.get("book_id")}
+    if books_a & books_b:
+        empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
+        return ArbResult(legs=empty, excluded="same-book")
+    if settlement_compatible is False:
+        empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
+        return ArbResult(legs=empty, excluded="settlement-mismatch")
     if tie_payouts is not None and any(v is None for v in tie_payouts):
         empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
         return ArbResult(legs=empty, excluded="unknown-tie")
-    a, _ = ioc_entry(rows_a, decision_ts, limit_a, count, fee_a, latency_a_s, haircut, entry_tol_s)
-    b, _ = ioc_entry(rows_b, decision_ts, limit_b, count, fee_b, latency_b_s, haircut, entry_tol_s)
-    res = ArbResult(legs=(a, b), matched=min(a.filled, b.filled),
+    a, obs_a = ioc_entry(rows_a, decision_ts, limit_a, count, fee_a, latency_a_s, haircut, entry_tol_s)
+    b, obs_b = ioc_entry(rows_b, decision_ts, limit_b, count, fee_b, latency_b_s, haircut, entry_tol_s)
+    res = ArbResult(legs=(a, b), matched=min(a.filled, b.filled), settlement_compatible=settlement_compatible,
                     tie_payouts=tuple(float(v) for v in tie_payouts) if tie_payouts is not None else None)
     excess = abs(a.filled - b.filled)
     if excess:
         # The larger leg is unhedged from the moment the other leg's result is known.
-        big, rows, fee, known = (a, rows_a, fee_a, decision_ts + max(latency_a_s, latency_b_s)) if a.filled > b.filled else (b, rows_b, fee_b, decision_ts + max(latency_a_s, latency_b_s))
+        known_a = _t(obs_a) if obs_a is not None else decision_ts + latency_a_s + entry_tol_s
+        known_b = _t(obs_b) if obs_b is not None else decision_ts + latency_b_s + entry_tol_s
+        big, rows, fee, known = (a, rows_a, fee_a, max(known_a, known_b)) if a.filled > b.filled else (b, rows_b, fee_b, max(known_a, known_b))
         t0 = known + unwind_latency_s
-        later = sorted((r for r in rows if _refreshed(r) and (_t(r) or 0) >= t0), key=_t)[: max_rolls + 1]
+        later = sorted((r for r in rows if _refreshed(r) and (_t(r) or 0) >= t0
+                        and (_t(r) or 0) <= t0 + unwind_window_s), key=_t)[: max_rolls + 1]
         for r in later:
             if not excess:
                 break
@@ -232,6 +274,14 @@ def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any
             excess -= n
         res.unresolved = excess
     return res
+
+
+def ioc_short_via_complement(complement_rows: Iterable[dict[str, Any]], decision_ts: float,
+                             complement_limit: float, order: int, fee_model: Any, **kwargs: Any) -> PaperTrade:
+    """Executable short exposure is a purchase of the complementary contract. The caller
+    must supply that contract's own rows, limit, depth and fee model; no synthetic sale is
+    inferred from the long book."""
+    return ioc_round_trip(complement_rows, decision_ts, complement_limit, order, fee_model, **kwargs)
 
 
 # Codex-era names.
