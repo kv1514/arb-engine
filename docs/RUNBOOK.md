@@ -173,6 +173,14 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    (`ARB_STAKE_FRACTION_ARB=0` stops those alerts). docs/MODEL.md, "Backtest of the arb
    alerts" and "How long an arb lasts, and Kelly".
 
+   The line under the header says whether the lock is **guaranteed** - pays in every result,
+   a tie included - or **NOT tie-proof**. In an NFL game a Kalshi YES + Rothera YES pair pays
+   $0.50 a set on a tie; a Kalshi YES + Rothera NO of the same team pays $1.50. When the
+   tie-proof pair still locks at least 1c the ticket uses it and says what the cheaper pair
+   would have locked (`arb_prefer_tie_safe`, `arb_tie_safe_min_margin`); `NOT tie-proof`
+   means no tie-proof pair locks right now - still a lock unless the game ends tied (1-2 NFL
+   games a season), your call. College games cannot tie: no line.
+
    The `window:` line under the header is how long arbs of that tier stayed open on the
    recorded slate - a median of ~8 s, a third still there at 15 s, one in ten at 30 s. If
    you cannot buy the first leg within a few seconds, skip it.
