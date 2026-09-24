@@ -37,7 +37,7 @@ from typing import Any, Iterable, Optional
 from .fees.registry import fee_model_for_quote
 from .matching.matcher import MergedEvent, merge_snapshots
 from .models import OutcomeQuote, VenueSnapshot
-from .quant.arbitrage import ArbResult, Leg, best_leg_per_outcome, evaluate, max_price_for_leg, min_size_for_legs, size_for_budget, size_from_books, tick_for_quote
+from .quant.arbitrage import ArbResult, Leg, best_leg_per_outcome, best_tie_safe_legs, evaluate, max_price_for_leg, min_size_for_legs, size_for_budget, size_from_books, tick_for_quote
 from .quant.fairvalue import consensus_fair_value
 
 try:  # settings registry (P01); the scanner must import without it
@@ -56,7 +56,12 @@ def _as_bool(v: Any) -> bool:
 SETTING_DOCS = {
     "rothera_no_leg": ("ROTHERA_NO_LEG", True, _as_bool, "scan(): emit the NO side of Rothera game contracts as its own leg (tie-aware hedge)"),
     "line_fair": ("LINE_FAIR", False, _as_bool, "scan(): attach quant.lines fair values to spread/total events when that module exists"),
+    "arb_prefer_tie_safe": ("ARB_PREFER_TIE_SAFE", True, _as_bool, "analyze_event(): in a game that can tie (NFL moneyline), when the cheapest lock loses on a tie (Kalshi YES + Rothera YES pays $0.50), use the cheapest tie-proof set instead (e.g. the Rothera NO) as long as it still locks at least arb_tie_safe_min_margin"),
+    "arb_tie_safe_min_margin": ("ARB_TIE_SAFE_MIN_MARGIN", 0.01, float, "smallest margin (dollars per contract, fees in) at which the tie-proof set is preferred over a cheaper lock that loses on a tie (below it the cheaper lock is shown, marked NOT tie-proof)"),
 }
+# Games that can end tied, where a "lock" must also pay on a tie to be guaranteed (NFL
+# regular season; college football plays overtime to a winner).
+TIE_SPORTS = frozenset({"nfl"})
 if _declare_setting is not None:
     for _k, (_env, _default, _cast, _doc) in SETTING_DOCS.items():
         try:
@@ -341,6 +346,19 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
     legs = best_leg_per_outcome(tradable, fee_for, contracts=contracts, allowed_venues=allowed_venues)
     complete = len(legs) == len(info.outcomes)
     arb = evaluate(legs, contracts) if complete else None
+    # Guaranteed means every result, a tie included: where the game can tie and the cheapest
+    # lock would lose on one, prefer the cheapest tie-proof set while it still locks.
+    can_tie = info.sport in TIE_SPORTS and (info.market_type or "moneyline") == "moneyline" and len(info.outcomes) == 2
+    tie_flags: list[str] = []
+    if complete and can_tie and arb is not None and arb.is_arb and arb.tie_margin < 0:
+        safe = best_tie_safe_legs(tradable, fee_for, contracts=contracts, allowed_venues=allowed_venues) \
+            if _as_bool(setting(settings, "arb_prefer_tie_safe", True)) else None
+        sres = evaluate(safe, contracts) if safe else None
+        if sres is not None and sres.is_arb and sres.margin >= float(setting(settings, "arb_tie_safe_min_margin", 0.01) or 0.0):
+            tie_flags.append(f"tie-safe-preferred:{arb.margin - sres.margin:.4f}:{arb.tie_payout_total:.2f}")
+            legs, arb = safe, sres
+    if complete and can_tie and arb is not None and arb.is_arb and arb.tie_margin < 0:
+        tie_flags.append("loses-on-tie")
     # Depth check: the largest size (book depth, else top-of-book size, else unlimited) that
     # still clears the target margin, on the legs' minimum-size floor. A tail quote backed by
     # 0.01 contracts is not an arb, nor is a 3-share Polymarket leg (5-share minimum).
@@ -359,6 +377,7 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
         flags.append("tie-rule-unverified")
     flags.extend(settlement_mismatches(info, me.quotes_by_venue))
     flags.extend(registry_settlement_flags(legs, arb, info, settings))
+    flags.extend(tie_flags)
     if complete:
         mismatch = tie_mismatch_flag(legs)
         if mismatch:

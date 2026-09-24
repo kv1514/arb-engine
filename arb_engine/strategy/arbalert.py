@@ -60,6 +60,29 @@ def window_line(kind: str) -> str:
             f"buy the first leg now or skip")
 
 
+def guarantee_line(rep: Any, sized: dict) -> str:
+    """Whether the lock pays in every result, a tie included (games that can tie only)."""
+    try:
+        from ..scanner import TIE_SPORTS
+    except Exception:  # pragma: no cover
+        TIE_SPORTS = frozenset({"nfl"})
+    if rep.sport not in TIE_SPORTS or (getattr(rep, "market_type", None) or "moneyline") != "moneyline":
+        return ""
+    flags = list(rep.flags or [])
+    pref = next((f for f in flags if f.startswith("tie-safe-preferred:")), None)
+    if pref:
+        _, give_up, cheap_tie = pref.split(":")
+        return (f"guaranteed: pays in every result, a tie included (tie-proof pair; the cheapest pair locked "
+                f"{float(give_up) * 100:.1f}c more but paid only ${float(cheap_tie):.2f} a set on a tie)")
+    tie_total, tie_margin = sized.get("tie_payout_total"), sized.get("tie_margin")
+    if "loses-on-tie" in flags or (tie_margin is not None and float(tie_margin) < 0):
+        n = float(sized.get("contracts") or 0)
+        loss = f" = {ticket.money(float(tie_margin) * n)}" if tie_margin is not None and n else ""
+        return (f"NOT tie-proof: a tied game pays ${float(tie_total or 0):.2f} a set{loss}; NFL ties are rare "
+                f"(1-2 a season) and no tie-proof pair locks right now")
+    return "guaranteed: pays in every result, a tie included"
+
+
 def _setting(settings: Optional[dict[str, Any]], key: str, default: Any) -> Any:
     try:
         from ..config import setting
@@ -171,7 +194,8 @@ class ArbAlerter:
             margin = float(sized.get("margin") or 0.0)
             kind = "BIG ARB" if margin >= self.big else ("ARB" if margin >= self.push_min else "ARB SMALL")
             text = ticket.arb_ticket(title, sized, size_note=note, sport=rep.sport or me.event_key, header=kind,
-                                     first=first, first_reason=why, max_prices=maxp, now=now, window=window_line(kind))
+                                     first=first, first_reason=why, max_prices=maxp, now=now, window=window_line(kind),
+                                     guarantee=guarantee_line(rep, sized))
             out.append((kind, text))
             # Once per throttle_s per event - sooner if the lock grew by a cent since the last push.
             if now - self.last.get(me.event_key, -1e18) >= self.throttle_s or margin >= self.last_margin.get(me.event_key, 9.0) + 0.01:

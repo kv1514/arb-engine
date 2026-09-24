@@ -705,90 +705,163 @@ The causal synthetic acceptance case deliberately rejects the momentum prototype
 Fixture: `tests/fixtures/results/micro_synthetic.json`. The frozen whole-game evaluation
 uses H3 at 30 seconds as primary; all other horizons/candidates receive Holm correction.
 
+### Interfaces between the recorder / executor and the experiment
+
+The experiment (`quant/microdata.py`, `scripts/microstructure_eval.py`) reads what the
+recorder writes and scores trades with the paper executor; neither side changes the other's
+files. The contract it relies on:
+
+* **Rows** (`Store.l1_from_quotes` -> `inplay_ticks.l1_json["rows"]`): `venue`, `book_id`,
+  `venue_market_id`, `outcome`, `side` (`yes`/`no`; a Rothera NO is its own row on the other
+  team), `bid`/`ask`/sizes, `quote_time` (the venue's), `req_ts` / `obs_ts` (our request and
+  answer times), `refreshed` (0 = carried forward, never an observation), `tie_payout`,
+  `fee_params`, `exchange`; the tick's `source` (`fast` / `full`). Legacy maps without
+  `obs_ts` load with `approx_time = 1`.
+* **Prints** (`trade_prints`): `ts` is the exchange's stamp. Requested: a receipt time
+  `recv_ts` per print. Until it exists a print counts as seen one second after its stamp
+  (`PRINT_RECEIPT_LAG_S`), which a late page can violate.
+* **Paper executor** (`quant/paperexec.py`): `ioc_round_trip(rows, decision_ts, limit, order,
+  fee_model, latency_s, horizon_s, haircut, settlement, entry_tol_s)` -> `PaperTrade`
+  (`requested`, `filled`, `missed`, `entry_fee`, `exits`, `settled`, `unresolved`, `pnl`);
+  `two_leg_arb(..., haircut, tie_payouts)` -> `ArbResult` (`legs`, `matched`, `unwound`,
+  `unresolved`, `excluded`, `pnl`, `pnl_tie`). `microdata.exec_record` maps a trade to
+  missed / closed / settled / unresolved.
+
 ### The discovery set re-run with executable accounting
 
-`scripts/microstructure_eval.py --fold discovery` replays the 15 games the LAG rule was
-designed on (2026-09-20 plus the Monday night game; `tests/fixtures/microstructure/
-manifest.json`) through `quant/microdata` and `quant/paperexec`: every trade is an
-immediate-or-cancel buy limited to the ask at decision time, meeting the book after the
-latency, filled only for the displayed size, sold to the bid at the horizon, **both fees
-paid**, unsold-and-unsettled trades excluded and missed fills counted. The recorder polled
-every 5 s that day, so the latency is 5 s: the book one second after a decision was never
-observed. Intervals are 90 % game-block bootstrap; cells read "mean per contract [interval]
-(completed / attempted)".
+`scripts/microstructure_eval.py --fold discovery` replays every NFL game dated 2026-09-20/21
+(the 15 recorded games the LAG rule was designed on; `tests/fixtures/microstructure/
+manifest.json`, spec v3) through `quant/microdata` and `quant/paperexec`. **Discovery is
+descriptive, not evidence**: these games shaped the rules, so nothing below may be quoted as
+a test result. The test fold opens at the verified week-5 kickoff (TB @ DAL, 2026-10-08 8:15
+PM ET) and has not been opened.
+
+How a trade is scored: an immediate-or-cancel buy limited to the ask at decision time, meeting
+the book after the latency, filled only for the displayed size, sold to the bid at the
+horizon, **both fees paid**. Orders, fills and positions are counted apart - *fill rate* is
+filled orders / orders; a filled position is closed (sold, or settled at the result) or
+unresolved (neither: excluded from P&L, never valued). The recorder polled every 5 s that
+day, so the latency is 5 s. Intervals are 90 % whole-game bootstrap (2000 draws, fixed seed).
+Unconditional-sample rules (H3, the momentum prototype) fire once per contract per 60 s, so a
+lag that persists for a minute is one decision, not twelve. Cells: "mean per contract
+[interval] (orders)".
 
 <!-- results:micro_discovery_trades -->
-| horizon | B1 buy at random | H1 momentum | H2 dip | H3 lead-lag |
-|---|---|---|---|---|
-| 5 s | -4.0c [-4.3, -3.6] (18237/31127) | -4.4c [-4.7, -4.0] (117/194) | -5.1c [-5.4, -4.7] (124/232) | -5.5c [-6.7, -3.9] (48/111) |
-| 15 s | -4.0c [-4.3, -3.6] (18162/31127) | -4.3c [-4.7, -3.8] (116/194) | -5.1c [-5.5, -4.7] (122/232) | -5.6c [-7.8, -3.3] (47/111) |
-| 30 s | -4.0c [-4.4, -3.6] (18098/31127) | -3.7c [-4.4, -3.1] (115/194) | -5.8c [-7.0, -4.4] (121/232) | -6.1c [-9.0, -2.9] (47/111) |
-| 60 s | -4.0c [-4.4, -3.6] (17910/31127) | -3.5c [-4.7, -2.0] (115/194) | -5.9c [-7.6, -3.6] (120/232) | -4.5c [-8.9, +0.9] (44/111) |
+| horizon | B1 buy at random | H1 momentum | H2 dip | H2 recovery | H3 lead-lag | M prototype |
+|---|---|---|---|---|---|---|
+| 5 s | -4.0c [-4.3, -3.6] (31127) | -4.4c [-4.7, -4.0] (194) | -5.1c [-5.4, -4.7] (232) | -5.0c [-5.7, -4.3] (55) | -5.6c [-7.6, -3.3] (55) | -3.9c [-4.2, -3.5] (725) |
+| 15 s | -4.0c [-4.3, -3.6] (31127) | -4.3c [-4.7, -3.8] (194) | -5.1c [-5.5, -4.7] (232) | -5.2c [-5.8, -4.6] (55) | -5.6c [-7.9, -3.2] (55) | -3.7c [-4.0, -3.4] (725) |
+| 30 s | -4.0c [-4.4, -3.6] (31127) | -3.7c [-4.4, -3.1] (194) | -5.8c [-7.0, -4.4] (232) | -4.9c [-7.2, -2.2] (55) | -7.0c [-9.6, -4.9] (55) | -3.7c [-4.3, -3.1] (725) |
+| 60 s | -4.0c [-4.4, -3.6] (31127) | -3.5c [-4.7, -2.0] (194) | -5.9c [-7.6, -3.6] (232) | -4.4c [-7.8, +0.1] (55) | -5.5c [-10.3, -0.7] (55) | -3.6c [-4.3, -2.8] (725) |
 <!-- /results:micro_discovery_trades -->
 
-A buy at a random moment costs about 4c per contract round trip (spread plus both fees);
-momentum buys, dip buys and the LAG rule all do no better, and at 5-30 s their intervals lie
-below zero. None of H1-H3 survives the Holm correction; the primary H3 at 30 s has a
-one-sided p of 0.997 that it is positive. **The +$0.073 per contract claimed for LAG below
-does not survive executable accounting at the latency these data allow.** They cannot say
-how LAG does at the fast lane's ~1 s: that needs games recorded with observation times
-(from 2026-09-24 on) and is what the validation fold will measure.
+The same candidates at 30 s, with the accounting and the pre-registered rule's verdict (a dry
+run of the rule on discovery data). *Skill* for a buy rule is the mid move it bought into
+(before costs); *moved up* is how often the mid rose among decisions whose mid moved:
 
-Forecasting the next move does no better than assuming the price stays put (leave-one-game-
-out; skill = unchanged-price MAE minus model MAE, negative = worse than unchanged):
+<!-- results:micro_discovery_accounting -->
+| at 30 s | orders | filled (fill rate) | contracts | closed | unresolved | no label | skill: mid move bought [90 % CI] | moved up | net $ (10 ct) | fees $ | drawdown $ | top game | rule says |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| B1 buy at random | 31127 | 18463 (59%) | 183889 | 18098 | 365 | 5525 | -0.03c [-0.05, -0.02] | 49% | -7,292.01 | 5,108.45 | 7,292.01 | 16% | - |
+| H1 momentum | 194 | 118 (61%) | 1158 | 115 | 3 | 38 | +0.28c [-0.46, +1.28] | 56% | -42.76 | 35.81 | 45.17 | 24% | reject |
+| H2 dip | 232 | 125 (54%) | 1250 | 121 | 4 | 62 | +0.07c [-1.10, +0.98] | 48% | -70.28 | 39.23 | 70.28 | 26% | reject |
+| H2 recovery | 55 | 25 (45%) | 250 | 25 | 0 | 15 | -0.04c [-1.28, +0.85] | 52% | -12.20 | 8.75 | 13.36 | 21% | reject |
+| H3 lead-lag | 55 | 28 (51%) | 275 | 27 | 1 | 22 | -1.15c [-3.82, +0.77] | 46% | -18.65 | 10.00 | 18.65 | 26% | reject |
+| M prototype | 725 | 456 (63%) | 4532 | 448 | 8 | 92 | +0.20c [-0.05, +0.55] | 51% | -166.32 | 121.10 | 169.31 | 24% | reject |
+<!-- /results:micro_discovery_accounting -->
+
+A buy at a random moment costs about 4c per contract round trip (spread plus both fees).
+Momentum, dip, recovery, the LAG rule and the momentum prototype all do no better; none has a
+skill interval above zero at 30 s (the dip bounces a little within 5 s - a skill interval
+above zero there - but not enough to pay the round trip). **The LAG profitability claimed
+earlier (+$0.073 per contract, in "The LAG rule" below) is unverified and contradicted here**:
+executable accounting at the latency these data allow loses about 7c per contract at 30 s.
+How LAG does at the fast lane's ~1 s needs games recorded with observation times (from
+2026-09-24) and is what the validation fold will measure.
+
+Forecast models against unchanged price (B0). B3/B4 are fitted on the fold's first ten games
+in kickoff order and scored on the last five (never on the games they were fitted on); the
+momentum prototype is `strategy/momentum.MomentumTracker` at its defaults, scored on its own
+projection. Skill = unchanged-price MAE minus model MAE (negative = worse than unchanged):
 
 <!-- results:micro_discovery_forecast -->
-| horizon | model | MAE | unchanged-price MAE | skill 90 % CI |
-|---|---|---|---|---|
-| 5 s | B3 ridge on dmid_30 | 0.158c | 0.149c | [-0.010, -0.008]c |
-| 5 s | B4 ridge on leader gap | 0.198c | 0.167c | [-0.038, -0.026]c |
-| 15 s | B3 ridge on dmid_30 | 0.422c | 0.403c | [-0.024, -0.015]c |
-| 15 s | B4 ridge on leader gap | 0.543c | 0.440c | [-0.130, -0.083]c |
-| 30 s | B3 ridge on dmid_30 | 0.893c | 0.877c | [-0.019, -0.013]c |
-| 30 s | B4 ridge on leader gap | 1.100c | 0.881c | [-0.268, -0.182]c |
-| 60 s | B3 ridge on dmid_30 | 1.561c | 1.548c | [-0.017, -0.010]c |
-| 60 s | B4 ridge on leader gap | 1.854c | 1.556c | [-0.352, -0.252]c |
+| horizon | model | MAE | unchanged-price MAE (B0) | skill 90 % CI | direction right | calibration slope |
+|---|---|---|---|---|---|---|
+| 5 s | B3 ridge on dmid_30 | 0.099c | 0.089c | -0.010c [-0.011, -0.009] | 51% | 0.48 |
+| 5 s | B4 ridge on leader gap | 0.132c | 0.105c | -0.027c [-0.030, -0.021] | 53% | 1.51 |
+| 15 s | B3 ridge on dmid_30 | 0.278c | 0.263c | -0.015c [-0.017, -0.013] | 52% | 2.16 |
+| 15 s | B4 ridge on leader gap | 0.365c | 0.276c | -0.089c [-0.120, -0.048] | 53% | 0.70 |
+| 30 s | B3 ridge on dmid_30 | 0.724c | 0.711c | -0.013c [-0.015, -0.011] | 53% | 1.59 |
+| 30 s | B4 ridge on leader gap | 0.824c | 0.643c | -0.181c [-0.231, -0.120] | 56% | 1.15 |
+| 60 s | B3 ridge on dmid_30 | 1.295c | 1.290c | -0.005c [-0.006, -0.005] | 52% | 5.96 |
+| 60 s | B4 ridge on leader gap | 1.428c | 1.180c | -0.248c [-0.316, -0.170] | 60% | 1.11 |
+| <= 10 s | M prototype (its own projection) | 0.471c | 0.255c | -0.215c [-0.281, -0.156] | 51% | 0.02 |
 <!-- /results:micro_discovery_forecast -->
 
-Two-venue arbitrage (H4) on independent executable books, the Robinhood leg at a person's
-15 s and the Kalshi leg at 5 s, failed legs unwound at the bid:
+Every model forecasts worse than "the price stays put". The prototype's real-data result
+agrees with the synthetic case above (MAE 0.030 vs persistence 0.017): reject.
+
+**H4, the guaranteed trade.** Two-venue arbitrage on independent executable books, each leg
+meeting its own book after its own latency, a failed leg unwound at the bid. *Win case*: a
+team wins. *Guaranteed*: the worse of a win and a tie - the only number that is
+guaranteed. *With NFL tie odds*: the tie weighted at 0.4 %:
 
 <!-- results:micro_discovery_arb -->
-| attempts | completed | fill rate | mean per contract | 90 % CI | games positive |
-|---|---|---|---|---|---|
-| 164 | 97 | 59% | +0.26c | [-0.84, +1.46]c | 40% |
+| H4 two-leg arb | signals | both legs filled | one leg (unwound) | neither | win case per set | with NFL tie odds | guaranteed (tie case) |
+|---|---|---|---|---|---|---|---|
+| Kalshi leg at the latency, Robinhood by hand (15 s) | 162 | 15 | 81 | 66 | +0.37c [-0.66, +1.44] | +0.34c [-0.67, +1.40] | -7.44c [-10.73, -3.55] |
+| both legs at the latency | 162 | 57 | 44 | 61 | +1.65c [+0.48, +2.83] | +1.53c [+0.38, +2.72] | -26.13c [-29.72, -21.19] |
 <!-- /results:micro_discovery_arb -->
 
-The same arbs split by how big the lock was when it fired - the part that decides whether
-acting on a push by hand pays:
-
 <!-- results:micro_discovery_arb_size -->
-| arb size when it fired | completed / attempted | won | mean per contract [90 % CI] |
+| arb size when it fired | completed / signals | win case per set [90 % CI] | guaranteed (tie case) |
 |---|---|---|---|
-| <1c | 30/48 | 37% | -1.6c [-3.0, -0.2] |
-| 1-3c | 34/56 | 50% | +0.2c [-1.3, +1.7] |
-| >=3c | 33/60 | 39% | +2.0c [+0.6, +3.6] |
+| <1c | 29/48 | -1.4c [-2.6, -0.2] | -4.9c [-9.3, -1.2] |
+| 1-3c | 36/57 | +0.0c [-1.5, +1.4] | -9.7c [-16.1, -2.6] |
+| >=3c | 31/57 | +2.5c [+1.1, +3.9] | -7.2c [-11.8, -2.0] |
 <!-- /results:micro_discovery_arb_size -->
 
-Small arbs evaporate in the seconds a person takes to place the Robinhood leg, and the
-unwound leg costs the spread and a fee; big ones survive. The pattern held with the manual
-leg at 5 s, 15 s and 30 s (under 1c: -0.9c, -1.6c, -0.1c; 3c+: +3.3c, +2.0c, +4.6c per
-contract), so the live slate journals arbs under `arb_push_min_margin` (1c) as ARB SMALL
-without pushing them and titles those from `arb_big_margin` (3c) BIG ARB. Every arb on these
-games was a Kalshi YES + Rothera YES pair (it pays $0.50 on a tie); the legacy recorder kept
-no Rothera NO rows, so tie-safe pairs could not be scored here.
+Three things follow. (1) **Speed of the second leg is the edge**: with both legs at the
+latency the win case is positive with its whole interval above zero; with the Robinhood leg
+typed by hand at 15 s most signals end with one leg filled and unwound, and the interval
+straddles zero. The 3c+ arbs survive even by hand. (2) **None of these was guaranteed**: every
+arb on these games was a Kalshi YES + Rothera YES pair, which pays $0.50 on a tie, so the
+tie case loses about 45c per set. The legacy recorder kept no Rothera NO rows, so the
+tie-proof pairs (Kalshi YES + Rothera NO, which pays $1.50 on a tie) could not be scored;
+`analyze_event` now prefers the tie-proof pair whenever it still locks
+(`arb_prefer_tie_safe`), and every ARB ticket says `guaranteed:` or `NOT tie-proof:`.
+(3) Small arbs (<1c) lose even in the win case: the live slate journals them as ARB SMALL
+without pushing them.
 
-The LAG grades do not separate at the 5 s these games allow - hard and soft lags lose alike,
-and agreement from a third book almost never happens at this cadence:
+The primary and secondary tests (H3 at 30 s alone; the pre-registered secondary family
+Holm-corrected at 10 %):
+
+<!-- results:micro_discovery_tests -->
+| hypothesis | role | one-sided p (mean <= 0) | passes |
+|---|---|---|---|
+| H3_leadlag@30 | primary (alone) | 1.000 | no |
+| H1_momentum@30 | secondary (Holm) | 1.000 | no |
+| H2_dip@30 | secondary (Holm) | 1.000 | no |
+| H2_recovery@30 | secondary (Holm) | 0.998 | no |
+| M_prototype@30 | secondary (Holm) | 1.000 | no |
+| H3_leadlag@5 | secondary (Holm) | 1.000 | no |
+| H3_leadlag@15 | secondary (Holm) | 1.000 | no |
+| H3_leadlag@60 | secondary (Holm) | 0.969 | no |
+| H4_arb | secondary (Holm) | 1.000 | no |
+<!-- /results:micro_discovery_tests -->
+
+The LAG grades do not separate at the 5 s these games allow:
 
 <!-- results:micro_discovery_grade -->
-| H3 at 30 s | completed / attempted | won | mean per contract [90 % CI] |
+| H3 at 30 s | filled / orders | won | mean per contract [90 % CI] |
 |---|---|---|---|
-| hard | 22/49 | 9% | -5.9c [-9.5, -2.7] |
-| soft | 25/62 | 4% | -6.2c [-8.9, -3.0] |
+| hard | 10/26 | 10% | -5.0c [-7.7, -2.2] |
+| soft | 18/29 | 0% | -8.2c [-10.9, -5.6] |
 | agree>=1 | 1/2 | 0% | -8.0c [-8.0, -8.0] |
-| agree=0 | 46/109 | 7% | -6.1c [-9.1, -2.8] |
+| agree=0 | 27/53 | 4% | -7.0c [-9.6, -4.8] |
 <!-- /results:micro_discovery_grade -->
+
+LAG, then lock is replayed below, after the arb backtest ("LAG, then lock").
 
 ### Backtest of the arb alerts on the recorded week-2 slate
 
@@ -909,7 +982,7 @@ own IOC facing the same latency:
 <!-- results:micro_discovery_lock -->
 | signals | entries filled | locked | median time to lock | lock or hold (10 min) | same entries held, never locked | locked ones only |
 |---|---|---|---|---|---|---|
-| 111 | 48 | 6 (12%) | 59 s | -0.0c [-4.7, +5.9] | -0.3c [-4.9, +5.1] | +13.6c [+7.1, +16.8] |
+| 55 | 28 | 4 (14%) | 59 s | -5.5c [-12.6, +1.8] | -4.9c [-12.1, +2.0] | +11.6c [+4.3, +16.0] |
 <!-- /results:micro_discovery_lock -->
 
 Locking works mechanically - about one entry in eight became a guaranteed profit, a minute
@@ -970,14 +1043,17 @@ venue's stale price*, not the move itself.
 venue's mid moves ≥ `leadlag_move` (5¢) within `leadlag_window_s` (30 s) and an executable
 follower's mid has moved less than half of that (or the other way), buy the side the leader
 moved toward on the follower, provided its all-in ask sits ≥ `leadlag_min_edge` (2¢) below
-the leader's mid and both quotes are fresh. Replayed over the same ticks (fills at the
-recorded ask assumed; exit by selling to the follower's *bid*, entry fee paid but exit fee
-not paid in this legacy fixture):
+the leader's mid and both quotes are fresh. **Unverified legacy replay** - kept as a record of
+what was first measured, not as evidence: fills at the recorded ask assumed, exit by selling
+to the follower's *bid*, entry fee paid but exit fee not. The executable re-run of the same
+games ("The discovery set re-run with executable accounting" above) contradicts it: about
+-7c per contract at 30 s once the order meets the book after the latency and both fees are
+paid.
 
 | exit | signals | wins | losses | mean P&L per contract |
 |---|---|---|---|---|
 | +30 s | 172 | 143 | 29 | +$0.054 |
-| +60 s | 172 | 149 | 22 | **+$0.073** |
+| +60 s | 172 | 149 | 22 | +$0.073 |
 | +5 min | 172 | 117 | 38 | +$0.067 |
 | held to settlement (3 finals recorded, 32 signals) | 32 | 23 | 9 | +$0.207 |
 

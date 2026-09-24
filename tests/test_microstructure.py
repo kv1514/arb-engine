@@ -78,14 +78,21 @@ class BuilderTests(unittest.TestCase):
     def test_planted_twenty_second_lead_is_convergence_on_the_follower(self):
         from arb_engine.quant.microdata import build
 
-        # Rothera jumps 0.40 -> 0.48 at t=30; Kalshi follows at t=50.
-        lead = [row(t, .40 if t < 30 else .48, book="rothera", market="R", venue="robinhood", event_key="g", outcome="A") for t in range(0, 90)]
-        follow = [row(t, .40 if t < 50 else .48, book="kalshi", market="K", event_key="g", outcome="A") for t in range(0, 90)]
+        # Rothera jumps 0.40 -> 0.48 at t=30; Kalshi follows at t=50. NFL tie rules: a Kalshi YES
+        # pays $0.50 on a tie, a Rothera YES $0.
+        lead = [row(t, .40 if t < 30 else .48, book="rothera", market="R", venue="robinhood", event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=0.0) for t in range(0, 90)]
+        follow = [row(t, .40 if t < 50 else .48, book="kalshi", market="K", event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=0.5) for t in range(0, 90)]
         out = build(lead + follow, sample="unconditional", horizons=(30,), fee_for_row=lambda r: None)
         k = next(s for s in out if s["book_id"] == "kalshi" and 35 <= s["t"] < 40)   # after the lead, before the catch-up
         self.assertEqual(k["leader_book"], "rothera")
         self.assertGreater(k["gap_leader"], .05)
+        self.assertAlmostEqual(k["gap_leader"], k["cross"]["rothera"]["gap_raw"] + .004 * .5)   # the tie difference, priced
+        self.assertTrue(k["cross"]["rothera"]["tie_mismatch"])
         self.assertGreater(k["dmid_30_fwd"], .05)          # the follower converged within 30 s
+        # Adversarial: with no settlement rule on record for either book, no comparison is made.
+        blind = build([dict(r, event_key="xyz:A|B:2026-09-27", tie_payout=None) for r in lead + follow], sample="unconditional",
+                      horizons=(), fee_for_row=lambda r: None)
+        self.assertTrue(all(s["leader_book"] is None and s["cross"] == {} for s in blind))
 
     def test_missing_marks_stay_missing_and_carried_rows_are_not_observations(self):
         from arb_engine.quant.microdata import build
@@ -244,7 +251,7 @@ class EvaluationDisciplineTests(unittest.TestCase):
         self.assertEqual(holm({"a": .01, "b": .04, "c": .5}, alpha=.10), {"a": True, "b": True, "c": False})
         m = summarize({"g1": [.02, None, .04], "g2": [-.05], "g3": [None]}, {"g1": 3, "g2": 1, "g3": 1}, draws=200)
         self.assertEqual((m["attempts"], m["trades"], m["games"]), (5, 3, 2))
-        self.assertAlmostEqual(m["fill_rate"], .6)
+        self.assertAlmostEqual(m["resolved_rate"], .6)   # completed / attempted: a resolution rate, not a fill rate
         self.assertAlmostEqual(m["top_game_share"], .06 / .11)
         self.assertAlmostEqual(m["max_drawdown_per_contract"], .05)
         self.assertAlmostEqual(m["positive_game_share"], .5)
@@ -283,15 +290,32 @@ class EvaluationDisciplineTests(unittest.TestCase):
             r = json.loads(out.read_text())
             self.assertEqual((r["games"], r["latency_s"], r["legacy_timestamps"]), (2, 1, False))
             h = r["horizons"]["30"]
-            self.assertGreater(h["B1_buy_any"]["attempts"], 0)
+            b1 = h["B1_buy_any"]
+            self.assertGreater(b1["attempted_orders"], 0)
+            self.assertEqual(b1["attempted_orders"], b1["missed_orders"] + b1["filled_orders"])
+            self.assertEqual(b1["filled_orders"], b1["closed_positions"] + b1["settled_positions"] + b1["unresolved_positions"])
+            self.assertAlmostEqual(b1["fill_rate"], b1["filled_orders"] / b1["attempted_orders"])
+            for name in ("H1_momentum", "H2_dip", "H2_recovery", "H3_leadlag", "M_prototype", "B0_persistence"):
+                self.assertIn(name, h)
             self.assertIn("skill_ci", h["B3_ridge_dmid30"])
+            self.assertEqual(r["model_fit"]["from"], "earlier games of this fold")   # no discovery data here
             self.assertIn("H4_arb", r)
             self.assertEqual(set(r["H4_arb"]["by_margin"]), {"<1c", "1-3c", ">=3c"})
+            self.assertIn("both_legs_fast", r["H4_arb"])
             self.assertEqual(set(h["H3_by_grade"]), {"hard", "soft", "agree>=1", "agree=0"})
             lk = r["H3_lock"]
             for k in ("entries_filled", "locked", "lock_conversion", "hold_no_lock", "locked_only"):
                 self.assertIn(k, lk)
-            self.assertEqual(json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])["fold"], "validation")
+            self.assertIn("H3_leadlag@30", r["decisions"])
+            self.assertEqual(r["primary"]["hypothesis"], "H3_leadlag@30")
+            self.assertFalse(r["exploratory"])
+            self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "code", "frozen_models"})
+            audit = json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])
+            self.assertEqual(audit["fold"], "validation")
+            for k in ("utc", "git_head", "spec_hash", "hashes", "results_sha256", "exploratory", "argv"):
+                self.assertIn(k, audit)
+            import hashlib
+            self.assertEqual(audit["results_sha256"], hashlib.sha256(out.read_bytes()).hexdigest())
 
     def test_h3_lock_locks_a_winner_and_holds_a_loser(self):
         """Replay of the lock watch: KC bought on Kalshi after a Rothera lead. In game g1 KC then
@@ -317,3 +341,249 @@ class EvaluationDisciplineTests(unittest.TestCase):
         self.assertAlmostEqual(out["rets"]["nfl:g2:2026-09-27"][0], .44 - .61)              # never locked: sold to the 0.44 bid
         self.assertAlmostEqual(out["hold"]["nfl:g1:2026-09-27"][0], .79 - .61)              # held, not locked: the bid after the watch
 
+
+
+def _db(tmp, games, n=400, kalshi_tie=.5, rothera_tie=0.0):
+    """A small recorder database: Kalshi + Rothera YES rows for both teams, 1 s apart."""
+    import sqlite3
+
+    db = Path(tmp) / "h.db"
+    con = sqlite3.connect(db)
+    con.execute("create table inplay_ticks (ts real, event_key text, live integer, l1_json text, source text)")
+    con.execute("create table espn_ticks (ts real, event_key text, status text, period integer, clock integer, home text, away text, home_score integer, away_score integer, last_play_type text)")
+    for g in games:
+        a, b = g.split(":")[1].split("|")
+        for t in range(0, n):
+            mid = .5 + .06 * ((t // 60) % 2)
+            rows = [{"venue": v, "book_id": bk, "outcome": o, "side": "yes", "obs_ts": 1000.0 + t, "refreshed": 1,
+                     "venue_market_id": f"{bk}-{o}", "bid": round((mid if o == a else 1 - mid) - .01, 3),
+                     "ask": round((mid if o == a else 1 - mid) + .01, 3), "bid_size": 50, "ask_size": 50,
+                     "fee_params": {}, "exchange": "rothera" if bk == "rothera" else None,
+                     "tie_payout": rothera_tie if bk == "rothera" else kalshi_tie}
+                    for v, bk in (("kalshi", "kalshi"), ("robinhood", "rothera")) for o in (a, b)]
+            con.execute("insert into inplay_ticks values (?,?,?,?,?)", (1000.0 + t, g, 1, json.dumps({"rows": rows}), "fast"))
+        con.execute("insert into espn_ticks values (?,?,?,?,?,?,?,?,?,?)", (1000.0, g, "in", 1, 900, a, b, 0, 0, None))
+    con.commit()
+    con.close()
+    return db
+
+
+def _run(argv):
+    import contextlib
+    import io
+    from scripts import microstructure_eval as ev
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        return ev.main(argv)
+
+
+class SpecComplianceTests(unittest.TestCase):
+    """Adversarial checks of the pre-registered spec (docs/MODEL.md, "Microstructure experiment")."""
+
+    MAN = {"discovery": [{"event_key": "nfl:A|B:2026-09-20"}], "discovery_dates": ["2026-09-20", "2026-09-21"], "test_from": "2026-10-08",
+           "test_kickoff": {"et_date": "2026-10-08", "utc": "2026-10-09T00:15:00Z"}}
+
+    def test_discovery_is_by_date_even_when_a_game_is_missing_from_the_list(self):
+        self.assertEqual(fold_of(self.MAN, "nfl:X|Y:2026-09-20"), "discovery")          # not enumerated
+        self.assertEqual(fold_of(self.MAN, "nfl:X|Y:2026-09-21:total:44.5"), "discovery")
+        self.assertEqual(fold_of(self.MAN, "nfl:X|Y:2026-09-22"), "validation")
+        self.assertEqual(fold_of(self.MAN, "nfl:X|Y:2026-10-07"), "validation")
+        self.assertEqual(fold_of(self.MAN, "nfl:X|Y:2026-10-08"), "test")
+        with self.assertRaises(ValueError):
+            validate_manifest({**self.MAN, "discovery_dates": ["2026-10-11"]})
+        with self.assertRaises(ValueError):
+            validate_manifest({**self.MAN, "test_kickoff": {"et_date": "2026-10-09"}})       # test_from must be the kickoff's date
+        validate_manifest(json.loads((Path(__file__).parent / "fixtures/microstructure/manifest.json").read_text()))
+
+    def test_the_forecast_models_never_score_the_data_they_were_fitted_on(self):
+        from scripts.microstructure_eval import chrono_split, forecast_skill
+
+        samples = [{"kind": "unconditional", "event_key": f"nfl:G{g}|H:2026-09-27", "t": 100.0 * g + i, "dmid_30": x, "dmid_30_fwd": 2 * x}
+                   for g in range(6) for i, x in enumerate((-.2, -.1, .1, .2))]
+        train, scored = chrono_split(samples, 2 / 3)
+        self.assertEqual((train, scored), ([f"nfl:G{g}|H:2026-09-27" for g in range(4)], [f"nfl:G{g}|H:2026-09-27" for g in (4, 5)]))
+        # Frozen coefficients are used as given: a zero model equals unchanged price even though
+        # the scored data follow y = 2x exactly (refitting on them would score perfectly).
+        m = forecast_skill(samples, 30, "dmid_30", 1, 200, coef=[0.0, 0.0])
+        self.assertAlmostEqual(m["mae_model"], m["mae_persistence"])
+        m = forecast_skill(samples, 30, "dmid_30", 1, 200, train=samples[:8])     # fitted on earlier games only
+        self.assertAlmostEqual(m["coef"][1], 2.0, delta=.01)                  # ridge shrinks it a hair
+
+    def test_the_test_fold_only_reads_frozen_models(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _db(tmp, ["nfl:A|B:2026-10-11"], n=200)
+            man = Path(tmp) / "m.json"
+            man.write_text(json.dumps({**self.MAN, "spec": {"horizons": [30], "bootstrap": 50, "seed": 1}}))
+            base = ["--db", str(db), "--manifest", str(man), "--log", str(Path(tmp) / "log.jsonl")]
+            with self.assertRaises(SystemExit):
+                _run(base + ["--fold", "test", "--frozen", str(Path(tmp) / "missing.json")])
+            with self.assertRaises(SystemExit):
+                _run(base + ["--fold", "test", "--freeze", str(Path(tmp) / "f.json")])
+            self.assertFalse((Path(tmp) / "log.jsonl").exists())            # refused before anything was opened or logged
+
+    def test_a_changed_test_spec_is_refused_then_visibly_exploratory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _db(tmp, ["nfl:A|B:2026-10-11", "nfl:C|D:2026-10-11"], n=200)
+            man = Path(tmp) / "m.json"
+            man.write_text(json.dumps({**self.MAN, "spec": {"horizons": [30], "bootstrap": 50, "seed": 1}}))
+            frozen = Path(tmp) / "frozen.json"
+            frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, 0]}, "B4_ridge_gap": {"30": [0, 0]}}, "trained_on": []}))
+            out = Path(tmp) / "r.json"
+            base = ["--db", str(db), "--manifest", str(man), "--log", str(Path(tmp) / "log.jsonl"), "--fold", "test", "--frozen", str(frozen), "--results", str(out)]
+            self.assertEqual(_run(base), 0)
+            first = json.loads(out.read_text())
+            self.assertFalse(first["exploratory"])
+            self.assertEqual(first["model_fit"]["from"], "frozen")
+            frozen.write_text(json.dumps({"coef": {"B3_ridge_dmid30": {"30": [0, .1]}, "B4_ridge_gap": {"30": [0, 0]}}, "trained_on": []}))
+            with self.assertRaises(RuntimeError):
+                _run(base)                                                       # a different model after opening
+            with self.assertRaises(ValueError):
+                _run(base + ["--reopen-test", "  "])
+            self.assertEqual(_run(base + ["--reopen-test", "coefficient typo found after opening"]), 0)
+            again = json.loads(out.read_text())
+            self.assertTrue(again["exploratory"])
+            self.assertTrue(again["decisions"] and all(v.startswith("exploratory:") for v in again["decisions"].values()))
+            log = [json.loads(x) for x in (Path(tmp) / "log.jsonl").read_text().splitlines()]
+            self.assertEqual([x["exploratory"] for x in log], [False, True])
+            self.assertEqual(log[1]["reopen_reason"], "coefficient typo found after opening")
+
+    def test_the_spec_hash_covers_constants_folds_code_and_frozen_models(self):
+        from arb_engine.quant import microdata
+        from scripts.microstructure_eval import effective_spec
+
+        base = spec_hash(effective_spec(self.MAN))
+        self.assertNotEqual(base, spec_hash(effective_spec({**self.MAN, "discovery_dates": ["2026-09-20"]})))
+        self.assertNotEqual(base, spec_hash(effective_spec(self.MAN, frozen={"coef": {}})))
+        saved = microdata.TRIGGER_MOVE
+        try:
+            microdata.TRIGGER_MOVE = 0.04
+            self.assertNotEqual(base, spec_hash(effective_spec(self.MAN)))
+        finally:
+            microdata.TRIGGER_MOVE = saved
+        with tempfile.TemporaryDirectory() as tmp:
+            from scripts.microstructure_eval import CODE_FILES
+            for f in CODE_FILES:
+                (Path(tmp) / f).parent.mkdir(parents=True, exist_ok=True)
+                (Path(tmp) / f).write_text("x")
+            a = spec_hash(effective_spec(self.MAN, root=Path(tmp)))
+            (Path(tmp) / CODE_FILES[1]).write_text("y")                          # the paper executor changed
+            self.assertNotEqual(a, spec_hash(effective_spec(self.MAN, root=Path(tmp))))
+
+    def test_fills_are_not_resolutions(self):
+        from scripts.microstructure_eval import candidate_metrics
+
+        def s(t, status, filled, pnl, fwd):
+            return {"t": t, "event_key": "nfl:A|B:2026-09-27", "exec_30": {"status": status, "requested": 10, "filled": filled, "fees": .1 if filled else 0.0, "pnl": pnl},
+                    "dmid_30_fwd": fwd}
+        sel = [s(1, "missed", 0, None, .01), s(2, "closed", 10, .5, .02), s(3, "unresolved", 10, None, None), s(4, "settled", 4, -.2, -.01)]
+        m = candidate_metrics(sel, 30, 1, 100)
+        self.assertEqual((m["attempted_orders"], m["filled_orders"], m["filled_contracts"], m["missed_orders"]), (4, 3, 24, 1))
+        self.assertEqual((m["closed_positions"], m["settled_positions"], m["unresolved_positions"]), (1, 1, 1))
+        self.assertAlmostEqual(m["fill_rate"], 3 / 4)                     # filled orders / attempted orders
+        self.assertAlmostEqual(m["resolved_share_of_fills"], 2 / 3)
+        self.assertEqual((m["labelled"], m["missing_labels"]), (3, 1))
+        self.assertAlmostEqual(m["dollar_pnl"], .3)
+        self.assertAlmostEqual(m["fees"], .2)                              # resolved positions only
+        self.assertAlmostEqual(m["directional_hit"], 2 / 3)
+
+    def test_drawdown_is_chronological_not_by_game(self):
+        # Game b's loss happens between game a's two gains: by game the curve never dips below
+        # its peak by more than 0.03; in time order it falls 0.05 from a peak of 0.02.
+        m = summarize({"a": [.02, .03], "b": [-.05]}, {"a": 2, "b": 1}, draws=50, times={"a": [1.0, 3.0], "b": [2.0]})
+        self.assertAlmostEqual(m["max_drawdown_per_contract"], .05)
+
+    def test_decision_rules_edges(self):
+        ok = {"skill_ci": {"lo": .001}, "net_pnl_ci": {"lo": .01}, "fill_rate": .9, "test_games": 40, "deduped_triggers": 400,
+              "top_game_share": .1, "robust_l3_h05": {"net_pnl_ci": {"lo": .01}, "positive_game_share": .8}}
+        self.assertEqual(decision(ok), "alert-only")
+        self.assertEqual(decision(dict(ok, skill_ci={"lo": 0.0, "hi": .01})), "reject")        # includes zero
+        self.assertEqual(decision(dict(ok, skill_ci={"lo": -.01, "hi": .01})), "reject")
+        for bad in ({"net_pnl_ci": {"lo": -.001, "hi": .02}}, {"fill_rate": .59}, {"test_games": 29}, {"deduped_triggers": 199},
+                    {"top_game_share": .41}, {"robust_l3_h05": {"net_pnl_ci": {"lo": .01}, "positive_game_share": .59}},
+                    {"robust_l3_h05": {"net_pnl_ci": {"lo": -.01}, "positive_game_share": .9}}):
+            self.assertEqual(decision(dict(ok, **bad)), "shadow", bad)
+
+    def test_holm_family_is_the_pre_registered_secondary_list(self):
+        self.assertEqual(holm({"H1_momentum@30": .001, "H4_arb": .2}, .10), {"H1_momentum@30": True, "H4_arb": False})
+        spec = json.loads((Path(__file__).parent / "fixtures/microstructure/manifest.json").read_text())["spec"]
+        self.assertEqual(spec["primary"], "H3@30s")
+        self.assertNotIn("H3_leadlag@30", spec["secondary"])                   # the primary is tested alone
+        self.assertIn("M_prototype@30", spec["secondary"])
+
+
+class H2AndCausalityTests(unittest.TestCase):
+    def _path(self, mids, bids_up=True):
+        out = []
+        for t, m in enumerate(mids):
+            r = row(t, m, event_key="nfl:A|B:2026-09-27", outcome="A", tie_payout=.5)
+            if not bids_up and t >= 40:                                     # the bounce is only the ask lifting
+                r["bid"], r["ask"] = mids[39] - .01, m + .02
+            out.append(r)
+        return out
+
+    def test_dip_and_recovery_are_different_decisions(self):
+        from arb_engine.quant.microdata import build
+
+        fall = [.60 - .003 * t for t in range(31)] + [.51] * 9               # falls 9c, then flat
+        bounce = fall + [.51 + .005 * (t + 1) for t in range(10)]            # then comes back 5c
+        dips = [s for s in build(self._path(fall), sample="all", horizons=()) if s["kind"] == "trigger"]
+        self.assertTrue(dips and all(s["dmid_30"] < 0 for s in dips))
+        self.assertEqual([s for s in build(self._path(fall), sample="all", horizons=()) if s["kind"] == "recovery"], [])   # no bounce yet
+        rec = [s for s in build(self._path(bounce), sample="all", horizons=()) if s["kind"] == "recovery"]
+        self.assertEqual(len(rec), 1)                                         # once per contract per 60 s
+        self.assertGreaterEqual(rec[0]["t"], 41)
+        self.assertGreaterEqual(rec[0]["drop_60"], .05)
+        self.assertGreaterEqual(rec[0]["rebound"], .01)
+        spread_only = [s for s in build(self._path(bounce, bids_up=False), sample="all", horizons=()) if s["kind"] == "recovery"]
+        self.assertEqual(spread_only, [])                                     # an ask lifting alone is not a recovery
+
+    def test_a_print_received_late_is_a_future_input(self):
+        from arb_engine.quant.microdata import _Prints
+
+        p = _Prints([{"ticker": "K", "ts": 95.0, "recv_ts": 103.0, "count": 10, "taker_side": "yes", "price": .5},
+                     {"ticker": "K", "ts": 99.5, "count": 7, "taker_side": "yes", "price": .5}])
+        self.assertEqual(p.at("K", 100.0, "yes", .5)["flow_30"], 0)          # stamped 95 but in hand only at 103; 99.5 not until 100.5
+        self.assertEqual(p.at("K", 101.0, "yes", .5)["flow_30"], 7)
+        self.assertEqual(p.at("K", 103.0, "yes", .5)["flow_30"], 17)
+
+    def test_cross_book_freshness_by_venue(self):
+        from arb_engine.quant.microdata import build
+
+        ev = "nfl:A|B:2026-09-27"
+        me = [row(t, .40, event_key=ev, outcome="A", tie_payout=.5) for t in range(0, 40)]
+        rh = [row(29, .50, book="rothera", market="R", venue="robinhood", event_key=ev, outcome="A", tie_payout=0.0)]
+        pm = [row(29, .50, book="polymarket", market="P", venue="polymarket", event_key=ev, outcome="A", tie_payout=.5)]
+        out = {s["t"]: s for s in build(me + rh + pm, sample="unconditional", horizons=(), fee_for_row=lambda r: None) if s["book_id"] == "kalshi"}
+        self.assertEqual(set(out[30.0]["cross"]), {"rothera", "polymarket"})   # both 1 s old
+        self.assertEqual(set(out[35.0]["cross"]), {"polymarket"})            # 6 s old: > 2 s for the fast-lane Rothera, <= 6 s for Polymarket
+
+    def test_a_persistent_lag_is_one_decision_per_minute(self):
+        from scripts.microstructure_eval import _h3, select
+
+        s = [{"kind": "unconditional", "t": float(t), "venue": "kalshi", "event_key": "nfl:A|B:2026-09-27", "book_id": "kalshi", "outcome": "A",
+              "side": "yes", "leader_dmid_30": .08, "dmid_30": 0.0, "gap_leader": .05} for t in range(0, 120, 5)]
+        self.assertEqual(len(select(s, _h3, 60.0)), 2)
+        self.assertEqual(len(select(s, _h3, 0.0)), 24)
+
+    def test_the_guaranteed_arb_counts_the_tie(self):
+        from arb_engine.fees.base import ZeroFees
+        from scripts.microstructure_eval import arb_scan
+
+        ev = "nfl:A|B:2026-09-27"
+        def rows(no_leg):
+            out = []
+            for t in range(0, 40):
+                out.append(row(t, .44, event_key=ev, outcome="A", tie_payout=.5))                          # Kalshi YES A at .45
+                if no_leg:   # Rothera NO of A, shown on B: pays $1 on a tie
+                    out.append(row(t, .44, book="rothera", market="RA#no", venue="robinhood", event_key=ev, outcome="B", side="no", tie_payout=1.0))
+                else:
+                    out.append(row(t, .44, book="rothera", market="RB", venue="robinhood", event_key=ev, outcome="B", tie_payout=0.0))
+            return out
+        unsafe = arb_scan(rows(False), lambda r: ZeroFees(), 1, 5)[0]
+        self.assertEqual(unsafe["tie_safe"], False)
+        self.assertAlmostEqual(unsafe["pnl_win"], .10)
+        self.assertAlmostEqual(unsafe["pnl_tie"], .5 - .90)
+        self.assertAlmostEqual(unsafe["pnl_worst"], -.40)                     # a tie turns this "lock" into a loss
+        safe = arb_scan(rows(True), lambda r: ZeroFees(), 1, 5)[0]
+        self.assertEqual(safe["tie_safe"], True)
+        self.assertAlmostEqual(safe["pnl_worst"], .10)

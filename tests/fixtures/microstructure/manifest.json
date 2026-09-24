@@ -1,5 +1,5 @@
 {
-  "_note": "Frozen whole-game folds for scripts/microstructure_eval.py. discovery = the games the LAG rule was designed on (never in validation or test). validation = NFL games after discovery and before test_from. test = every NFL game with an event date >= test_from, defined by rule before any of them was recorded; opening it is logged in out/eval_log.jsonl and a changed spec needs --reopen-test.",
+  "_note": "Frozen whole-game folds for scripts/microstructure_eval.py. discovery = every NFL game dated 2026-09-20/21 (discovery_dates is the rule; the list records the 15 recorded games) - the games the LAG rule was designed on, never validation or test. validation = NFL games after discovery and before test_from. test = every NFL game with an ET event date >= test_from, the verified week-5 kickoff (test_kickoff), defined by rule before any was recorded. Every run is appended to out/eval_log.jsonl with the hash of the complete effective spec; a test run under a spec other than the first test opening needs --reopen-test and is reported as exploratory.",
   "discovery": [
     {
       "event_key": "nfl:ARI|SEA:2026-09-20",
@@ -64,7 +64,7 @@
   ],
   "test_from": "2026-10-08",
   "spec": {
-    "version": 2,
+    "version": 3,
     "primary": "H3@30s",
     "hypotheses": [
       "H1",
@@ -97,6 +97,45 @@
     "bootstrap": 2000,
     "seed": 20260920,
     "ci": 0.9,
-    "holm": true
+    "holm": true,
+    "alpha": 0.1,
+    "secondary": [
+      "H1_momentum@30",
+      "H2_dip@30",
+      "H2_recovery@30",
+      "M_prototype@30",
+      "H3_leadlag@5",
+      "H3_leadlag@15",
+      "H3_leadlag@60",
+      "H4_arb"
+    ],
+    "h2": {
+      "dip": "down trigger: dmid_30 <= -0.05 with bid and ask each confirming >= 40 %, same sign; buy into the fall",
+      "recovery": "fell >= 5c peak-to-trough within 60 s, mid now >= 1c above that trough, bid and ask both up over 5 s; buy the observed bounce; once per contract per 60 s"
+    },
+    "momentum_candidate": "M_prototype = strategy/momentum.MomentumTracker at its defaults; buy on status 'rising'; forecast = projected_mid over its horizon_s",
+    "signal_cooldown_s": 60,
+    "robust": {
+      "latency_s": 3,
+      "haircut": 0.5
+    },
+    "train_share": 0.6667,
+    "decision_rules": {
+      "reject": "skill CI includes 0 or is below it",
+      "shadow": "net P&L CI includes 0, fill rate < 0.60, < 30 test games, < 200 deduplicated decisions, or one game > 40 % of P&L",
+      "alert_only_eligible": "positive net P&L CI at L=3 s, haircut 0.5, both fees, >= 60 % positive games (no alert is created)"
+    }
+  },
+  "discovery_dates": [
+    "2026-09-20",
+    "2026-09-21"
+  ],
+  "test_kickoff": {
+    "game": "TB @ DAL",
+    "utc": "2026-10-09T00:15:00Z",
+    "et_date": "2026-10-08",
+    "week": 5,
+    "source": "ESPN scoreboard, sports/football/nfl/scoreboard?dates=20261008",
+    "checked": "2026-09-23"
   }
 }

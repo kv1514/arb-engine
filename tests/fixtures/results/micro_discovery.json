@@ -1,763 +1,2349 @@
 {
   "H3_lock": {
-    "attempts": 111,
-    "entries_filled": 48,
-    "fill_rate": 0.35135,
-    "games": 9,
-    "hit_rate": 0.4359,
+    "attempts": 55,
+    "entries_filled": 28,
+    "games": 8,
+    "hit_rate": 0.3913,
     "hold_no_lock": {
-      "attempts": 48,
-      "fill_rate": 0.79167,
-      "games": 9,
-      "hit_rate": 0.42105,
-      "max_drawdown_per_contract": 0.932,
+      "attempts": 28,
+      "games": 8,
+      "hit_rate": 0.3913,
+      "max_drawdown_per_contract": 1.499,
       "mean_ret": {
-        "hi": 0.05129,
-        "lo": -0.049,
-        "point": -0.00337
+        "hi": 0.02037,
+        "lo": -0.12127,
+        "point": -0.04939
       },
-      "positive_game_share": 0.44444,
-      "top_game_share": 0.22103,
-      "trades": 38
+      "positive_game_share": 0.375,
+      "resolved_rate": 0.82143,
+      "top_game_share": 0.26333,
+      "trades": 23
     },
-    "lock_conversion": 0.125,
-    "locked": 6,
+    "lock_conversion": 0.14286,
+    "locked": 4,
     "locked_only": {
-      "attempts": 6,
-      "fill_rate": 1.0,
+      "attempts": 4,
       "games": 3,
       "hit_rate": 1.0,
       "max_drawdown_per_contract": 0.0,
       "mean_ret": {
-        "hi": 0.16837,
-        "lo": 0.07075,
-        "point": 0.13583
+        "hi": 0.16,
+        "lo": 0.04333,
+        "point": 0.11625
       },
       "positive_game_share": 1.0,
-      "top_game_share": 0.67362,
-      "trades": 6
+      "resolved_rate": 1.0,
+      "top_game_share": 0.75699,
+      "trades": 4
     },
-    "max_drawdown_per_contract": 0.932,
+    "max_drawdown_per_contract": 1.668,
     "mean_ret": {
-      "hi": 0.05896,
-      "lo": -0.0468,
-      "point": -8e-05
+      "hi": 0.01786,
+      "lo": -0.1263,
+      "point": -0.05461
     },
     "median_seconds_to_lock": 58.83968,
     "note": "locking mostly happens after the entry has moved in its favour: it turns winners into sure profit; compare with hold_no_lock (same entries, same watch, never locked)",
-    "positive_game_share": 0.44444,
-    "top_game_share": 0.26963,
-    "trades": 39
+    "positive_game_share": 0.375,
+    "resolved_rate": 0.41818,
+    "top_game_share": 0.2552,
+    "trades": 23
   },
   "H4_arb": {
-    "attempts": 164,
+    "attempts": 162,
+    "both_legs_fast": {
+      "attempts": 162,
+      "both_legs_filled": 57,
+      "excluded_unknown_tie": 0,
+      "expected_with_tie_prior": {
+        "hi": 0.02716,
+        "lo": 0.00382,
+        "point": 0.01533
+      },
+      "games": 10,
+      "hit_rate": 0.0396,
+      "locked_sets": 561,
+      "max_drawdown_per_contract": 26.389,
+      "mean_ret": {
+        "hi": -0.21194,
+        "lo": -0.29715,
+        "point": -0.26128
+      },
+      "no_leg_filled": 61,
+      "one_leg_filled": 44,
+      "positive_game_share": 0.1,
+      "resolved_rate": 0.62346,
+      "top_game_share": 0.24709,
+      "trades": 101,
+      "unresolved_contracts": 0,
+      "unwound_contracts": 444,
+      "win_case": {
+        "hi": 0.02831,
+        "lo": 0.00482,
+        "point": 0.01645
+      }
+    },
+    "both_legs_filled": 15,
     "by_margin": {
       "1-3c": {
-        "attempts": 56,
-        "fill_rate": 0.60714,
+        "attempts": 57,
+        "both_legs_filled": 7,
+        "excluded_unknown_tie": 0,
         "games": 10,
-        "hit_rate": 0.5,
-        "max_drawdown_per_contract": 0.232,
+        "hit_rate": 0.27778,
+        "locked_sets": 70,
+        "max_drawdown_per_contract": 3.574,
         "mean_ret": {
-          "hi": 0.01688,
-          "lo": -0.01264,
-          "point": 0.00224
+          "hi": -0.02593,
+          "lo": -0.16149,
+          "point": -0.09714
         },
-        "positive_game_share": 0.6,
-        "top_game_share": 0.2761,
-        "trades": 34
+        "no_leg_filled": 21,
+        "one_leg_filled": 29,
+        "positive_game_share": 0.3,
+        "resolved_rate": 0.63158,
+        "top_game_share": 0.68574,
+        "trades": 36,
+        "unresolved_contracts": 0,
+        "unwound_contracts": 281,
+        "win_case": {
+          "hi": 0.01403,
+          "lo": -0.01488,
+          "point": 8e-05
+        }
       },
       "<1c": {
         "attempts": 48,
-        "fill_rate": 0.625,
+        "both_legs_filled": 2,
+        "excluded_unknown_tie": 0,
         "games": 8,
-        "hit_rate": 0.36667,
-        "max_drawdown_per_contract": 0.498,
+        "hit_rate": 0.31034,
+        "locked_sets": 20,
+        "max_drawdown_per_contract": 1.501,
         "mean_ret": {
-          "hi": -0.00245,
-          "lo": -0.02972,
-          "point": -0.01643
+          "hi": -0.01171,
+          "lo": -0.09276,
+          "point": -0.04872
         },
-        "positive_game_share": 0.375,
-        "top_game_share": 0.5399,
-        "trades": 30
+        "no_leg_filled": 19,
+        "one_leg_filled": 27,
+        "positive_game_share": 0.25,
+        "resolved_rate": 0.60417,
+        "top_game_share": 0.66896,
+        "trades": 29,
+        "unresolved_contracts": 0,
+        "unwound_contracts": 270,
+        "win_case": {
+          "hi": -0.00245,
+          "lo": -0.02584,
+          "point": -0.01424
+        }
       },
       ">=3c": {
-        "attempts": 60,
-        "fill_rate": 0.55,
+        "attempts": 57,
+        "both_legs_filled": 6,
+        "excluded_unknown_tie": 0,
         "games": 9,
-        "hit_rate": 0.39394,
-        "max_drawdown_per_contract": 0.054,
+        "hit_rate": 0.22581,
+        "locked_sets": 60,
+        "max_drawdown_per_contract": 2.353,
         "mean_ret": {
-          "hi": 0.03641,
-          "lo": 0.0061,
-          "point": 0.02018
+          "hi": -0.01972,
+          "lo": -0.11796,
+          "point": -0.07206
         },
-        "positive_game_share": 0.77778,
-        "top_game_share": 0.32794,
-        "trades": 33
+        "no_leg_filled": 26,
+        "one_leg_filled": 25,
+        "positive_game_share": 0.33333,
+        "resolved_rate": 0.54386,
+        "top_game_share": 0.31946,
+        "trades": 31,
+        "unresolved_contracts": 0,
+        "unwound_contracts": 245,
+        "win_case": {
+          "hi": 0.0393,
+          "lo": 0.01052,
+          "point": 0.02471
+        }
       }
     },
     "by_tie": {
       "loses-on-tie": {
-        "attempts": 164,
-        "fill_rate": 0.59146,
+        "attempts": 162,
+        "both_legs_filled": 15,
+        "excluded_unknown_tie": 0,
         "games": 10,
-        "hit_rate": 0.42268,
-        "max_drawdown_per_contract": 0.424,
+        "hit_rate": 0.27083,
+        "locked_sets": 150,
+        "max_drawdown_per_contract": 7.333,
         "mean_ret": {
-          "hi": 0.0146,
-          "lo": -0.00845,
-          "point": 0.00257
+          "hi": -0.03555,
+          "lo": -0.10727,
+          "point": -0.07442
         },
-        "positive_game_share": 0.4,
-        "top_game_share": 0.27074,
-        "trades": 97
+        "no_leg_filled": 66,
+        "one_leg_filled": 81,
+        "positive_game_share": 0.0,
+        "resolved_rate": 0.59259,
+        "top_game_share": 0.44779,
+        "trades": 96,
+        "unresolved_contracts": 0,
+        "unwound_contracts": 796
       },
       "tie-safe": {
         "attempts": 0,
-        "fill_rate": null,
+        "both_legs_filled": 0,
+        "excluded_unknown_tie": 0,
         "games": 0,
-        "trades": 0
+        "locked_sets": 0,
+        "no_leg_filled": 0,
+        "one_leg_filled": 0,
+        "resolved_rate": null,
+        "trades": 0,
+        "unresolved_contracts": 0,
+        "unwound_contracts": 0
       }
     },
-    "fill_rate": 0.59146,
-    "games": 10,
-    "hit_rate": 0.42268,
-    "max_drawdown_per_contract": 0.424,
-    "mean_ret": {
-      "hi": 0.0146,
-      "lo": -0.00845,
-      "point": 0.00257
+    "excluded_unknown_tie": 0,
+    "expected_with_tie_prior": {
+      "hi": 0.01396,
+      "lo": -0.0067,
+      "point": 0.0034
     },
-    "positive_game_share": 0.4,
-    "top_game_share": 0.27074,
-    "trades": 97
+    "games": 10,
+    "hit_rate": 0.27083,
+    "locked_sets": 150,
+    "max_drawdown_per_contract": 7.333,
+    "mean_ret": {
+      "hi": -0.03555,
+      "lo": -0.10727,
+      "point": -0.07442
+    },
+    "no_leg_filled": 66,
+    "one_leg_filled": 81,
+    "positive_game_share": 0.0,
+    "resolved_rate": 0.59259,
+    "stressed_l3_h05": {
+      "attempts": 162,
+      "both_legs_filled": 15,
+      "excluded_unknown_tie": 0,
+      "games": 10,
+      "hit_rate": 0.27368,
+      "locked_sets": 150,
+      "max_drawdown_per_contract": 7.38,
+      "mean_ret": {
+        "hi": -0.03737,
+        "lo": -0.10753,
+        "point": -0.07569
+      },
+      "no_leg_filled": 67,
+      "one_leg_filled": 80,
+      "positive_game_share": 0.0,
+      "resolved_rate": 0.58642,
+      "top_game_share": 0.44486,
+      "trades": 95,
+      "unresolved_contracts": 0,
+      "unwound_contracts": 784,
+      "win_case": {
+        "hi": 0.01306,
+        "lo": -0.00649,
+        "point": 0.00325
+      }
+    },
+    "top_game_share": 0.44779,
+    "trades": 96,
+    "unresolved_contracts": 0,
+    "unwound_contracts": 796,
+    "win_case": {
+      "hi": 0.01438,
+      "lo": -0.00657,
+      "point": 0.00371
+    }
   },
-  "caveat": "discovery games designed the LAG rule: descriptive, not evidence; legacy 5 s timestamps",
+  "M_prototype_forecast": {
+    "calibration": {
+      "bins": [
+        [
+          -0.00568,
+          -0.00624,
+          6189
+        ],
+        [
+          0.0,
+          0.0,
+          6189
+        ],
+        [
+          0.0,
+          0.0,
+          6189
+        ],
+        [
+          0.0,
+          0.0,
+          6189
+        ],
+        [
+          0.00548,
+          0.00608,
+          6190
+        ]
+      ],
+      "slope": 0.0207
+    },
+    "directional_hit": 0.51031,
+    "games": 14,
+    "mae_model": 0.00471,
+    "mae_persistence": 0.00255,
+    "n": 30946,
+    "skill_ci": {
+      "hi": -0.00156,
+      "lo": -0.00281,
+      "point": -0.00215
+    },
+    "statuses": {
+      "dip-watch": 3554,
+      "flat": 54307,
+      "rebound-watch": 425,
+      "rising": 2960
+    }
+  },
+  "_fixture": "scripts/microstructure_eval.py --fold discovery --db out/history.db (the 15 NFL games of 2026-09-20/21, legacy 5 s recorder), metrics only; discovery is descriptive, not evidence",
+  "baselines": {
+    "B0": "B0_persistence (unchanged price)",
+    "B1": "B1_buy_any (cost hurdle)",
+    "B2": [
+      "H1_momentum",
+      "H2_dip",
+      "H2_recovery",
+      "H3_leadlag",
+      "M_prototype"
+    ],
+    "B3": "B3_ridge_dmid30",
+    "B4": "B4_ridge_gap"
+  },
+  "caveat": "legacy 5 s timestamps: the book 1 s after a decision was never observed",
+  "decision_points": {
+    "recovery": 55,
+    "trigger": 609,
+    "unconditional": 57267
+  },
+  "decisions": {
+    "B3_ridge_dmid30@15": "reject",
+    "B3_ridge_dmid30@30": "reject",
+    "B3_ridge_dmid30@5": "reject",
+    "B3_ridge_dmid30@60": "reject",
+    "B4_ridge_gap@15": "reject",
+    "B4_ridge_gap@30": "reject",
+    "B4_ridge_gap@5": "reject",
+    "B4_ridge_gap@60": "reject",
+    "H1_momentum@15": "reject",
+    "H1_momentum@30": "reject",
+    "H1_momentum@5": "reject",
+    "H1_momentum@60": "reject",
+    "H2_dip@15": "reject",
+    "H2_dip@30": "reject",
+    "H2_dip@5": "shadow",
+    "H2_dip@60": "reject",
+    "H2_recovery@15": "reject",
+    "H2_recovery@30": "reject",
+    "H2_recovery@5": "reject",
+    "H2_recovery@60": "reject",
+    "H3_leadlag@15": "reject",
+    "H3_leadlag@30": "reject",
+    "H3_leadlag@5": "reject",
+    "H3_leadlag@60": "reject",
+    "M_prototype@15": "reject",
+    "M_prototype@30": "reject",
+    "M_prototype@5": "reject",
+    "M_prototype@60": "reject"
+  },
   "experiment": "microstructure",
+  "exploratory": false,
   "finals": 3,
   "fold": "discovery",
+  "fold_role": "descriptive: these games shaped the rules; not evidence",
   "games": 15,
-  "holm_pass": {
-    "H1_momentum@15": false,
-    "H1_momentum@30": false,
-    "H1_momentum@5": false,
-    "H1_momentum@60": false,
-    "H2_dip@15": false,
-    "H2_dip@30": false,
-    "H2_dip@5": false,
-    "H2_dip@60": false,
-    "H3_leadlag@15": false,
-    "H3_leadlag@30": false,
-    "H3_leadlag@5": false,
-    "H3_leadlag@60": false
+  "hashes": {
+    "code": "46f38831f223f53dd4ba86590ea2310574a8050b48afd696063244e0273fd1cf",
+    "constants": "8683f1b3105ded357d659225d1dab8ca27cf124c3b3a5c1580e624ff5945699f",
+    "folds": "3f8fa925aff1310d9d0046182d12eff258d7e0218a3612ee6208f8efb3b11f9b",
+    "frozen_models": null,
+    "spec": "e7e56ca1c6bc7c211370e6c646d1103cdc0534c111b859c29b8093168f9c78d1"
   },
   "horizons": {
     "15": {
+      "B0_persistence": {
+        "mae": 0.00263,
+        "n": 9882
+      },
       "B1_buy_any": {
-        "attempts": 31127,
-        "fill_rate": 0.58348,
-        "games": 13,
+        "attempted_orders": 31127,
+        "closed_positions": 18107,
+        "directional_hit": 0.47183,
+        "dollar_pnl": -7267.91,
+        "fees": 5130.0,
+        "fill_rate": 0.59315,
+        "filled_contracts": 183889,
+        "filled_orders": 18463,
+        "games": 15,
         "hit_rate": 0.02665,
-        "max_drawdown_per_contract": 730.58972,
+        "labelled": 18198,
+        "max_drawdown_usd": 7267.91,
         "mean_ret": {
           "hi": -0.03614,
           "lo": -0.04319,
           "point": -0.04023
         },
+        "missed_orders": 12664,
+        "missing_labels": 12929,
         "positive_game_share": 0.0,
-        "top_game_share": 0.158,
-        "trades": 18162
+        "resolved_share_of_fills": 0.9837,
+        "robust_l3_h05": {
+          "attempted_orders": 31127,
+          "fill_rate": 0.15585,
+          "mean_ret": {
+            "hi": -0.03182,
+            "lo": -0.0422,
+            "point": -0.03749
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 55,
+        "skill_ci": {
+          "hi": -0.0001,
+          "lo": -0.00039,
+          "point": -0.00025
+        },
+        "top_game_share": 0.15766,
+        "unresolved_positions": 301
       },
       "B3_ridge_dmid30": {
-        "beta_median": 0.02192,
-        "games": 14,
-        "mae_model": 0.00422,
-        "mae_persistence": 0.00403,
-        "n": 34371,
+        "calibration": {
+          "bins": [
+            [
+              -0.00036,
+              -0.00462,
+              1976
+            ],
+            [
+              -0.0001,
+              0.0,
+              1976
+            ],
+            [
+              -0.0001,
+              0.0,
+              1977
+            ],
+            [
+              -0.0001,
+              0.0,
+              1976
+            ],
+            [
+              0.00015,
+              0.00443,
+              1977
+            ]
+          ],
+          "slope": 2.16178
+        },
+        "coef": [
+          -0.0001,
+          0.02034
+        ],
+        "directional_hit": 0.5152,
+        "games": 4,
+        "mae_model": 0.00278,
+        "mae_persistence": 0.00263,
+        "n": 9882,
         "skill_ci": {
-          "hi": -0.00015,
-          "lo": -0.00024,
-          "point": -0.0002
+          "hi": -0.00013,
+          "lo": -0.00017,
+          "point": -0.00015
         }
       },
       "B4_ridge_gap": {
-        "beta_median": 0.03604,
-        "games": 14,
-        "mae_model": 0.00543,
-        "mae_persistence": 0.0044,
-        "n": 32318,
+        "calibration": {
+          "bins": [
+            [
+              -0.00229,
+              -0.00137,
+              1746
+            ],
+            [
+              -0.00068,
+              0.00042,
+              1746
+            ],
+            [
+              -0.00021,
+              -0.00027,
+              1747
+            ],
+            [
+              0.00026,
+              -1e-05,
+              1746
+            ],
+            [
+              0.00188,
+              0.00129,
+              1747
+            ]
+          ],
+          "slope": 0.70466
+        },
+        "coef": [
+          -0.0002,
+          0.03778
+        ],
+        "directional_hit": 0.53351,
+        "games": 4,
+        "mae_model": 0.00365,
+        "mae_persistence": 0.00276,
+        "n": 8732,
         "skill_ci": {
-          "hi": -0.00083,
-          "lo": -0.0013,
-          "point": -0.00103
+          "hi": -0.00048,
+          "lo": -0.0012,
+          "point": -0.00089
         }
       },
       "H1_momentum": {
-        "attempts": 194,
-        "fill_rate": 0.59794,
-        "games": 10,
+        "attempted_orders": 194,
+        "closed_positions": 116,
+        "directional_hit": 0.70588,
+        "dollar_pnl": -49.21,
+        "fees": 36.24,
+        "fill_rate": 0.60825,
+        "filled_contracts": 1158,
+        "filled_orders": 118,
+        "games": 11,
         "hit_rate": 0.02586,
-        "max_drawdown_per_contract": 5.02964,
+        "labelled": 83,
+        "max_drawdown_usd": 49.21,
         "mean_ret": {
           "hi": -0.03822,
           "lo": -0.04668,
           "point": -0.04336
         },
+        "missed_orders": 76,
+        "missing_labels": 111,
         "positive_game_share": 0.0,
-        "top_game_share": 0.23401,
-        "trades": 116
+        "resolved_share_of_fills": 0.98305,
+        "robust_l3_h05": {
+          "attempted_orders": 194,
+          "fill_rate": 0.08763,
+          "mean_ret": {
+            "hi": -0.04417,
+            "lo": -0.04471,
+            "point": -0.04429
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00466,
+          "lo": -0.0002,
+          "point": 0.00175
+        },
+        "top_game_share": 0.23918,
+        "unresolved_positions": 2
       },
       "H2_dip": {
-        "attempts": 232,
-        "fill_rate": 0.52586,
-        "games": 10,
+        "attempted_orders": 232,
+        "closed_positions": 122,
+        "directional_hit": 0.54545,
+        "dollar_pnl": -62.06,
+        "fees": 39.85,
+        "fill_rate": 0.53879,
+        "filled_contracts": 1250,
+        "filled_orders": 125,
+        "games": 11,
         "hit_rate": 0.02459,
-        "max_drawdown_per_contract": 6.206,
+        "labelled": 96,
+        "max_drawdown_usd": 62.06,
         "mean_ret": {
           "hi": -0.0466,
           "lo": -0.05527,
           "point": -0.05087
         },
+        "missed_orders": 107,
+        "missing_labels": 136,
         "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.976,
+        "robust_l3_h05": {
+          "attempted_orders": 232,
+          "fill_rate": 0.0819,
+          "mean_ret": {
+            "hi": -0.04323,
+            "lo": -0.05958,
+            "point": -0.04979
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00492,
+          "lo": -0.00567,
+          "point": -0.00021
+        },
         "top_game_share": 0.21092,
-        "trades": 122
+        "unresolved_positions": 3
+      },
+      "H2_recovery": {
+        "attempted_orders": 55,
+        "closed_positions": 25,
+        "directional_hit": 0.5,
+        "dollar_pnl": -13.04,
+        "fees": 8.79,
+        "fill_rate": 0.45455,
+        "filled_contracts": 250,
+        "filled_orders": 25,
+        "games": 9,
+        "hit_rate": 0.04,
+        "labelled": 29,
+        "max_drawdown_usd": 13.04,
+        "mean_ret": {
+          "hi": -0.04586,
+          "lo": -0.05757,
+          "point": -0.05216
+        },
+        "missed_orders": 30,
+        "missing_labels": 26,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 1.0,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.2,
+          "mean_ret": {
+            "hi": -0.05108,
+            "lo": -0.054,
+            "point": -0.05209
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.005,
+          "lo": -0.00091,
+          "point": 0.00172
+        },
+        "top_game_share": 0.21933,
+        "unresolved_positions": 0
       },
       "H3_by_grade": {
         "agree=0": {
-          "attempts": 109,
-          "fill_rate": 0.42202,
-          "games": 11,
-          "hit_rate": 0.06522,
-          "max_drawdown_per_contract": 2.56,
+          "attempted_orders": 53,
+          "closed_positions": 26,
+          "directional_hit": 0.53846,
+          "dollar_pnl": -14.3,
+          "fees": 9.6,
+          "fill_rate": 0.50943,
+          "filled_contracts": 265,
+          "filled_orders": 27,
+          "games": 10,
+          "hit_rate": 0.07692,
+          "labelled": 18,
+          "max_drawdown_usd": 15.82,
           "mean_ret": {
-            "hi": -0.03023,
-            "lo": -0.07795,
-            "point": -0.05565
+            "hi": -0.02808,
+            "lo": -0.07892,
+            "point": -0.05577
           },
-          "positive_game_share": 0.09091,
-          "top_game_share": 0.2625,
-          "trades": 46
+          "missed_orders": 26,
+          "missing_labels": 35,
+          "positive_game_share": 0.11111,
+          "resolved_share_of_fills": 0.96296,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.0325,
+            "lo": -0.01079,
+            "point": 0.01
+          },
+          "top_game_share": 0.20994,
+          "unresolved_positions": 1
         },
         "agree>=1": {
-          "attempts": 2,
+          "attempted_orders": 2,
+          "closed_positions": 1,
+          "dollar_pnl": -0.7,
+          "fees": 0.4,
           "fill_rate": 0.5,
-          "games": 1,
+          "filled_contracts": 10,
+          "filled_orders": 1,
+          "games": 2,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 0.07,
+          "labelled": 0,
+          "max_drawdown_usd": 0.7,
           "mean_ret": {
             "hi": -0.07,
             "lo": -0.07,
             "point": -0.07
           },
+          "missed_orders": 1,
+          "missing_labels": 2,
           "positive_game_share": 0.0,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
           "top_game_share": 1.0,
-          "trades": 1
+          "unresolved_positions": 0
         },
         "hard": {
-          "attempts": 49,
-          "fill_rate": 0.44898,
+          "attempted_orders": 26,
+          "closed_positions": 10,
+          "directional_hit": 0.6,
+          "dollar_pnl": -1.5,
+          "fees": 3.6,
+          "fill_rate": 0.38462,
+          "filled_contracts": 100,
+          "filled_orders": 10,
           "games": 8,
-          "hit_rate": 0.13636,
-          "max_drawdown_per_contract": 1.052,
+          "hit_rate": 0.2,
+          "labelled": 7,
+          "max_drawdown_usd": 3.4,
           "mean_ret": {
-            "hi": -0.00779,
-            "lo": -0.07411,
-            "point": -0.04173
+            "hi": 0.0168,
+            "lo": -0.0478,
+            "point": -0.015
           },
-          "positive_game_share": 0.25,
-          "top_game_share": 0.27653,
-          "trades": 22
+          "missed_orders": 16,
+          "missing_labels": 19,
+          "positive_game_share": 0.33333,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.03111,
+            "lo": 0.006,
+            "point": 0.02214
+          },
+          "top_game_share": 0.26667,
+          "unresolved_positions": 0
         },
         "soft": {
-          "attempts": 62,
-          "fill_rate": 0.40323,
-          "games": 10,
+          "attempted_orders": 29,
+          "closed_positions": 17,
+          "directional_hit": 0.5,
+          "dollar_pnl": -13.5,
+          "fees": 6.4,
+          "fill_rate": 0.62069,
+          "filled_contracts": 175,
+          "filled_orders": 18,
+          "games": 9,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 1.712,
+          "labelled": 11,
+          "max_drawdown_usd": 13.5,
           "mean_ret": {
-            "hi": -0.05457,
-            "lo": -0.08243,
-            "point": -0.06848
+            "hi": -0.06385,
+            "lo": -0.09696,
+            "point": -0.08059
           },
+          "missed_orders": 11,
+          "missing_labels": 18,
           "positive_game_share": 0.0,
-          "top_game_share": 0.22897,
-          "trades": 25
+          "resolved_share_of_fills": 0.94444,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.03562,
+            "lo": -0.02042,
+            "point": 0.00227
+          },
+          "top_game_share": 0.28148,
+          "unresolved_positions": 1
         }
       },
       "H3_leadlag": {
-        "attempts": 111,
-        "fill_rate": 0.42342,
-        "games": 11,
-        "hit_rate": 0.06383,
-        "max_drawdown_per_contract": 2.63,
+        "attempted_orders": 55,
+        "closed_positions": 27,
+        "directional_hit": 0.53846,
+        "dollar_pnl": -15.0,
+        "fees": 10.0,
+        "fill_rate": 0.50909,
+        "filled_contracts": 275,
+        "filled_orders": 28,
+        "games": 10,
+        "hit_rate": 0.07407,
+        "labelled": 18,
+        "max_drawdown_usd": 16.52,
         "mean_ret": {
-          "hi": -0.03264,
-          "lo": -0.07787,
-          "point": -0.05596
+          "hi": -0.03193,
+          "lo": -0.0789,
+          "point": -0.0563
         },
-        "positive_game_share": 0.09091,
-        "top_game_share": 0.26904,
-        "trades": 47
+        "missed_orders": 27,
+        "missing_labels": 37,
+        "positive_game_share": 0.11111,
+        "resolved_share_of_fills": 0.96429,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.07273,
+          "mean_ret": {
+            "hi": -0.01533,
+            "lo": -0.036,
+            "point": -0.0205
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.0325,
+          "lo": -0.01079,
+          "point": 0.01
+        },
+        "top_game_share": 0.21839,
+        "unresolved_positions": 1
       },
-      "coverage": 0.62982
+      "M_prototype": {
+        "attempted_orders": 725,
+        "closed_positions": 452,
+        "directional_hit": 0.41667,
+        "dollar_pnl": -166.5,
+        "fees": 122.52,
+        "fill_rate": 0.62897,
+        "filled_contracts": 4532,
+        "filled_orders": 456,
+        "games": 13,
+        "hit_rate": 0.0177,
+        "labelled": 446,
+        "max_drawdown_usd": 166.5,
+        "mean_ret": {
+          "hi": -0.03358,
+          "lo": -0.04011,
+          "point": -0.03718
+        },
+        "missed_orders": 269,
+        "missing_labels": 279,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.99123,
+        "robust_l3_h05": {
+          "attempted_orders": 725,
+          "fill_rate": 0.20138,
+          "mean_ret": {
+            "hi": -0.02871,
+            "lo": -0.0362,
+            "point": -0.03322
+          },
+          "positive_game_share": 0.14286
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00218,
+          "lo": -0.0,
+          "point": 0.00081
+        },
+        "top_game_share": 0.20054,
+        "unresolved_positions": 4
+      },
+      "coverage": 0.62982,
+      "missing_labels_unconditional": 21199
     },
     "30": {
+      "B0_persistence": {
+        "mae": 0.00711,
+        "n": 16027
+      },
       "B1_buy_any": {
-        "attempts": 31127,
-        "fill_rate": 0.58142,
-        "games": 13,
+        "attempted_orders": 31127,
+        "closed_positions": 18027,
+        "directional_hit": 0.48538,
+        "dollar_pnl": -7292.01,
+        "fees": 5108.45,
+        "fill_rate": 0.59315,
+        "filled_contracts": 183889,
+        "filled_orders": 18463,
+        "games": 15,
         "hit_rate": 0.04536,
-        "max_drawdown_per_contract": 732.9511,
+        "labelled": 25602,
+        "max_drawdown_usd": 7292.01,
         "mean_ret": {
           "hi": -0.03628,
           "lo": -0.04352,
           "point": -0.0405
         },
+        "missed_orders": 12664,
+        "missing_labels": 5525,
         "positive_game_share": 0.0,
-        "top_game_share": 0.16262,
-        "trades": 18098
+        "resolved_share_of_fills": 0.98023,
+        "robust_l3_h05": {
+          "attempted_orders": 31127,
+          "fill_rate": 0.15585,
+          "mean_ret": {
+            "hi": -0.03157,
+            "lo": -0.04149,
+            "point": -0.03699
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 71,
+        "skill_ci": {
+          "hi": -0.0002,
+          "lo": -0.00053,
+          "point": -0.00033
+        },
+        "top_game_share": 0.16298,
+        "unresolved_positions": 365
       },
       "B3_ridge_dmid30": {
-        "beta_median": 0.0324,
-        "games": 14,
-        "mae_model": 0.00893,
-        "mae_persistence": 0.00877,
-        "n": 46838,
+        "calibration": {
+          "bins": [
+            [
+              -0.00061,
+              -0.01015,
+              3205
+            ],
+            [
+              -5e-05,
+              0.0,
+              3205
+            ],
+            [
+              -5e-05,
+              0.0,
+              3206
+            ],
+            [
+              -5e-05,
+              0.0,
+              3205
+            ],
+            [
+              0.00051,
+              0.0102,
+              3206
+            ]
+          ],
+          "slope": 1.59304
+        },
+        "coef": [
+          -5e-05,
+          0.02997
+        ],
+        "directional_hit": 0.52979,
+        "games": 4,
+        "mae_model": 0.00724,
+        "mae_persistence": 0.00711,
+        "n": 16027,
         "skill_ci": {
-          "hi": -0.00013,
-          "lo": -0.00019,
-          "point": -0.00016
+          "hi": -0.00011,
+          "lo": -0.00015,
+          "point": -0.00013
         }
       },
       "B4_ridge_gap": {
-        "beta_median": 0.0851,
-        "games": 14,
-        "mae_model": 0.011,
-        "mae_persistence": 0.00881,
-        "n": 41981,
+        "calibration": {
+          "bins": [
+            [
+              -0.00568,
+              -0.00529,
+              2618
+            ],
+            [
+              -0.00144,
+              0.00017,
+              2618
+            ],
+            [
+              -0.00027,
+              -1e-05,
+              2618
+            ],
+            [
+              0.00087,
+              2e-05,
+              2618
+            ],
+            [
+              0.00507,
+              0.00474,
+              2618
+            ]
+          ],
+          "slope": 1.14601
+        },
+        "coef": [
+          -0.00026,
+          0.08358
+        ],
+        "directional_hit": 0.56376,
+        "games": 4,
+        "mae_model": 0.00824,
+        "mae_persistence": 0.00643,
+        "n": 13090,
         "skill_ci": {
-          "hi": -0.00182,
-          "lo": -0.00268,
-          "point": -0.00219
+          "hi": -0.0012,
+          "lo": -0.00231,
+          "point": -0.00181
         }
       },
       "H1_momentum": {
-        "attempts": 194,
-        "fill_rate": 0.59278,
-        "games": 10,
+        "attempted_orders": 194,
+        "closed_positions": 115,
+        "directional_hit": 0.5567,
+        "dollar_pnl": -42.76,
+        "fees": 35.81,
+        "fill_rate": 0.60825,
+        "filled_contracts": 1158,
+        "filled_orders": 118,
+        "games": 11,
         "hit_rate": 0.12174,
-        "max_drawdown_per_contract": 4.29664,
+        "labelled": 156,
+        "max_drawdown_usd": 45.17,
         "mean_ret": {
           "hi": -0.03057,
           "lo": -0.04445,
           "point": -0.03736
         },
+        "missed_orders": 76,
+        "missing_labels": 38,
         "positive_game_share": 0.1,
-        "top_game_share": 0.24251,
-        "trades": 115
+        "resolved_share_of_fills": 0.97458,
+        "robust_l3_h05": {
+          "attempted_orders": 194,
+          "fill_rate": 0.08763,
+          "mean_ret": {
+            "hi": -0.0422,
+            "lo": -0.073,
+            "point": -0.06394
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.01278,
+          "lo": -0.00461,
+          "point": 0.00279
+        },
+        "top_game_share": 0.23814,
+        "unresolved_positions": 3
       },
       "H2_dip": {
-        "attempts": 232,
-        "fill_rate": 0.52155,
-        "games": 10,
+        "attempted_orders": 232,
+        "closed_positions": 121,
+        "directional_hit": 0.47706,
+        "dollar_pnl": -70.28,
+        "fees": 39.23,
+        "fill_rate": 0.53879,
+        "filled_contracts": 1250,
+        "filled_orders": 125,
+        "games": 11,
         "hit_rate": 0.09917,
-        "max_drawdown_per_contract": 7.028,
+        "labelled": 170,
+        "max_drawdown_usd": 70.28,
         "mean_ret": {
           "hi": -0.04391,
           "lo": -0.07034,
           "point": -0.05808
         },
+        "missed_orders": 107,
+        "missing_labels": 62,
         "positive_game_share": 0.1,
+        "resolved_share_of_fills": 0.968,
+        "robust_l3_h05": {
+          "attempted_orders": 232,
+          "fill_rate": 0.0819,
+          "mean_ret": {
+            "hi": -0.01558,
+            "lo": -0.09763,
+            "point": -0.03732
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.0098,
+          "lo": -0.01105,
+          "point": 0.00065
+        },
         "top_game_share": 0.25642,
-        "trades": 121
+        "unresolved_positions": 4
+      },
+      "H2_recovery": {
+        "attempted_orders": 55,
+        "closed_positions": 25,
+        "directional_hit": 0.51515,
+        "dollar_pnl": -12.2,
+        "fees": 8.75,
+        "fill_rate": 0.45455,
+        "filled_contracts": 250,
+        "filled_orders": 25,
+        "games": 9,
+        "hit_rate": 0.12,
+        "labelled": 40,
+        "max_drawdown_usd": 13.36,
+        "mean_ret": {
+          "hi": -0.02245,
+          "lo": -0.07159,
+          "point": -0.0488
+        },
+        "missed_orders": 30,
+        "missing_labels": 15,
+        "positive_game_share": 0.11111,
+        "resolved_share_of_fills": 1.0,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.2,
+          "mean_ret": {
+            "hi": -0.03827,
+            "lo": -0.05833,
+            "point": -0.04745
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00853,
+          "lo": -0.01283,
+          "point": -0.00038
+        },
+        "top_game_share": 0.21183,
+        "unresolved_positions": 0
       },
       "H3_by_grade": {
         "agree=0": {
-          "attempts": 109,
-          "fill_rate": 0.42202,
-          "games": 11,
-          "hit_rate": 0.06522,
-          "max_drawdown_per_contract": 3.047,
+          "attempted_orders": 53,
+          "closed_positions": 26,
+          "directional_hit": 0.48148,
+          "dollar_pnl": -17.85,
+          "fees": 9.6,
+          "fill_rate": 0.50943,
+          "filled_contracts": 265,
+          "filled_orders": 27,
+          "games": 10,
+          "hit_rate": 0.03846,
+          "labelled": 32,
+          "max_drawdown_usd": 17.85,
           "mean_ret": {
-            "hi": -0.02754,
-            "lo": -0.09104,
-            "point": -0.06057
+            "hi": -0.04835,
+            "lo": -0.09623,
+            "point": -0.06962
           },
-          "positive_game_share": 0.09091,
-          "top_game_share": 0.27207,
-          "trades": 46
+          "missed_orders": 26,
+          "missing_labels": 21,
+          "positive_game_share": 0.0,
+          "resolved_share_of_fills": 0.96296,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.00788,
+            "lo": -0.03905,
+            "point": -0.01125
+          },
+          "top_game_share": 0.27451,
+          "unresolved_positions": 1
         },
         "agree>=1": {
-          "attempts": 2,
+          "attempted_orders": 2,
+          "closed_positions": 1,
+          "directional_hit": 0.0,
+          "dollar_pnl": -0.8,
+          "fees": 0.4,
           "fill_rate": 0.5,
-          "games": 1,
+          "filled_contracts": 10,
+          "filled_orders": 1,
+          "games": 2,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 0.08,
+          "labelled": 1,
+          "max_drawdown_usd": 0.8,
           "mean_ret": {
             "hi": -0.08,
             "lo": -0.08,
             "point": -0.08
           },
+          "missed_orders": 1,
+          "missing_labels": 1,
           "positive_game_share": 0.0,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": -0.02,
+            "lo": -0.02,
+            "point": -0.02
+          },
           "top_game_share": 1.0,
-          "trades": 1
+          "unresolved_positions": 0
         },
         "hard": {
-          "attempts": 49,
-          "fill_rate": 0.44898,
+          "attempted_orders": 26,
+          "closed_positions": 10,
+          "directional_hit": 0.5,
+          "dollar_pnl": -5.0,
+          "fees": 3.6,
+          "fill_rate": 0.38462,
+          "filled_contracts": 100,
+          "filled_orders": 10,
           "games": 8,
-          "hit_rate": 0.09091,
-          "max_drawdown_per_contract": 1.397,
+          "hit_rate": 0.1,
+          "labelled": 16,
+          "max_drawdown_usd": 5.0,
           "mean_ret": {
-            "hi": -0.0272,
-            "lo": -0.09453,
-            "point": -0.05941
+            "hi": -0.02175,
+            "lo": -0.0774,
+            "point": -0.05
           },
-          "positive_game_share": 0.125,
-          "top_game_share": 0.27572,
-          "trades": 22
+          "missed_orders": 16,
+          "missing_labels": 10,
+          "positive_game_share": 0.16667,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.02619,
+            "lo": -0.02958,
+            "point": 0.00344
+          },
+          "top_game_share": 0.375,
+          "unresolved_positions": 0
         },
         "soft": {
-          "attempts": 62,
-          "fill_rate": 0.40323,
-          "games": 10,
-          "hit_rate": 0.04,
-          "max_drawdown_per_contract": 1.73,
+          "attempted_orders": 29,
+          "closed_positions": 17,
+          "directional_hit": 0.4375,
+          "dollar_pnl": -13.65,
+          "fees": 6.4,
+          "fill_rate": 0.62069,
+          "filled_contracts": 175,
+          "filled_orders": 18,
+          "games": 9,
+          "hit_rate": 0.0,
+          "labelled": 17,
+          "max_drawdown_usd": 13.65,
           "mean_ret": {
-            "hi": -0.03043,
-            "lo": -0.08907,
-            "point": -0.06236
+            "hi": -0.056,
+            "lo": -0.10925,
+            "point": -0.08176
           },
-          "positive_game_share": 0.1,
-          "top_game_share": 0.25776,
-          "trades": 25
+          "missed_orders": 11,
+          "missing_labels": 12,
+          "positive_game_share": 0.0,
+          "resolved_share_of_fills": 0.94444,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.00528,
+            "lo": -0.06269,
+            "point": -0.02559
+          },
+          "top_game_share": 0.35897,
+          "unresolved_positions": 1
         }
       },
       "H3_leadlag": {
-        "attempts": 111,
-        "fill_rate": 0.42342,
-        "games": 11,
-        "hit_rate": 0.06383,
-        "max_drawdown_per_contract": 3.127,
+        "attempted_orders": 55,
+        "closed_positions": 27,
+        "directional_hit": 0.46429,
+        "dollar_pnl": -18.65,
+        "fees": 10.0,
+        "fill_rate": 0.50909,
+        "filled_contracts": 275,
+        "filled_orders": 28,
+        "games": 10,
+        "hit_rate": 0.03704,
+        "labelled": 33,
+        "max_drawdown_usd": 18.65,
         "mean_ret": {
-          "hi": -0.02862,
-          "lo": -0.09049,
-          "point": -0.06098
+          "hi": -0.04925,
+          "lo": -0.09552,
+          "point": -0.07
         },
-        "positive_game_share": 0.09091,
-        "top_game_share": 0.26564,
-        "trades": 47
+        "missed_orders": 27,
+        "missing_labels": 22,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.96429,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.07273,
+          "mean_ret": {
+            "hi": -0.036,
+            "lo": -0.05833,
+            "point": -0.05275
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00773,
+          "lo": -0.03825,
+          "point": -0.01152
+        },
+        "top_game_share": 0.26273,
+        "unresolved_positions": 1
       },
-      "coverage": 0.87963
+      "M_prototype": {
+        "attempted_orders": 725,
+        "closed_positions": 447,
+        "directional_hit": 0.5076,
+        "dollar_pnl": -166.32,
+        "fees": 121.1,
+        "fill_rate": 0.62897,
+        "filled_contracts": 4532,
+        "filled_orders": 456,
+        "games": 13,
+        "hit_rate": 0.07366,
+        "labelled": 633,
+        "max_drawdown_usd": 169.31,
+        "mean_ret": {
+          "hi": -0.03095,
+          "lo": -0.0427,
+          "point": -0.03719
+        },
+        "missed_orders": 269,
+        "missing_labels": 92,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.98246,
+        "robust_l3_h05": {
+          "attempted_orders": 725,
+          "fill_rate": 0.20138,
+          "mean_ret": {
+            "hi": -0.0277,
+            "lo": -0.03851,
+            "point": -0.03369
+          },
+          "positive_game_share": 0.14286
+        },
+        "settled_positions": 1,
+        "skill_ci": {
+          "hi": 0.00548,
+          "lo": -0.0005,
+          "point": 0.00202
+        },
+        "top_game_share": 0.23749,
+        "unresolved_positions": 8
+      },
+      "coverage": 0.87963,
+      "missing_labels_unconditional": 6893
     },
     "5": {
+      "B0_persistence": {
+        "mae": 0.00089,
+        "n": 6882
+      },
       "B1_buy_any": {
-        "attempts": 31127,
-        "fill_rate": 0.58589,
-        "games": 14,
+        "attempted_orders": 31127,
+        "closed_positions": 18198,
+        "directional_hit": 0.44975,
+        "dollar_pnl": -7342.48,
+        "fees": 5152.23,
+        "fill_rate": 0.59315,
+        "filled_contracts": 183889,
+        "filled_orders": 18463,
+        "games": 15,
         "hit_rate": 0.01014,
-        "max_drawdown_per_contract": 737.94402,
+        "labelled": 14869,
+        "max_drawdown_usd": 7342.48,
         "mean_ret": {
           "hi": -0.03644,
           "lo": -0.04339,
           "point": -0.04046
         },
+        "missed_orders": 12664,
+        "missing_labels": 16258,
         "positive_game_share": 0.0,
-        "top_game_share": 0.15756,
-        "trades": 18237
+        "resolved_share_of_fills": 0.98776,
+        "robust_l3_h05": {
+          "attempted_orders": 31127,
+          "fill_rate": 0.15585,
+          "mean_ret": {
+            "hi": -0.032,
+            "lo": -0.04266,
+            "point": -0.03787
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 39,
+        "skill_ci": {
+          "hi": -0.00019,
+          "lo": -0.00044,
+          "point": -0.0003
+        },
+        "top_game_share": 0.15752,
+        "unresolved_positions": 226
       },
       "B3_ridge_dmid30": {
-        "beta_median": 0.00609,
-        "games": 14,
-        "mae_model": 0.00158,
-        "mae_persistence": 0.00149,
-        "n": 26917,
+        "calibration": {
+          "bins": [
+            [
+              -0.00017,
+              -0.00136,
+              1376
+            ],
+            [
+              -9e-05,
+              0.0,
+              1376
+            ],
+            [
+              -9e-05,
+              0.0,
+              1377
+            ],
+            [
+              -9e-05,
+              0.0,
+              1376
+            ],
+            [
+              -1e-05,
+              0.00129,
+              1377
+            ]
+          ],
+          "slope": 0.47614
+        },
+        "coef": [
+          -9e-05,
+          0.0065
+        ],
+        "directional_hit": 0.50755,
+        "games": 4,
+        "mae_model": 0.00099,
+        "mae_persistence": 0.00089,
+        "n": 6882,
         "skill_ci": {
-          "hi": -8e-05,
-          "lo": -0.0001,
-          "point": -9e-05
+          "hi": -9e-05,
+          "lo": -0.00011,
+          "point": -0.0001
         }
       },
       "B4_ridge_gap": {
-        "beta_median": 0.00711,
-        "games": 13,
-        "mae_model": 0.00198,
-        "mae_persistence": 0.00167,
-        "n": 25799,
+        "calibration": {
+          "bins": [
+            [
+              -0.00059,
+              -0.00053,
+              1251
+            ],
+            [
+              -0.0003,
+              0.00011,
+              1252
+            ],
+            [
+              -0.00022,
+              -2e-05,
+              1252
+            ],
+            [
+              -0.00014,
+              -7e-05,
+              1252
+            ],
+            [
+              0.00015,
+              0.00039,
+              1252
+            ]
+          ],
+          "slope": 1.51409
+        },
+        "coef": [
+          -0.00022,
+          0.00689
+        ],
+        "directional_hit": 0.53333,
+        "games": 4,
+        "mae_model": 0.00132,
+        "mae_persistence": 0.00105,
+        "n": 6259,
         "skill_ci": {
-          "hi": -0.00026,
-          "lo": -0.00038,
-          "point": -0.0003
+          "hi": -0.00021,
+          "lo": -0.0003,
+          "point": -0.00027
         }
       },
       "H1_momentum": {
-        "attempts": 194,
-        "fill_rate": 0.60309,
-        "games": 10,
+        "attempted_orders": 194,
+        "closed_positions": 117,
+        "directional_hit": 0.64706,
+        "dollar_pnl": -50.11,
+        "fees": 36.44,
+        "fill_rate": 0.60825,
+        "filled_contracts": 1158,
+        "filled_orders": 118,
+        "games": 11,
         "hit_rate": 0.00855,
-        "max_drawdown_per_contract": 5.11964,
+        "labelled": 76,
+        "max_drawdown_usd": 50.11,
         "mean_ret": {
           "hi": -0.03992,
           "lo": -0.04658,
           "point": -0.04376
         },
+        "missed_orders": 76,
+        "missing_labels": 118,
         "positive_game_share": 0.0,
-        "top_game_share": 0.20861,
-        "trades": 117
+        "resolved_share_of_fills": 0.99153,
+        "robust_l3_h05": {
+          "attempted_orders": 194,
+          "fill_rate": 0.08763,
+          "mean_ret": {
+            "hi": -0.03925,
+            "lo": -0.04514,
+            "point": -0.04369
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00063,
+          "lo": -0.00061,
+          "point": 0.0
+        },
+        "top_game_share": 0.21313,
+        "unresolved_positions": 1
       },
       "H2_dip": {
-        "attempts": 232,
-        "fill_rate": 0.53448,
-        "games": 10,
+        "attempted_orders": 232,
+        "closed_positions": 124,
+        "directional_hit": 0.58824,
+        "dollar_pnl": -63.25,
+        "fees": 40.44,
+        "fill_rate": 0.53879,
+        "filled_contracts": 1250,
+        "filled_orders": 125,
+        "games": 11,
         "hit_rate": 0.00806,
-        "max_drawdown_per_contract": 6.325,
+        "labelled": 98,
+        "max_drawdown_usd": 63.25,
         "mean_ret": {
           "hi": -0.04713,
           "lo": -0.05439,
           "point": -0.05101
         },
+        "missed_orders": 107,
+        "missing_labels": 134,
         "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.992,
+        "robust_l3_h05": {
+          "attempted_orders": 232,
+          "fill_rate": 0.0819,
+          "mean_ret": {
+            "hi": -0.04357,
+            "lo": -0.05958,
+            "point": -0.05005
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.01143,
+          "lo": 0.00201,
+          "point": 0.00587
+        },
         "top_game_share": 0.21075,
-        "trades": 124
+        "unresolved_positions": 1
+      },
+      "H2_recovery": {
+        "attempted_orders": 55,
+        "closed_positions": 25,
+        "directional_hit": 0.45455,
+        "dollar_pnl": -12.54,
+        "fees": 8.79,
+        "fill_rate": 0.45455,
+        "filled_contracts": 250,
+        "filled_orders": 25,
+        "games": 9,
+        "hit_rate": 0.04,
+        "labelled": 22,
+        "max_drawdown_usd": 12.54,
+        "mean_ret": {
+          "hi": -0.04265,
+          "lo": -0.05709,
+          "point": -0.05016
+        },
+        "missed_orders": 30,
+        "missing_labels": 33,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 1.0,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.2,
+          "mean_ret": {
+            "hi": -0.04891,
+            "lo": -0.06156,
+            "point": -0.05373
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.00659,
+          "lo": -0.002,
+          "point": 0.00182
+        },
+        "top_game_share": 0.22807,
+        "unresolved_positions": 0
       },
       "H3_by_grade": {
         "agree=0": {
-          "attempts": 109,
-          "fill_rate": 0.43119,
-          "games": 11,
-          "hit_rate": 0.04255,
-          "max_drawdown_per_contract": 2.562,
+          "attempted_orders": 53,
+          "closed_positions": 27,
+          "directional_hit": 0.69231,
+          "dollar_pnl": -14.71,
+          "fees": 9.98,
+          "fill_rate": 0.50943,
+          "filled_contracts": 265,
+          "filled_orders": 27,
+          "games": 10,
+          "hit_rate": 0.07407,
+          "labelled": 19,
+          "max_drawdown_usd": 16.23,
           "mean_ret": {
-            "hi": -0.03717,
-            "lo": -0.06689,
-            "point": -0.05451
+            "hi": -0.02827,
+            "lo": -0.07621,
+            "point": -0.05541
           },
-          "positive_game_share": 0.09091,
-          "top_game_share": 0.23838,
-          "trades": 47
+          "missed_orders": 26,
+          "missing_labels": 34,
+          "positive_game_share": 0.11111,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.01353,
+            "lo": -0.01167,
+            "point": 0.00289
+          },
+          "top_game_share": 0.23771,
+          "unresolved_positions": 0
         },
         "agree>=1": {
-          "attempts": 2,
+          "attempted_orders": 2,
+          "closed_positions": 1,
+          "dollar_pnl": -0.7,
+          "fees": 0.4,
           "fill_rate": 0.5,
-          "games": 1,
+          "filled_contracts": 10,
+          "filled_orders": 1,
+          "games": 2,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 0.07,
+          "labelled": 0,
+          "max_drawdown_usd": 0.7,
           "mean_ret": {
             "hi": -0.07,
             "lo": -0.07,
             "point": -0.07
           },
+          "missed_orders": 1,
+          "missing_labels": 2,
           "positive_game_share": 0.0,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
           "top_game_share": 1.0,
-          "trades": 1
+          "unresolved_positions": 0
         },
         "hard": {
-          "attempts": 49,
-          "fill_rate": 0.44898,
+          "attempted_orders": 26,
+          "closed_positions": 10,
+          "directional_hit": 1.0,
+          "dollar_pnl": -1.8,
+          "fees": 3.6,
+          "fill_rate": 0.38462,
+          "filled_contracts": 100,
+          "filled_orders": 10,
           "games": 8,
-          "hit_rate": 0.09091,
-          "max_drawdown_per_contract": 0.894,
+          "hit_rate": 0.2,
+          "labelled": 7,
+          "max_drawdown_usd": 3.7,
           "mean_ret": {
-            "hi": -0.01863,
-            "lo": -0.05862,
-            "point": -0.04064
+            "hi": 0.01433,
+            "lo": -0.0542,
+            "point": -0.018
           },
-          "positive_game_share": 0.125,
-          "top_game_share": 0.31217,
-          "trades": 22
+          "missed_orders": 16,
+          "missing_labels": 19,
+          "positive_game_share": 0.33333,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.025,
+            "lo": 0.00417,
+            "point": 0.015
+          },
+          "top_game_share": 0.25,
+          "unresolved_positions": 0
         },
         "soft": {
-          "attempts": 62,
-          "fill_rate": 0.41935,
-          "games": 10,
+          "attempted_orders": 29,
+          "closed_positions": 18,
+          "directional_hit": 0.5,
+          "dollar_pnl": -13.61,
+          "fees": 6.78,
+          "fill_rate": 0.62069,
+          "filled_contracts": 175,
+          "filled_orders": 18,
+          "games": 9,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 1.738,
+          "labelled": 12,
+          "max_drawdown_usd": 13.61,
           "mean_ret": {
-            "hi": -0.05412,
-            "lo": -0.07948,
-            "point": -0.06685
+            "hi": -0.06344,
+            "lo": -0.08962,
+            "point": -0.077
           },
+          "missed_orders": 11,
+          "missing_labels": 17,
           "positive_game_share": 0.0,
-          "top_game_share": 0.25316,
-          "trades": 26
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.00818,
+            "lo": -0.02208,
+            "point": -0.00417
+          },
+          "top_game_share": 0.32329,
+          "unresolved_positions": 0
         }
       },
       "H3_leadlag": {
-        "attempts": 111,
-        "fill_rate": 0.43243,
-        "games": 11,
-        "hit_rate": 0.04167,
-        "max_drawdown_per_contract": 2.632,
+        "attempted_orders": 55,
+        "closed_positions": 28,
+        "directional_hit": 0.69231,
+        "dollar_pnl": -15.41,
+        "fees": 10.38,
+        "fill_rate": 0.50909,
+        "filled_contracts": 275,
+        "filled_orders": 28,
+        "games": 10,
+        "hit_rate": 0.07143,
+        "labelled": 19,
+        "max_drawdown_usd": 16.93,
         "mean_ret": {
-          "hi": -0.03898,
-          "lo": -0.06689,
-          "point": -0.05483
+          "hi": -0.03268,
+          "lo": -0.07621,
+          "point": -0.05593
         },
-        "positive_game_share": 0.09091,
-        "top_game_share": 0.24431,
-        "trades": 48
+        "missed_orders": 27,
+        "missing_labels": 36,
+        "positive_game_share": 0.11111,
+        "resolved_share_of_fills": 1.0,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.07273,
+          "mean_ret": {
+            "hi": -0.012,
+            "lo": -0.036,
+            "point": -0.018
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.01353,
+          "lo": -0.01167,
+          "point": 0.00289
+        },
+        "top_game_share": 0.24705,
+        "unresolved_positions": 0
       },
-      "coverage": 0.50093
+      "M_prototype": {
+        "attempted_orders": 725,
+        "closed_positions": 454,
+        "directional_hit": 0.2381,
+        "dollar_pnl": -176.82,
+        "fees": 123.26,
+        "fill_rate": 0.62897,
+        "filled_contracts": 4532,
+        "filled_orders": 456,
+        "games": 13,
+        "hit_rate": 0.0022,
+        "labelled": 331,
+        "max_drawdown_usd": 176.82,
+        "mean_ret": {
+          "hi": -0.03521,
+          "lo": -0.04221,
+          "point": -0.03929
+        },
+        "missed_orders": 269,
+        "missing_labels": 394,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.99561,
+        "robust_l3_h05": {
+          "attempted_orders": 725,
+          "fill_rate": 0.20138,
+          "mean_ret": {
+            "hi": -0.02682,
+            "lo": -0.03571,
+            "point": -0.03205
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": -0.0002,
+          "lo": -0.00209,
+          "point": -0.00088
+        },
+        "top_game_share": 0.20456,
+        "unresolved_positions": 2
+      },
+      "coverage": 0.50093,
+      "missing_labels_unconditional": 28580
     },
     "60": {
+      "B0_persistence": {
+        "mae": 0.0129,
+        "n": 17302
+      },
       "B1_buy_any": {
-        "attempts": 31127,
-        "fill_rate": 0.57538,
-        "games": 13,
+        "attempted_orders": 31127,
+        "closed_positions": 17803,
+        "directional_hit": 0.49523,
+        "dollar_pnl": -7207.94,
+        "fees": 5045.03,
+        "fill_rate": 0.59315,
+        "filled_contracts": 183889,
+        "filled_orders": 18463,
+        "games": 15,
         "hit_rate": 0.08023,
-        "max_drawdown_per_contract": 724.95188,
+        "labelled": 27066,
+        "max_drawdown_usd": 7207.94,
         "mean_ret": {
           "hi": -0.0361,
           "lo": -0.04358,
           "point": -0.04048
         },
+        "missed_orders": 12664,
+        "missing_labels": 4061,
         "positive_game_share": 0.0,
-        "top_game_share": 0.16727,
-        "trades": 17910
+        "resolved_share_of_fills": 0.97005,
+        "robust_l3_h05": {
+          "attempted_orders": 31127,
+          "fill_rate": 0.15585,
+          "mean_ret": {
+            "hi": -0.03157,
+            "lo": -0.04197,
+            "point": -0.03723
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 107,
+        "skill_ci": {
+          "hi": 0.00014,
+          "lo": -0.0003,
+          "point": -7e-05
+        },
+        "top_game_share": 0.16799,
+        "unresolved_positions": 553
       },
       "B3_ridge_dmid30": {
-        "beta_median": 0.0299,
-        "games": 14,
-        "mae_model": 0.01561,
-        "mae_persistence": 0.01548,
-        "n": 48394,
+        "calibration": {
+          "bins": [
+            [
+              -0.00031,
+              -0.01885,
+              3460
+            ],
+            [
+              -2e-05,
+              -0.00188,
+              3460
+            ],
+            [
+              -2e-05,
+              0.0,
+              3461
+            ],
+            [
+              -2e-05,
+              0.00179,
+              3460
+            ],
+            [
+              0.00026,
+              0.01869,
+              3461
+            ]
+          ],
+          "slope": 5.96329
+        },
+        "coef": [
+          -2e-05,
+          0.01494
+        ],
+        "directional_hit": 0.52008,
+        "games": 4,
+        "mae_model": 0.01295,
+        "mae_persistence": 0.0129,
+        "n": 17302,
         "skill_ci": {
-          "hi": -0.0001,
-          "lo": -0.00017,
-          "point": -0.00013
+          "hi": -5e-05,
+          "lo": -6e-05,
+          "point": -5e-05
         }
       },
       "B4_ridge_gap": {
-        "beta_median": 0.16503,
-        "games": 14,
-        "mae_model": 0.01854,
-        "mae_persistence": 0.01556,
-        "n": 43604,
+        "calibration": {
+          "bins": [
+            [
+              -0.01063,
+              -0.01003,
+              2838
+            ],
+            [
+              -0.00227,
+              -8e-05,
+              2839
+            ],
+            [
+              -2e-05,
+              0.00025,
+              2838
+            ],
+            [
+              0.00217,
+              -0.00011,
+              2839
+            ],
+            [
+              0.01045,
+              0.0097,
+              2839
+            ]
+          ],
+          "slope": 1.11461
+        },
+        "coef": [
+          -2e-05,
+          0.16271
+        ],
+        "directional_hit": 0.59853,
+        "games": 4,
+        "mae_model": 0.01428,
+        "mae_persistence": 0.0118,
+        "n": 14193,
         "skill_ci": {
-          "hi": -0.00252,
-          "lo": -0.00352,
-          "point": -0.00298
+          "hi": -0.0017,
+          "lo": -0.00316,
+          "point": -0.00248
         }
       },
       "H1_momentum": {
-        "attempts": 194,
-        "fill_rate": 0.59278,
-        "games": 10,
+        "attempted_orders": 194,
+        "closed_positions": 115,
+        "directional_hit": 0.57778,
+        "dollar_pnl": -38.87,
+        "fees": 35.36,
+        "fill_rate": 0.60825,
+        "filled_contracts": 1158,
+        "filled_orders": 118,
+        "games": 11,
         "hit_rate": 0.18261,
-        "max_drawdown_per_contract": 4.00689,
+        "labelled": 167,
+        "max_drawdown_usd": 40.78,
         "mean_ret": {
           "hi": -0.01983,
           "lo": -0.04667,
           "point": -0.03484
         },
+        "missed_orders": 76,
+        "missing_labels": 27,
         "positive_game_share": 0.1,
-        "top_game_share": 0.26427,
-        "trades": 115
+        "resolved_share_of_fills": 0.97458,
+        "robust_l3_h05": {
+          "attempted_orders": 194,
+          "fill_rate": 0.08763,
+          "mean_ret": {
+            "hi": -0.02623,
+            "lo": -0.06374,
+            "point": -0.05271
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.0208,
+          "lo": -0.00577,
+          "point": 0.00847
+        },
+        "top_game_share": 0.26244,
+        "unresolved_positions": 3
       },
       "H2_dip": {
-        "attempts": 232,
-        "fill_rate": 0.51724,
-        "games": 10,
+        "attempted_orders": 232,
+        "closed_positions": 119,
+        "directional_hit": 0.45399,
+        "dollar_pnl": -70.87,
+        "fees": 38.51,
+        "fill_rate": 0.53879,
+        "filled_contracts": 1250,
+        "filled_orders": 125,
+        "games": 11,
         "hit_rate": 0.15833,
-        "max_drawdown_per_contract": 7.353,
+        "labelled": 193,
+        "max_drawdown_usd": 73.14,
         "mean_ret": {
           "hi": -0.03616,
           "lo": -0.07624,
           "point": -0.05906
         },
+        "missed_orders": 107,
+        "missing_labels": 39,
         "positive_game_share": 0.1,
+        "resolved_share_of_fills": 0.96,
+        "robust_l3_h05": {
+          "attempted_orders": 232,
+          "fill_rate": 0.0819,
+          "mean_ret": {
+            "hi": -0.02435,
+            "lo": -0.12425,
+            "point": -0.05211
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 1,
+        "skill_ci": {
+          "hi": 0.00607,
+          "lo": -0.02415,
+          "point": -0.00834
+        },
         "top_game_share": 0.24479,
-        "trades": 120
+        "unresolved_positions": 5
+      },
+      "H2_recovery": {
+        "attempted_orders": 55,
+        "closed_positions": 24,
+        "directional_hit": 0.5,
+        "dollar_pnl": -10.45,
+        "fees": 8.5,
+        "fill_rate": 0.45455,
+        "filled_contracts": 250,
+        "filled_orders": 25,
+        "games": 9,
+        "hit_rate": 0.20833,
+        "labelled": 41,
+        "max_drawdown_usd": 14.73,
+        "mean_ret": {
+          "hi": 0.00059,
+          "lo": -0.07816,
+          "point": -0.04354
+        },
+        "missed_orders": 30,
+        "missing_labels": 14,
+        "positive_game_share": 0.22222,
+        "resolved_share_of_fills": 0.96,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.2,
+          "mean_ret": {
+            "hi": -0.0516,
+            "lo": -0.06767,
+            "point": -0.06036
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.02282,
+          "lo": -0.02435,
+          "point": 0.00061
+        },
+        "top_game_share": 0.21937,
+        "unresolved_positions": 1
       },
       "H3_by_grade": {
         "agree=0": {
-          "attempts": 109,
-          "fill_rate": 0.3945,
-          "games": 11,
-          "hit_rate": 0.18605,
-          "max_drawdown_per_contract": 2.561,
+          "attempted_orders": 53,
+          "closed_positions": 25,
+          "directional_hit": 0.61538,
+          "dollar_pnl": -11.98,
+          "fees": 8.99,
+          "fill_rate": 0.50943,
+          "filled_contracts": 265,
+          "filled_orders": 27,
+          "games": 10,
+          "hit_rate": 0.2,
+          "labelled": 40,
+          "max_drawdown_usd": 13.95,
           "mean_ret": {
-            "hi": 0.01192,
-            "lo": -0.08514,
-            "point": -0.04191
+            "hi": -0.00361,
+            "lo": -0.09361,
+            "point": -0.04912
           },
-          "positive_game_share": 0.09091,
-          "top_game_share": 0.28494,
-          "trades": 43
+          "missed_orders": 26,
+          "missing_labels": 13,
+          "positive_game_share": 0.11111,
+          "resolved_share_of_fills": 0.92593,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.07068,
+            "lo": -0.00197,
+            "point": 0.03225
+          },
+          "top_game_share": 0.19979,
+          "unresolved_positions": 2
         },
         "agree>=1": {
-          "attempts": 2,
+          "attempted_orders": 2,
+          "closed_positions": 1,
+          "dollar_pnl": -1.9,
+          "fees": 0.4,
           "fill_rate": 0.5,
-          "games": 1,
+          "filled_contracts": 10,
+          "filled_orders": 1,
+          "games": 2,
           "hit_rate": 0.0,
-          "max_drawdown_per_contract": 0.19,
+          "labelled": 0,
+          "max_drawdown_usd": 1.9,
           "mean_ret": {
             "hi": -0.19,
             "lo": -0.19,
             "point": -0.19
           },
+          "missed_orders": 1,
+          "missing_labels": 2,
           "positive_game_share": 0.0,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
           "top_game_share": 1.0,
-          "trades": 1
+          "unresolved_positions": 0
         },
         "hard": {
-          "attempts": 49,
-          "fill_rate": 0.42857,
+          "attempted_orders": 26,
+          "closed_positions": 10,
+          "directional_hit": 0.66667,
+          "dollar_pnl": -5.68,
+          "fees": 3.49,
+          "fill_rate": 0.38462,
+          "filled_contracts": 100,
+          "filled_orders": 10,
           "games": 8,
-          "hit_rate": 0.19048,
-          "max_drawdown_per_contract": 1.602,
+          "hit_rate": 0.2,
+          "labelled": 19,
+          "max_drawdown_usd": 5.68,
           "mean_ret": {
-            "hi": 0.0098,
-            "lo": -0.11067,
-            "point": -0.05157
+            "hi": 0.018,
+            "lo": -0.13308,
+            "point": -0.0568
           },
-          "positive_game_share": 0.25,
-          "top_game_share": 0.23291,
-          "trades": 21
+          "missed_orders": 16,
+          "missing_labels": 7,
+          "positive_game_share": 0.33333,
+          "resolved_share_of_fills": 1.0,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.07833,
+            "lo": -0.0025,
+            "point": 0.03684
+          },
+          "top_game_share": 0.48,
+          "unresolved_positions": 0
         },
         "soft": {
-          "attempts": 62,
-          "fill_rate": 0.37097,
-          "games": 10,
-          "hit_rate": 0.17391,
-          "max_drawdown_per_contract": 1.303,
+          "attempted_orders": 29,
+          "closed_positions": 16,
+          "directional_hit": 0.57143,
+          "dollar_pnl": -8.2,
+          "fees": 5.9,
+          "fill_rate": 0.62069,
+          "filled_contracts": 175,
+          "filled_orders": 18,
+          "games": 9,
+          "hit_rate": 0.1875,
+          "labelled": 21,
+          "max_drawdown_usd": 10.17,
           "mean_ret": {
-            "hi": 0.01511,
-            "lo": -0.07963,
-            "point": -0.03952
+            "hi": 0.00031,
+            "lo": -0.09312,
+            "point": -0.05312
           },
-          "positive_game_share": 0.2,
-          "top_game_share": 0.24931,
-          "trades": 23
+          "missed_orders": 11,
+          "missing_labels": 8,
+          "positive_game_share": 0.25,
+          "resolved_share_of_fills": 0.88889,
+          "settled_positions": 0,
+          "skill_ci": {
+            "hi": 0.073,
+            "lo": -0.01781,
+            "point": 0.0281
+          },
+          "top_game_share": 0.28148,
+          "unresolved_positions": 2
         }
       },
       "H3_leadlag": {
-        "attempts": 111,
-        "fill_rate": 0.3964,
-        "games": 11,
-        "hit_rate": 0.18182,
-        "max_drawdown_per_contract": 2.751,
+        "attempted_orders": 55,
+        "closed_positions": 26,
+        "directional_hit": 0.61538,
+        "dollar_pnl": -13.88,
+        "fees": 9.39,
+        "fill_rate": 0.50909,
+        "filled_contracts": 275,
+        "filled_orders": 28,
+        "games": 10,
+        "hit_rate": 0.19231,
+        "labelled": 40,
+        "max_drawdown_usd": 15.85,
         "mean_ret": {
-          "hi": 0.00885,
-          "lo": -0.08895,
-          "point": -0.04527
+          "hi": -0.00746,
+          "lo": -0.10315,
+          "point": -0.05454
         },
-        "positive_game_share": 0.09091,
-        "top_game_share": 0.26952,
-        "trades": 44
+        "missed_orders": 27,
+        "missing_labels": 15,
+        "positive_game_share": 0.11111,
+        "resolved_share_of_fills": 0.92857,
+        "robust_l3_h05": {
+          "attempted_orders": 55,
+          "fill_rate": 0.07273,
+          "mean_ret": {
+            "hi": -0.005,
+            "lo": -0.06833,
+            "point": -0.0525
+          },
+          "positive_game_share": 0.0
+        },
+        "settled_positions": 0,
+        "skill_ci": {
+          "hi": 0.07068,
+          "lo": -0.00197,
+          "point": 0.03225
+        },
+        "top_game_share": 0.22945,
+        "unresolved_positions": 2
       },
-      "coverage": 0.92057
+      "M_prototype": {
+        "attempted_orders": 725,
+        "closed_positions": 445,
+        "directional_hit": 0.52401,
+        "dollar_pnl": -158.42,
+        "fees": 120.81,
+        "fill_rate": 0.62897,
+        "filled_contracts": 4532,
+        "filled_orders": 456,
+        "games": 13,
+        "hit_rate": 0.13229,
+        "labelled": 681,
+        "max_drawdown_usd": 162.94,
+        "mean_ret": {
+          "hi": -0.02827,
+          "lo": -0.04329,
+          "point": -0.03598
+        },
+        "missed_orders": 269,
+        "missing_labels": 44,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.97807,
+        "robust_l3_h05": {
+          "attempted_orders": 725,
+          "fill_rate": 0.20138,
+          "mean_ret": {
+            "hi": -0.01968,
+            "lo": -0.04306,
+            "point": -0.03403
+          },
+          "positive_game_share": 0.14286
+        },
+        "settled_positions": 1,
+        "skill_ci": {
+          "hi": 0.01039,
+          "lo": -0.0012,
+          "point": 0.00397
+        },
+        "top_game_share": 0.21172,
+        "unresolved_positions": 10
+      },
+      "coverage": 0.92057,
+      "missing_labels_unconditional": 4549
     }
   },
   "latency_s": 5,
   "legacy_timestamps": true,
-  "primary": {
-    "hypothesis": "H3@30",
-    "p_mean_le_0": 0.997
+  "model_fit": {
+    "coef": {
+      "B3_ridge_dmid30": {
+        "15": [
+          -0.0001,
+          0.02034
+        ],
+        "30": [
+          -5e-05,
+          0.02997
+        ],
+        "5": [
+          -9e-05,
+          0.0065
+        ],
+        "60": [
+          -2e-05,
+          0.01494
+        ]
+      },
+      "B4_ridge_gap": {
+        "15": [
+          -0.0002,
+          0.03778
+        ],
+        "30": [
+          -0.00026,
+          0.08358
+        ],
+        "5": [
+          -0.00022,
+          0.00689
+        ],
+        "60": [
+          -2e-05,
+          0.16271
+        ]
+      }
+    },
+    "from": "earlier games of this fold",
+    "scored_on": [
+      "nfl:ARI|SEA:2026-09-20",
+      "nfl:MIA|SF:2026-09-20",
+      "nfl:IND|KC:2026-09-20",
+      "nfl:LAR|NYG:2026-09-21"
+    ],
+    "trained_on": [
+      "nfl:CHI|MIN:2026-09-20",
+      "nfl:NE|PIT:2026-09-20",
+      "nfl:BAL|NO:2026-09-20",
+      "nfl:CIN|HOU:2026-09-20",
+      "nfl:ATL|CAR:2026-09-20",
+      "nfl:PHI|TEN:2026-09-20",
+      "nfl:CLE|TB:2026-09-20",
+      "nfl:GB|NYJ:2026-09-20",
+      "nfl:LAC|LV:2026-09-20",
+      "nfl:DEN|JAX:2026-09-20",
+      "nfl:DAL|WAS:2026-09-20"
+    ]
   },
-  "samples": 57876,
-  "spec_hash": "bf2ca294e1e7b445079002995138ab7e26e445717890366d2fe97749d422b1e4",
+  "primary": {
+    "alpha": 0.1,
+    "hypothesis": "H3_leadlag@30",
+    "p_mean_le_0": 1.0,
+    "passes": false
+  },
+  "samples": 57931,
+  "secondary": {
+    "family": [
+      "H1_momentum@30",
+      "H2_dip@30",
+      "H2_recovery@30",
+      "M_prototype@30",
+      "H3_leadlag@5",
+      "H3_leadlag@15",
+      "H3_leadlag@60",
+      "H4_arb"
+    ],
+    "holm_pass": {
+      "H1_momentum@30": false,
+      "H2_dip@30": false,
+      "H2_recovery@30": false,
+      "H3_leadlag@15": false,
+      "H3_leadlag@5": false,
+      "H3_leadlag@60": false,
+      "H4_arb": false,
+      "M_prototype@30": false
+    },
+    "p": {
+      "H1_momentum@30": 1.0,
+      "H2_dip@30": 1.0,
+      "H2_recovery@30": 0.9975,
+      "H3_leadlag@15": 0.9995,
+      "H3_leadlag@5": 0.9995,
+      "H3_leadlag@60": 0.96902,
+      "H4_arb": 1.0,
+      "M_prototype@30": 1.0
+    }
+  },
+  "spec_hash": "4614699014e4bac92c78783ef287eaf498cac635541843d75cb82401fffa380a",
   "triggers": 609
 }

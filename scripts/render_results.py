@@ -390,49 +390,77 @@ def render_micro_synthetic(d: dict) -> dict[str, str]:
 
 
 def render_micro_discovery(d: dict) -> dict[str, str]:
-    """Discovery fold of scripts/microstructure_eval.py: per-contract net return (both fees,
-    IOC at the decision ask after the latency) with the game-bootstrap 90 % interval."""
-    def cell(m: dict) -> str:
-        mr = m.get("mean_ret") or {}
-        if mr.get("point") is None:
+    """Discovery fold of scripts/microstructure_eval.py (descriptive: these games shaped the
+    rules). Per-contract net return (IOC at the decision ask after the latency, both fees)
+    with the game-bootstrap 90 % interval; orders, fills and resolutions counted apart."""
+    def ci(x: Optional[dict], k: float = 100, p: int = 1, unit: str = "c") -> str:
+        if not x or x.get("point") is None:
             return "-"
-        return f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}] ({m['trades']}/{m['attempts']})"
+        return f"{x['point'] * k:+.{p}f}{unit} [{x['lo'] * k:+.{p}f}, {x['hi'] * k:+.{p}f}]"
+
+    def pct(x: Any) -> str:
+        return f"{x:.0%}" if x is not None else "-"
+
+    names = (("B1_buy_any", "B1 buy at random"), ("H1_momentum", "H1 momentum"), ("H2_dip", "H2 dip"), ("H2_recovery", "H2 recovery"),
+             ("H3_leadlag", "H3 lead-lag"), ("M_prototype", "M prototype"))
     rows = []
     for h in ("5", "15", "30", "60"):
         hr = d["horizons"][h]
-        rows.append([f"{h} s", cell(hr["B1_buy_any"]), cell(hr["H1_momentum"]), cell(hr["H2_dip"]), cell(hr["H3_leadlag"])])
-    trades = table(["horizon", "B1 buy at random", "H1 momentum", "H2 dip", "H3 lead-lag"], rows)
+        rows.append([f"{h} s"] + [f"{ci(hr[n].get('mean_ret'))} ({hr[n]['attempted_orders']})" for n, _ in names])
+    trades = table(["horizon"] + [label for _, label in names], rows)
+    h30 = d["horizons"]["30"]
+    acct = []
+    for n, label in names:
+        m = h30[n]
+        acct.append([label, str(m["attempted_orders"]), f"{m['filled_orders']} ({pct(m.get('fill_rate'))})", str(m["filled_contracts"]),
+                     str(m["closed_positions"] + m["settled_positions"]), str(m["unresolved_positions"]), str(m["missing_labels"]),
+                     ci(m.get("skill_ci"), p=2), pct(m.get("directional_hit")), f"{m.get('dollar_pnl', 0):+,.2f}", f"{m.get('fees', 0):,.2f}",
+                     f"{m.get('max_drawdown_usd', 0):,.2f}", pct(m.get("top_game_share")), d["decisions"].get(f"{n}@30", "-")])
+    accounting = table(["at 30 s", "orders", "filled (fill rate)", "contracts", "closed", "unresolved", "no label", "skill: mid move bought [90 % CI]",
+                        "moved up", "net $ (10 ct)", "fees $", "drawdown $", "top game", "rule says"], acct)
     fc = []
     for h in ("5", "15", "30", "60"):
         for name, label in (("B3_ridge_dmid30", "B3 ridge on dmid_30"), ("B4_ridge_gap", "B4 ridge on leader gap")):
             m = d["horizons"][h][name]
-            sk = m.get("skill_ci") or {}
-            fc.append([f"{h} s", label, f"{m['mae_model'] * 100:.3f}c", f"{m['mae_persistence'] * 100:.3f}c", f"[{sk['lo'] * 100:+.3f}, {sk['hi'] * 100:+.3f}]c"])
-    forecast = table(["horizon", "model", "MAE", "unchanged-price MAE", "skill 90 % CI"], fc)
+            cal = (m.get("calibration") or {}).get("slope")
+            fc.append([f"{h} s", label, f"{m['mae_model'] * 100:.3f}c", f"{m['mae_persistence'] * 100:.3f}c", ci(m.get("skill_ci"), p=3),
+                       pct(m.get("directional_hit")), f"{cal:.2f}" if cal is not None else "-"])
+    mp = d.get("M_prototype_forecast") or {}
+    if mp.get("n"):
+        cal = (mp.get("calibration") or {}).get("slope")
+        fc.append(["<= 10 s", "M prototype (its own projection)", f"{mp['mae_model'] * 100:.3f}c", f"{mp['mae_persistence'] * 100:.3f}c",
+                   ci(mp.get("skill_ci"), p=3), pct(mp.get("directional_hit")), f"{cal:.2f}" if cal is not None else "-"])
+    forecast = table(["horizon", "model", "MAE", "unchanged-price MAE (B0)", "skill 90 % CI", "direction right", "calibration slope"], fc)
     a = d["H4_arb"]
-    ar = a.get("mean_ret") or {}
-    arb = table(["attempts", "completed", "fill rate", "mean per contract", "90 % CI", "games positive"],
-                [[str(a["attempts"]), str(a["trades"]), f"{a['fill_rate']:.0%}", f"{ar['point'] * 100:+.2f}c", f"[{ar['lo'] * 100:+.2f}, {ar['hi'] * 100:+.2f}]c", f"{a['positive_game_share']:.0%}"]])
+    def arb_row(label: str, m: dict) -> list[str]:
+        return [label, str(m["attempts"]), str(m.get("both_legs_filled", "-")), str(m.get("one_leg_filled", "-")), str(m.get("no_leg_filled", "-")),
+                ci(m.get("win_case"), p=2), ci(m.get("expected_with_tie_prior"), p=2), ci(m.get("mean_ret"), p=2)]
+    arb = table(["H4 two-leg arb", "signals", "both legs filled", "one leg (unwound)", "neither", "win case per set", "with NFL tie odds", "guaranteed (tie case)"],
+                [arb_row("Kalshi leg at the latency, Robinhood by hand (15 s)", a), arb_row("both legs at the latency", a["both_legs_fast"])])
     lk = d.get("H3_lock") or {}
     def m(x: dict) -> str:
-        mr = (x or {}).get("mean_ret") or {}
-        return f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}]" if mr.get("point") is not None else "-"
+        return ci((x or {}).get("mean_ret"))
     lock = table(["signals", "entries filled", "locked", "median time to lock", "lock or hold (10 min)", "same entries held, never locked", "locked ones only"],
                  [[str(lk.get("attempts")), str(lk.get("entries_filled")), f"{lk.get('locked')} ({(lk.get('lock_conversion') or 0):.0%})",
                    f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
                    m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
-    bym = (a.get("by_margin") or {})
-    def row(name: str, m: dict) -> list[str]:
-        mr = m.get("mean_ret") or {}
-        return [name, f"{m.get('trades', 0)}/{m.get('attempts', 0)}", f"{(m.get('hit_rate') or 0):.0%}",
-                f"{mr['point'] * 100:+.1f}c [{mr['lo'] * 100:+.1f}, {mr['hi'] * 100:+.1f}]" if mr.get("point") is not None else "-"]
-    arb_size = table(["arb size when it fired", "completed / attempted", "won", "mean per contract [90 % CI]"],
-                     [row(k, bym[k]) for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
-    g30 = (d["horizons"].get("30") or {}).get("H3_by_grade") or {}
-    grade = table(["H3 at 30 s", "completed / attempted", "won", "mean per contract [90 % CI]"],
-                  [row(k, g30[k]) for k in ("hard", "soft", "agree>=1", "agree=0") if k in g30]) if g30 else ""
-    return {"micro_discovery_trades": trades, "micro_discovery_forecast": forecast, "micro_discovery_arb": arb, "micro_discovery_lock": lock,
-            "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade}
+    bym = a.get("by_margin") or {}
+    arb_size = table(["arb size when it fired", "completed / signals", "win case per set [90 % CI]", "guaranteed (tie case)"],
+                     [[k, f"{bym[k].get('trades', 0)}/{bym[k].get('attempts', 0)}", ci(bym[k].get("win_case"), p=1), ci(bym[k].get("mean_ret"), p=1)]
+                      for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
+    g30 = h30.get("H3_by_grade") or {}
+    grade = table(["H3 at 30 s", "filled / orders", "won", "mean per contract [90 % CI]"],
+                  [[k, f"{g30[k].get('filled_orders', 0)}/{g30[k].get('attempted_orders', 0)}", pct(g30[k].get("hit_rate")), ci(g30[k].get("mean_ret"))]
+                   for k in ("hard", "soft", "agree>=1", "agree=0") if k in g30]) if g30 else ""
+    sec = d.get("secondary") or {}
+    pr = d.get("primary") or {}
+    tests = table(["hypothesis", "role", "one-sided p (mean <= 0)", "passes"],
+                  [[pr.get("hypothesis", "-"), "primary (alone)", f"{pr.get('p_mean_le_0', 1):.3f}", "yes" if pr.get("passes") else "no"]]
+                  + [[k, "secondary (Holm)", f"{(sec.get('p') or {}).get(k, 1):.3f}", "yes" if (sec.get("holm_pass") or {}).get(k) else "no"]
+                     for k in sec.get("family") or []])
+    return {"micro_discovery_trades": trades, "micro_discovery_accounting": accounting, "micro_discovery_forecast": forecast,
+            "micro_discovery_arb": arb, "micro_discovery_lock": lock, "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade,
+            "micro_discovery_tests": tests}
 
 
 def render_arb_backtest(d: dict) -> dict[str, str]:

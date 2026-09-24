@@ -106,7 +106,7 @@ def _urls(legs: Sequence[Any]) -> list[str]:
 
 def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB", sport: Optional[str] = None,
                first: Optional[int] = None, first_reason: str = "", max_prices: Optional[dict] = None, now: Optional[float] = None,
-               window: str = "") -> str:
+               window: str = "", guarantee: str = "") -> str:
     """The whole two-leg (or n-leg) trade as an order ticket.
 
     ``result`` is an ``ArbResult`` sized the way it would actually be bought (depth and
@@ -121,6 +121,8 @@ def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB"
     margin = _g(result, "margin")
     roi = _g(result, "roi")
     lines = [f"{headline(title, sport)} - {header} {cents(margin)}/ct after fees"]
+    if guarantee:
+        lines.append(guarantee)
     if window:
         lines.append(window)
     # Legging by hand: the stale price goes first (it is the one about to move); every other

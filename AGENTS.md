@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (823)
+python -m unittest discover -s tests -t .      # Python tests (840)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -138,6 +138,8 @@ When you declare a key, add its row here.
 | `rothera_fee_model` | `ROBINHOOD_ROTHERA_FEE_MODEL` | `flat_001` | Rothera exchange fee on Robinhood NFL contracts: `flat_001` ($0.01/contract) or `quadratic` (per order `max(round(0.02·P·(1−P)·C, 2), $0.01)`, Rothera schedule 2026-05-20). |
 | `cdna_fee_model` | `CDNA_FEE_MODEL` | `flat_001` | CDNA exchange fee on Robinhood college contracts: `flat_001`, `flat_002` or `weighted_007` (0.07·P·(1−P)·C); unverified until an order ticket is seen. |
 | `rothera_no_leg` | `ROTHERA_NO_LEG` | `True` | `scan()`: emit the NO side of each Rothera game contract as its own leg (the tie-aware hedge). |
+| `arb_prefer_tie_safe` | `ARB_PREFER_TIE_SAFE` | `True` | In a game that can tie (NFL moneyline), when the cheapest lock loses on a tie (Kalshi YES + Rothera YES pays $0.50 a set), use the cheapest tie-proof set (e.g. the Rothera NO) while it still locks `arb_tie_safe_min_margin`; the ticket says `guaranteed:` or `NOT tie-proof:`. |
+| `arb_tie_safe_min_margin` | `ARB_TIE_SAFE_MIN_MARGIN` | `0.01` | Smallest margin (dollars per contract, fees in) at which the tie-proof set is preferred over a cheaper lock that loses on a tie. |
 | `line_fair` | `LINE_FAIR` | `False` | Attach `quant.lines` fair values to spread/total events in `scan()` and use them in play (one knob for both). |
 | `tennis_thin_book_spread` | `ARB_TENNIS_THIN_SPREAD` | `0.03` | Tennis `thin-book` flag when abs(yes_ask + no_ask − 1) exceeds this. |
 | `tennis_thin_book_size` | `ARB_TENNIS_THIN_SIZE` | `20.0` | Tennis `thin-book` flag when the top-of-book size is below this many contracts. |

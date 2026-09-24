@@ -151,7 +151,9 @@ The fixture is now classified as a legacy measurement: it predates strict horizo
 two-sided fee accounting, full-depth paper-fill checks and settlement-risk execution gates.
 The figures below describe the original experiment, not validated executable returns.
 
-* **Question 5 (lead-lag, quote lifetimes) is answered, and it is the trade.** Of Rothera's
+* **Question 5 (lead-lag, quote lifetimes) is answered descriptively; whether it is a trade is
+  unverified - the executable re-run contradicts it (docs/MODEL.md: about -7c per contract at
+  30 s with latency and both fees).** Of Rothera's
   178 ≥ 5¢ moves, Kalshi had moved first on only 51 and caught up within five minutes on
   144, median 23 s; Polymarket trails both by minutes. Every two-leg ARB the day showed was
   such a flash, in-play and seconds long, none pre-game: cluster 06's prediction, with the
@@ -161,7 +163,7 @@ The figures below describe the original experiment, not validated executable ret
   Kalshi ≥ 5¢ moves without a score change continued rather than reverted at +30 s, +2 min
   and +5 min (buying the dip after a move lost). What the same mechanism *does* produce is the
   laggard's stale ask: buying the follower venue as soon as the leader has repriced replayed
-  149 W / 22 L in the legacy entry-fee-only replay (+$0.073 per contract selling to the bid
+  149 W / 22 L in the legacy entry-fee-only replay (unverified: +$0.073 per contract selling to the bid
   60 s later; 23 W / 9 L, +$0.207 held
   to settlement on the three games that finished inside the recording). Fill-adjusted
   numbers wait on the paper book (`lag_paper`).

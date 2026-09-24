@@ -191,7 +191,8 @@ def lag_replay(db: str, date: str, sport: str, bankroll: float = 500.0, horizons
         except Exception:
             return None
 
-    out: dict[str, Any] = {"signals": len(sigs), "by_leader": dict(collections.Counter(s.leader for _, s in sigs)), "by_follower": dict(collections.Counter(s.follower for _, s in sigs)), "edge_median": round(statistics.median(s.edge for _, s in sigs), 4) if sigs else None, "exit_at_bid": {}}
+    out: dict[str, Any] = {"caveat": "unverified mark-to-bid replay: fills at the recorded ask assumed, no latency, entry fee only; not evidence of net profitability (scripts/microstructure_eval.py scores executable trades)",
+                           "signals": len(sigs), "by_leader": dict(collections.Counter(s.leader for _, s in sigs)), "by_follower": dict(collections.Counter(s.follower for _, s in sigs)), "edge_median": round(statistics.median(s.edge for _, s in sigs), 4) if sigs else None, "exit_at_bid": {}}
     # Hold to settlement: the final score from the ESPN ticks decides each signal's side.
     finals = {r["event_key"]: dict(r) for r in c.execute("select * from espn_ticks where status = 'final' and ts >= ? and ts < ? + 86400 order by ts", (t0, t1)).fetchall()}
     settled = []
@@ -278,6 +279,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     for k, v in res["leadlag"].items():
         print(f"  {k}: {v['lead_moves']} moves; follower moved first {v['follower_moved_first']}; caught up within 5 min {v['caught_up_5min']} (median {v['median_lag_s']} s), never {v['never_5min']}")
     lr = res["lag_replay"]
+    print("  LAG rule replayed - UNVERIFIED mark-to-bid replay (fills at the recorded ask assumed, no latency, entry fee only);"
+          " executable results come from scripts/microstructure_eval.py:")
     print(f"  LAG rule replayed: {lr['signals']} signals; " + "; ".join(f"sell at bid +{h}s: {v['win']}W/{v['loss']}L mean {(v['mean_pnl_per_contract'] if v['mean_pnl_per_contract'] is not None else 0.0):+.4f}/ct" for h, v in lr["exit_at_bid"].items()))
     if lr.get("hold_to_settlement"):
         h = lr["hold_to_settlement"]

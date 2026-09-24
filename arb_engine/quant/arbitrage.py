@@ -224,6 +224,41 @@ def best_leg_per_outcome(
     return legs
 
 
+def best_tie_safe_legs(
+    quotes_by_outcome: Mapping[str, Iterable[OutcomeQuote]],
+    fee_for_quote,
+    contracts: float = 100,
+    role: str = "taker",
+    allowed_venues: Optional[set[str]] = None,
+) -> Optional[list[Leg]]:
+    """The cheapest one-leg-per-outcome set (all-in) whose legs together pay at least $1 on a
+    tie, i.e. a set that pays >= $1 whoever wins *and* on a tie. In an NFL moneyline the
+    cheapest pair is often a Kalshi YES + a Rothera YES, which pays $0.50 on a tie (Kalshi
+    half, Rothera nothing); a Rothera NO of the other team pays $1 on a tie and makes the
+    same pair tie-proof. None when no such set exists. Two-outcome events only (a three-way
+    market prices the draw as its own outcome)."""
+    import itertools
+
+    outcomes = list(quotes_by_outcome)
+    if len(outcomes) != 2:
+        return None
+    cands: list[list[Leg]] = []
+    for o in outcomes:
+        cs = [Leg.from_quote(o, q, fee_for_quote(q), role=role) for q in quotes_by_outcome[o]
+              if q.ask is not None and not (allowed_venues and q.venue not in allowed_venues)]
+        if not cs:
+            return None
+        cands.append(cs)
+    best, best_cost = None, None
+    for combo in itertools.product(*cands):
+        if sum(D(l.tie_payout) for l in combo) < D(1):
+            continue
+        cost = sum((leg_all_in_cost(l, contracts) for l in combo), Decimal("0"))
+        if best_cost is None or cost < best_cost:
+            best, best_cost = list(combo), cost
+    return best
+
+
 def max_price_for_leg(
     other_legs: Sequence[Leg],
     fee_model: FeeModel,

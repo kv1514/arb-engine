@@ -202,6 +202,46 @@ class TieAwareTests(unittest.TestCase):
         self.assertAlmostEqual(rep.tie_margin, rep.margin - 0.5)
         self.assertIn("tie-rule-mismatch:kalshi=0.5,robinhood=0", rep.flags)
 
+    def test_the_tie_proof_pair_is_preferred_while_it_still_locks(self):
+        """Guaranteed means a tie too: Kalshi YES-A + Rothera YES-B is the cheapest lock but pays
+        $0.50 on a tie; Kalshi YES-A + Rothera NO-A still locks >= 1c and pays $1.50 on a tie."""
+        me = _tie_event(kalshi_yes_a=0.48, rothera_yes_b=0.44, rothera_no_a=0.47)
+        rep = analyze_event(me, {}, now=1000.0)
+        legs = {l["outcome"]: l for l in rep.arb["legs"]}
+        self.assertEqual(legs["BBB"]["market_id"], "ra#no")
+        self.assertGreaterEqual(rep.tie_margin, rep.margin)
+        pref = next(f for f in rep.flags if f.startswith("tie-safe-preferred:"))
+        give_up, cheap_tie = map(float, pref.split(":")[1:])
+        self.assertAlmostEqual(give_up, 0.03, places=3)          # the YES-B pair locked 3c more ...
+        self.assertAlmostEqual(cheap_tie, 0.5)                    # ... but paid $0.50 a set on a tie
+        self.assertNotIn("loses-on-tie", rep.flags)
+        from arb_engine.strategy.arbalert import guarantee_line
+        self.assertIn("guaranteed: pays in every result, a tie included (tie-proof pair; the cheapest pair locked 3.0c more",
+                      guarantee_line(rep, rep.sized_arb or rep.arb))
+
+    def test_the_cheaper_lock_stays_when_no_tie_proof_pair_locks(self):
+        for kw, settings in (({"rothera_no_a": 0.49}, {}),                       # NO-A pair does not lock
+                             ({"rothera_no_a": 0.47}, {"arb_prefer_tie_safe": "0"}),   # preference off
+                             ({"rothera_no_a": 0.47}, {"arb_tie_safe_min_margin": 0.02})):   # locks, but under the floor
+            me = _tie_event(kalshi_yes_a=0.48, rothera_yes_b=0.44, **kw)
+            rep = analyze_event(me, settings, now=1000.0)
+            legs = {l["outcome"]: l for l in rep.arb["legs"]}
+            self.assertEqual(legs["BBB"]["market_id"], "rb", (kw, settings))
+            self.assertIn("loses-on-tie", rep.flags)
+            from arb_engine.strategy.arbalert import guarantee_line
+            line = guarantee_line(rep, rep.sized_arb or rep.arb)
+            self.assertTrue(line.startswith("NOT tie-proof: a tied game pays $0.50 a set = -$"), line)
+
+    def test_no_tie_preference_where_games_cannot_tie(self):
+        me = _tie_event(kalshi_yes_a=0.48, rothera_yes_b=0.44, rothera_no_a=0.47)
+        me.info.sport = "ncaaf"                                    # college plays overtime to a winner
+        rep = analyze_event(me, {}, now=1000.0)
+        legs = {l["outcome"]: l for l in rep.arb["legs"]}
+        self.assertEqual(legs["BBB"]["market_id"], "rb")
+        self.assertFalse(any(f.startswith(("tie-safe-preferred", "loses-on-tie")) for f in rep.flags))
+        from arb_engine.strategy.arbalert import guarantee_line
+        self.assertEqual(guarantee_line(rep, rep.arb), "")
+
     def test_mismatch_flag_only_when_the_chosen_legs_differ(self):
         # Kalshi both sides (mirror-free): payouts agree -> no flag.
         info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=["AAA", "BBB"], tie_rule="half")
