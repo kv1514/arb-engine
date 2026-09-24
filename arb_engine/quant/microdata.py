@@ -336,137 +336,214 @@ def features_at(rows: Iterable[dict[str, Any]], t: float) -> dict[tuple, dict[st
 def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), prints: Iterable[dict[str, Any]] = (),
           horizons: Iterable[int] = HORIZONS, sample: str = "trigger", settlement: Optional[dict[tuple, float]] = None,
           fee_for_row: Any = None, ref_contracts: int = REF_CONTRACTS, latency_s: float = 1.0,
-          entry_tol_s: float = 2.0, haircut: float = 1.0, prints_approx: bool = False) -> list[dict[str, Any]]:
+          entry_tol_s: float = 2.0, haircut: float = 1.0, prints_approx: bool = False,
+          venue_latency: Optional[dict[str, float]] = None) -> list[dict[str, Any]]:
     """Samples (``trigger``, ``unconditional``, ``recovery`` or ``all``) with causal features
     and forward labels. ``haircut`` scales the displayed sizes the paper orders may take.
 
-    ``settlement`` maps (event_key, outcome, side) to the contract's settlement value for the
-    executable return's roll-to-settlement; ``fee_for_row(row)`` returns the venue fee model
-    (default: ``fees.registry.fee_model_for_quote`` on the row's venue and fee params).
-    ``latency_s`` / ``entry_tol_s`` are the order's arrival and how stale a book it may meet:
-    a 5 s recorder cannot show the book 1 s after a decision, so legacy data needs
-    latency_s >= its poll interval, or every executable return is (rightly) a missed fill."""
+    ``settlement`` maps a contract (``contract_key``: event, book, outcome, side) to its
+    settlement value for the executable return's roll-to-settlement (``settlement_values``);
+    ``fee_for_row(row)`` returns the venue fee model (default: ``fees.registry.
+    fee_model_for_quote`` on the row's venue and fee params). ``latency_s`` / ``entry_tol_s``
+    are the order's arrival and how stale a book it may meet; ``venue_latency`` overrides the
+    latency per venue (a Robinhood order is placed by a person). A 5 s recorder cannot show
+    the book 1 s after a decision, so legacy data needs latency_s >= its poll interval, or
+    every executable return is (rightly) a missed fill.
+
+    Observations with the same ``obs_ts`` are one atomic batch: every book seen at t is in
+    place before any decision at t is sampled, so cross-book features do not depend on the
+    order rows arrive in or on how book names sort."""
     obs = _dedupe(rows)
     espn_idx, prints_idx = _Espn(espn), _Prints(prints, approx=prints_approx)
     build.print_counts = prints_idx.counts()
     books: dict[tuple, _Book] = defaultdict(_Book)
     by_contract: dict[tuple, list[tuple[float, dict[str, Any]]]] = defaultdict(list)
+    outcomes_by_event: dict[str, set] = defaultdict(set)
     for t, _, r in obs:
         by_contract[contract_key(r)].append((t, r))
+        outcomes_by_event[str(r.get("event_key") or "")].add(str(r.get("outcome") or ""))
     times = {k: [x[0] for x in v] for k, v in by_contract.items()}
     last_trigger: dict[tuple, float] = {}
     last_uncond: dict[tuple, float] = {}
     last_recovery: dict[tuple, float] = {}
     out: list[dict[str, Any]] = []
     fee_for_row = fee_for_row or _default_fee
-    for t, approx, r in obs:
-        key = contract_key(r)
-        b = books[key]
-        b.push(t, r)
-        f = _book_features(b, t)
-        kinds = []
-        if sample in ("trigger", "all") and f["dmid_30"] is not None and abs(f["dmid_30"]) >= TRIGGER_MOVE and _two_sided(f) \
-                and t - last_trigger.get(key, -math.inf) >= TRIGGER_COOLDOWN_S:
-            last_trigger[key] = t
-            kinds.append("trigger")
-        if sample in ("unconditional", "all") and t - last_uncond.get(key, -math.inf) >= UNCONDITIONAL_EVERY_S:
-            last_uncond[key] = t
-            kinds.append("unconditional")
-        if sample in ("recovery", "all") and _recovering(f) and t - last_recovery.get(key, -math.inf) >= RECOVERY_COOLDOWN_S:
-            last_recovery[key] = t
-            kinds.append("recovery")
-        if not kinds:
-            continue
-        s: dict[str, Any] = {"t": t, "approx_time": approx, "event_key": key[0], "book_id": key[1], "outcome": key[2], "side": key[3],
-                             "venue": r.get("venue"), "venue_market_id": r.get("venue_market_id"), "tie_payout": _f(r.get("tie_payout")), **f}
-        qt = _f(r.get("quote_time"))
-        s["venue_lag_s"] = t - qt if qt is not None else None
-        bs, as_ = _f(r.get("bid_size")), _f(r.get("ask_size"))
-        s["imbalance"] = (bs - as_) / (bs + as_) if bs is not None and as_ is not None and bs + as_ > 0 else None   # displayed; may be cancelled
-        # cross-book: the same contract on independent books, as last observed and still fresh
-        cross, diag = {}, {}
-        my_tie = _tie_cached(r)
-        sport = key[0].split(":", 1)[0].lower()
-        can_tie = sport in TIE_PRIOR and _is_moneyline(key[0])
-        prior = TIE_PRIOR.get(sport, 0.0)
-        excluded: dict[str, int] = defaultdict(int)
-        for (ev, book, oc, sd), ob in books.items():
-            if ev != key[0] or oc != key[2] or sd != key[3] or book == key[1] or not ob.hist:
+    venue_latency = venue_latency or {}
+    pos = 0
+    while pos < len(obs):
+        t = obs[pos][0]
+        end = pos + 1
+        while end < len(obs) and obs[end][0] == t:
+            end += 1
+        group = obs[pos:end]
+        pos = end
+        for _, _, r in group:                       # the whole batch lands first ...
+            books[contract_key(r)].push(t, r)
+        for _, approx, r in group:                  # ... then every decision at t sees all of it
+            s = _sample(t, approx, r, books, sample, last_trigger, last_uncond, last_recovery, fee_for_row, ref_contracts,
+                        espn_idx, prints_idx, outcomes_by_event)
+            if s is None:
                 continue
-            age = t - ob.hist[-1][0]
-            if age > fresh_limit(ob.row or {}):
-                continue
-            their_tie = _tie_cached(ob.row or {})
-            if can_tie and (my_tie is None or their_tie is None):
-                excluded["unknown_tie"] += 1
-                continue                       # not even comparable: what a tie pays is unknown
-            tie_match = (not can_tie) or abs(their_tie - my_tie) < 1e-9
-            settle = settlement_relation(r, ob.row or {})
-            of = _book_features(ob, t)
-            entry = {"gap": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age, "bid": of["bid"], "ask": of["ask"],
-                     "tie_match": tie_match, "settlement": settle}
-            if tie_match and settle == "identical":
-                cross[book] = entry
-            else:
-                excluded["tie_mismatch" if not tie_match else f"settlement_{settle}"] += 1
-            adj = prior * ((their_tie or 0.0) - (my_tie or 0.0)) if can_tie else 0.0
-            diag[book] = dict(entry, gap_tie_adjusted=entry["gap"] - adj)
-        s["cross"], s["cross_excluded"] = cross, dict(excluded)
-        # Diagnostics only (not the registered hypothesis): the leader among tie-matched books
-        # whatever their other rules, and among all fresh books with the tie priced in.
-        def _lead(items: dict[str, dict], gap_key: str = "gap") -> Optional[dict[str, Any]]:
-            b = max(items.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
-            return {"book": b[0], "dmid_30": b[1]["dmid_30"], "gap": b[1][gap_key]} if b else None
-        s["leader_diag"] = {"tie_matched": _lead({k: v for k, v in diag.items() if v["tie_match"]}),
-                            "any_settlement": _lead(diag, "gap_tie_adjusted")}
-        leader = max(cross.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
-        s["leader_book"] = leader[0] if leader else None
-        s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
-        s["gap_leader"] = leader[1]["gap"] if leader else None
-        # Grades, as strategy/leadlag.py logs them live: our all-in against the leader's *bid*
-        # (hard lag) and how many other books agree with the leader's move.
-        fm = fee_for_row(r)
-        try:
-            s["all_in"] = f["ask"] + float(fm.fee(f["ask"], ref_contracts, "taker")) / ref_contracts if fm is not None else None
-        except Exception:
-            s["all_in"] = None
-        s["leader_bid"] = leader[1]["bid"] if leader else None
-        s["hard_lag"] = (s["all_in"] < s["leader_bid"]) if s["all_in"] is not None and s["leader_bid"] is not None else None
-        ld = s["leader_dmid_30"]
-        s["agree"] = sum(1 for b, c in cross.items() if leader and b != leader[0] and ld and c["dmid_30"] is not None
-                         and c["dmid_30"] * ld > 0 and abs(c["dmid_30"]) >= 0.5 * abs(ld))
-        s.update(espn_idx.at(_game_key(key[0]), t, key[2]))
-        s.setdefault("prints_approx_time", 0)
-        if key[1] == "kalshi":
-            ticker = str(r.get("venue_market_id") or "").split("#", 1)[0]
-            s.update(prints_idx.at(ticker, t, key[3], f["mid"]))
-        # labels
-        series, ts_list = by_contract[key], times[key]
-        for h in horizons:
-            lo, hi = t + h, t + h + max(1.0, 0.2 * h)
-            i = bisect.bisect_left(ts_list, lo)
-            if i < len(ts_list) and ts_list[i] <= hi:
-                m = series[i][1]
-                s[f"dbid_{h}"], s[f"dask_{h}"] = float(m["bid"]) - f["bid"], float(m["ask"]) - f["ask"]
-                s[f"dmid_{h}_fwd"] = _mid(m) - f["mid"]
-            else:
-                s[f"dbid_{h}"] = s[f"dask_{h}"] = s[f"dmid_{h}_fwd"] = None
-            trade = _exec_trade(series, t, f["ask"], h, fee_for_row(r), ref_contracts,
-                                (settlement or {}).get((key[0], key[2], key[3])), latency_s, entry_tol_s, haircut)
-            s[f"ret_long_{h}"] = trade.pnl_per_contract if trade is not None else None
-            s[f"exec_{h}"] = exec_record(trade)
-        for kind in kinds:
-            out.append({**s, "kind": kind})
+            key = contract_key(r)
+            lat = float(venue_latency.get(str(r.get("venue")), latency_s))
+            s["order_latency_s"] = lat
+            series, ts_list = by_contract[key], times[key]
+            for h in horizons:
+                lo, hi = t + h, t + h + max(1.0, 0.2 * h)
+                i = bisect.bisect_left(ts_list, lo)
+                if i < len(ts_list) and ts_list[i] <= hi:
+                    m = series[i][1]
+                    s[f"dbid_{h}"], s[f"dask_{h}"] = float(m["bid"]) - s["bid"], float(m["ask"]) - s["ask"]
+                    s[f"dmid_{h}_fwd"] = _mid(m) - s["mid"]
+                else:
+                    s[f"dbid_{h}"] = s[f"dask_{h}"] = s[f"dmid_{h}_fwd"] = None
+                trade = _exec_trade(series, t, s["ask"], h, fee_for_row(r), ref_contracts,
+                                    (settlement or {}).get(key), lat, entry_tol_s, haircut, times=ts_list)
+                s[f"ret_long_{h}"] = trade.pnl_per_contract if trade is not None else None
+                s[f"exec_{h}"] = exec_record(trade)
+            for kind in s.pop("_kinds"):
+                out.append({**s, "kind": kind})
     return out
 
 
+def _sample(t: float, approx: int, r: dict[str, Any], books: dict[tuple, "_Book"], sample: str, last_trigger: dict, last_uncond: dict,
+            last_recovery: dict, fee_for_row: Any, ref_contracts: int, espn_idx: "_Espn", prints_idx: "_Prints",
+            outcomes_by_event: dict[str, set]) -> Optional[dict[str, Any]]:
+    """The decision-time sample for one observation (None when no sampling rule fires)."""
+    key = contract_key(r)
+    b = books[key]
+    f = _book_features(b, t)
+    kinds = []
+    if sample in ("trigger", "all") and f["dmid_30"] is not None and abs(f["dmid_30"]) >= TRIGGER_MOVE and _two_sided(f) \
+            and t - last_trigger.get(key, -math.inf) >= TRIGGER_COOLDOWN_S:
+        last_trigger[key] = t
+        kinds.append("trigger")
+    if sample in ("unconditional", "all") and t - last_uncond.get(key, -math.inf) >= UNCONDITIONAL_EVERY_S:
+        last_uncond[key] = t
+        kinds.append("unconditional")
+    if sample in ("recovery", "all") and _recovering(f) and t - last_recovery.get(key, -math.inf) >= RECOVERY_COOLDOWN_S:
+        last_recovery[key] = t
+        kinds.append("recovery")
+    if not kinds:
+        return None
+    s: dict[str, Any] = {"t": t, "approx_time": approx, "event_key": key[0], "book_id": key[1], "outcome": key[2], "side": key[3],
+                         "venue": r.get("venue"), "venue_market_id": r.get("venue_market_id"), "tie_payout": _f(r.get("tie_payout")),
+                         "no_of": r.get("no_of"), "_kinds": kinds, **f}
+    qt = _f(r.get("quote_time"))
+    s["venue_lag_s"] = t - qt if qt is not None else None
+    bs, as_ = _f(r.get("bid_size")), _f(r.get("ask_size"))
+    s["imbalance"] = (bs - as_) / (bs + as_) if bs is not None and as_ is not None and bs + as_ > 0 else None   # displayed; may be cancelled
+    # cross-book: the same contract on independent books, as last observed and still fresh
+    cross, diag = {}, {}
+    my_tie = _tie_cached(r)
+    sport = key[0].split(":", 1)[0].lower()
+    can_tie = sport in TIE_PRIOR and _is_moneyline(key[0])
+    prior = TIE_PRIOR.get(sport, 0.0)
+    excluded: dict[str, int] = defaultdict(int)
+    for (ev, book, oc, sd), ob in books.items():
+        if ev != key[0] or oc != key[2] or sd != key[3] or book == key[1] or not ob.hist:
+            continue
+        age = t - ob.hist[-1][0]
+        if age > fresh_limit(ob.row or {}):
+            continue
+        their_tie = _tie_cached(ob.row or {})
+        if can_tie and (my_tie is None or their_tie is None):
+            excluded["unknown_tie"] += 1
+            continue                       # not even comparable: what a tie pays is unknown
+        tie_match = (not can_tie) or abs(their_tie - my_tie) < 1e-9
+        settle = settlement_relation(r, ob.row or {})
+        of = _book_features(ob, t)
+        entry = {"gap": of["mid"] - f["mid"], "dmid_30": of["dmid_30"], "age_s": age, "bid": of["bid"], "ask": of["ask"],
+                 "tie_match": tie_match, "settlement": settle}
+        if tie_match and settle == "identical":
+            cross[book] = entry
+        else:
+            excluded["tie_mismatch" if not tie_match else f"settlement_{settle}"] += 1
+        adj = prior * ((their_tie or 0.0) - (my_tie or 0.0)) if can_tie else 0.0
+        diag[book] = dict(entry, gap_tie_adjusted=entry["gap"] - adj)
+    s["cross"], s["cross_excluded"] = cross, dict(excluded)
+    # Diagnostics only (not the registered hypothesis): the leader among tie-matched books
+    # whatever their other rules, and among all fresh books with the tie priced in.
+    def _lead(items: dict[str, dict], gap_key: str = "gap") -> Optional[dict[str, Any]]:
+        best = max(sorted(items.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+        return {"book": best[0], "dmid_30": best[1]["dmid_30"], "gap": best[1][gap_key]} if best else None
+    s["leader_diag"] = {"tie_matched": _lead({k: v for k, v in diag.items() if v["tie_match"]}),
+                        "any_settlement": _lead(diag, "gap_tie_adjusted")}
+    # Ties in |dmid_30| break on the book name so the leader never depends on arrival order.
+    leader = max(sorted(cross.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+    s["leader_book"] = leader[0] if leader else None
+    s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
+    s["gap_leader"] = leader[1]["gap"] if leader else None
+    # Grades, as strategy/leadlag.py logs them live: our all-in against the leader's *bid*
+    # (hard lag) and how many other books agree with the leader's move.
+    fm = fee_for_row(r)
+    try:
+        s["all_in"] = f["ask"] + float(fm.fee(f["ask"], ref_contracts, "taker")) / ref_contracts if fm is not None else None
+    except Exception:
+        s["all_in"] = None
+    s["leader_bid"] = leader[1]["bid"] if leader else None
+    s["hard_lag"] = (s["all_in"] < s["leader_bid"]) if s["all_in"] is not None and s["leader_bid"] is not None else None
+    ld = s["leader_dmid_30"]
+    s["agree"] = sum(1 for bk, c in cross.items() if leader and bk != leader[0] and ld and c["dmid_30"] is not None
+                     and c["dmid_30"] * ld > 0 and abs(c["dmid_30"]) >= 0.5 * abs(ld))
+    s["complement"], s["complement_missing"] = _complement(key, r, t, my_tie, can_tie, books, outcomes_by_event)
+    s.update(espn_idx.at(_game_key(key[0]), t, key[2]))
+    s.setdefault("prints_approx_time", 0)
+    if key[1] == "kalshi":
+        ticker = str(r.get("venue_market_id") or "").split("#", 1)[0]
+        s.update(prints_idx.at(ticker, t, key[3], f["mid"]))
+    return s
+
+
+def _complement(key: tuple, r: dict[str, Any], t: float, my_tie: Optional[float], can_tie: bool, books: dict[tuple, "_Book"],
+                outcomes_by_event: dict[str, set]) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+    """The executable contract that pays exactly what this one does not: same event, market
+    and book, paying on the other outcome, and - where a tie can happen - paying 1 - this
+    contract's tie payout on a tie (a Kalshi YES-B for a Kalshi YES-A: $0.50 + $0.50; a
+    Rothera NO-A, recorded on outcome B with ``no_of`` A, for a Rothera YES-A: $0 + $1). It
+    must have been observed, fresh, two-sided, at the decision. Returns (the complement's
+    decision-time quote, None) or (None, why it is unavailable)."""
+    ev, book, oc, _ = key
+    if len(outcomes_by_event.get(ev, ())) != 2:
+        return None, "not-two-outcome"
+    seen = stale = inexact = unknown = 0
+    best: Optional[dict[str, Any]] = None
+    for k2, ob in books.items():
+        if k2[0] != ev or k2[1] != book or k2[2] == oc or not ob.hist or ob.row is None:
+            continue
+        seen += 1
+        age = t - ob.hist[-1][0]
+        if age > fresh_limit(ob.row):
+            stale += 1
+            continue
+        if can_tie:
+            tie2 = _tie_cached(ob.row)
+            if my_tie is None or tie2 is None:
+                unknown += 1
+                continue
+            if abs(tie2 - (1.0 - my_tie)) > 1e-9:
+                inexact += 1
+                continue
+        cur = ob.hist[-1]
+        cand = {"key": list(k2), "venue": ob.row.get("venue"), "bid": cur[1], "ask": cur[2], "ask_size": _f(ob.row.get("ask_size")),
+                "age_s": age, "tie_payout": _tie_cached(ob.row), "observed_at": cur[0]}
+        if best is None or (cand["ask"], cand["key"]) < (best["ask"], best["key"]):
+            best = cand
+    if best is not None:
+        return best, None
+    if not seen:
+        return None, "none-observed"
+    return None, "unknown-tie" if unknown else ("tie-inexact" if inexact else "stale")
+
+
 def _exec_trade(series: list[tuple[float, dict[str, Any]]], t: float, ask: float, h: int, fee_model: Any, n: int,
-                settle: Optional[float], latency_s: float = 1.0, entry_tol_s: float = 2.0, haircut: float = 1.0) -> Any:
+                settle: Optional[float], latency_s: float = 1.0, entry_tol_s: float = 2.0, haircut: float = 1.0,
+                times: Optional[list[float]] = None) -> Any:
     if fee_model is None:
         return None
     from .paperexec import ioc_round_trip
 
-    times = [tt for tt, _ in series]
+    times = times if times is not None else [tt for tt, _ in series]
     lo, hi = bisect.bisect_right(times, t), bisect.bisect_right(times, t + latency_s + entry_tol_s + h + 90)
     rows = [dict(r, obs_ts=tt) for tt, r in series[lo:hi]]
     return ioc_round_trip(rows, t, ask, n, fee_model, latency_s=latency_s, horizon_s=float(h), haircut=haircut,
@@ -494,9 +571,11 @@ def exec_record(trade: Any) -> dict[str, Any]:
     else:
         status = "closed"
     pnl = trade.pnl
+    entry_notional = float(trade.entry_price) * trade.filled if trade.filled and trade.entry_price is not None else 0.0
+    exit_notional = sum(float(p) * n for _, p, n, _ in trade.exits) + (float(trade.settle_value) * trade.settled if trade.settled else 0.0)
     return {"status": status, "requested": int(trade.requested), "filled": int(trade.filled),
             "fees": float(trade.entry_fee + trade.exit_fee) if trade.filled else 0.0, "pnl": float(pnl) if pnl is not None else None,
-            "reason": trade.reason or None}
+            "entry_notional": entry_notional, "exit_notional": exit_notional, "reason": trade.reason or None}
 
 
 def _default_fee(row: dict[str, Any]) -> Any:
@@ -607,23 +686,28 @@ def load_db(path: str, event_keys: Optional[Iterable[str]] = None, date: Optiona
 
 
 def settlement_values(rows: Iterable[dict[str, Any]], finals: dict[str, tuple]) -> dict[tuple, float]:
-    """(event_key, outcome, side) -> settlement dollars for moneyline contracts of finished
-    games. A tie is valued only when the row carries its own tie payout."""
+    """``contract_key`` (event, book, outcome, side) -> settlement dollars for the moneyline
+    contracts of finished games.
+
+    Rows are *normalized*: a NO row already names the outcome it pays on (Robinhood's NO of
+    KC is recorded on outcome DEN with ``no_of`` KC; Kalshi's NO rows likewise), so a win or
+    loss is read from ``outcome`` alone for YES and NO alike - never inverted by side. A tie
+    pays the contract's own tie payout (the row's ``tie_payout``, else the settlement
+    registry's rule for that book and side); unknown -> not valued. Keys carry the book, so
+    a Kalshi YES-KC ($0.50 on a tie) and a Rothera YES-KC ($0) never overwrite each other."""
     out: dict[tuple, float] = {}
     for r in rows:
         ev = str(r.get("event_key") or "")
         if ev != _game_key(ev) or ev not in finals:
             continue
         _, _, winner = finals[ev]
-        side = side_of(r)
+        key = contract_key(r)
         if winner is None:
-            tp = _f(r.get("tie_payout"))
-            if tp is None:
-                continue
-            out[(ev, r.get("outcome"), side)] = tp
+            tp = _tie_cached(r)
+            if tp is not None:
+                out[key] = tp
         else:
-            yes = 1.0 if r.get("outcome") == winner else 0.0
-            out[(ev, r.get("outcome"), side)] = yes
+            out[key] = 1.0 if r.get("outcome") == winner else 0.0
     return out
 
 

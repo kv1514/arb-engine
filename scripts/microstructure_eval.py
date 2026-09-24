@@ -63,8 +63,14 @@ DEFAULT_LOG = ROOT / "out/eval_log.jsonl"
 DEFAULT_FROZEN = ROOT / "tests/fixtures/microstructure/frozen_models.json"
 DEFAULT_FROZEN_SPEC = ROOT / "tests/fixtures/microstructure/frozen_spec.json"
 EXECUTABLE = ("kalshi", "robinhood")
-CODE_FILES = ("arb_engine/quant/microdata.py", "arb_engine/quant/paperexec.py", "arb_engine/strategy/momentum.py",
-              "scripts/microstructure_eval.py")
+CODE_FILES = (
+    # the experiment
+    "arb_engine/quant/microdata.py", "arb_engine/quant/paperexec.py", "arb_engine/strategy/momentum.py", "scripts/microstructure_eval.py",
+    # fees, settlement and contract identity it relies on
+    "arb_engine/fees/base.py", "arb_engine/fees/kalshi.py", "arb_engine/fees/polymarket.py", "arb_engine/fees/robinhood.py",
+    "arb_engine/fees/registry.py", "arb_engine/matching/settlement_rules.py", "arb_engine/matching/normalize.py",
+    "arb_engine/data/settlement_rules.json", "arb_engine/models/__init__.py",
+)
 DEFAULT_SPEC: dict[str, Any] = {"version": 3, "primary": "H3@30s", "horizons": [5, 15, 30, 60], "bootstrap": 2000, "seed": 20260920}
 
 
@@ -125,14 +131,54 @@ def fold_policy(manifest: dict[str, Any]) -> dict[str, Any]:
             "rule": "whole games with all their markets; discovery by list or date; test = ET date >= test_from; else validation"}
 
 
-def effective_spec(manifest: dict[str, Any], frozen: Optional[dict[str, Any]] = None, root: Path = ROOT) -> dict[str, Any]:
+FEE_PROBES = (("kalshi", {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1, "series": "KXNFLGAME"}, None),
+              ("robinhood", {"exchange": "rothera"}, "rothera"), ("robinhood", {"exchange": "cdna"}, "cdna"),
+              ("robinhood", {"exchange": "kalshi"}, "kalshi"),
+              ("polymarket", {"feeSchedule": {"rate": 0.05, "exponent": 1, "takerOnly": True}, "feesEnabled": True}, None))
+
+
+def fee_fingerprint() -> list[Any]:
+    """The fees the experiment would charge, evaluated: the fee model ``microdata`` builds for
+    each venue / exchange (code, registry dispatch and settings such as
+    ROBINHOOD_ROTHERA_FEE_MODEL alike) on a grid of prices and counts."""
+    from arb_engine.fees.registry import fee_model_for_quote
+    from arb_engine.models import OutcomeQuote
+
+    out = []
+    for venue, params, exch in FEE_PROBES:
+        q = OutcomeQuote(venue, "probe", "nfl:A|B:2026-01-01", "A", ask=.5, bid=.49, fee_params=dict(params), meta={"exchange": exch} if exch else {})
+        fm = fee_model_for_quote(q)
+        out.append([venue, exch, type(fm).__name__, [str(fm.fee(px, n, "taker")) for px in (.03, .25, .5, .77, .97) for n in (1, 10, 137)]])
+    return out
+
+
+def settlement_fingerprint() -> dict[str, Any]:
+    """The settlement registry as the experiment reads it, per venue / exchange / sport / market."""
+    from arb_engine.matching.settlement_rules import lookup
+
+    out: dict[str, Any] = {}
+    for venue, exch in (("kalshi", None), ("polymarket", None), ("robinhood", "rothera"), ("robinhood", "cdna"), ("robinhood", "kalshi")):
+        for sport in ("nfl", "ncaaf"):
+            for mt in ("moneyline", "spread", "total"):
+                r = lookup(venue, sport, mt, exch)
+                out[f"{venue}/{exch}/{sport}/{mt}"] = ({k: r.get(k) for k in ("tie", "postponed", "cancelled", "walkover", "retirement", "ot_included", "status")}
+                                                       if r else None)
+    return out
+
+
+def effective_spec(manifest: dict[str, Any], frozen: Optional[dict[str, Any]] = None, root: Path = ROOT,
+                   runtime: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Everything that decides a result: the manifest spec, the fold policy, the sampling
-    constants, the code that samples / executes / scores, and the frozen models."""
+    constants, the code that samples / executes / scores (and the fee, settlement and
+    identity code under it), the fees and settlement rules as evaluated (so a setting or a
+    registry edit counts too), runtime overrides (``--latency``) and the frozen models."""
     from arb_engine.quant.microdata import effective_constants
 
-    code = {f: hashlib.sha256((root / f).read_bytes()).hexdigest() for f in CODE_FILES if (root / f).exists()}
+    # A listed file that is missing is recorded as such - never silently left out of the hash.
+    code = {f: hashlib.sha256((root / f).read_bytes()).hexdigest() if (root / f).exists() else "MISSING" for f in CODE_FILES}
     return {"spec": manifest.get("spec") or DEFAULT_SPEC, "folds": fold_policy(manifest), "constants": effective_constants(),
-            "code": code, "frozen_models": spec_hash(frozen) if frozen else None}
+            "code": code, "fees": fee_fingerprint(), "settlement": settlement_fingerprint(), "runtime": dict(runtime or {}),
+            "frozen_models": spec_hash(frozen) if frozen else None}
 
 
 def component_hashes(eff: dict[str, Any]) -> dict[str, Any]:
@@ -188,26 +234,28 @@ def summarize(trades: dict[str, list[Optional[float]]], attempts: dict[str, int]
               times: Optional[dict[str, list[float]]] = None) -> dict[str, Any]:
     """Per-contract net returns by game (``None`` = missed or unresolved: no return) -> metrics.
     ``resolved_rate`` is completed trades / attempts - a resolution rate, not a fill rate
-    (``candidate_metrics`` counts fills). Drawdown follows ``times`` (decision times per game,
-    aligned with ``trades``) when given, else games in kickoff order is unknown and it falls
-    back to each game's total in key order."""
+    (``candidate_metrics`` counts fills). Drawdown needs the decision times (``times``,
+    aligned with ``trades``); without them it is reported as unsupported, never computed in
+    some other order."""
     done = {g: [x for x in xs if x is not None] for g, xs in trades.items()}
     n = sum(len(v) for v in done.values())
     tried = sum(attempts.values())
     out: dict[str, Any] = {"attempts": tried, "trades": n, "games": sum(1 for v in done.values() if v),
-                           "resolved_rate": (n / tried) if tried else None}
+                           "resolved_rate": (n / tried) if tried else None, "unsupported": {}}
     if not n:
+        out["unsupported"]["mean_ret"] = "no resolved trade"
         return out
     per_game = {g: sum(v) for g, v in done.items() if v}
     out["mean_ret"] = game_block_bootstrap(done, seed=seed, draws=draws)
     out["hit_rate"] = sum(1 for v in done.values() for x in v if x > 0) / n
     out["positive_game_share"] = sum(1 for v in per_game.values() if v > 0) / len(per_game)
     out["top_game_share"] = _concentration(per_game)
-    if times:
-        chrono = sorted((t, x) for g, xs in trades.items() for t, x in zip(times.get(g, []), xs) if x is not None)
+    if times and all(len(times.get(g, [])) == len(xs) for g, xs in trades.items()):
+        chrono = sorted((t, x) for g, xs in trades.items() for t, x in zip(times[g], xs) if x is not None)
         out["max_drawdown_per_contract"] = _drawdown(x for _, x in chrono)
     else:
-        out["max_drawdown_per_contract"] = _drawdown(per_game[g] for g in sorted(per_game))
+        out["max_drawdown_per_contract"] = None
+        out["unsupported"]["max_drawdown_per_contract"] = "no decision times: a drawdown needs chronological order"
     return out
 
 
@@ -248,33 +296,63 @@ def holm(pvalues: dict[str, float], alpha: float = 0.10) -> dict[str, bool]:
     return out
 
 
-def boot_p(values: dict[str, list[float]], seed: int, draws: int = 2000) -> float:
-    """One-sided p that the mean is <= 0, by game bootstrap."""
+def sign_flip_p(values: dict[str, list[float]], seed: int = 20260920, draws: int = 2000, exact_max_games: int = 16) -> float:
+    """One-sided game-level sign-flip (randomization) test.
+
+    H0: every game's total net return is symmetric about zero (so the mean is 0); H1: the mean
+    is positive. The statistic is the pooled per-contract mean T = sum_g S_g / N (S_g = game
+    g's total, N = all resolved trades) - the number the report's mean shows. Under H0 each
+    game's total is as likely to be -S_g as S_g, so T* = sum_g e_g S_g / N with e_g = +-1.
+    p = the share of T* >= T: over all 2^G sign vectors when G <= ``exact_max_games`` (exact;
+    the smallest possible p is 2^-G), else over ``draws`` random vectors with a fixed seed plus
+    the observed one. Games, not trades, are flipped: a game's trades share its news, and
+    flipping them one by one would overstate the evidence. A game without a resolved trade
+    contributes nothing; no data gives p = 1. (The old uncentered bootstrap share of means
+    <= 0 was a confidence-interval diagnostic, not a p-value.)"""
     games = sorted(g for g, v in values.items() if v)
     if not games:
         return 1.0
+    S = [float(sum(values[g])) for g in games]
+    N = sum(len(values[g]) for g in games)
+    T = sum(S) / N
+    tol = 1e-12 * max(1.0, abs(T))
+    G = len(S)
+    if G <= exact_max_games:
+        tot, flipped, ge = sum(S), [False] * G, 0
+        ge += tot / N >= T - tol
+        for k in range(1, 1 << G):                    # Gray code: one sign changes per step
+            i = (k & -k).bit_length() - 1
+            flipped[i] = not flipped[i]
+            tot += -2 * S[i] if flipped[i] else 2 * S[i]
+            ge += tot / N >= T - tol
+        return ge / (1 << G)
     rng = random.Random(seed)
-    le = 0
+    ge = 1
     for _ in range(draws):
-        vals = [x for g in (rng.choice(games) for _ in games) for x in values[g]]
-        le += (sum(vals) / len(vals)) <= 0
-    return (le + 1) / (draws + 1)
+        ge += sum(x if rng.random() < .5 else -x for x in S) / N >= T - tol
+    return ge / (draws + 1)
 
 
-# ---- test-fold discipline -----------------------------------------------------------
 def _log_rows(log_path: Path) -> list[dict[str, Any]]:
     if not log_path.exists():
         return []
     return [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
 
 
-def guard_test_open(log_path: Path, current_hash: str, reopen_reason: Optional[str] = None) -> bool:
+def ledger_path(frozen_spec_path: Path) -> Path:
+    """The canonical test-open ledger: beside the frozen spec record (committed with it), not
+    wherever ``--log`` points, so choosing another audit log cannot reset the history."""
+    return frozen_spec_path.parent / "test_open_ledger.jsonl"
+
+
+def guard_test_open(ledger: Path, current_hash: str, reopen_reason: Optional[str] = None) -> bool:
     """Refuse a test run under a spec other than the one the test fold was first opened with,
-    unless a non-empty reason is given. Returns True when the run is exploratory (the test
-    spec changed, or the run was explicitly reopened)."""
+    unless a non-empty reason is given. ``ledger`` holds one ``intent`` row per test run,
+    written before any test data is read (older logs' ``fold == "test"`` rows count too).
+    Returns True when the run is exploratory (the test spec changed, or it was reopened)."""
     if reopen_reason is not None and not reopen_reason.strip():
         raise ValueError("--reopen-test requires a non-empty reason")
-    opened = [r for r in _log_rows(log_path) if r.get("fold") == "test"]
+    opened = [r for r in _log_rows(ledger) if r.get("event") == "intent" or (r.get("event") is None and r.get("fold") == "test")]
     changed = bool(opened) and opened[0].get("spec_hash") != current_hash
     if changed and not reopen_reason:
         raise RuntimeError('test fold was first opened under a different spec; use --reopen-test "<reason>"')
@@ -295,32 +373,54 @@ def _git_head() -> Optional[str]:
 
 
 # ---- candidates ---------------------------------------------------------------------
-def _h3_diag(level: str) -> Callable[[dict[str, Any]], bool]:
-    """The H3 rule on a looser leader (``leader_diag``): not registered, never tested."""
-    def rule(s: dict[str, Any]) -> bool:
-        ld = (s.get("leader_diag") or {}).get(level)
-        return bool(ld) and _h3({**s, "leader_dmid_30": ld["dmid_30"], "gap_leader": ld["gap"]})
-    return rule
+def _h3_direction(s: dict[str, Any], leader: Optional[dict[str, Any]] = None) -> int:
+    """The registered H3 rule, symmetric. +1 = buy the follower (its independent leader rose);
+    -1 = buy the follower's complement (its leader fell); 0 = no decision. A decision needs a
+    leader that moved >= 5c in 30 s, a follower that moved less than half as much, and the
+    leader's mid >= 2c beyond the follower's in the leader's direction."""
+    ld = leader["dmid_30"] if leader is not None else s.get("leader_dmid_30")
+    gap = leader["gap"] if leader is not None else s.get("gap_leader")
+    if s.get("kind") != "unconditional" or ld is None or gap is None or abs(ld) < .05:
+        return 0
+    d = 1 if ld > 0 else -1
+    if abs(s.get("dmid_30") or 0) >= .5 * abs(ld) or d * gap < .02:
+        return 0
+    return d
 
 
 def _h3(s: dict[str, Any]) -> bool:
-    return (s["kind"] == "unconditional" and s.get("leader_dmid_30") is not None and abs(s["leader_dmid_30"]) >= .05
-            and s["leader_dmid_30"] > 0 and abs(s.get("dmid_30") or 0) < .5 * abs(s["leader_dmid_30"]) and (s.get("gap_leader") or 0) >= .02)
+    return _h3_direction(s) != 0
 
 
-RULES: dict[str, tuple[Callable[[dict[str, Any]], bool], bool]] = {   # name -> (rule, one per contract per cooldown)
-    "B1_buy_any": (lambda s: s["kind"] == "unconditional", False),
-    "H1_momentum": (lambda s: s["kind"] == "trigger" and (s["dmid_30"] or 0) > 0, False),
-    "H2_dip": (lambda s: s["kind"] == "trigger" and (s["dmid_30"] or 0) < 0, False),
-    "H2_recovery": (lambda s: s["kind"] == "recovery", False),
-    "H3_leadlag": (_h3, True),
-    "M_prototype": (lambda s: s["kind"] == "unconditional" and s.get("momentum_status") == "rising", True),
+def _h3_diag(level: str) -> Callable[[dict[str, Any]], int]:
+    """The H3 rule on a looser leader (``leader_diag``): not registered, never tested."""
+    def rule(s: dict[str, Any]) -> int:
+        ld = (s.get("leader_diag") or {}).get(level)
+        return _h3_direction(s, ld) if ld else 0
+    return rule
+
+
+def _dir_h1(s: dict[str, Any]) -> int:
+    """Momentum, both ways: a rise buys the contract, a fall buys its complement."""
+    if s.get("kind") != "trigger":
+        return 0
+    d = s.get("dmid_30") or 0
+    return 1 if d > 0 else (-1 if d < 0 else 0)
+
+
+# name -> (direction rule, one decision per economic exposure per signal_cooldown_s)
+RULES: dict[str, tuple[Callable[[dict[str, Any]], int], bool]] = {
+    "B1_buy_any": (lambda s: 1 if s["kind"] == "unconditional" else 0, False),
+    "H1_momentum": (_dir_h1, True),
+    "H2_dip": (lambda s: 1 if s["kind"] == "trigger" and (s["dmid_30"] or 0) < 0 else 0, True),
+    "H2_recovery": (lambda s: 1 if s["kind"] == "recovery" else 0, True),
+    "H3_leadlag": (_h3_direction, True),
+    "M_prototype": (lambda s: 1 if s["kind"] == "unconditional" and s.get("momentum_status") == "rising" else 0, True),
 }
 
 
-def select(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], bool], cooldown_s: float = 0.0) -> list[dict[str, Any]]:
-    """Executable decision points a rule fires on, once per contract per ``cooldown_s`` (a
-    condition that persists for a minute is one decision, not twelve)."""
+def select(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], Any], cooldown_s: float = 0.0) -> list[dict[str, Any]]:
+    """Executable decision points a rule fires on, once per contract per ``cooldown_s``."""
     last: dict[tuple, float] = {}
     out = []
     for s in sorted(samples, key=lambda x: x["t"]):
@@ -334,19 +434,134 @@ def select(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], bool]
     return out
 
 
+def bought_contract(s: dict[str, Any], d: int) -> Optional[dict[str, Any]]:
+    """What a decision buys: the contract itself (d = +1) or its executable complement (d = -1,
+    ``microdata._complement``: same event, market and book, paying on the other outcome and,
+    where a tie can happen, the rest of the tie). Never a short synthesised from a bid."""
+    if d > 0:
+        return {"key": (s["event_key"], s["book_id"], s["outcome"], s["side"]), "venue": s.get("venue"), "ask": s["ask"],
+                "mid": s.get("mid", s["ask"]), "self": True}
+    c = s.get("complement")
+    if not c:
+        return None
+    return {"key": tuple(c["key"]), "venue": c.get("venue"), "ask": c["ask"], "mid": (c["bid"] + c["ask"]) / 2.0, "self": False}
+
+
+def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], int], cooldown_s: float = 0.0
+                  ) -> tuple[list[tuple[dict[str, Any], int, dict[str, Any]]], dict[str, Any]]:
+    """(decision, direction, bought contract) in time order, plus the counts of what was not
+    traded. One *economic exposure* - (event, book, the outcome the bought contract pays on) -
+    trades once per ``cooldown_s``: a rise in KC and the mirror fall in DEN both mean "long
+    KC" and are one trade, whichever contract signalled first. A fall with no executable
+    complement is counted, not traded."""
+    last: dict[tuple, float] = {}
+    out = []
+    unavailable: Counter = Counter()
+    dup = 0
+    for s in sorted(samples, key=lambda x: (x["t"], x["event_key"], x["book_id"], x["outcome"], x["side"], x["kind"])):
+        if s.get("venue") not in EXECUTABLE:
+            continue
+        d = rule(s)
+        if not d:
+            continue
+        bc = bought_contract(s, d)
+        if bc is None or bc.get("venue") not in EXECUTABLE:
+            unavailable[s.get("complement_missing") or "not-executable"] += 1
+            continue
+        exposure = (bc["key"][0], bc["key"][1], bc["key"][2])
+        if cooldown_s and exposure in last and s["t"] - last[exposure] < cooldown_s:
+            dup += 1
+            continue
+        last[exposure] = s["t"]
+        out.append((s, d, bc))
+    return out, {"complement_unavailable": dict(unavailable), "complement_unavailable_total": sum(unavailable.values()),
+                 "same_exposure_dropped": dup, "long": sum(1 for _, d, _ in out if d > 0), "via_complement": sum(1 for _, d, _ in out if d < 0)}
+
+
+class ExecCtx:
+    """Paper execution of any contract at any latency / haircut from the recorded rows
+    (``quant.paperexec`` through ``microdata._exec_trade``); Robinhood orders are placed by a
+    person, so ``venue_latency`` overrides the latency for them."""
+
+    def __init__(self, rows: list[dict[str, Any]], settle: dict[tuple, float], fee_for_row: Callable, n: int,
+                 venue_latency: Optional[dict[str, float]] = None, entry_tol_s: float = 2.0) -> None:
+        from arb_engine.quant.microdata import series_by_contract
+
+        self.series = {k: [(r["obs_ts"], r) for r in v] for k, v in series_by_contract(rows).items()}
+        self.times = {k: [t for t, _ in v] for k, v in self.series.items()}
+        self.settle, self.fee_for_row, self.n = settle, fee_for_row, n
+        self.venue_latency, self.entry_tol_s = dict(venue_latency or {}), entry_tol_s
+        self._fees: dict[tuple, Any] = {}
+
+    def latency(self, venue: Any, latency_s: float) -> float:
+        return float(self.venue_latency.get(str(venue), latency_s))
+
+    def fee(self, key: tuple) -> Any:
+        if key not in self._fees:
+            ser = self.series.get(key)
+            self._fees[key] = self.fee_for_row(ser[0][1]) if ser else None
+        return self._fees[key]
+
+    def execute(self, key: tuple, venue: Any, t: float, ask: float, h: int, latency_s: float, haircut: float) -> dict[str, Any]:
+        from arb_engine.quant.microdata import _exec_trade, exec_record
+
+        lat = self.latency(venue, latency_s)
+        ser = self.series.get(key)
+        if not ser:
+            rec = exec_record(None)
+            rec["status"] = "no-observations"
+        else:
+            rec = exec_record(_exec_trade(ser, t, ask, h, self.fee(key), self.n, self.settle.get(key), lat, self.entry_tol_s, haircut,
+                                          times=self.times[key]))
+        rec["latency_s"] = lat
+        return rec
+
+    def forward(self, key: tuple, t: float, mid: float, h: int) -> Optional[float]:
+        """The label: the first refreshed mark of the bought contract in [t+h, t+h+max(1, .2h)]."""
+        from arb_engine.quant.microdata import _mid
+
+        ts = self.times.get(key) or []
+        i = bisect.bisect_left(ts, t + h)
+        if i < len(ts) and ts[i] <= t + h + max(1.0, 0.2 * h):
+            return _mid(self.series[key][i][1]) - mid
+        return None
+
+
+def realize(ctx: ExecCtx, s: dict[str, Any], d: int, bc: dict[str, Any], horizons: Iterable[int], latency_s: float, haircut: float,
+            reuse: bool) -> dict[str, Any]:
+    """A decision as the trade it makes: the bought contract's execution and label per horizon.
+    ``reuse``: the build already executed this very order (self, same latency and haircut)."""
+    tr: dict[str, Any] = {"t": s["t"], "event_key": s["event_key"], "direction": d, "bought": list(bc["key"]), "venue": bc["venue"]}
+    for h in horizons:
+        if reuse and bc["self"]:
+            tr[f"exec_{h}"], tr[f"dmid_{h}_fwd"] = s.get(f"exec_{h}") or {}, s.get(f"dmid_{h}_fwd")
+        else:
+            tr[f"exec_{h}"] = ctx.execute(bc["key"], bc["venue"], s["t"], bc["ask"], h, latency_s, haircut)
+            tr[f"dmid_{h}_fwd"] = ctx.forward(bc["key"], s["t"], bc["mid"], h)
+    return tr
+
+
 def candidate_metrics(sel: list[dict[str, Any]], h: int, seed: int, draws: int) -> dict[str, Any]:
-    """Orders, fills, positions, labels, skill and P&L for one candidate at horizon h."""
+    """Orders, fills, positions, labels, skill and P&L for one candidate at horizon h. Every
+    metric that cannot be computed is None with its reason under ``unsupported``."""
     ex = [(s, s.get(f"exec_{h}") or {}) for s in sel]
     st = Counter(e.get("status") for _, e in ex)
     filled = [(s, e) for s, e in ex if (e.get("filled") or 0) > 0]
     resolved = [(s, e) for s, e in filled if e.get("pnl") is not None]
+    uns: dict[str, str] = {}
     out: dict[str, Any] = {
         "attempted_orders": len(ex), "filled_orders": len(filled), "filled_contracts": sum(e["filled"] for _, e in filled),
-        "missed_orders": st.get("missed", 0), "closed_positions": st.get("closed", 0), "settled_positions": st.get("settled", 0),
+        "missed_orders": st.get("missed", 0) + st.get("no-observations", 0) + st.get("no-fee-model", 0),
+        "closed_positions": st.get("closed", 0), "settled_positions": st.get("settled", 0),
         "unresolved_positions": st.get("unresolved", 0), "fill_rate": len(filled) / len(ex) if ex else None,
         "resolved_share_of_fills": len(resolved) / len(filled) if filled else None,
         "games": len({_game(s["event_key"]) for s in sel}), "fees": sum(e.get("fees") or 0.0 for _, e in resolved),
+        "unsupported": uns,
     }
+    if not ex:
+        uns["fill_rate"] = "no decisions"
+    elif not filled:
+        uns["resolved_share_of_fills"] = "no fills"
     lab: dict[str, list[float]] = defaultdict(list)
     for s in sel:
         y = s.get(f"dmid_{h}_fwd")
@@ -355,11 +570,20 @@ def candidate_metrics(sel: list[dict[str, Any]], h: int, seed: int, draws: int) 
     n_lab = sum(len(v) for v in lab.values())
     out["labelled"], out["missing_labels"] = n_lab, len(sel) - n_lab
     if n_lab:
-        # A buy rule forecasts "up": its skill is the mean forward mid move it bought into.
+        # A buy forecasts "up" for what it bought: its skill is the mid move of that contract.
         out["skill_ci"] = game_block_bootstrap(dict(lab), seed=seed, draws=draws)
         moved = [y for v in lab.values() for y in v if y != 0]
         out["directional_hit"] = sum(1 for y in moved if y > 0) / len(moved) if moved else None
+        if not moved:
+            uns["directional_hit"] = "no labelled mid moved"
+    else:
+        out["skill_ci"], out["directional_hit"] = None, None
+        uns["skill_ci"] = uns["directional_hit"] = "no labelled decision"
     if not resolved:
+        for k in ("mean_ret", "dollar_pnl", "hit_rate", "positive_game_share", "top_game_share", "max_drawdown_usd", "fee_share_of_notional",
+                  "fee_share_of_gross_edge"):
+            out[k] = None
+            uns[k] = "no resolved trade"
         return out
     per_game_ret: dict[str, list[float]] = defaultdict(list)
     per_game_usd: dict[str, float] = defaultdict(float)
@@ -369,20 +593,33 @@ def candidate_metrics(sel: list[dict[str, Any]], h: int, seed: int, draws: int) 
         per_game_usd[g] += e["pnl"]
     out["mean_ret"] = game_block_bootstrap(dict(per_game_ret), seed=seed, draws=draws)
     out["dollar_pnl"] = sum(per_game_usd.values())
+    out["gross_pnl_usd"] = out["dollar_pnl"] + out["fees"]
+    notional = sum((e.get("entry_notional") or 0.0) + (e.get("exit_notional") or 0.0) for _, e in resolved)
+    out["fee_share_of_notional"] = out["fees"] / notional if notional else None
+    if not notional:
+        uns["fee_share_of_notional"] = "no traded notional"
+    out["fee_share_of_gross_edge"] = out["fees"] / out["gross_pnl_usd"] if out["gross_pnl_usd"] > 0 else None
+    if out["gross_pnl_usd"] <= 0:
+        uns["fee_share_of_gross_edge"] = "no gross edge before fees (fees cannot be a share of a loss)"
     out["hit_rate"] = sum(1 for _, e in resolved if e["pnl"] > 0) / len(resolved)
     out["positive_game_share"] = sum(1 for v in per_game_usd.values() if v > 0) / len(per_game_usd)
     out["top_game_share"] = _concentration(dict(per_game_usd))
-    out["max_drawdown_usd"] = _drawdown(e["pnl"] for s, e in sorted(resolved, key=lambda x: x[0]["t"]))
+    if out["top_game_share"] is None:
+        uns["top_game_share"] = "zero P&L in every game"
+    out["max_drawdown_usd"] = _drawdown(e["pnl"] for s, e in sorted(resolved, key=lambda x: (x[0]["t"], x[0]["event_key"])))
     return out
 
 
 def decision_inputs(m: dict[str, Any], robust: Optional[dict[str, Any]]) -> dict[str, Any]:
-    return {"skill_ci": m.get("skill_ci"), "net_pnl_ci": m.get("mean_ret"), "fill_rate": m.get("fill_rate"),
-            "test_games": m.get("games", 0), "deduped_triggers": m.get("attempted_orders", 0), "top_game_share": m.get("top_game_share"),
-            "robust_l3_h05": {"net_pnl_ci": (robust or {}).get("mean_ret"), "positive_game_share": (robust or {}).get("positive_game_share")}}
+    """Exactly what ``decision`` reads; ``missing`` names every input it had to do without."""
+    out = {"skill_ci": m.get("skill_ci"), "net_pnl_ci": m.get("mean_ret"), "fill_rate": m.get("fill_rate"),
+           "test_games": m.get("games", 0), "deduped_triggers": m.get("attempted_orders", 0), "top_game_share": m.get("top_game_share"),
+           "robust_l3_h05": {"net_pnl_ci": (robust or {}).get("mean_ret"), "positive_game_share": (robust or {}).get("positive_game_share")}}
+    out["missing"] = sorted([k for k in ("skill_ci", "net_pnl_ci", "fill_rate", "top_game_share") if out[k] is None]
+                            + [f"robust_l3_h05.{k}" for k, v in out["robust_l3_h05"].items() if v is None])
+    return out
 
 
-# ---- forecasts (B0 / B3 / B4 / the momentum prototype) --------------------------------
 def forecast_pairs(samples: list[dict[str, Any]], h: int, feature: str) -> list[tuple[str, float, float, float]]:
     """(game, t, x, y) on unconditional samples with the feature and a forward label."""
     return [(_game(s["event_key"]), s["t"], float(s[feature]), float(s[f"dmid_{h}_fwd"])) for s in samples
@@ -532,81 +769,124 @@ def momentum_forecast_score(fc: dict[tuple, dict[str, Any]], rows: list[dict[str
 # ---- H3 extras, H4 ----------------------------------------------------------------------
 def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fee_for_row: Callable, latency_s: float,
                    watch_s: float = 600.0, n: int = 10, tie_safe: bool = True, settle: Optional[dict] = None,
-                   cooldown_s: float = 0.0) -> dict[str, Any]:
-    """H3 + lock (strategy/laglock.py replayed): buy the follower on an H3 signal (IOC at the
-    decision ask after the latency, fees in); then for ``watch_s`` watch the other outcome on
-    the executable venues and lock with the first observation whose all-in makes the pair
-    cost <= $1 *and* whose own IOC (same latency) fills - tie-safe pairs only when asked. An
-    unlocked position is sold to the bid at the end of the watch (or settled). Returns the
-    per-game per-contract P&L plus the lock conversion and the locked-only P&L."""
+                   cooldown_s: float = 0.0, venue_latency: Optional[dict[str, float]] = None) -> dict[str, Any]:
+    """H3 + lock (strategy/laglock.py replayed) with inventory accounting. Buy what the H3
+    decision buys (IOC at the decision ask after the latency, fees in); then for ``watch_s``
+    watch the contracts paying on the other outcome on the executable venues and send an IOC
+    for the *unhedged remainder* whenever the pair costs <= $1 (tie-safe pairs only when
+    asked). Every contract a hedge actually fills stays in the books - a partial hedge locks
+    what it filled and the watch goes on for the rest; one order at a time. Whatever is still
+    unhedged after the watch is sold to the bid (or settled) by the paper executor's own exit;
+    if any of it is neither, the trade is unresolved (None), never valued."""
+    from decimal import Decimal
+
     from arb_engine.quant.microdata import series_by_contract, tie_value
     from arb_engine.quant.paperexec import ioc_entry, ioc_round_trip
 
     series = series_by_contract(rows)
+    vl = dict(venue_latency or {})
     rets: dict[str, list] = defaultdict(list)
+    times: dict[str, list] = defaultdict(list)
     tries: dict[str, int] = defaultdict(int)
     locked_only: dict[str, list] = defaultdict(list)
-    hold: dict[str, list] = defaultdict(list)   # the same entries held for watch_s, never locked: the fair baseline
+    hold: dict[str, list] = defaultdict(list)
     waits: list[float] = []
-    n_filled = n_locked = 0
-    for s in select(samples, _h3, cooldown_s):
-        g = _game(s["event_key"])
+    inv = Counter()
+    decisions, _ = select_trades(samples, _h3_direction, cooldown_s)
+    for s, d, bc in decisions:
+        g, t = _game(s["event_key"]), s["t"]
         tries[g] += 1
-        key = (s["event_key"], s["book_id"], s["outcome"], s["side"])
-        mine = [r for r in series.get(key, []) if r["obs_ts"] > s["t"]]
+        times[g].append(t)
+        key = tuple(bc["key"])
+        mine = [r for r in series.get(key, []) if r["obs_ts"] > t]
         fee = fee_for_row(mine[0]) if mine else None
         if fee is None:
             rets[g].append(None)
             continue
-        entry, erow = ioc_entry(mine, s["t"], s["ask"], n, fee, latency_s)
-        if entry.missed:
+        lat = float(vl.get(str(bc["venue"]), latency_s))
+        entry, erow = ioc_entry(mine, t, bc["ask"], n, fee, lat)
+        if entry.missed or not entry.filled:
             rets[g].append(None)
             continue
-        n_filled += 1
-        sv = (settle or {}).get((s["event_key"], s["outcome"], s["side"]))
-        hold[g].append(ioc_round_trip(mine, s["t"], s["ask"], n, fee, latency_s, horizon_s=watch_s, settlement=sv).pnl_per_contract)
+        inv["entries_filled"] += 1
+        sv = (settle or {}).get(key)
+        hold[g].append(ioc_round_trip(mine, t, bc["ask"], n, fee, lat, horizon_s=watch_s, settlement=sv).pnl_per_contract)
+        held = entry.filled
+        cost = Decimal(str(entry.entry_price)) * held + entry.entry_fee
         t_in = erow["obs_ts"]
-        entry_all_in = (entry.entry_price * entry.filled + float(entry.entry_fee)) / entry.filled
         etie = tie_value(erow)
-        comp_keys = [k for k in series if k[0] == s["event_key"] and k[2] != s["outcome"] and k[3] == "yes"]
+        comp_keys = [k for k in series if k[0] == key[0] and k[2] != key[2]]      # rows are normalized: any side
         stream = sorted((r["obs_ts"], k, r) for k in comp_keys for r in series[k]
                         if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE)
-        done = None
+        locked, hedge_cost, busy_until = 0, Decimal("0"), -math.inf
         for tt, k, r in stream:
-            ask = r.get("ask")
-            cfee = fee_for_row(r)
-            if ask is None or cfee is None or (r.get("ask_size") is not None and float(r["ask_size"]) < entry.filled):
+            remaining = held - locked
+            if remaining <= 0:
+                break
+            if tt < busy_until:
+                continue                                    # the previous hedge order is still out
+            ask, cfee = r.get("ask"), fee_for_row(r)
+            if ask is None or cfee is None:
                 continue
-            c_all_in = float(ask) + float(cfee.fee(ask, entry.filled, "taker")) / entry.filled
-            if entry_all_in + c_all_in > 1.0:
+            c_all_in = float(ask) + float(cfee.fee(ask, remaining, "taker")) / remaining
+            if float(cost) / held + c_all_in > 1.0:
                 continue
             if tie_safe:
                 ct = tie_value(r)
                 if etie is None or ct is None or etie + ct < 1.0 - 1e-9:
                     continue
-            leg, lrow = ioc_entry([x for x in series[k] if x["obs_ts"] > tt], tt, float(ask), entry.filled, cfee, latency_s)
-            if leg.missed or leg.filled < entry.filled:
+            leg_lat = float(vl.get(str(r.get("venue")), latency_s))
+            leg, lrow = ioc_entry([x for x in series[k] if x["obs_ts"] > tt], tt, float(ask), remaining, cfee, leg_lat)
+            inv["hedge_orders"] += 1
+            busy_until = lrow["obs_ts"] if lrow is not None else tt + leg_lat + 2.0
+            if leg.missed or not leg.filled:
                 continue
-            got = (leg.entry_price * leg.filled + float(leg.entry_fee)) / leg.filled
-            done = 1.0 - entry_all_in - got
-            waits.append(lrow["obs_ts"] - t_in)
-            break
-        if done is not None:
-            n_locked += 1
-            rets[g].append(done)
-            locked_only[g].append(done)
+            locked += leg.filled
+            hedge_cost += Decimal(str(leg.entry_price)) * leg.filled + leg.entry_fee
+            inv["hedge_contracts"] += leg.filled
+            if leg.filled < remaining:
+                inv["partial_hedges"] += 1
+            if locked == held:
+                waits.append(lrow["obs_ts"] - t_in)
+        rest = held - locked
+        proceeds = exit_fee = Decimal("0")
+        unresolved = 0
+        if rest:
+            ex = ioc_round_trip(mine, t, bc["ask"], rest, fee, lat, horizon_s=watch_s, settlement=sv)
+            if ex.filled < rest:                            # cannot happen (rest <= held at the same book); never silently
+                unresolved = rest - ex.filled
+            proceeds = sum((Decimal(str(p)) * c for _, p, c, _ in ex.exits), Decimal("0")) + (Decimal(str(ex.settle_value)) * ex.settled if ex.settled else Decimal("0"))
+            exit_fee = ex.exit_fee
+            unresolved += ex.unresolved
+        inv["locked_contracts"] += locked
+        inv["unhedged_contracts_at_watch_end"] += rest
+        if locked == held:
+            inv["fully_locked"] += 1
+        elif locked:
+            inv["partly_locked"] += 1
+        if unresolved:
+            inv["unresolved"] += 1
+            rets[g].append(None)
             continue
-        rets[g].append(hold[g][-1])
-    return {"rets": dict(rets), "tries": dict(tries), "locked_only": dict(locked_only), "hold": dict(hold), "filled": n_filled, "locked": n_locked,
+        pnl = Decimal(locked) + proceeds - exit_fee - cost - hedge_cost
+        per = float(pnl / held)
+        rets[g].append(per)
+        if locked == held:
+            locked_only[g].append(per)
+    return {"rets": dict(rets), "times": dict(times), "tries": dict(tries), "locked_only": dict(locked_only), "hold": dict(hold),
+            "filled": inv["entries_filled"], "locked": inv["fully_locked"], "inventory": dict(inv),
             "median_seconds_to_lock": sorted(waits)[len(waits) // 2] if waits else None}
 
 
-def h3_by_grade(samples: list[dict[str, Any]], h: int, seed: int, draws: int, cooldown_s: float = 0.0) -> dict[str, Any]:
-    """H3 split by the grades logged live: hard vs soft lag, agreement vs none."""
+def h3_by_grade(samples: list[dict[str, Any]], h: int, seed: int, draws: int, cooldown_s: float = 0.0,
+                trades: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    """H3 split by the grades logged live: hard vs soft lag, agreement vs none (on the realized
+    trades when given, so a complement buy is graded by the decision that made it)."""
     groups = {"hard": lambda s: s.get("hard_lag") is True, "soft": lambda s: s.get("hard_lag") is False,
               "agree>=1": lambda s: (s.get("agree") or 0) >= 1, "agree=0": lambda s: (s.get("agree") or 0) == 0}
-    sel = select(samples, _h3, cooldown_s)
-    return {name: candidate_metrics([s for s in sel if keep(s)], h, seed, draws) for name, keep in groups.items()}
+    if trades is None:
+        trades = [dict(s, _decision=s) for s, _, _ in select_trades(samples, _h3_direction, cooldown_s)[0]]
+    return {name: candidate_metrics([tr for tr in trades if keep(tr["_decision"])], h, seed, draws) for name, keep in groups.items()}
 
 
 def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float, latency_rh: float, seed_n: int = 10,
@@ -658,7 +938,7 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
             compat = True if rel == "identical" else (False if rel == "mismatch" else None)
             res = two_leg_arb([x for x in series[ka] if x["obs_ts"] > t], [x for x in series[kb] if x["obs_ts"] > t], t,
                               float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb, haircut=haircut,
-                              tie_payouts=ties, settlement_compatible=compat)
+                              tie_payouts=ties, settlement_compatible=compat, book_id_a=ka[1], book_id_b=kb[1])
             legs_filled = sum(1 for l in res.legs if l.filled)
             win = float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None
             tie = float(res.pnl_tie) / seed_n if res.pnl_tie is not None and (res.matched or res.unwound) else None
@@ -709,35 +989,65 @@ def arb_metrics(records: list[dict[str, Any]], seed: int, draws: int, field: str
 # ---- the experiment -----------------------------------------------------------------
 def _spec_with_defaults(spec: dict[str, Any]) -> dict[str, Any]:
     return {**DEFAULT_SPEC, "signal_cooldown_s": 60, "robust": {"latency_s": 3, "haircut": 0.5}, "manual_leg_latency_s": 15,
-            "train_share": 2 / 3, "ref_contracts": 10, "secondary": [], "alpha": 0.10, **(spec or {})}
+            "manual_venues": ["robinhood"], "latencies_s": [1, 3], "haircuts": [1.0, 0.5], "train_share": 2 / 3, "ref_contracts": 10,
+            "secondary": [], "alpha": 0.10, **(spec or {})}
+
+
+GRID_KEYS = ("attempted_orders", "filled_orders", "fill_rate", "resolved_share_of_fills", "mean_ret", "positive_game_share", "dollar_pnl",
+             "unsupported")
+
+
+def _cadence(ctx: ExecCtx) -> Optional[float]:
+    """The median time between consecutive observations of a contract (the recorder's cadence)."""
+    gaps = sorted(b - a for ts in ctx.times.values() for a, b in zip(ts, ts[1:]) if b > a)
+    return gaps[len(gaps) // 2] if gaps else None
+
+
+def _per_game_returns(trades: list[dict[str, Any]], h: int) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = defaultdict(list)
+    for tr in trades:
+        e = tr.get(f"exec_{h}") or {}
+        if e.get("pnl") is not None and e.get("filled"):
+            out[_game(tr["event_key"])].append(e["pnl"] / e["filled"])
+    return dict(out)
 
 
 def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legacy: bool, fold: str = "discovery",
-             frozen: Optional[dict[str, Any]] = None, train_samples: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
-    """One fold. ``frozen`` = coefficients fixed before this fold (the test fold's only
-    option); ``train_samples`` = earlier data to fit on (validation); neither = the fold's own
-    earlier games train and its later games are scored (discovery)."""
+             frozen: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """One fold. ``frozen`` = the discovery-frozen forecast coefficients (validation and test);
+    without it (discovery) each scored game is fitted on the games that ended before it.
+
+    Execution: single-leg orders at ``latency_s`` (a Robinhood order - placed by a person - at
+    ``manual_leg_latency_s``), then every decision again under each registered latency x
+    haircut (``latencies_s`` x ``haircuts``); the promotion rule's stress input is L=3 s,
+    haircut 0.5 from that grid."""
     from arb_engine.quant.microdata import _default_fee, build, settlement_values
 
     spec = _spec_with_defaults(spec)
     seed, draws = spec["seed"], spec["bootstrap"]
     cd = float(spec["signal_cooldown_s"])
-    horizons = spec["horizons"]
+    horizons = list(spec["horizons"])
+    manual = float(spec["manual_leg_latency_s"])
+    venue_latency = {str(v): manual for v in spec["manual_venues"]}
     settle = settlement_values(data["rows"], data["finals"])
     samples = build(data["rows"], espn=data["espn"], prints=data["prints"], sample="all", settlement=settle, horizons=horizons,
-                    latency_s=latency_s, entry_tol_s=2.0, ref_contracts=spec["ref_contracts"])
-    rob = spec["robust"]
-    robust = build(data["rows"], sample="all", settlement=settle, horizons=horizons, latency_s=max(float(rob["latency_s"]), 0.0),
-                   entry_tol_s=2.0, ref_contracts=spec["ref_contracts"], haircut=float(rob["haircut"]))
+                    latency_s=latency_s, entry_tol_s=2.0, ref_contracts=spec["ref_contracts"], venue_latency=venue_latency)
+    print_counts = dict(getattr(build, "print_counts", {}) or {})
     fc = momentum_forecasts(data["rows"])
-    for ss in (samples, robust):
-        for s in ss:
-            f = fc.get((s["event_key"], s["book_id"], s["outcome"], s["side"], s["t"]))
-            s["momentum_status"] = f["status"] if f else None
-    kinds = Counter(s["kind"] for s in samples)
+    for smp in samples:
+        f = fc.get((smp["event_key"], smp["book_id"], smp["outcome"], smp["side"], smp["t"]))
+        smp["momentum_status"] = f["status"] if f else None
+    ctx = ExecCtx(data["rows"], settle, _default_fee, int(spec["ref_contracts"]), venue_latency)
+    cadence = _cadence(ctx)
+    grid = [(float(L), float(hc)) for L in spec["latencies_s"] for hc in spec["haircuts"]]
+    gname = lambda L, hc: f"L{L:g}_h{hc:g}"   # noqa: E731
+    kinds = Counter(x["kind"] for x in samples)
     report: dict[str, Any] = {"latency_s": latency_s, "legacy_timestamps": legacy, "games": len({_game(k) for k in data["event_keys"]}),
                               "samples": len(samples), "decision_points": dict(kinds), "triggers": kinds.get("trigger", 0),
-                              "finals": len(data["finals"]), "horizons": {},
+                              "finals": len(data["finals"]), "prints": print_counts, "horizons": {},
+                              "execution": {"latency_s": latency_s, "venue_latency": venue_latency, "cadence_s": cadence,
+                                            "registered_grid": [gname(L, hc) for L, hc in grid], "robust_for_decisions": "L3_h0.5",
+                                            "unsupported_latencies": [gname(L, hc) for L, hc in grid if cadence and cadence > L + 2.0]},
                               "baselines": {"B0": "B0_persistence (unchanged price)", "B1": "B1_buy_any (cost hurdle)",
                                             "B2": ["H1_momentum", "H2_dip", "H2_recovery", "H3_leadlag", "M_prototype"],
                                             "B3": "B3_ridge_dmid30", "B4": "B4_ridge_gap"}}
@@ -750,31 +1060,50 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
         plan = chrono_training(samples, int(spec.get("min_train_games", 3)))
         coef = None
         fit_note = {"from": "games that ended before each scored game", "plan": plan}
-        scored = [s for s in samples if _game(s["event_key"]) in plan]
+        scored = [x for x in samples if _game(x["event_key"]) in plan]
     report["model_fit"] = {**fit_note, "coef": coef}
-    report["prints"] = dict(getattr(build, "print_counts", {}) or {})
+    # Decisions -> trades (the bought contract: itself, or its executable complement), once per
+    # economic exposure per cooldown; then each trade under the main execution and the grid.
+    sels = {name: select_trades(samples, rule, cd if cool else 0.0) for name, (rule, cool) in RULES.items()}
+    main = {name: [dict(realize(ctx, x, d, bc, horizons, latency_s, 1.0, reuse=True), _decision=x) for x, d, bc in sel]
+            for name, (sel, _) in sels.items()}
+    grid_h = {name: (horizons if name != "B1_buy_any" else [30 if 30 in horizons else horizons[0]]) for name in RULES}
+    gtr = {name: {(L, hc): [realize(ctx, x, d, bc, grid_h[name], L, hc, reuse=False) for x, d, bc in sels[name][0]] for L, hc in grid}
+           for name in RULES}
     pvals: dict[str, float] = {}
     decisions: dict[str, Any] = {}
+    dinputs: dict[str, Any] = {}
     for h in horizons:
-        unc = [s for s in samples if s["kind"] == "unconditional"]
-        cover = sum(1 for s in unc if s.get(f"dmid_{h}_fwd") is not None) / len(unc) if unc else None
-        hr: dict[str, Any] = {"coverage": cover, "missing_labels_unconditional": sum(1 for s in unc if s.get(f"dmid_{h}_fwd") is None)}
-        b0 = forecast_pairs(scored if plan is None else [s for s in samples if _game(s["event_key"]) in plan], h, "dmid_30")
+        unc = [x for x in samples if x["kind"] == "unconditional"]
+        cover = sum(1 for x in unc if x.get(f"dmid_{h}_fwd") is not None) / len(unc) if unc else None
+        hr: dict[str, Any] = {"coverage": cover, "missing_labels_unconditional": sum(1 for x in unc if x.get(f"dmid_{h}_fwd") is None)}
+        b0 = forecast_pairs(scored, h, "dmid_30")
         hr["B0_persistence"] = {"n": len(b0), "mae": (sum(abs(y) for _, _, _, y in b0) / len(b0)) if b0 else None}
-        for name, (rule, cool) in RULES.items():
-            m = candidate_metrics(select(samples, rule, cd if cool else 0.0), h, seed, draws)
-            rm = candidate_metrics(select(robust, rule, cd if cool else 0.0), h, seed, draws)
-            m["robust_l3_h05"] = {k: rm.get(k) for k in ("mean_ret", "positive_game_share", "fill_rate", "attempted_orders")}
+        for name in RULES:
+            m = candidate_metrics(main[name], h, seed, draws)
+            m["selection"] = sels[name][1]
+            m["grid"] = {}
+            robust = None
+            for L, hc in grid:
+                if h not in grid_h[name]:
+                    m["grid"][gname(L, hc)] = {"unsupported": {"all": f"the grid is computed at {grid_h[name]} s for this candidate"}}
+                    continue
+                gm = candidate_metrics(gtr[name][(L, hc)], h, seed, draws)
+                if cadence and cadence > L + 2.0:
+                    gm["unsupported"]["latency"] = (f"recorder cadence {cadence:.1f} s exceeds latency + entry tolerance "
+                                                    f"({L:g} + 2 s): orders at this latency cannot meet an observed book")
+                m["grid"][gname(L, hc)] = {k: gm.get(k) for k in GRID_KEYS}
+                if (L, hc) == (float(spec["robust"]["latency_s"]), float(spec["robust"]["haircut"])):
+                    robust = gm
             hr[name] = m
             if name != "B1_buy_any":
-                decisions[f"{name}@{h}"] = decision(decision_inputs(m, rm))
-            per_game = defaultdict(list)
-            for s in select(samples, rule, cd if cool else 0.0):
-                e = s.get(f"exec_{h}") or {}
-                if e.get("pnl") is not None and e.get("filled"):
-                    per_game[_game(s["event_key"])].append(e["pnl"] / e["filled"])
-            pvals[f"{name}@{h}"] = boot_p(dict(per_game), seed, draws)
-        hr["H3_by_grade"] = h3_by_grade(samples, h, seed, draws, cd)
+                inp = decision_inputs(m, robust)
+                if robust is None:
+                    inp["missing"] = sorted(set(inp["missing"]) | {"robust_l3_h05 (not computed at this horizon)"})
+                dinputs[f"{name}@{h}"] = inp
+                decisions[f"{name}@{h}"] = decision(inp)
+            pvals[f"{name}@{h}"] = sign_flip_p(_per_game_returns(main[name], h), seed, draws)
+        hr["H3_by_grade"] = h3_by_grade(samples, h, seed, draws, cd, trades=main["H3_leadlag"])
         if plan is None:
             hr["B3_ridge_dmid30"] = forecast_skill(scored, h, "dmid_30", seed, draws, coef=coef["B3_ridge_dmid30"][str(h)])
             hr["B4_ridge_gap"] = forecast_skill(scored, h, "gap_leader", seed, draws, coef=coef["B4_ridge_gap"][str(h)])
@@ -782,29 +1111,36 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
             hr["B3_ridge_dmid30"] = forecast_skill_rolling(samples, h, "dmid_30", seed, draws, plan)
             hr["B4_ridge_gap"] = forecast_skill_rolling(samples, h, "gap_leader", seed, draws, plan)
         # H3 under looser settlement rules: diagnostics, outside the decisions and every test.
-        hr["H3_diagnostics"] = {lvl: candidate_metrics(select(samples, _h3_diag(lvl), cd), h, seed, draws)
-                                for lvl in ("tie_matched", "any_settlement")}
+        hr["H3_diagnostics"] = {}
+        for lvl in ("tie_matched", "any_settlement"):
+            sel, st = select_trades(samples, _h3_diag(lvl), cd)
+            hr["H3_diagnostics"][lvl] = {**candidate_metrics([realize(ctx, x, d, bc, [h], latency_s, 1.0, reuse=True) for x, d, bc in sel],
+                                                             h, seed, draws), "selection": st}
         for name in ("B3_ridge_dmid30", "B4_ridge_gap"):
             decisions[f"{name}@{h}"] = decision({"skill_ci": hr[name].get("skill_ci")})   # no orders: at best shadow
         report["horizons"][str(h)] = hr
+    report["decision_inputs"] = dinputs
     report["M_prototype_forecast"] = momentum_forecast_score(fc, data["rows"], samples, seed, draws)
-    # H4: the guaranteed trade. Manual Robinhood leg (a person, 15 s) and both legs fast.
-    manual = arb_scan(data["rows"], _default_fee, latency_s, spec["manual_leg_latency_s"])
+    # H4: the guaranteed trade. Manual Robinhood leg (a person) and both legs fast.
+    rob = spec["robust"]
+    manual_recs = arb_scan(data["rows"], _default_fee, latency_s, manual)
     fast = arb_scan(data["rows"], _default_fee, latency_s, latency_s)
-    stressed = arb_scan(data["rows"], _default_fee, max(float(rob["latency_s"]), latency_s), spec["manual_leg_latency_s"], haircut=float(rob["haircut"]))
-    h4 = h4_report(manual, seed, draws)
+    stressed = arb_scan(data["rows"], _default_fee, max(float(rob["latency_s"]), latency_s), manual, haircut=float(rob["haircut"]))
+    h4 = h4_report(manual_recs, seed, draws)
     h4["both_legs_fast"] = h4_report(fast, seed, draws)
     h4["stressed_l3_h05"] = h4_report(stressed, seed, draws)
-    h4["by_margin"] = {name: h4_report([r for r in manual if lo <= r["margin"] < hi], seed, draws)
+    h4["by_margin"] = {name: h4_report([r for r in manual_recs if lo <= r["margin"] < hi], seed, draws)
                        for name, lo, hi in (("<1c", 0.0, 0.01), ("1-3c", 0.01, 0.03), (">=3c", 0.03, 9.0))}
     report["H4_arb"] = h4
-    pv4 = defaultdict(list)                   # H4 is tested on guaranteed-eligible pairs only
-    for r in manual:
+    pv4: dict[str, list[float]] = defaultdict(list)          # H4 is tested on guaranteed-eligible pairs only
+    for r in manual_recs:
         if r["class"] == "guaranteed-eligible" and r["pnl_worst"] is not None:
             pv4[r["game"]].append(r["pnl_worst"])
-    pvals["H4_arb"] = boot_p(dict(pv4), seed, draws)
-    lk = h3_lock_trades(samples, data["rows"], _default_fee, latency_s, watch_s=spec.get("lock_watch_s", 600), settle=settle, cooldown_s=cd)
-    report["H3_lock"] = {**summarize(lk["rets"], lk["tries"], seed=seed, draws=draws), "entries_filled": lk["filled"], "locked": lk["locked"],
+    pvals["H4_arb"] = sign_flip_p(dict(pv4), seed, draws)
+    lk = h3_lock_trades(samples, data["rows"], _default_fee, latency_s, watch_s=spec.get("lock_watch_s", 600), settle=settle,
+                        cooldown_s=cd, venue_latency=venue_latency)
+    report["H3_lock"] = {**summarize(lk["rets"], lk["tries"], seed=seed, draws=draws, times=lk["times"]), "entries_filled": lk["filled"],
+                         "locked": lk["locked"], "inventory": lk["inventory"],
                          "lock_conversion": (lk["locked"] / lk["filled"]) if lk["filled"] else None,
                          "median_seconds_to_lock": lk["median_seconds_to_lock"],
                          "locked_only": summarize(lk["locked_only"], {g: len(v) for g, v in lk["locked_only"].items()}, seed=seed, draws=draws),
@@ -813,16 +1149,24 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
                                   "profit; compare with hold_no_lock (same entries, same watch, never locked)")}
     primary = spec["primary"].rstrip("s").replace("H3@", "H3_leadlag@")
     alpha = float(spec["alpha"])
-    report["primary"] = {"hypothesis": primary, "p_mean_le_0": pvals.get(primary), "alpha": alpha,
-                         "passes": (pvals.get(primary, 1.0) <= alpha)}
+    report["primary"] = {"hypothesis": primary, "p_value": pvals.get(primary), "test": "game-level sign-flip, one-sided (mean > 0)",
+                         "alpha": alpha, "passes": (pvals.get(primary, 1.0) <= alpha)}
     family = [k for k in spec["secondary"] if k != primary]      # the primary is tested alone, never in the family
     fam = {k: pvals[k] for k in family if k in pvals}
-    report["secondary"] = {"family": family, "p": fam, "holm_pass": holm(fam, alpha)}
+    report["secondary"] = {"family": family, "p": fam, "holm_pass": holm(fam, alpha), "test": "game-level sign-flip, one-sided; Holm"}
     report["decisions"] = decisions
     report["fold_role"] = {"discovery": "descriptive: these games shaped the rules; not evidence",
                            "validation": "chronological check before the test; not the test",
                            "test": "the pre-registered test"}.get(fold, fold)
-    return report
+    return _strip_private(report)
+
+
+def _strip_private(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {k: _strip_private(v) for k, v in x.items() if not str(k).startswith("_")}
+    if isinstance(x, list):
+        return [_strip_private(v) for v in x]
+    return x
 
 
 def synthetic_report() -> dict[str, Any]:
@@ -882,15 +1226,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not path.exists():
             raise SystemExit(f"no frozen models at {path}: run --fold discovery --freeze {path} first")
         frozen = json.loads(path.read_text())
-    eff = effective_spec(manifest, frozen)
+    runtime = {"latency_override": args.latency}        # a CLI override changes results, so it is part of the spec
+    eff = effective_spec(manifest, frozen, runtime=runtime)
     digest = spec_hash(eff)
+    ledger = ledger_path(args.frozen_spec)
     if args.freeze_spec:
         if args.fold == "test":
             raise SystemExit("--freeze-spec cannot be combined with --fold test")
         rec = {"spec_hash": digest, "hashes": component_hashes(eff), "frozen_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "git_head": _git_head(), "note": "the test fold opens only under this hash; a different one needs --reopen-test and is exploratory"}
+               "git_head": _git_head(), "test_ledger": ledger.name,
+               "note": "the test fold opens only under this hash; a different one needs --reopen-test and is exploratory"}
         args.freeze_spec.parent.mkdir(parents=True, exist_ok=True)
         args.freeze_spec.write_text(json.dumps(rec, indent=2, sort_keys=True) + "\n")
+        append_log(args.log, {"utc": rec["frozen_utc"], "event": "freeze-spec", "fold": args.fold, "spec_hash": digest,
+                              "hashes": rec["hashes"], "git_head": rec["git_head"], "frozen_spec": str(args.freeze_spec),
+                              "argv": list(argv) if argv is not None else sys.argv[1:]})
         print(json.dumps(rec, indent=2, sort_keys=True))
         return 0
     exploratory = False
@@ -901,7 +1251,43 @@ def main(argv: Optional[list[str]] = None) -> int:
         changed = fz.get("spec_hash") != digest
         if changed and not (args.reopen_test or "").strip():
             raise SystemExit("the effective spec differs from the frozen one; the test fold stays closed (a change after opening needs --reopen-test)")
-        exploratory = guard_test_open(args.log, digest, args.reopen_test) or changed
+        exploratory = guard_test_open(ledger, digest, args.reopen_test) or changed
+        import uuid
+
+        run_id = uuid.uuid4().hex
+        # Durable intent, before a single test row is read: a crash or a different --log cannot
+        # erase the fact that the test fold was opened under this spec.
+        append_log(ledger, {"event": "intent", "run_id": run_id, "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            "spec_hash": digest, "reopen_reason": args.reopen_test, "exploratory": exploratory, "audit_log": str(args.log),
+                            "git_head": _git_head(), "argv": list(argv) if argv is not None else sys.argv[1:]})
+    try:
+        report = _run_fold(args, manifest, spec, frozen)
+    except BaseException as exc:
+        if args.fold == "test":
+            append_log(ledger, {"event": "failed", "run_id": run_id, "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                "error": repr(exc)[:500]})
+        raise
+    report.update({"spec_hash": digest, "hashes": component_hashes(eff), "exploratory": exploratory})
+    if exploratory:
+        report["decisions"] = {k: f"exploratory:{v}" for k, v in (report.get("decisions") or {}).items()}
+    report = _round(report)
+    rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    results_sha = hashlib.sha256(rendered.encode()).hexdigest()
+    append_log(args.log, {"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "git_head": _git_head(), "fold": args.fold,
+                          "spec_hash": digest, "hashes": component_hashes(eff), "reopen_reason": args.reopen_test,
+                          "exploratory": exploratory, "results_sha256": results_sha,
+                          "argv": list(argv) if argv is not None else sys.argv[1:]})
+    if args.results:
+        args.results.parent.mkdir(parents=True, exist_ok=True)
+        args.results.write_text(rendered)
+    if args.fold == "test":
+        append_log(ledger, {"event": "completed", "run_id": run_id, "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            "results_sha256": results_sha})
+    print(rendered, end="")
+    return 0
+
+
+def _run_fold(args: Any, manifest: dict[str, Any], spec: dict[str, Any], frozen: Optional[dict[str, Any]]) -> dict[str, Any]:
     if args.fold == "synthetic":
         report = synthetic_report()
     else:
@@ -926,20 +1312,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 report["frozen_models_written"] = {"path": str(args.freeze), "sha256": spec_hash(_round(art))}
             if legacy:
                 report["caveat"] = "legacy 5 s timestamps: the book 1 s after a decision was never observed"
-    report.update({"spec_hash": digest, "hashes": component_hashes(eff), "exploratory": exploratory})
-    if exploratory:
-        report["decisions"] = {k: f"exploratory:{v}" for k, v in (report.get("decisions") or {}).items()}
-    report = _round(report)
-    rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
-    append_log(args.log, {"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "git_head": _git_head(), "fold": args.fold,
-                          "spec_hash": digest, "hashes": component_hashes(eff), "reopen_reason": args.reopen_test,
-                          "exploratory": exploratory, "results_sha256": hashlib.sha256(rendered.encode()).hexdigest(),
-                          "argv": list(argv) if argv is not None else sys.argv[1:]})
-    if args.results:
-        args.results.parent.mkdir(parents=True, exist_ok=True)
-        args.results.write_text(rendered)
-    print(rendered, end="")
-    return 0
+    return report
 
 
 if __name__ == "__main__":
