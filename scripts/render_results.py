@@ -401,6 +401,9 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     def pct(x: Any) -> str:
         return f"{x:.0%}" if x is not None else "-"
 
+    def usd(x: Any, sign: bool = False) -> str:
+        return "-" if x is None else (f"{x:+,.2f}" if sign else f"{x:,.2f}")
+
     names = (("B1_buy_any", "B1 buy at random"), ("H1_momentum", "H1 momentum"), ("H2_dip", "H2 dip"), ("H2_recovery", "H2 recovery"),
              ("H3_leadlag", "H3 lead-lag"), ("M_prototype", "M prototype"))
     rows = []
@@ -414,8 +417,8 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
         m = h30[n]
         acct.append([label, str(m["attempted_orders"]), f"{m['filled_orders']} ({pct(m.get('fill_rate'))})", str(m["filled_contracts"]),
                      str(m["closed_positions"] + m["settled_positions"]), str(m["unresolved_positions"]), str(m["missing_labels"]),
-                     ci(m.get("skill_ci"), p=2), pct(m.get("directional_hit")), f"{m.get('dollar_pnl', 0):+,.2f}", f"{m.get('fees', 0):,.2f}",
-                     f"{m.get('max_drawdown_usd', 0):,.2f}", pct(m.get("top_game_share")), d["decisions"].get(f"{n}@30", "-")])
+                     ci(m.get("skill_ci"), p=2), pct(m.get("directional_hit")), usd(m.get("dollar_pnl"), sign=True), usd(m.get("fees")),
+                     usd(m.get("max_drawdown_usd")), pct(m.get("top_game_share")), d["decisions"].get(f"{n}@30", "-")])
     accounting = table(["at 30 s", "orders", "filled (fill rate)", "contracts", "closed", "unresolved", "no label", "skill: mid move bought [90 % CI]",
                         "moved up", "net $ (10 ct)", "fees $", "drawdown $", "top game", "rule says"], acct)
     fc = []
@@ -447,8 +450,11 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     lk = d.get("H3_lock") or {}
     def m(x: dict) -> str:
         return ci((x or {}).get("mean_ret"))
-    lock = table(["signals", "entries filled", "locked", "median time to lock", "lock or hold (10 min)", "same entries held, never locked", "locked ones only"],
+    inv = lk.get("inventory") or {}
+    lock = table(["signals", "entries filled", "fully locked", "partly locked (partial hedges)", "median time to lock", "lock or hold (10 min)",
+                  "same entries held, never locked", "fully locked ones only"],
                  [[str(lk.get("attempts")), str(lk.get("entries_filled")), f"{lk.get('locked')} ({(lk.get('lock_conversion') or 0):.0%})",
+                   f"{inv.get('partly_locked', 0)} ({inv.get('partial_hedges', 0)})",
                    f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
                    m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
     bym = a.get("by_margin") or {}
@@ -469,11 +475,26 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
                    for k in ("hard", "soft", "agree>=1", "agree=0") if k in g30]) if g30 else ""
     sec = d.get("secondary") or {}
     pr = d.get("primary") or {}
-    tests = table(["hypothesis", "role", "one-sided p (mean <= 0)", "passes"],
-                  [[pr.get("hypothesis", "-"), "primary (alone)", f"{pr.get('p_mean_le_0', 1):.3f}", "yes" if pr.get("passes") else "no"]]
+    pv = pr.get("p_value", pr.get("p_mean_le_0", 1))
+    tests = table(["hypothesis", "role", "one-sided p (game-level sign-flip)", "passes"],
+                  [[pr.get("hypothesis", "-"), "primary (alone)", f"{pv:.3f}", "yes" if pr.get("passes") else "no"]]
                   + [[k, "secondary (Holm)", f"{(sec.get('p') or {}).get(k, 1):.3f}", "yes" if (sec.get("holm_pass") or {}).get(k) else "no"]
                      for k in sec.get("family") or []])
+    srows, grows = [], []
+    for n, label in names:
+        m = h30[n]
+        st = m.get("selection") or {}
+        why = ", ".join(f"{v} {k}" for k, v in sorted((st.get("complement_unavailable") or {}).items())) or "-"
+        srows.append([label, str(m["attempted_orders"]), str(st.get("long", "-")), str(st.get("via_complement", "-")),
+                      str(st.get("complement_unavailable_total", "-")), why, str(st.get("same_exposure_dropped", "-"))])
+        g = m.get("grid") or {}
+        grows.append([label] + [f"{ci((g.get(k) or {}).get('mean_ret'))} ({pct((g.get(k) or {}).get('fill_rate'))} filled)" for k in
+                                (d.get("execution") or {}).get("registered_grid", [])])
+    selection = table(["at 30 s", "trades", "bought itself", "bought its complement", "no executable complement", "why", "mirror / repeat dropped"], srows)
+    ex = d.get("execution") or {}
+    grid_tbl = table(["at 30 s, latency x haircut"] + list(ex.get("registered_grid", [])), grows) if ex.get("registered_grid") else ""
     return {"micro_discovery_trades": trades, "micro_discovery_accounting": accounting, "micro_discovery_forecast": forecast,
+            "micro_discovery_selection": selection, "micro_discovery_grid": grid_tbl,
             "micro_discovery_arb": arb, "micro_discovery_lock": lock, "micro_discovery_arb_size": arb_size, "micro_discovery_grade": grade,
             "micro_discovery_tests": tests, "micro_discovery_h3_settlement": h3_settle}
 

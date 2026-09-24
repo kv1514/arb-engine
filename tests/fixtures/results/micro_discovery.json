@@ -7,20 +7,30 @@
       "attempts": 0,
       "games": 0,
       "resolved_rate": null,
-      "trades": 0
+      "trades": 0,
+      "unsupported": {
+        "mean_ret": "no resolved trade"
+      }
     },
+    "inventory": {},
     "lock_conversion": null,
     "locked": 0,
     "locked_only": {
       "attempts": 0,
       "games": 0,
       "resolved_rate": null,
-      "trades": 0
+      "trades": 0,
+      "unsupported": {
+        "mean_ret": "no resolved trade"
+      }
     },
     "median_seconds_to_lock": null,
     "note": "locking mostly happens after the entry has moved in its favour: it turns winners into sure profit; compare with hold_no_lock (same entries, same watch, never locked)",
     "resolved_rate": null,
-    "trades": 0
+    "trades": 0,
+    "unsupported": {
+      "mean_ret": "no resolved trade"
+    }
   },
   "H4_arb": {
     "both_legs_fast": {
@@ -42,6 +52,9 @@
         "resolved_rate": null,
         "trades": 0,
         "unresolved_contracts": 0,
+        "unsupported": {
+          "mean_ret": "no resolved trade"
+        },
         "unwound_contracts": 0
       },
       "signals": 162,
@@ -75,6 +88,7 @@
         "top_game_share": 0.29836,
         "trades": 100,
         "unresolved_contracts": 10,
+        "unsupported": {},
         "unwound_contracts": 434
       }
     },
@@ -98,6 +112,9 @@
           "resolved_rate": null,
           "trades": 0,
           "unresolved_contracts": 0,
+          "unsupported": {
+            "mean_ret": "no resolved trade"
+          },
           "unwound_contracts": 0
         },
         "signals": 57,
@@ -131,6 +148,7 @@
           "top_game_share": 0.48226,
           "trades": 36,
           "unresolved_contracts": 0,
+          "unsupported": {},
           "unwound_contracts": 281
         }
       },
@@ -153,6 +171,9 @@
           "resolved_rate": null,
           "trades": 0,
           "unresolved_contracts": 0,
+          "unsupported": {
+            "mean_ret": "no resolved trade"
+          },
           "unwound_contracts": 0
         },
         "signals": 48,
@@ -186,6 +207,7 @@
           "top_game_share": 0.53007,
           "trades": 29,
           "unresolved_contracts": 0,
+          "unsupported": {},
           "unwound_contracts": 270
         }
       },
@@ -208,6 +230,9 @@
           "resolved_rate": null,
           "trades": 0,
           "unresolved_contracts": 0,
+          "unsupported": {
+            "mean_ret": "no resolved trade"
+          },
           "unwound_contracts": 0
         },
         "signals": 57,
@@ -241,6 +266,7 @@
           "top_game_share": 0.3983,
           "trades": 31,
           "unresolved_contracts": 0,
+          "unsupported": {},
           "unwound_contracts": 245
         }
       }
@@ -263,6 +289,9 @@
       "resolved_rate": null,
       "trades": 0,
       "unresolved_contracts": 0,
+      "unsupported": {
+        "mean_ret": "no resolved trade"
+      },
       "unwound_contracts": 0
     },
     "signals": 162,
@@ -296,6 +325,7 @@
       "top_game_share": 0.30028,
       "trades": 96,
       "unresolved_contracts": 0,
+      "unsupported": {},
       "unwound_contracts": 796
     },
     "stressed_l3_h05": {
@@ -317,6 +347,9 @@
         "resolved_rate": null,
         "trades": 0,
         "unresolved_contracts": 0,
+        "unsupported": {
+          "mean_ret": "no resolved trade"
+        },
         "unwound_contracts": 0
       },
       "signals": 162,
@@ -350,6 +383,7 @@
         "top_game_share": 0.30548,
         "trades": 95,
         "unresolved_contracts": 0,
+        "unsupported": {},
         "unwound_contracts": 784
       }
     }
@@ -402,7 +436,7 @@
       "rising": 2960
     }
   },
-  "_fixture": "scripts/microstructure_eval.py --fold discovery --db out/history.db (the 15 NFL games of 2026-09-20/21, legacy 5 s recorder), after integrating Codex bd804aa; metrics only; discovery is descriptive, not evidence",
+  "_fixture": "scripts/microstructure_eval.py --fold discovery --db out/history.db (the 15 NFL games of 2026-09-20/21, legacy ~5 s recorder), replayed under spec v4 (atomic observations, symmetric H1/H3 via executable complements, sign-flip p-values); metrics only; discovery is descriptive, not evidence",
   "baselines": {
     "B0": "B0_persistence (unchanged price)",
     "B1": "B1_buy_any (cost hurdle)",
@@ -417,6 +451,488 @@
     "B4": "B4_ridge_gap"
   },
   "caveat": "legacy 5 s timestamps: the book 1 s after a decision was never observed",
+  "decision_inputs": {
+    "H1_momentum@15": {
+      "deduped_triggers": 202,
+      "fill_rate": 0.5,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.03684,
+        "lo": -0.04372,
+        "point": -0.04098
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.043,
+          "lo": -0.05415,
+          "point": -0.04745
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00429,
+        "lo": -0.00019,
+        "point": 0.00165
+      },
+      "test_games": 11,
+      "top_game_share": 0.23891
+    },
+    "H1_momentum@30": {
+      "deduped_triggers": 202,
+      "fill_rate": 0.5,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.02464,
+        "lo": -0.03942,
+        "point": -0.03197
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.04615,
+          "lo": -0.07006,
+          "point": -0.06155
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.01177,
+        "lo": -0.00515,
+        "point": 0.00199
+      },
+      "test_games": 11,
+      "top_game_share": 0.23586
+    },
+    "H1_momentum@5": {
+      "deduped_triggers": 202,
+      "fill_rate": 0.5,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.03742,
+        "lo": -0.04366,
+        "point": -0.04096
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.04372,
+          "lo": -0.05164,
+          "point": -0.04668
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00061,
+        "lo": -0.00059,
+        "point": 0.0
+      },
+      "test_games": 11,
+      "top_game_share": 0.22195
+    },
+    "H1_momentum@60": {
+      "deduped_triggers": 202,
+      "fill_rate": 0.5,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.02311,
+        "lo": -0.0442,
+        "point": -0.03286
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.03577,
+          "lo": -0.06434,
+          "point": -0.05387
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.01916,
+        "lo": -0.00616,
+        "point": 0.00723
+      },
+      "test_games": 11,
+      "top_game_share": 0.28648
+    },
+    "H2_dip@15": {
+      "deduped_triggers": 232,
+      "fill_rate": 0.43534,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.04006,
+        "lo": -0.04991,
+        "point": -0.04478
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.02951,
+          "lo": -0.07094,
+          "point": -0.04622
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00492,
+        "lo": -0.00567,
+        "point": -0.00021
+      },
+      "test_games": 11,
+      "top_game_share": 0.20144
+    },
+    "H2_dip@30": {
+      "deduped_triggers": 232,
+      "fill_rate": 0.43534,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.04107,
+        "lo": -0.07041,
+        "point": -0.05689
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.01264,
+          "lo": -0.15263,
+          "point": -0.06111
+        },
+        "positive_game_share": 0.14286
+      },
+      "skill_ci": {
+        "hi": 0.0098,
+        "lo": -0.01105,
+        "point": 0.00065
+      },
+      "test_games": 11,
+      "top_game_share": 0.24596
+    },
+    "H2_dip@5": {
+      "deduped_triggers": 232,
+      "fill_rate": 0.43534,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.0424,
+        "lo": -0.04673,
+        "point": -0.04503
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.04624,
+          "lo": -0.05971,
+          "point": -0.05188
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.01143,
+        "lo": 0.00201,
+        "point": 0.00587
+      },
+      "test_games": 11,
+      "top_game_share": 0.2205
+    },
+    "H2_dip@60": {
+      "deduped_triggers": 232,
+      "fill_rate": 0.43534,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.03437,
+        "lo": -0.07086,
+        "point": -0.05528
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.02243,
+          "lo": -0.17195,
+          "point": -0.07352
+        },
+        "positive_game_share": 0.14286
+      },
+      "skill_ci": {
+        "hi": 0.00607,
+        "lo": -0.02415,
+        "point": -0.00834
+      },
+      "test_games": 11,
+      "top_game_share": 0.22941
+    },
+    "H2_recovery@15": {
+      "deduped_triggers": 55,
+      "fill_rate": 0.34545,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.043,
+        "lo": -0.0562,
+        "point": -0.04995
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.04719,
+          "lo": -0.06073,
+          "point": -0.05254
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.005,
+        "lo": -0.00091,
+        "point": 0.00172
+      },
+      "test_games": 9,
+      "top_game_share": 0.36038
+    },
+    "H2_recovery@30": {
+      "deduped_triggers": 55,
+      "fill_rate": 0.34545,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.01047,
+        "lo": -0.06679,
+        "point": -0.04972
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.03811,
+          "lo": -0.06969,
+          "point": -0.05733
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00853,
+        "lo": -0.01283,
+        "point": -0.00038
+      },
+      "test_games": 9,
+      "top_game_share": 0.42376
+    },
+    "H2_recovery@5": {
+      "deduped_triggers": 55,
+      "fill_rate": 0.34545,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.04315,
+        "lo": -0.05614,
+        "point": -0.05047
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.04536,
+          "lo": -0.061,
+          "point": -0.05285
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00659,
+        "lo": -0.002,
+        "point": 0.00182
+      },
+      "test_games": 9,
+      "top_game_share": 0.36705
+    },
+    "H2_recovery@60": {
+      "deduped_triggers": 55,
+      "fill_rate": 0.34545,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.01008,
+        "lo": -0.06521,
+        "point": -0.04744
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.035,
+          "lo": -0.07575,
+          "point": -0.0585
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.02282,
+        "lo": -0.02435,
+        "point": 0.00061
+      },
+      "test_games": 9,
+      "top_game_share": 0.40227
+    },
+    "H3_leadlag@15": {
+      "deduped_triggers": 0,
+      "fill_rate": null,
+      "missing": [
+        "fill_rate",
+        "net_pnl_ci",
+        "robust_l3_h05.net_pnl_ci",
+        "robust_l3_h05.positive_game_share",
+        "skill_ci",
+        "top_game_share"
+      ],
+      "net_pnl_ci": null,
+      "robust_l3_h05": {
+        "net_pnl_ci": null,
+        "positive_game_share": null
+      },
+      "skill_ci": null,
+      "test_games": 0,
+      "top_game_share": null
+    },
+    "H3_leadlag@30": {
+      "deduped_triggers": 0,
+      "fill_rate": null,
+      "missing": [
+        "fill_rate",
+        "net_pnl_ci",
+        "robust_l3_h05.net_pnl_ci",
+        "robust_l3_h05.positive_game_share",
+        "skill_ci",
+        "top_game_share"
+      ],
+      "net_pnl_ci": null,
+      "robust_l3_h05": {
+        "net_pnl_ci": null,
+        "positive_game_share": null
+      },
+      "skill_ci": null,
+      "test_games": 0,
+      "top_game_share": null
+    },
+    "H3_leadlag@5": {
+      "deduped_triggers": 0,
+      "fill_rate": null,
+      "missing": [
+        "fill_rate",
+        "net_pnl_ci",
+        "robust_l3_h05.net_pnl_ci",
+        "robust_l3_h05.positive_game_share",
+        "skill_ci",
+        "top_game_share"
+      ],
+      "net_pnl_ci": null,
+      "robust_l3_h05": {
+        "net_pnl_ci": null,
+        "positive_game_share": null
+      },
+      "skill_ci": null,
+      "test_games": 0,
+      "top_game_share": null
+    },
+    "H3_leadlag@60": {
+      "deduped_triggers": 0,
+      "fill_rate": null,
+      "missing": [
+        "fill_rate",
+        "net_pnl_ci",
+        "robust_l3_h05.net_pnl_ci",
+        "robust_l3_h05.positive_game_share",
+        "skill_ci",
+        "top_game_share"
+      ],
+      "net_pnl_ci": null,
+      "robust_l3_h05": {
+        "net_pnl_ci": null,
+        "positive_game_share": null
+      },
+      "skill_ci": null,
+      "test_games": 0,
+      "top_game_share": null
+    },
+    "M_prototype@15": {
+      "deduped_triggers": 725,
+      "fill_rate": 0.59586,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.03309,
+        "lo": -0.04115,
+        "point": -0.03751
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.03127,
+          "lo": -0.04718,
+          "point": -0.03847
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00218,
+        "lo": -0.0,
+        "point": 0.00081
+      },
+      "test_games": 13,
+      "top_game_share": 0.22117
+    },
+    "M_prototype@30": {
+      "deduped_triggers": 725,
+      "fill_rate": 0.59586,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.02987,
+        "lo": -0.04392,
+        "point": -0.03711
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.03164,
+          "lo": -0.04724,
+          "point": -0.03958
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": 0.00548,
+        "lo": -0.0005,
+        "point": 0.00202
+      },
+      "test_games": 13,
+      "top_game_share": 0.26384
+    },
+    "M_prototype@5": {
+      "deduped_triggers": 725,
+      "fill_rate": 0.59586,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.03404,
+        "lo": -0.04283,
+        "point": -0.03879
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.03178,
+          "lo": -0.04283,
+          "point": -0.03691
+        },
+        "positive_game_share": 0.0
+      },
+      "skill_ci": {
+        "hi": -0.0002,
+        "lo": -0.00209,
+        "point": -0.00088
+      },
+      "test_games": 13,
+      "top_game_share": 0.22635
+    },
+    "M_prototype@60": {
+      "deduped_triggers": 725,
+      "fill_rate": 0.59586,
+      "missing": [],
+      "net_pnl_ci": {
+        "hi": -0.0283,
+        "lo": -0.04534,
+        "point": -0.03727
+      },
+      "robust_l3_h05": {
+        "net_pnl_ci": {
+          "hi": -0.02999,
+          "lo": -0.05755,
+          "point": -0.04443
+        },
+        "positive_game_share": 0.14286
+      },
+      "skill_ci": {
+        "hi": 0.01039,
+        "lo": -0.0012,
+        "point": 0.00397
+      },
+      "test_games": 13,
+      "top_game_share": 0.26469
+    }
+  },
   "decision_points": {
     "recovery": 55,
     "trigger": 609,
@@ -452,6 +968,26 @@
     "M_prototype@5": "reject",
     "M_prototype@60": "reject"
   },
+  "execution": {
+    "cadence_s": 5.40639,
+    "latency_s": 5,
+    "registered_grid": [
+      "L1_h1",
+      "L1_h0.5",
+      "L3_h1",
+      "L3_h0.5"
+    ],
+    "robust_for_decisions": "L3_h0.5",
+    "unsupported_latencies": [
+      "L1_h1",
+      "L1_h0.5",
+      "L3_h1",
+      "L3_h0.5"
+    ],
+    "venue_latency": {
+      "robinhood": 15.0
+    }
+  },
   "experiment": "microstructure",
   "exploratory": false,
   "finals": 3,
@@ -463,11 +999,14 @@
   },
   "games": 15,
   "hashes": {
-    "code": "fbdd0cd87b8ec2e8da701c3aac87460ddd0cc318c41d47c29a15e7e7d9079142",
+    "code": "3ff6565b02e9fb4db475bacbfdda5fd2e5bfc81c1d7baa742e60baaa4405252f",
     "constants": "56b7a9c7fe20685ca75cd4b78bcc9b751bc12ddb9f4a7ed6caf35fa4034db9a8",
+    "fees": "2dd10c49991c30a884537cb31a363938be94a7edf5617c2e99ed92b7f4477450",
     "folds": "3f8fa925aff1310d9d0046182d12eff258d7e0218a3612ee6208f8efb3b11f9b",
     "frozen_models": null,
-    "spec": "e7e56ca1c6bc7c211370e6c646d1103cdc0534c111b859c29b8093168f9c78d1"
+    "runtime": "c918b189519bb841f193c768ae0c5f3eff821e7800f12a8a52080faf9a5b0bf6",
+    "settlement": "74c3cf3551172c8bd5c876fa99220fab6203e89b67fe44eb26286b73ef8456da",
+    "spec": "df5fc0215ec0a2cdb4adc28c66473031b1fe360637918190b832fdaf41e0274a"
   },
   "horizons": {
     "15": {
@@ -477,44 +1016,69 @@
       },
       "B1_buy_any": {
         "attempted_orders": 31127,
-        "closed_positions": 18111,
+        "closed_positions": 16734,
         "directional_hit": 0.47183,
-        "dollar_pnl": -7267.59,
-        "fees": 5130.58,
-        "fill_rate": 0.59315,
-        "filled_contracts": 183889,
-        "filled_orders": 18463,
+        "dollar_pnl": -6472.45,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.0277,
+        "fees": 4591.36,
+        "fill_rate": 0.54397,
+        "filled_contracts": 168717,
+        "filled_orders": 16932,
         "games": 15,
-        "hit_rate": 0.02543,
-        "labelled": 18198,
-        "max_drawdown_usd": 7267.59,
-        "mean_ret": {
-          "hi": -0.03614,
-          "lo": -0.04318,
-          "point": -0.04022
+        "grid": {
+          "L1_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L1_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          }
         },
-        "missed_orders": 12664,
+        "gross_pnl_usd": -1881.09,
+        "hit_rate": 0.02457,
+        "labelled": 18198,
+        "max_drawdown_usd": 6472.45,
+        "mean_ret": {
+          "hi": -0.03439,
+          "lo": -0.04191,
+          "point": -0.03877
+        },
+        "missed_orders": 14195,
         "missing_labels": 12929,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.98391,
-        "robust_l3_h05": {
-          "attempted_orders": 31127,
-          "fill_rate": 0.15585,
-          "mean_ret": {
-            "hi": -0.03181,
-            "lo": -0.0422,
-            "point": -0.03748
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.99049,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 31127,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
-        "settled_positions": 55,
+        "settled_positions": 37,
         "skill_ci": {
           "hi": -0.0001,
           "lo": -0.00039,
           "point": -0.00025
         },
-        "top_game_share": 0.15776,
-        "unresolved_positions": 297
+        "top_game_share": 0.16709,
+        "unresolved_positions": 161,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "B3_ridge_dmid30": {
         "calibration": {
@@ -594,77 +1158,223 @@
         "n": 0
       },
       "H1_momentum": {
-        "attempted_orders": 194,
-        "closed_positions": 116,
+        "attempted_orders": 202,
+        "closed_positions": 100,
         "directional_hit": 0.70588,
-        "dollar_pnl": -48.91,
-        "fees": 36.24,
-        "fill_rate": 0.60825,
-        "filled_contracts": 1158,
-        "filled_orders": 118,
+        "dollar_pnl": -39.89,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02749,
+        "fees": 29.72,
+        "fill_rate": 0.5,
+        "filled_contracts": 988,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.02586,
-        "labelled": 83,
-        "max_drawdown_usd": 48.91,
-        "mean_ret": {
-          "hi": -0.03817,
-          "lo": -0.04631,
-          "point": -0.0431
-        },
-        "missed_orders": 76,
-        "missing_labels": 111,
-        "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.98305,
-        "robust_l3_h05": {
-          "attempted_orders": 194,
-          "fill_rate": 0.08763,
-          "mean_ret": {
-            "hi": -0.03925,
-            "lo": -0.0445,
-            "point": -0.04306
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -4.47,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.056,
+              "lo": -0.0756,
+              "point": -0.06386
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -4.52,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.056,
+              "lo": -0.0756,
+              "point": -0.06457
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -10.44,
+            "fill_rate": 0.11386,
+            "filled_orders": 23,
+            "mean_ret": {
+              "hi": -0.043,
+              "lo": -0.05415,
+              "point": -0.04745
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95652,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -10.54,
+            "fill_rate": 0.11881,
+            "filled_orders": 24,
+            "mean_ret": {
+              "hi": -0.04332,
+              "lo": -0.05415,
+              "point": -0.04778
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95833,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -10.17,
+        "hit_rate": 0.02,
+        "labelled": 88,
+        "max_drawdown_usd": 39.89,
+        "mean_ret": {
+          "hi": -0.03684,
+          "lo": -0.04372,
+          "point": -0.04098
+        },
+        "missed_orders": 101,
+        "missing_labels": 114,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.9901,
+        "selection": {
+          "complement_unavailable": {
+            "stale": 45,
+            "tie-inexact": 60
+          },
+          "complement_unavailable_total": 105,
+          "long": 141,
+          "same_exposure_dropped": 119,
+          "via_complement": 61
         },
         "settled_positions": 0,
         "skill_ci": {
-          "hi": 0.00466,
-          "lo": -0.0002,
-          "point": 0.00175
+          "hi": 0.00429,
+          "lo": -0.00019,
+          "point": 0.00165
         },
-        "top_game_share": 0.23451,
-        "unresolved_positions": 2
+        "top_game_share": 0.23891,
+        "unresolved_positions": 1,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_dip": {
         "attempted_orders": 232,
-        "closed_positions": 122,
+        "closed_positions": 99,
         "directional_hit": 0.54545,
-        "dollar_pnl": -62.22,
-        "fees": 39.85,
-        "fill_rate": 0.53879,
-        "filled_contracts": 1250,
-        "filled_orders": 125,
+        "dollar_pnl": -44.33,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.03538,
+        "fees": 30.73,
+        "fill_rate": 0.43534,
+        "filled_contracts": 1010,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.02459,
-        "labelled": 96,
-        "max_drawdown_usd": 62.22,
-        "mean_ret": {
-          "hi": -0.04677,
-          "lo": -0.05534,
-          "point": -0.051
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -6.05,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": 0.0045,
+              "lo": -0.08444,
+              "point": -0.05042
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -6.05,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": 0.0045,
+              "lo": -0.08444,
+              "point": -0.05042
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -12.48,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.02951,
+              "lo": -0.07094,
+              "point": -0.04622
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -12.48,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.02951,
+              "lo": -0.07094,
+              "point": -0.04622
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 107,
+        "gross_pnl_usd": -13.6,
+        "hit_rate": 0.0303,
+        "labelled": 96,
+        "max_drawdown_usd": 44.33,
+        "mean_ret": {
+          "hi": -0.04006,
+          "lo": -0.04991,
+          "point": -0.04478
+        },
+        "missed_orders": 131,
         "missing_labels": 136,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.976,
-        "robust_l3_h05": {
-          "attempted_orders": 232,
-          "fill_rate": 0.0819,
-          "mean_ret": {
-            "hi": -0.04323,
-            "lo": -0.05958,
-            "point": -0.04979
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.9802,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 232,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -672,40 +1382,113 @@
           "lo": -0.00567,
           "point": -0.00021
         },
-        "top_game_share": 0.21038,
-        "unresolved_positions": 3
+        "top_game_share": 0.20144,
+        "unresolved_positions": 2,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_recovery": {
         "attempted_orders": 55,
-        "closed_positions": 25,
+        "closed_positions": 19,
         "directional_hit": 0.5,
-        "dollar_pnl": -13.04,
-        "fees": 8.79,
-        "fill_rate": 0.45455,
-        "filled_contracts": 250,
-        "filled_orders": 25,
+        "dollar_pnl": -9.49,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.03041,
+        "fees": 6.39,
+        "fill_rate": 0.34545,
+        "filled_contracts": 190,
+        "filled_orders": 19,
         "games": 9,
-        "hit_rate": 0.04,
-        "labelled": 29,
-        "max_drawdown_usd": 13.04,
-        "mean_ret": {
-          "hi": -0.04586,
-          "lo": -0.05757,
-          "point": -0.05216
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.4,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05444,
+              "lo": -0.072,
+              "point": -0.06286
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.4,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05444,
+              "lo": -0.072,
+              "point": -0.06286
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.83,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.04719,
+              "lo": -0.06073,
+              "point": -0.05254
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.83,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.04719,
+              "lo": -0.06073,
+              "point": -0.05254
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 30,
+        "gross_pnl_usd": -3.1,
+        "hit_rate": 0.0,
+        "labelled": 29,
+        "max_drawdown_usd": 9.49,
+        "mean_ret": {
+          "hi": -0.043,
+          "lo": -0.0562,
+          "point": -0.04995
+        },
+        "missed_orders": 36,
         "missing_labels": 26,
         "positive_game_share": 0.0,
         "resolved_share_of_fills": 1.0,
-        "robust_l3_h05": {
-          "attempted_orders": 55,
-          "fill_rate": 0.2,
-          "mean_ret": {
-            "hi": -0.05108,
-            "lo": -0.054,
-            "point": -0.05209
-          },
-          "positive_game_share": 0.0
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 55,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -713,196 +1496,509 @@
           "lo": -0.00091,
           "point": 0.00172
         },
-        "top_game_share": 0.21933,
-        "unresolved_positions": 0
+        "top_game_share": 0.36038,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H3_by_grade": {
         "agree=0": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "agree>=1": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "hard": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "soft": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         }
       },
       "H3_diagnostics": {
         "any_settlement": {
-          "attempted_orders": 55,
-          "closed_positions": 27,
-          "directional_hit": 0.53846,
-          "dollar_pnl": -15.0,
-          "fees": 10.0,
-          "fill_rate": 0.50909,
-          "filled_contracts": 275,
-          "filled_orders": 28,
-          "games": 10,
-          "hit_rate": 0.07407,
-          "labelled": 18,
-          "max_drawdown_usd": 16.52,
+          "attempted_orders": 148,
+          "closed_positions": 61,
+          "directional_hit": 0.86842,
+          "dollar_pnl": 2.28,
+          "fee_share_of_gross_edge": 0.89341,
+          "fee_share_of_notional": 0.03208,
+          "fees": 19.11,
+          "fill_rate": 0.41216,
+          "filled_contracts": 596,
+          "filled_orders": 61,
+          "games": 11,
+          "gross_pnl_usd": 21.39,
+          "hit_rate": 0.44262,
+          "labelled": 68,
+          "max_drawdown_usd": 4.79,
           "mean_ret": {
-            "hi": -0.03193,
-            "lo": -0.0789,
-            "point": -0.0563
+            "hi": 0.01791,
+            "lo": -0.00942,
+            "point": 0.00495
           },
-          "missed_orders": 27,
-          "missing_labels": 37,
-          "positive_game_share": 0.11111,
-          "resolved_share_of_fills": 0.96429,
+          "missed_orders": 87,
+          "missing_labels": 80,
+          "positive_game_share": 0.45455,
+          "resolved_share_of_fills": 1.0,
+          "selection": {
+            "complement_unavailable": {
+              "stale": 23,
+              "tie-inexact": 64
+            },
+            "complement_unavailable_total": 87,
+            "long": 82,
+            "same_exposure_dropped": 250,
+            "via_complement": 66
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.0325,
-            "lo": -0.01079,
-            "point": 0.01
+            "hi": 0.0625,
+            "lo": 0.02588,
+            "point": 0.04162
           },
-          "top_game_share": 0.21839,
-          "unresolved_positions": 1
+          "top_game_share": 0.22598,
+          "unresolved_positions": 0,
+          "unsupported": {}
         },
         "tie_matched": {
-          "attempted_orders": 11,
-          "closed_positions": 9,
-          "directional_hit": 0.33333,
-          "dollar_pnl": -3.6,
-          "fees": 3.0,
-          "fill_rate": 0.81818,
-          "filled_contracts": 90,
-          "filled_orders": 9,
-          "games": 6,
-          "hit_rate": 0.11111,
-          "labelled": 6,
-          "max_drawdown_usd": 3.6,
+          "attempted_orders": 21,
+          "closed_positions": 11,
+          "directional_hit": 1.0,
+          "dollar_pnl": -4.43,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": 0.03571,
+          "fees": 3.51,
+          "fill_rate": 0.52381,
+          "filled_contracts": 110,
+          "filled_orders": 11,
+          "games": 7,
+          "gross_pnl_usd": -0.92,
+          "hit_rate": 0.09091,
+          "labelled": 11,
+          "max_drawdown_usd": 4.43,
           "mean_ret": {
-            "hi": -0.01533,
-            "lo": -0.06089,
-            "point": -0.04
+            "hi": -0.00771,
+            "lo": -0.05927,
+            "point": -0.04027
           },
-          "missed_orders": 2,
-          "missing_labels": 5,
-          "positive_game_share": 0.16667,
+          "missed_orders": 10,
+          "missing_labels": 10,
+          "positive_game_share": 0.14286,
           "resolved_share_of_fills": 1.0,
+          "selection": {
+            "complement_unavailable": {},
+            "complement_unavailable_total": 0,
+            "long": 11,
+            "same_exposure_dropped": 96,
+            "via_complement": 10
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.04333,
-            "lo": -0.00167,
-            "point": 0.02083
+            "hi": 0.028,
+            "lo": 0.0,
+            "point": 0.01273
           },
-          "top_game_share": 0.3619,
-          "unresolved_positions": 0
+          "top_game_share": 0.30551,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+          }
         }
       },
       "H3_leadlag": {
         "attempted_orders": 0,
         "closed_positions": 0,
+        "directional_hit": null,
+        "dollar_pnl": null,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": null,
         "fees": 0,
         "fill_rate": null,
         "filled_contracts": 0,
         "filled_orders": 0,
         "games": 0,
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          }
+        },
+        "hit_rate": null,
         "labelled": 0,
+        "max_drawdown_usd": null,
+        "mean_ret": null,
         "missed_orders": 0,
         "missing_labels": 0,
+        "positive_game_share": null,
         "resolved_share_of_fills": null,
-        "robust_l3_h05": {
-          "attempted_orders": 0,
-          "fill_rate": null,
-          "mean_ret": null,
-          "positive_game_share": null
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 0,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
-        "unresolved_positions": 0
+        "skill_ci": null,
+        "top_game_share": null,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "directional_hit": "no labelled decision",
+          "dollar_pnl": "no resolved trade",
+          "fee_share_of_gross_edge": "no resolved trade",
+          "fee_share_of_notional": "no resolved trade",
+          "fill_rate": "no decisions",
+          "hit_rate": "no resolved trade",
+          "max_drawdown_usd": "no resolved trade",
+          "mean_ret": "no resolved trade",
+          "positive_game_share": "no resolved trade",
+          "skill_ci": "no labelled decision",
+          "top_game_share": "no resolved trade"
+        }
       },
       "M_prototype": {
         "attempted_orders": 725,
-        "closed_positions": 453,
+        "closed_positions": 430,
         "directional_hit": 0.41667,
-        "dollar_pnl": -165.53,
-        "fees": 122.55,
-        "fill_rate": 0.62897,
-        "filled_contracts": 4532,
-        "filled_orders": 456,
+        "dollar_pnl": -160.01,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02508,
+        "fees": 113.49,
+        "fill_rate": 0.59586,
+        "filled_contracts": 4290,
+        "filled_orders": 432,
         "games": 13,
-        "hit_rate": 0.01766,
-        "labelled": 446,
-        "max_drawdown_usd": 165.53,
-        "mean_ret": {
-          "hi": -0.03333,
-          "lo": -0.03979,
-          "point": -0.03688
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -11.64,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.0525,
+              "lo": -0.12714,
+              "point": -0.1005
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -11.92,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.0525,
+              "lo": -0.12714,
+              "point": -0.1005
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -56.1,
+            "fill_rate": 0.20414,
+            "filled_orders": 148,
+            "mean_ret": {
+              "hi": -0.03127,
+              "lo": -0.04718,
+              "point": -0.03847
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -56.65,
+            "fill_rate": 0.2069,
+            "filled_orders": 150,
+            "mean_ret": {
+              "hi": -0.03132,
+              "lo": -0.04712,
+              "point": -0.03845
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 269,
+        "gross_pnl_usd": -46.52,
+        "hit_rate": 0.01392,
+        "labelled": 446,
+        "max_drawdown_usd": 160.01,
+        "mean_ret": {
+          "hi": -0.03309,
+          "lo": -0.04115,
+          "point": -0.03751
+        },
+        "missed_orders": 293,
         "missing_labels": 279,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.99342,
-        "robust_l3_h05": {
-          "attempted_orders": 725,
-          "fill_rate": 0.20138,
-          "mean_ret": {
-            "hi": -0.02838,
-            "lo": -0.03607,
-            "point": -0.03308
-          },
-          "positive_game_share": 0.14286
+        "resolved_share_of_fills": 0.99769,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 725,
+          "same_exposure_dropped": 1292,
+          "via_complement": 0
         },
-        "settled_positions": 0,
+        "settled_positions": 1,
         "skill_ci": {
           "hi": 0.00218,
           "lo": -0.0,
           "point": 0.00081
         },
-        "top_game_share": 0.20172,
-        "unresolved_positions": 3
+        "top_game_share": 0.22117,
+        "unresolved_positions": 1,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "coverage": 0.62982,
       "missing_labels_unconditional": 21199
@@ -914,44 +2010,117 @@
       },
       "B1_buy_any": {
         "attempted_orders": 31127,
-        "closed_positions": 18026,
+        "closed_positions": 16661,
         "directional_hit": 0.48538,
-        "dollar_pnl": -7279.87,
-        "fees": 5108.4,
-        "fill_rate": 0.59315,
-        "filled_contracts": 183889,
-        "filled_orders": 18463,
+        "dollar_pnl": -6500.77,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.0277,
+        "fees": 4572.77,
+        "fill_rate": 0.54397,
+        "filled_contracts": 168717,
+        "filled_orders": 16932,
         "games": 15,
-        "hit_rate": 0.04503,
-        "labelled": 25602,
-        "max_drawdown_usd": 7279.87,
-        "mean_ret": {
-          "hi": -0.03626,
-          "lo": -0.04344,
-          "point": -0.04043
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 31127,
+            "dollar_pnl": -617.04,
+            "fill_rate": 0.03916,
+            "filled_orders": 1219,
+            "mean_ret": {
+              "hi": -0.05329,
+              "lo": -0.06341,
+              "point": -0.05717
+            },
+            "positive_game_share": 0.08333,
+            "resolved_share_of_fills": 0.89582,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 31127,
+            "dollar_pnl": -627.02,
+            "fill_rate": 0.03916,
+            "filled_orders": 1219,
+            "mean_ret": {
+              "hi": -0.0533,
+              "lo": -0.06334,
+              "point": -0.05714
+            },
+            "positive_game_share": 0.08333,
+            "resolved_share_of_fills": 0.90238,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 31127,
+            "dollar_pnl": -2087.5,
+            "fill_rate": 0.17493,
+            "filled_orders": 5445,
+            "mean_ret": {
+              "hi": -0.03423,
+              "lo": -0.04509,
+              "point": -0.0396
+            },
+            "positive_game_share": 0.08333,
+            "resolved_share_of_fills": 0.973,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 31127,
+            "dollar_pnl": -2101.12,
+            "fill_rate": 0.17519,
+            "filled_orders": 5453,
+            "mean_ret": {
+              "hi": -0.03427,
+              "lo": -0.04517,
+              "point": -0.03966
+            },
+            "positive_game_share": 0.08333,
+            "resolved_share_of_fills": 0.97451,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 12664,
+        "gross_pnl_usd": -1928.0,
+        "hit_rate": 0.04345,
+        "labelled": 25602,
+        "max_drawdown_usd": 6500.77,
+        "mean_ret": {
+          "hi": -0.03452,
+          "lo": -0.04222,
+          "point": -0.03906
+        },
+        "missed_orders": 14195,
         "missing_labels": 5525,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.98023,
-        "robust_l3_h05": {
-          "attempted_orders": 31127,
-          "fill_rate": 0.15585,
-          "mean_ret": {
-            "hi": -0.03154,
-            "lo": -0.04146,
-            "point": -0.03696
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.98683,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 31127,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
-        "settled_positions": 72,
+        "settled_positions": 48,
         "skill_ci": {
           "hi": -0.0002,
           "lo": -0.00053,
           "point": -0.00033
         },
-        "top_game_share": 0.16211,
-        "unresolved_positions": 365
+        "top_game_share": 0.16618,
+        "unresolved_positions": 223,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "B3_ridge_dmid30": {
         "calibration": {
@@ -1031,77 +2200,223 @@
         "n": 0
       },
       "H1_momentum": {
-        "attempted_orders": 194,
-        "closed_positions": 115,
-        "directional_hit": 0.5567,
-        "dollar_pnl": -42.76,
-        "fees": 35.81,
-        "fill_rate": 0.60825,
-        "filled_contracts": 1158,
-        "filled_orders": 118,
+        "attempted_orders": 202,
+        "closed_positions": 98,
+        "directional_hit": 0.55102,
+        "dollar_pnl": -31.12,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02695,
+        "fees": 28.87,
+        "fill_rate": 0.5,
+        "filled_contracts": 988,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.12174,
-        "labelled": 156,
-        "max_drawdown_usd": 44.87,
-        "mean_ret": {
-          "hi": -0.03057,
-          "lo": -0.04445,
-          "point": -0.03736
-        },
-        "missed_orders": 76,
-        "missing_labels": 38,
-        "positive_game_share": 0.1,
-        "resolved_share_of_fills": 0.97458,
-        "robust_l3_h05": {
-          "attempted_orders": 194,
-          "fill_rate": 0.08763,
-          "mean_ret": {
-            "hi": -0.0422,
-            "lo": -0.073,
-            "point": -0.06394
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -2.4,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.02575,
+              "lo": -0.0632,
+              "point": -0.04
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -2.4,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.02575,
+              "lo": -0.0632,
+              "point": -0.04
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -13.54,
+            "fill_rate": 0.11386,
+            "filled_orders": 23,
+            "mean_ret": {
+              "hi": -0.04615,
+              "lo": -0.07006,
+              "point": -0.06155
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95652,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -13.61,
+            "fill_rate": 0.11881,
+            "filled_orders": 24,
+            "mean_ret": {
+              "hi": -0.04615,
+              "lo": -0.07005,
+              "point": -0.06191
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95833,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -2.25,
+        "hit_rate": 0.14286,
+        "labelled": 163,
+        "max_drawdown_usd": 34.03,
+        "mean_ret": {
+          "hi": -0.02464,
+          "lo": -0.03942,
+          "point": -0.03197
+        },
+        "missed_orders": 101,
+        "missing_labels": 39,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.9703,
+        "selection": {
+          "complement_unavailable": {
+            "stale": 45,
+            "tie-inexact": 60
+          },
+          "complement_unavailable_total": 105,
+          "long": 141,
+          "same_exposure_dropped": 119,
+          "via_complement": 61
         },
         "settled_positions": 0,
         "skill_ci": {
-          "hi": 0.01278,
-          "lo": -0.00461,
-          "point": 0.00279
+          "hi": 0.01177,
+          "lo": -0.00515,
+          "point": 0.00199
         },
-        "top_game_share": 0.23814,
-        "unresolved_positions": 3
+        "top_game_share": 0.23586,
+        "unresolved_positions": 3,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_dip": {
         "attempted_orders": 232,
-        "closed_positions": 120,
+        "closed_positions": 98,
         "directional_hit": 0.47706,
-        "dollar_pnl": -68.53,
-        "fees": 38.88,
-        "fill_rate": 0.53879,
-        "filled_contracts": 1250,
-        "filled_orders": 125,
+        "dollar_pnl": -55.75,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.0356,
+        "fees": 30.15,
+        "fill_rate": 0.43534,
+        "filled_contracts": 1010,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.09167,
-        "labelled": 170,
-        "max_drawdown_usd": 68.53,
-        "mean_ret": {
-          "hi": -0.04362,
-          "lo": -0.06888,
-          "point": -0.05711
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -12.66,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.01875,
+              "lo": -0.20009,
+              "point": -0.1055
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -12.75,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.01909,
+              "lo": -0.20071,
+              "point": -0.10625
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -16.5,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.01264,
+              "lo": -0.15263,
+              "point": -0.06111
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -16.59,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.01289,
+              "lo": -0.15319,
+              "point": -0.06144
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 107,
+        "gross_pnl_usd": -25.6,
+        "hit_rate": 0.09184,
+        "labelled": 170,
+        "max_drawdown_usd": 55.75,
+        "mean_ret": {
+          "hi": -0.04107,
+          "lo": -0.07041,
+          "point": -0.05689
+        },
+        "missed_orders": 131,
         "missing_labels": 62,
         "positive_game_share": 0.1,
-        "resolved_share_of_fills": 0.96,
-        "robust_l3_h05": {
-          "attempted_orders": 232,
-          "fill_rate": 0.0819,
-          "mean_ret": {
-            "hi": -0.01527,
-            "lo": -0.09638,
-            "point": -0.03679
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.9703,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 232,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -1109,40 +2424,113 @@
           "lo": -0.01105,
           "point": 0.00065
         },
-        "top_game_share": 0.25426,
-        "unresolved_positions": 5
+        "top_game_share": 0.24596,
+        "unresolved_positions": 3,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_recovery": {
         "attempted_orders": 55,
-        "closed_positions": 25,
+        "closed_positions": 18,
         "directional_hit": 0.51515,
-        "dollar_pnl": -11.8,
-        "fees": 8.75,
-        "fill_rate": 0.45455,
-        "filled_contracts": 250,
-        "filled_orders": 25,
+        "dollar_pnl": -8.95,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02874,
+        "fees": 5.95,
+        "fill_rate": 0.34545,
+        "filled_contracts": 190,
+        "filled_orders": 19,
         "games": 9,
-        "hit_rate": 0.12,
-        "labelled": 40,
-        "max_drawdown_usd": 13.36,
-        "mean_ret": {
-          "hi": -0.01776,
-          "lo": -0.07159,
-          "point": -0.0472
-        },
-        "missed_orders": 30,
-        "missing_labels": 15,
-        "positive_game_share": 0.11111,
-        "resolved_share_of_fills": 1.0,
-        "robust_l3_h05": {
-          "attempted_orders": 55,
-          "fill_rate": 0.2,
-          "mean_ret": {
-            "hi": -0.03827,
-            "lo": -0.05833,
-            "point": -0.04745
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.86,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.0492,
+              "lo": -0.1045,
+              "point": -0.081
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.8,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.048,
+              "lo": -0.10375,
+              "point": -0.08
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.88,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.03811,
+              "lo": -0.06969,
+              "point": -0.05733
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.82,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.03687,
+              "lo": -0.0695,
+              "point": -0.05683
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -3.0,
+        "hit_rate": 0.05556,
+        "labelled": 40,
+        "max_drawdown_usd": 10.41,
+        "mean_ret": {
+          "hi": -0.01047,
+          "lo": -0.06679,
+          "point": -0.04972
+        },
+        "missed_orders": 36,
+        "missing_labels": 15,
+        "positive_game_share": 0.14286,
+        "resolved_share_of_fills": 0.94737,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 55,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -1150,196 +2538,507 @@
           "lo": -0.01283,
           "point": -0.00038
         },
-        "top_game_share": 0.20658,
-        "unresolved_positions": 0
+        "top_game_share": 0.42376,
+        "unresolved_positions": 1,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H3_by_grade": {
         "agree=0": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "agree>=1": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "hard": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "soft": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         }
       },
       "H3_diagnostics": {
         "any_settlement": {
-          "attempted_orders": 55,
-          "closed_positions": 27,
-          "directional_hit": 0.46429,
-          "dollar_pnl": -20.35,
-          "fees": 10.0,
-          "fill_rate": 0.50909,
-          "filled_contracts": 275,
-          "filled_orders": 28,
-          "games": 10,
-          "hit_rate": 0.03704,
-          "labelled": 33,
-          "max_drawdown_usd": 20.35,
+          "attempted_orders": 148,
+          "closed_positions": 60,
+          "directional_hit": 0.81818,
+          "dollar_pnl": 15.24,
+          "fee_share_of_gross_edge": 0.5519,
+          "fee_share_of_notional": 0.03177,
+          "fees": 18.77,
+          "fill_rate": 0.41216,
+          "filled_contracts": 596,
+          "filled_orders": 61,
+          "games": 11,
+          "gross_pnl_usd": 34.01,
+          "hit_rate": 0.63333,
+          "labelled": 123,
+          "max_drawdown_usd": 1.4,
           "mean_ret": {
-            "hi": -0.05126,
-            "lo": -0.10693,
-            "point": -0.0763
+            "hi": 0.04051,
+            "lo": 0.01146,
+            "point": 0.02663
           },
-          "missed_orders": 27,
-          "missing_labels": 22,
-          "positive_game_share": 0.0,
-          "resolved_share_of_fills": 0.96429,
+          "missed_orders": 87,
+          "missing_labels": 25,
+          "positive_game_share": 0.54545,
+          "resolved_share_of_fills": 0.98361,
+          "selection": {
+            "complement_unavailable": {
+              "stale": 23,
+              "tie-inexact": 64
+            },
+            "complement_unavailable_total": 87,
+            "long": 82,
+            "same_exposure_dropped": 250,
+            "via_complement": 66
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.00773,
-            "lo": -0.03825,
-            "point": -0.01152
+            "hi": 0.05827,
+            "lo": 0.03078,
+            "point": 0.04467
           },
-          "top_game_share": 0.24079,
-          "unresolved_positions": 1
+          "top_game_share": 0.28308,
+          "unresolved_positions": 1,
+          "unsupported": {}
         },
         "tie_matched": {
-          "attempted_orders": 11,
-          "closed_positions": 9,
-          "directional_hit": 0.42857,
-          "dollar_pnl": -2.9,
-          "fees": 3.0,
-          "fill_rate": 0.81818,
-          "filled_contracts": 90,
-          "filled_orders": 9,
-          "games": 6,
-          "hit_rate": 0.11111,
-          "labelled": 10,
-          "max_drawdown_usd": 2.9,
+          "attempted_orders": 21,
+          "closed_positions": 11,
+          "directional_hit": 0.53846,
+          "dollar_pnl": -3.01,
+          "fee_share_of_gross_edge": 7.02,
+          "fee_share_of_notional": 0.03521,
+          "fees": 3.51,
+          "fill_rate": 0.52381,
+          "filled_contracts": 110,
+          "filled_orders": 11,
+          "games": 7,
+          "gross_pnl_usd": 0.5,
+          "hit_rate": 0.09091,
+          "labelled": 21,
+          "max_drawdown_usd": 3.01,
           "mean_ret": {
-            "hi": -0.01325,
-            "lo": -0.04686,
-            "point": -0.03222
+            "hi": 0.0021,
+            "lo": -0.0418,
+            "point": -0.02736
           },
-          "missed_orders": 2,
-          "missing_labels": 1,
-          "positive_game_share": 0.16667,
+          "missed_orders": 10,
+          "missing_labels": 0,
+          "positive_game_share": 0.14286,
           "resolved_share_of_fills": 1.0,
+          "selection": {
+            "complement_unavailable": {},
+            "complement_unavailable_total": 0,
+            "long": 11,
+            "same_exposure_dropped": 96,
+            "via_complement": 10
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.0325,
-            "lo": -0.024,
-            "point": 0.0045
+            "hi": 0.02031,
+            "lo": -0.00761,
+            "point": 0.00667
           },
-          "top_game_share": 0.26286,
-          "unresolved_positions": 0
+          "top_game_share": 0.25355,
+          "unresolved_positions": 0,
+          "unsupported": {}
         }
       },
       "H3_leadlag": {
         "attempted_orders": 0,
         "closed_positions": 0,
+        "directional_hit": null,
+        "dollar_pnl": null,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": null,
         "fees": 0,
         "fill_rate": null,
         "filled_contracts": 0,
         "filled_orders": 0,
         "games": 0,
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          }
+        },
+        "hit_rate": null,
         "labelled": 0,
+        "max_drawdown_usd": null,
+        "mean_ret": null,
         "missed_orders": 0,
         "missing_labels": 0,
+        "positive_game_share": null,
         "resolved_share_of_fills": null,
-        "robust_l3_h05": {
-          "attempted_orders": 0,
-          "fill_rate": null,
-          "mean_ret": null,
-          "positive_game_share": null
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 0,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
-        "unresolved_positions": 0
+        "skill_ci": null,
+        "top_game_share": null,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "directional_hit": "no labelled decision",
+          "dollar_pnl": "no resolved trade",
+          "fee_share_of_gross_edge": "no resolved trade",
+          "fee_share_of_notional": "no resolved trade",
+          "fill_rate": "no decisions",
+          "hit_rate": "no resolved trade",
+          "max_drawdown_usd": "no resolved trade",
+          "mean_ret": "no resolved trade",
+          "positive_game_share": "no resolved trade",
+          "skill_ci": "no labelled decision",
+          "top_game_share": "no resolved trade"
+        }
       },
       "M_prototype": {
         "attempted_orders": 725,
-        "closed_positions": 447,
+        "closed_positions": 423,
         "directional_hit": 0.5076,
-        "dollar_pnl": -165.42,
-        "fees": 121.1,
-        "fill_rate": 0.62897,
-        "filled_contracts": 4532,
-        "filled_orders": 456,
+        "dollar_pnl": -157.29,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02499,
+        "fees": 111.63,
+        "fill_rate": 0.59586,
+        "filled_contracts": 4290,
+        "filled_orders": 432,
         "games": 13,
-        "hit_rate": 0.07366,
-        "labelled": 633,
-        "max_drawdown_usd": 169.31,
-        "mean_ret": {
-          "hi": -0.03056,
-          "lo": -0.04263,
-          "point": -0.03699
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -11.64,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.052,
+              "lo": -0.13507,
+              "point": -0.10964
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.91667,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -11.92,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.052,
+              "lo": -0.13507,
+              "point": -0.10964
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.91667,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -57.16,
+            "fill_rate": 0.20414,
+            "filled_orders": 148,
+            "mean_ret": {
+              "hi": -0.03164,
+              "lo": -0.04724,
+              "point": -0.03958
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.98649,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -57.65,
+            "fill_rate": 0.2069,
+            "filled_orders": 150,
+            "mean_ret": {
+              "hi": -0.03181,
+              "lo": -0.04742,
+              "point": -0.03977
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.98667,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 269,
+        "gross_pnl_usd": -45.66,
+        "hit_rate": 0.07294,
+        "labelled": 633,
+        "max_drawdown_usd": 159.38,
+        "mean_ret": {
+          "hi": -0.02987,
+          "lo": -0.04392,
+          "point": -0.03711
+        },
+        "missed_orders": 293,
         "missing_labels": 92,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.98246,
-        "robust_l3_h05": {
-          "attempted_orders": 725,
-          "fill_rate": 0.20138,
-          "mean_ret": {
-            "hi": -0.0277,
-            "lo": -0.03851,
-            "point": -0.03369
-          },
-          "positive_game_share": 0.14286
+        "resolved_share_of_fills": 0.9838,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 725,
+          "same_exposure_dropped": 1292,
+          "via_complement": 0
         },
-        "settled_positions": 1,
+        "settled_positions": 2,
         "skill_ci": {
           "hi": 0.00548,
           "lo": -0.0005,
           "point": 0.00202
         },
-        "top_game_share": 0.23879,
-        "unresolved_positions": 8
+        "top_game_share": 0.26384,
+        "unresolved_positions": 7,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "coverage": 0.87963,
       "missing_labels_unconditional": 6893
@@ -1351,44 +3050,69 @@
       },
       "B1_buy_any": {
         "attempted_orders": 31127,
-        "closed_positions": 18205,
+        "closed_positions": 16815,
         "directional_hit": 0.44975,
-        "dollar_pnl": -7352.18,
-        "fees": 5154.63,
-        "fill_rate": 0.59315,
-        "filled_contracts": 183889,
-        "filled_orders": 18463,
+        "dollar_pnl": -6519.52,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02772,
+        "fees": 4610.38,
+        "fill_rate": 0.54397,
+        "filled_contracts": 168717,
+        "filled_orders": 16932,
         "games": 15,
-        "hit_rate": 0.00937,
-        "labelled": 14869,
-        "max_drawdown_usd": 7352.18,
-        "mean_ret": {
-          "hi": -0.03645,
-          "lo": -0.04345,
-          "point": -0.0405
+        "grid": {
+          "L1_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L1_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          }
         },
-        "missed_orders": 12664,
+        "gross_pnl_usd": -1909.14,
+        "hit_rate": 0.00885,
+        "labelled": 14869,
+        "max_drawdown_usd": 6519.52,
+        "mean_ret": {
+          "hi": -0.03459,
+          "lo": -0.04201,
+          "point": -0.0389
+        },
+        "missed_orders": 14195,
         "missing_labels": 16258,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.98803,
-        "robust_l3_h05": {
-          "attempted_orders": 31127,
-          "fill_rate": 0.15585,
-          "mean_ret": {
-            "hi": -0.03206,
-            "lo": -0.04291,
-            "point": -0.03803
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.99421,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 31127,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
-        "settled_positions": 37,
+        "settled_positions": 19,
         "skill_ci": {
           "hi": -0.00019,
           "lo": -0.00044,
           "point": -0.0003
         },
-        "top_game_share": 0.15879,
-        "unresolved_positions": 221
+        "top_game_share": 0.16651,
+        "unresolved_positions": 98,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "B3_ridge_dmid30": {
         "calibration": {
@@ -1468,77 +3192,223 @@
         "n": 0
       },
       "H1_momentum": {
-        "attempted_orders": 194,
-        "closed_positions": 117,
+        "attempted_orders": 202,
+        "closed_positions": 101,
         "directional_hit": 0.64706,
-        "dollar_pnl": -50.12,
-        "fees": 36.45,
-        "fill_rate": 0.60825,
-        "filled_contracts": 1158,
-        "filled_orders": 118,
+        "dollar_pnl": -40.28,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02724,
+        "fees": 29.91,
+        "fill_rate": 0.5,
+        "filled_contracts": 988,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.00855,
-        "labelled": 76,
-        "max_drawdown_usd": 50.12,
-        "mean_ret": {
-          "hi": -0.03987,
-          "lo": -0.04661,
-          "point": -0.04377
-        },
-        "missed_orders": 76,
-        "missing_labels": 118,
-        "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.99153,
-        "robust_l3_h05": {
-          "attempted_orders": 194,
-          "fill_rate": 0.08763,
-          "mean_ret": {
-            "hi": -0.04175,
-            "lo": -0.04514,
-            "point": -0.04431
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -4.2,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05086,
+              "lo": -0.0672,
+              "point": -0.06
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -4.2,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05086,
+              "lo": -0.0672,
+              "point": -0.06
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -10.27,
+            "fill_rate": 0.11386,
+            "filled_orders": 23,
+            "mean_ret": {
+              "hi": -0.04372,
+              "lo": -0.05164,
+              "point": -0.04668
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95652,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -10.32,
+            "fill_rate": 0.11881,
+            "filled_orders": 24,
+            "mean_ret": {
+              "hi": -0.04386,
+              "lo": -0.05164,
+              "point": -0.04683
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.95833,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -10.37,
+        "hit_rate": 0.0099,
+        "labelled": 78,
+        "max_drawdown_usd": 40.28,
+        "mean_ret": {
+          "hi": -0.03742,
+          "lo": -0.04366,
+          "point": -0.04096
+        },
+        "missed_orders": 101,
+        "missing_labels": 124,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 1.0,
+        "selection": {
+          "complement_unavailable": {
+            "stale": 45,
+            "tie-inexact": 60
+          },
+          "complement_unavailable_total": 105,
+          "long": 141,
+          "same_exposure_dropped": 119,
+          "via_complement": 61
         },
         "settled_positions": 0,
         "skill_ci": {
-          "hi": 0.00063,
-          "lo": -0.00061,
+          "hi": 0.00061,
+          "lo": -0.00059,
           "point": 0.0
         },
-        "top_game_share": 0.21309,
-        "unresolved_positions": 1
+        "top_game_share": 0.22195,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_dip": {
         "attempted_orders": 232,
-        "closed_positions": 124,
+        "closed_positions": 99,
         "directional_hit": 0.58824,
-        "dollar_pnl": -63.12,
-        "fees": 40.44,
-        "fill_rate": 0.53879,
-        "filled_contracts": 1250,
-        "filled_orders": 125,
+        "dollar_pnl": -44.58,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.03517,
+        "fees": 30.54,
+        "fill_rate": 0.43534,
+        "filled_contracts": 1010,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.00806,
-        "labelled": 98,
-        "max_drawdown_usd": 63.12,
-        "mean_ret": {
-          "hi": -0.0468,
-          "lo": -0.05434,
-          "point": -0.0509
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -7.15,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.06208,
+              "lo": -0.07,
+              "point": -0.065
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.84615,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -7.15,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.06208,
+              "lo": -0.07,
+              "point": -0.065
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.84615,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -13.49,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.04624,
+              "lo": -0.05971,
+              "point": -0.05188
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92857,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -13.49,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.04624,
+              "lo": -0.05971,
+              "point": -0.05188
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92857,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 107,
+        "gross_pnl_usd": -14.04,
+        "hit_rate": 0.0,
+        "labelled": 98,
+        "max_drawdown_usd": 44.58,
+        "mean_ret": {
+          "hi": -0.0424,
+          "lo": -0.04673,
+          "point": -0.04503
+        },
+        "missed_orders": 131,
         "missing_labels": 134,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.992,
-        "robust_l3_h05": {
-          "attempted_orders": 232,
-          "fill_rate": 0.0819,
-          "mean_ret": {
-            "hi": -0.04318,
-            "lo": -0.0588,
-            "point": -0.04958
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.9802,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 232,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -1546,40 +3416,113 @@
           "lo": 0.00201,
           "point": 0.00587
         },
-        "top_game_share": 0.21119,
-        "unresolved_positions": 1
+        "top_game_share": 0.2205,
+        "unresolved_positions": 2,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_recovery": {
         "attempted_orders": 55,
-        "closed_positions": 25,
+        "closed_positions": 19,
         "directional_hit": 0.45455,
-        "dollar_pnl": -12.64,
-        "fees": 8.79,
-        "fill_rate": 0.45455,
-        "filled_contracts": 250,
-        "filled_orders": 25,
+        "dollar_pnl": -9.59,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.03043,
+        "fees": 6.39,
+        "fill_rate": 0.34545,
+        "filled_contracts": 190,
+        "filled_orders": 19,
         "games": 9,
-        "hit_rate": 0.04,
-        "labelled": 22,
-        "max_drawdown_usd": 12.64,
-        "mean_ret": {
-          "hi": -0.04282,
-          "lo": -0.05765,
-          "point": -0.05056
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.44,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05343,
+              "lo": -0.074,
+              "point": -0.06343
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.5,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.05429,
+              "lo": -0.07429,
+              "point": -0.06429
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.87,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.04536,
+              "lo": -0.061,
+              "point": -0.05285
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -6.93,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.04579,
+              "lo": -0.0616,
+              "point": -0.05331
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 30,
+        "gross_pnl_usd": -3.2,
+        "hit_rate": 0.0,
+        "labelled": 22,
+        "max_drawdown_usd": 9.59,
+        "mean_ret": {
+          "hi": -0.04315,
+          "lo": -0.05614,
+          "point": -0.05047
+        },
+        "missed_orders": 36,
         "missing_labels": 33,
         "positive_game_share": 0.0,
         "resolved_share_of_fills": 1.0,
-        "robust_l3_h05": {
-          "attempted_orders": 55,
-          "fill_rate": 0.2,
-          "mean_ret": {
-            "hi": -0.04891,
-            "lo": -0.06156,
-            "point": -0.05373
-          },
-          "positive_game_share": 0.0
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 55,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -1587,196 +3530,512 @@
           "lo": -0.002,
           "point": 0.00182
         },
-        "top_game_share": 0.23418,
-        "unresolved_positions": 0
+        "top_game_share": 0.36705,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H3_by_grade": {
         "agree=0": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "agree>=1": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "hard": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "soft": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         }
       },
       "H3_diagnostics": {
         "any_settlement": {
-          "attempted_orders": 55,
-          "closed_positions": 28,
-          "directional_hit": 0.69231,
-          "dollar_pnl": -14.96,
-          "fees": 10.4,
-          "fill_rate": 0.50909,
-          "filled_contracts": 275,
-          "filled_orders": 28,
-          "games": 10,
-          "hit_rate": 0.07143,
-          "labelled": 19,
-          "max_drawdown_usd": 16.48,
+          "attempted_orders": 148,
+          "closed_positions": 60,
+          "directional_hit": 0.75,
+          "dollar_pnl": -18.88,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": 0.0331,
+          "fees": 18.82,
+          "fill_rate": 0.41216,
+          "filled_contracts": 596,
+          "filled_orders": 61,
+          "games": 11,
+          "gross_pnl_usd": -0.06,
+          "hit_rate": 0.15,
+          "labelled": 65,
+          "max_drawdown_usd": 19.67,
           "mean_ret": {
-            "hi": -0.03119,
-            "lo": -0.07437,
-            "point": -0.05432
+            "hi": -0.02498,
+            "lo": -0.03905,
+            "point": -0.03233
           },
-          "missed_orders": 27,
-          "missing_labels": 36,
-          "positive_game_share": 0.11111,
-          "resolved_share_of_fills": 1.0,
+          "missed_orders": 87,
+          "missing_labels": 83,
+          "positive_game_share": 0.0,
+          "resolved_share_of_fills": 0.98361,
+          "selection": {
+            "complement_unavailable": {
+              "stale": 23,
+              "tie-inexact": 64
+            },
+            "complement_unavailable_total": 87,
+            "long": 82,
+            "same_exposure_dropped": 250,
+            "via_complement": 66
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.01353,
-            "lo": -0.01167,
-            "point": 0.00289
+            "hi": 0.0144,
+            "lo": 0.00049,
+            "point": 0.00838
           },
-          "top_game_share": 0.25346,
-          "unresolved_positions": 0
+          "top_game_share": 0.26748,
+          "unresolved_positions": 1,
+          "unsupported": {
+            "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+          }
         },
         "tie_matched": {
-          "attempted_orders": 11,
-          "closed_positions": 9,
+          "attempted_orders": 21,
+          "closed_positions": 10,
           "directional_hit": null,
-          "dollar_pnl": -3.5,
-          "fees": 3.0,
-          "fill_rate": 0.81818,
-          "filled_contracts": 90,
-          "filled_orders": 9,
-          "games": 6,
-          "hit_rate": 0.11111,
-          "labelled": 3,
-          "max_drawdown_usd": 3.5,
+          "dollar_pnl": -5.27,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": 0.03464,
+          "fees": 3.17,
+          "fill_rate": 0.52381,
+          "filled_contracts": 110,
+          "filled_orders": 11,
+          "games": 7,
+          "gross_pnl_usd": -2.1,
+          "hit_rate": 0.0,
+          "labelled": 5,
+          "max_drawdown_usd": 5.27,
           "mean_ret": {
-            "hi": -0.01533,
-            "lo": -0.0605,
-            "point": -0.03889
+            "hi": -0.04278,
+            "lo": -0.06064,
+            "point": -0.0527
           },
-          "missed_orders": 2,
-          "missing_labels": 8,
-          "positive_game_share": 0.16667,
-          "resolved_share_of_fills": 1.0,
+          "missed_orders": 10,
+          "missing_labels": 16,
+          "positive_game_share": 0.0,
+          "resolved_share_of_fills": 0.90909,
+          "selection": {
+            "complement_unavailable": {},
+            "complement_unavailable_total": 0,
+            "long": 11,
+            "same_exposure_dropped": 96,
+            "via_complement": 10
+          },
           "settled_positions": 0,
           "skill_ci": {
             "hi": 0.0,
             "lo": 0.0,
             "point": 0.0
           },
-          "top_game_share": 0.37073,
-          "unresolved_positions": 0
+          "top_game_share": 0.34915,
+          "unresolved_positions": 1,
+          "unsupported": {
+            "directional_hit": "no labelled mid moved",
+            "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+          }
         }
       },
       "H3_leadlag": {
         "attempted_orders": 0,
         "closed_positions": 0,
+        "directional_hit": null,
+        "dollar_pnl": null,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": null,
         "fees": 0,
         "fill_rate": null,
         "filled_contracts": 0,
         "filled_orders": 0,
         "games": 0,
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          }
+        },
+        "hit_rate": null,
         "labelled": 0,
+        "max_drawdown_usd": null,
+        "mean_ret": null,
         "missed_orders": 0,
         "missing_labels": 0,
+        "positive_game_share": null,
         "resolved_share_of_fills": null,
-        "robust_l3_h05": {
-          "attempted_orders": 0,
-          "fill_rate": null,
-          "mean_ret": null,
-          "positive_game_share": null
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 0,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
-        "unresolved_positions": 0
+        "skill_ci": null,
+        "top_game_share": null,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "directional_hit": "no labelled decision",
+          "dollar_pnl": "no resolved trade",
+          "fee_share_of_gross_edge": "no resolved trade",
+          "fee_share_of_notional": "no resolved trade",
+          "fill_rate": "no decisions",
+          "hit_rate": "no resolved trade",
+          "max_drawdown_usd": "no resolved trade",
+          "mean_ret": "no resolved trade",
+          "positive_game_share": "no resolved trade",
+          "skill_ci": "no labelled decision",
+          "top_game_share": "no resolved trade"
+        }
       },
       "M_prototype": {
         "attempted_orders": 725,
-        "closed_positions": 454,
+        "closed_positions": 429,
         "directional_hit": 0.2381,
-        "dollar_pnl": -176.83,
-        "fees": 123.27,
-        "fill_rate": 0.62897,
-        "filled_contracts": 4532,
-        "filled_orders": 456,
+        "dollar_pnl": -165.1,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02519,
+        "fees": 113.4,
+        "fill_rate": 0.59586,
+        "filled_contracts": 4290,
+        "filled_orders": 432,
         "games": 13,
-        "hit_rate": 0.0022,
-        "labelled": 331,
-        "max_drawdown_usd": 176.83,
-        "mean_ret": {
-          "hi": -0.03518,
-          "lo": -0.04219,
-          "point": -0.03929
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -12.43,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.06571,
+              "lo": -0.13067,
+              "point": -0.10708
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -12.71,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.06571,
+              "lo": -0.13067,
+              "point": -0.10708
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -53.42,
+            "fill_rate": 0.20414,
+            "filled_orders": 148,
+            "mean_ret": {
+              "hi": -0.03178,
+              "lo": -0.04283,
+              "point": -0.03691
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.99324,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -55.85,
+            "fill_rate": 0.2069,
+            "filled_orders": 150,
+            "mean_ret": {
+              "hi": -0.03182,
+              "lo": -0.04554,
+              "point": -0.03818
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.99333,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 269,
+        "gross_pnl_usd": -51.7,
+        "hit_rate": 0.00233,
+        "labelled": 331,
+        "max_drawdown_usd": 165.1,
+        "mean_ret": {
+          "hi": -0.03404,
+          "lo": -0.04283,
+          "point": -0.03879
+        },
+        "missed_orders": 293,
         "missing_labels": 394,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.99561,
-        "robust_l3_h05": {
-          "attempted_orders": 725,
-          "fill_rate": 0.20138,
-          "mean_ret": {
-            "hi": -0.02585,
-            "lo": -0.03532,
-            "point": -0.03117
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.99537,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 725,
+          "same_exposure_dropped": 1292,
+          "via_complement": 0
         },
-        "settled_positions": 0,
+        "settled_positions": 1,
         "skill_ci": {
           "hi": -0.0002,
           "lo": -0.00209,
           "point": -0.00088
         },
-        "top_game_share": 0.20398,
-        "unresolved_positions": 2
+        "top_game_share": 0.22635,
+        "unresolved_positions": 2,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "coverage": 0.50093,
       "missing_labels_unconditional": 28580
@@ -1788,44 +4047,69 @@
       },
       "B1_buy_any": {
         "attempted_orders": 31127,
-        "closed_positions": 17806,
+        "closed_positions": 16520,
         "directional_hit": 0.49523,
-        "dollar_pnl": -7213.71,
-        "fees": 5046.34,
-        "fill_rate": 0.59315,
-        "filled_contracts": 183889,
-        "filled_orders": 18463,
+        "dollar_pnl": -6464.22,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02769,
+        "fees": 4540.55,
+        "fill_rate": 0.54397,
+        "filled_contracts": 168717,
+        "filled_orders": 16932,
         "games": 15,
-        "hit_rate": 0.07933,
-        "labelled": 27066,
-        "max_drawdown_usd": 7213.71,
-        "mean_ret": {
-          "hi": -0.03614,
-          "lo": -0.04357,
-          "point": -0.0405
+        "grid": {
+          "L1_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L1_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h0.5": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          },
+          "L3_h1": {
+            "unsupported": {
+              "all": "the grid is computed at [30] s for this candidate"
+            }
+          }
         },
-        "missed_orders": 12664,
+        "gross_pnl_usd": -1923.67,
+        "hit_rate": 0.07761,
+        "labelled": 27066,
+        "max_drawdown_usd": 6464.22,
+        "mean_ret": {
+          "hi": -0.03455,
+          "lo": -0.04232,
+          "point": -0.03914
+        },
+        "missed_orders": 14195,
         "missing_labels": 4061,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.97021,
-        "robust_l3_h05": {
-          "attempted_orders": 31127,
-          "fill_rate": 0.15585,
-          "mean_ret": {
-            "hi": -0.03153,
-            "lo": -0.04191,
-            "point": -0.03717
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.98016,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 31127,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
-        "settled_positions": 107,
+        "settled_positions": 76,
         "skill_ci": {
           "hi": 0.00014,
           "lo": -0.0003,
           "point": -7e-05
         },
-        "top_game_share": 0.16729,
-        "unresolved_positions": 550
+        "top_game_share": 0.16698,
+        "unresolved_positions": 336,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "B3_ridge_dmid30": {
         "calibration": {
@@ -1905,118 +4189,337 @@
         "n": 0
       },
       "H1_momentum": {
-        "attempted_orders": 194,
-        "closed_positions": 115,
-        "directional_hit": 0.57778,
-        "dollar_pnl": -40.35,
-        "fees": 35.44,
-        "fill_rate": 0.60825,
-        "filled_contracts": 1158,
-        "filled_orders": 118,
+        "attempted_orders": 202,
+        "closed_positions": 100,
+        "directional_hit": 0.57042,
+        "dollar_pnl": -31.66,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02692,
+        "fees": 29.31,
+        "fill_rate": 0.5,
+        "filled_contracts": 988,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.17391,
-        "labelled": 167,
-        "max_drawdown_usd": 42.26,
-        "mean_ret": {
-          "hi": -0.02375,
-          "lo": -0.04693,
-          "point": -0.03613
-        },
-        "missed_orders": 76,
-        "missing_labels": 27,
-        "positive_game_share": 0.1,
-        "resolved_share_of_fills": 0.97458,
-        "robust_l3_h05": {
-          "attempted_orders": 194,
-          "fill_rate": 0.08763,
-          "mean_ret": {
-            "hi": -0.02623,
-            "lo": -0.06374,
-            "point": -0.05271
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -2.97,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.01929,
+              "lo": -0.07567,
+              "point": -0.04243
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -2.97,
+            "fill_rate": 0.03465,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.01929,
+              "lo": -0.07567,
+              "point": -0.04243
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 202,
+            "dollar_pnl": -12.39,
+            "fill_rate": 0.11386,
+            "filled_orders": 23,
+            "mean_ret": {
+              "hi": -0.03577,
+              "lo": -0.06434,
+              "point": -0.05387
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 202,
+            "dollar_pnl": -12.48,
+            "fill_rate": 0.11881,
+            "filled_orders": 24,
+            "mean_ret": {
+              "hi": -0.03577,
+              "lo": -0.06559,
+              "point": -0.05538
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -2.35,
+        "hit_rate": 0.19,
+        "labelled": 175,
+        "max_drawdown_usd": 35.67,
+        "mean_ret": {
+          "hi": -0.02311,
+          "lo": -0.0442,
+          "point": -0.03286
+        },
+        "missed_orders": 101,
+        "missing_labels": 27,
+        "positive_game_share": 0.0,
+        "resolved_share_of_fills": 0.9901,
+        "selection": {
+          "complement_unavailable": {
+            "stale": 45,
+            "tie-inexact": 60
+          },
+          "complement_unavailable_total": 105,
+          "long": 141,
+          "same_exposure_dropped": 119,
+          "via_complement": 61
         },
         "settled_positions": 0,
         "skill_ci": {
-          "hi": 0.0208,
-          "lo": -0.00577,
-          "point": 0.00847
+          "hi": 0.01916,
+          "lo": -0.00616,
+          "point": 0.00723
         },
-        "top_game_share": 0.27496,
-        "unresolved_positions": 3
+        "top_game_share": 0.28648,
+        "unresolved_positions": 1,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_dip": {
         "attempted_orders": 232,
-        "closed_positions": 119,
+        "closed_positions": 98,
         "directional_hit": 0.45399,
-        "dollar_pnl": -72.6,
-        "fees": 38.54,
-        "fill_rate": 0.53879,
-        "filled_contracts": 1250,
-        "filled_orders": 125,
+        "dollar_pnl": -54.17,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.03532,
+        "fees": 30.11,
+        "fill_rate": 0.43534,
+        "filled_contracts": 1010,
+        "filled_orders": 101,
         "games": 11,
-        "hit_rate": 0.15,
-        "labelled": 193,
-        "max_drawdown_usd": 74.87,
-        "mean_ret": {
-          "hi": -0.0371,
-          "lo": -0.07816,
-          "point": -0.0605
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -14.72,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.0345,
+              "lo": -0.22313,
+              "point": -0.12267
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -14.55,
+            "fill_rate": 0.05603,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.0325,
+              "lo": -0.2225,
+              "point": -0.12125
+            },
+            "positive_game_share": 0.16667,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 232,
+            "dollar_pnl": -19.85,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.02243,
+              "lo": -0.17195,
+              "point": -0.07352
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 232,
+            "dollar_pnl": -19.68,
+            "fill_rate": 0.12069,
+            "filled_orders": 28,
+            "mean_ret": {
+              "hi": -0.02183,
+              "lo": -0.17105,
+              "point": -0.07289
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.96429,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 107,
+        "gross_pnl_usd": -24.06,
+        "hit_rate": 0.15306,
+        "labelled": 193,
+        "max_drawdown_usd": 55.89,
+        "mean_ret": {
+          "hi": -0.03437,
+          "lo": -0.07086,
+          "point": -0.05528
+        },
+        "missed_orders": 131,
         "missing_labels": 39,
         "positive_game_share": 0.1,
-        "resolved_share_of_fills": 0.96,
-        "robust_l3_h05": {
-          "attempted_orders": 232,
-          "fill_rate": 0.0819,
-          "mean_ret": {
-            "hi": -0.02323,
-            "lo": -0.10578,
-            "point": -0.04805
-          },
-          "positive_game_share": 0.0
+        "resolved_share_of_fills": 0.9703,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 232,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
-        "settled_positions": 1,
+        "settled_positions": 0,
         "skill_ci": {
           "hi": 0.00607,
           "lo": -0.02415,
           "point": -0.00834
         },
-        "top_game_share": 0.24801,
-        "unresolved_positions": 5
+        "top_game_share": 0.22941,
+        "unresolved_positions": 3,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H2_recovery": {
         "attempted_orders": 55,
-        "closed_positions": 25,
+        "closed_positions": 18,
         "directional_hit": 0.5,
-        "dollar_pnl": -13.59,
-        "fees": 8.74,
-        "fill_rate": 0.45455,
-        "filled_contracts": 250,
-        "filled_orders": 25,
+        "dollar_pnl": -8.54,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02979,
+        "fees": 5.94,
+        "fill_rate": 0.34545,
+        "filled_contracts": 190,
+        "filled_orders": 19,
         "games": 9,
-        "hit_rate": 0.16,
-        "labelled": 41,
-        "max_drawdown_usd": 14.91,
-        "mean_ret": {
-          "hi": -0.02223,
-          "lo": -0.08383,
-          "point": -0.05436
-        },
-        "missed_orders": 30,
-        "missing_labels": 14,
-        "positive_game_share": 0.11111,
-        "resolved_share_of_fills": 1.0,
-        "robust_l3_h05": {
-          "attempted_orders": 55,
-          "fill_rate": 0.2,
-          "mean_ret": {
-            "hi": -0.0385,
-            "lo": -0.0655,
-            "point": -0.0552
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.6,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.04143,
+              "lo": -0.11,
+              "point": -0.07667
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
           },
-          "positive_game_share": 0.0
+          "L1_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -4.6,
+            "fill_rate": 0.12727,
+            "filled_orders": 7,
+            "mean_ret": {
+              "hi": -0.04143,
+              "lo": -0.11,
+              "point": -0.07667
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.85714,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 55,
+            "dollar_pnl": -7.02,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.035,
+              "lo": -0.07575,
+              "point": -0.0585
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 55,
+            "dollar_pnl": -7.02,
+            "fill_rate": 0.23636,
+            "filled_orders": 13,
+            "mean_ret": {
+              "hi": -0.035,
+              "lo": -0.07575,
+              "point": -0.0585
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 0.92308,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
+        },
+        "gross_pnl_usd": -2.6,
+        "hit_rate": 0.11111,
+        "labelled": 41,
+        "max_drawdown_usd": 10.16,
+        "mean_ret": {
+          "hi": -0.01008,
+          "lo": -0.06521,
+          "point": -0.04744
+        },
+        "missed_orders": 36,
+        "missing_labels": 14,
+        "positive_game_share": 0.14286,
+        "resolved_share_of_fills": 0.94737,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 55,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -2024,196 +4527,507 @@
           "lo": -0.02435,
           "point": 0.00061
         },
-        "top_game_share": 0.23963,
-        "unresolved_positions": 0
+        "top_game_share": 0.40227,
+        "unresolved_positions": 1,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "H3_by_grade": {
         "agree=0": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "agree>=1": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "hard": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         },
         "soft": {
           "attempted_orders": 0,
           "closed_positions": 0,
+          "directional_hit": null,
+          "dollar_pnl": null,
+          "fee_share_of_gross_edge": null,
+          "fee_share_of_notional": null,
           "fees": 0,
           "fill_rate": null,
           "filled_contracts": 0,
           "filled_orders": 0,
           "games": 0,
+          "hit_rate": null,
           "labelled": 0,
+          "max_drawdown_usd": null,
+          "mean_ret": null,
           "missed_orders": 0,
           "missing_labels": 0,
+          "positive_game_share": null,
           "resolved_share_of_fills": null,
           "settled_positions": 0,
-          "unresolved_positions": 0
+          "skill_ci": null,
+          "top_game_share": null,
+          "unresolved_positions": 0,
+          "unsupported": {
+            "directional_hit": "no labelled decision",
+            "dollar_pnl": "no resolved trade",
+            "fee_share_of_gross_edge": "no resolved trade",
+            "fee_share_of_notional": "no resolved trade",
+            "fill_rate": "no decisions",
+            "hit_rate": "no resolved trade",
+            "max_drawdown_usd": "no resolved trade",
+            "mean_ret": "no resolved trade",
+            "positive_game_share": "no resolved trade",
+            "skill_ci": "no labelled decision",
+            "top_game_share": "no resolved trade"
+          }
         }
       },
       "H3_diagnostics": {
         "any_settlement": {
-          "attempted_orders": 55,
-          "closed_positions": 26,
-          "directional_hit": 0.61538,
-          "dollar_pnl": -12.58,
-          "fees": 9.39,
-          "fill_rate": 0.50909,
-          "filled_contracts": 275,
-          "filled_orders": 28,
-          "games": 10,
-          "hit_rate": 0.19231,
-          "labelled": 40,
-          "max_drawdown_usd": 14.55,
+          "attempted_orders": 148,
+          "closed_positions": 59,
+          "directional_hit": 0.80952,
+          "dollar_pnl": 25.55,
+          "fee_share_of_gross_edge": 0.41839,
+          "fee_share_of_notional": 0.0306,
+          "fees": 18.38,
+          "fill_rate": 0.41216,
+          "filled_contracts": 596,
+          "filled_orders": 61,
+          "games": 11,
+          "gross_pnl_usd": 43.93,
+          "hit_rate": 0.65,
+          "labelled": 132,
+          "max_drawdown_usd": 3.91,
           "mean_ret": {
-            "hi": -0.00489,
-            "lo": -0.09182,
-            "point": -0.04954
+            "hi": 0.06211,
+            "lo": 0.02997,
+            "point": 0.04395
           },
-          "missed_orders": 27,
-          "missing_labels": 15,
-          "positive_game_share": 0.11111,
-          "resolved_share_of_fills": 0.92857,
-          "settled_positions": 0,
+          "missed_orders": 87,
+          "missing_labels": 16,
+          "positive_game_share": 0.81818,
+          "resolved_share_of_fills": 0.98361,
+          "selection": {
+            "complement_unavailable": {
+              "stale": 23,
+              "tie-inexact": 64
+            },
+            "complement_unavailable_total": 87,
+            "long": 82,
+            "same_exposure_dropped": 250,
+            "via_complement": 66
+          },
+          "settled_positions": 1,
           "skill_ci": {
-            "hi": 0.07068,
-            "lo": -0.00197,
-            "point": 0.03225
+            "hi": 0.08187,
+            "lo": 0.0571,
+            "point": 0.06712
           },
-          "top_game_share": 0.19368,
-          "unresolved_positions": 2
+          "top_game_share": 0.1894,
+          "unresolved_positions": 1,
+          "unsupported": {}
         },
         "tie_matched": {
-          "attempted_orders": 11,
-          "closed_positions": 9,
-          "directional_hit": 0.6,
-          "dollar_pnl": 1.64,
-          "fees": 2.87,
-          "fill_rate": 0.81818,
-          "filled_contracts": 90,
-          "filled_orders": 9,
-          "games": 6,
-          "hit_rate": 0.33333,
-          "labelled": 11,
-          "max_drawdown_usd": 1.42,
+          "attempted_orders": 21,
+          "closed_positions": 11,
+          "directional_hit": 0.70588,
+          "dollar_pnl": -0.3,
+          "fee_share_of_gross_edge": 1.09375,
+          "fee_share_of_notional": 0.03418,
+          "fees": 3.5,
+          "fill_rate": 0.52381,
+          "filled_contracts": 110,
+          "filled_orders": 11,
+          "games": 7,
+          "gross_pnl_usd": 3.2,
+          "hit_rate": 0.27273,
+          "labelled": 21,
+          "max_drawdown_usd": 3.13,
           "mean_ret": {
-            "hi": 0.08391,
-            "lo": -0.05,
-            "point": 0.01822
+            "hi": 0.05313,
+            "lo": -0.0394,
+            "point": -0.00273
           },
-          "missed_orders": 2,
+          "missed_orders": 10,
           "missing_labels": 0,
-          "positive_game_share": 0.33333,
+          "positive_game_share": 0.28571,
           "resolved_share_of_fills": 1.0,
+          "selection": {
+            "complement_unavailable": {},
+            "complement_unavailable_total": 0,
+            "long": 11,
+            "same_exposure_dropped": 96,
+            "via_complement": 10
+          },
           "settled_positions": 0,
           "skill_ci": {
-            "hi": 0.1175,
-            "lo": -0.02464,
-            "point": 0.045
+            "hi": 0.08325,
+            "lo": 0.00212,
+            "point": 0.03429
           },
-          "top_game_share": 0.53172,
-          "unresolved_positions": 0
+          "top_game_share": 0.31981,
+          "unresolved_positions": 0,
+          "unsupported": {}
         }
       },
       "H3_leadlag": {
         "attempted_orders": 0,
         "closed_positions": 0,
+        "directional_hit": null,
+        "dollar_pnl": null,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": null,
         "fees": 0,
         "fill_rate": null,
         "filled_contracts": 0,
         "filled_orders": 0,
         "games": 0,
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 0,
+            "dollar_pnl": null,
+            "fill_rate": null,
+            "filled_orders": 0,
+            "mean_ret": null,
+            "positive_game_share": null,
+            "resolved_share_of_fills": null,
+            "unsupported": {
+              "directional_hit": "no labelled decision",
+              "dollar_pnl": "no resolved trade",
+              "fee_share_of_gross_edge": "no resolved trade",
+              "fee_share_of_notional": "no resolved trade",
+              "fill_rate": "no decisions",
+              "hit_rate": "no resolved trade",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book",
+              "max_drawdown_usd": "no resolved trade",
+              "mean_ret": "no resolved trade",
+              "positive_game_share": "no resolved trade",
+              "skill_ci": "no labelled decision",
+              "top_game_share": "no resolved trade"
+            }
+          }
+        },
+        "hit_rate": null,
         "labelled": 0,
+        "max_drawdown_usd": null,
+        "mean_ret": null,
         "missed_orders": 0,
         "missing_labels": 0,
+        "positive_game_share": null,
         "resolved_share_of_fills": null,
-        "robust_l3_h05": {
-          "attempted_orders": 0,
-          "fill_rate": null,
-          "mean_ret": null,
-          "positive_game_share": null
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 0,
+          "same_exposure_dropped": 0,
+          "via_complement": 0
         },
         "settled_positions": 0,
-        "unresolved_positions": 0
+        "skill_ci": null,
+        "top_game_share": null,
+        "unresolved_positions": 0,
+        "unsupported": {
+          "directional_hit": "no labelled decision",
+          "dollar_pnl": "no resolved trade",
+          "fee_share_of_gross_edge": "no resolved trade",
+          "fee_share_of_notional": "no resolved trade",
+          "fill_rate": "no decisions",
+          "hit_rate": "no resolved trade",
+          "max_drawdown_usd": "no resolved trade",
+          "mean_ret": "no resolved trade",
+          "positive_game_share": "no resolved trade",
+          "skill_ci": "no labelled decision",
+          "top_game_share": "no resolved trade"
+        }
       },
       "M_prototype": {
         "attempted_orders": 725,
-        "closed_positions": 445,
+        "closed_positions": 422,
         "directional_hit": 0.52401,
-        "dollar_pnl": -158.58,
-        "fees": 120.77,
-        "fill_rate": 0.62897,
-        "filled_contracts": 4532,
-        "filled_orders": 456,
+        "dollar_pnl": -156.18,
+        "fee_share_of_gross_edge": null,
+        "fee_share_of_notional": 0.02513,
+        "fees": 111.9,
+        "fill_rate": 0.59586,
+        "filled_contracts": 4290,
+        "filled_orders": 432,
         "games": 13,
-        "hit_rate": 0.1278,
-        "labelled": 681,
-        "max_drawdown_usd": 162.2,
-        "mean_ret": {
-          "hi": -0.02842,
-          "lo": -0.04293,
-          "point": -0.03601
+        "grid": {
+          "L1_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -16.68,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.05067,
+              "lo": -0.1984,
+              "point": -0.143
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L1_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -17.0,
+            "fill_rate": 0.01655,
+            "filled_orders": 12,
+            "mean_ret": {
+              "hi": -0.05067,
+              "lo": -0.1984,
+              "point": -0.143
+            },
+            "positive_game_share": 0.0,
+            "resolved_share_of_fills": 1.0,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (1 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h0.5": {
+            "attempted_orders": 725,
+            "dollar_pnl": -64.18,
+            "fill_rate": 0.20414,
+            "filled_orders": 148,
+            "mean_ret": {
+              "hi": -0.02999,
+              "lo": -0.05755,
+              "point": -0.04443
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.98649,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          },
+          "L3_h1": {
+            "attempted_orders": 725,
+            "dollar_pnl": -64.73,
+            "fill_rate": 0.2069,
+            "filled_orders": 150,
+            "mean_ret": {
+              "hi": -0.03006,
+              "lo": -0.05783,
+              "point": -0.04469
+            },
+            "positive_game_share": 0.14286,
+            "resolved_share_of_fills": 0.98667,
+            "unsupported": {
+              "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)",
+              "latency": "recorder cadence 5.4 s exceeds latency + entry tolerance (3 + 2 s): orders at this latency cannot meet an observed book"
+            }
+          }
         },
-        "missed_orders": 269,
+        "gross_pnl_usd": -44.28,
+        "hit_rate": 0.12471,
+        "labelled": 681,
+        "max_drawdown_usd": 158.5,
+        "mean_ret": {
+          "hi": -0.0283,
+          "lo": -0.04534,
+          "point": -0.03727
+        },
+        "missed_orders": 293,
         "missing_labels": 44,
         "positive_game_share": 0.0,
-        "resolved_share_of_fills": 0.97807,
-        "robust_l3_h05": {
-          "attempted_orders": 725,
-          "fill_rate": 0.20138,
-          "mean_ret": {
-            "hi": -0.01977,
-            "lo": -0.04366,
-            "point": -0.03438
-          },
-          "positive_game_share": 0.14286
+        "resolved_share_of_fills": 0.9838,
+        "selection": {
+          "complement_unavailable": {},
+          "complement_unavailable_total": 0,
+          "long": 725,
+          "same_exposure_dropped": 1292,
+          "via_complement": 0
         },
-        "settled_positions": 1,
+        "settled_positions": 3,
         "skill_ci": {
           "hi": 0.01039,
           "lo": -0.0012,
           "point": 0.00397
         },
-        "top_game_share": 0.2115,
-        "unresolved_positions": 10
+        "top_game_share": 0.26469,
+        "unresolved_positions": 7,
+        "unsupported": {
+          "fee_share_of_gross_edge": "no gross edge before fees (fees cannot be a share of a loss)"
+        }
       },
       "coverage": 0.92057,
       "missing_labels_unconditional": 4549
@@ -2299,8 +5113,9 @@
   "primary": {
     "alpha": 0.1,
     "hypothesis": "H3_leadlag@30",
-    "p_mean_le_0": 1.0,
-    "passes": false
+    "p_value": 1.0,
+    "passes": false,
+    "test": "game-level sign-flip, one-sided (mean > 0)"
   },
   "prints": {
     "approximate_receipt": 0,
@@ -2332,15 +5147,16 @@
     },
     "p": {
       "H1_momentum@30": 1.0,
-      "H2_dip@30": 1.0,
-      "H2_recovery@30": 0.99,
+      "H2_dip@30": 0.99902,
+      "H2_recovery@30": 0.96094,
       "H3_leadlag@15": 1.0,
       "H3_leadlag@5": 1.0,
       "H3_leadlag@60": 1.0,
       "H4_arb": 1.0,
       "M_prototype@30": 1.0
-    }
+    },
+    "test": "game-level sign-flip, one-sided; Holm"
   },
-  "spec_hash": "e971a8c91f50f1b992586f47a709f2977544c41f8f1389459426e1b9129dcbc0",
+  "spec_hash": "fb40604af8e36651627c509f1dfcdadf7f740283e3500acb9cdf81afb52fd74a",
   "triggers": 609
 }
