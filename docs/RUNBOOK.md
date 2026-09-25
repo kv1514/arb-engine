@@ -239,6 +239,32 @@ python3 scripts/kalshi_connect.py
    Claude Code. Those servers are for looking (markets, balance, positions, fills); orders go
    through the engine's own capped executor below.
 
+4. **Inspect the account and manage manual orders.** The `kalshi` command also reads
+   `~/.kalshi/env` (an already-exported variable wins). Account reads never mutate state:
+
+```bash
+python3 -m arb_engine kalshi balance
+python3 -m arb_engine kalshi positions
+python3 -m arb_engine kalshi orders --status resting
+python3 -m arb_engine kalshi fills
+```
+
+   Manual mutations print a dry-run unless `--confirm` is present. Start on demo. The default
+   manual-order maximum loss/notional is $25; raise it explicitly with `--max-notional` only
+   after checking the preview. IOC avoids leaving an unexpected resting order:
+
+```bash
+python3 -m arb_engine kalshi order --ticker <ticker> --side-action buy --side yes --count 1 --price 0.40 --time-in-force immediate_or_cancel
+python3 -m arb_engine kalshi order --ticker <ticker> --side-action buy --side yes --count 1 --price 0.40 --time-in-force immediate_or_cancel --confirm
+python3 -m arb_engine kalshi cancel --order-id <order-id>              # dry-run
+python3 -m arb_engine kalshi cancel --order-id <order-id> --confirm
+python3 -m arb_engine kalshi cancel-all                               # dry-run emergency sweep
+python3 -m arb_engine kalshi cancel-all --confirm
+```
+
+   Production keeps the third gate: `KALSHI_ENV=prod` plus `--confirm` is still blocked unless
+   `ARB_LIVE_TRADING=1` is exported. Never put that opt-in in a committed file.
+
 ## 1c. Acting on LAG automatically (needs your Kalshi API key)
 
 A LAG lives ~23 s; reading a push and typing an order is slower. `live --execute-lag` sends

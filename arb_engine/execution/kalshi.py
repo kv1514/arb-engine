@@ -82,24 +82,63 @@ class KalshiExecutor:
     def __init__(self, client: Optional[KalshiClient] = None):
         self.client = client or KalshiClient()
 
+    def _mutation_preview(self, operation: str, **fields: Any) -> dict[str, Any]:
+        return {"env": self.client.env, "base_url": self.client.base_url, "operation": operation, **fields}
+
+    def _mutation_allowed(self, preview: dict[str, Any], confirm: bool) -> bool:
+        if not confirm:
+            preview["status"] = "DRY_RUN (pass confirm=True / --confirm to submit)"
+            return False
+        if self.client.env == "prod" and os.environ.get("ARB_LIVE_TRADING") != "1":
+            preview["status"] = "BLOCKED: KALSHI_ENV=prod requires ARB_LIVE_TRADING=1"
+            return False
+        return True
+
     def plan(self, ticker: str, action: str, side: str, count: float, price: float, post_only: bool = False, exchange_index: Optional[int] = None, note: str = "", *, time_in_force: str = "good_till_canceled", kickoff: Optional[float] = None, expiration_time: Optional[int] = None, cancel_order_on_pause: bool = True, order_group_id: Optional[str] = None) -> OrderPlan:
+        if not str(ticker or "").strip():
+            raise ValueError("ticker is required")
+        if action not in ("buy", "sell"):
+            raise ValueError("action must be buy or sell")
+        if side not in ("yes", "no"):
+            raise ValueError("side must be yes or no")
         if not (0 < price < 1):
             raise ValueError("price must be in (0, 1) dollars")
         if count <= 0:
             raise ValueError("count must be positive")
+        tif = time_in_force.lower()
+        if tif not in {"good_till_canceled", "immediate_or_cancel", "fill_or_kill", "ioc", "fok"}:
+            raise ValueError("unsupported time_in_force")
+        if post_only and tif in IOC_TIFS:
+            raise ValueError("post_only cannot be combined with IOC/FOK")
         return OrderPlan(venue="kalshi", ticker=ticker, action=action, side=side, count=count, price=round(price, 4), post_only=post_only, time_in_force=time_in_force, exchange_index=exchange_index, note=note, kickoff=kickoff, expiration_time=expiration_time, cancel_order_on_pause=cancel_order_on_pause, order_group_id=order_group_id)
 
     def execute(self, plan: OrderPlan, confirm: bool = False) -> dict[str, Any]:
         payload = plan.payload()
-        preview = {"env": self.client.env, "base_url": self.client.base_url, "plan": asdict(plan), "payload": payload}
-        if not confirm:
-            preview["status"] = "DRY_RUN (pass confirm=True / --confirm to submit)"
-            return preview
-        if self.client.env == "prod" and os.environ.get("ARB_LIVE_TRADING") != "1":
-            preview["status"] = "BLOCKED: KALSHI_ENV=prod requires ARB_LIVE_TRADING=1"
+        preview = self._mutation_preview("create_order", plan=asdict(plan), payload=payload)
+        if not self._mutation_allowed(preview, confirm):
             return preview
         preview["response"] = self.client.create_order(payload)
         preview["status"] = "SUBMITTED"
+        return preview
+
+    def cancel(self, order_id: str, confirm: bool = False) -> dict[str, Any]:
+        """Cancel one order through the same gates as submission."""
+        if not str(order_id or "").strip():
+            raise ValueError("order_id is required")
+        preview = self._mutation_preview("cancel_order", order_id=str(order_id))
+        if not self._mutation_allowed(preview, confirm):
+            return preview
+        preview["response"] = self.client.cancel_order(str(order_id))
+        preview["status"] = "CANCELLED"
+        return preview
+
+    def cancel_all(self, confirm: bool = False, subaccount: Optional[int] = None) -> dict[str, Any]:
+        """Emergency sweep of resting orders, guarded like every other mutation."""
+        preview = self._mutation_preview("cancel_all_orders", subaccount=subaccount)
+        if not self._mutation_allowed(preview, confirm):
+            return preview
+        self.client.cancel_all_orders(subaccount=subaccount)
+        preview["status"] = "CANCELLED_ALL"
         return preview
 
     def execute_legs(self, plans: list[OrderPlan], confirm: bool = False) -> list[dict[str, Any]]:
