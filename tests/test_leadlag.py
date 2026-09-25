@@ -921,8 +921,10 @@ class NearArbAlertTests(unittest.TestCase):
 
         t0 = 1_800_000_000.0
         info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
-        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=kalshi_ask, bid=kalshi_ask - 0.01, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})]
-        rq = [OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=rh_ask, bid=rh_ask - 0.01, ask_size=120, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=kalshi_ask, bid=kalshi_ask - 0.01, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"},
+                           url="https://kalshi.com/markets/kxnflgame/kxnflgame-26sep20denkc")]
+        rq = [OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=rh_ask, bid=rh_ask - 0.01, ask_size=120, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera",
+                           url="https://robinhood.com/us/en/prediction-markets/nfl/events/denver-vs-kansas-city-sep-20-2026/")]
         me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
         view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
         alerts = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"near_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="")
@@ -969,7 +971,8 @@ class NearArbAlertTests(unittest.TestCase):
     def _pushed(self, slate):
         sent = []
         slate.alerts.ntfy = "https://ntfy.sh/t"
-        slate.alerts._post = lambda url, body, headers: sent.append((headers["Title"], headers["Priority"], body.decode()))
+        slate.alerts._post = lambda url, body, headers: (sent.append((headers["Title"], headers["Priority"], body.decode())),
+                                                         self.__dict__.setdefault("_headers", []).append(headers))
         return sent
 
     def test_arb_tiers_small_is_logged_normal_pushed_big_is_top_priority(self):
@@ -993,6 +996,15 @@ class NearArbAlertTests(unittest.TestCase):
                 # ... while the journal keeps the full itemised ticket.
                 full = [e for e in slate.alerts.events if e["kind"] == "alert"][0]["msg"]
                 self.assertIn("+ Kalshi taker fee:", full)
+                # One button per order, labelled with the order, in buying order; tapping the push
+                # opens the leg to buy first.
+                h = self._headers[-1]
+                buttons = [b.strip().split(", ") for b in h["Actions"].split(";")]
+                self.assertEqual([b[0] for b in buttons], ["view", "view"])
+                self.assertRegex(buttons[0][1], r"^1\. (Kalshi|Robinhood) \d+ (KC|DEN) YES \d+(\.\d+)?c$")
+                self.assertRegex(buttons[1][1], r"^2\. (Kalshi|Robinhood) \d+ (KC|DEN) YES \d+(\.\d+)?c")
+                self.assertEqual(h["Click"], buttons[0][2])
+                self.assertTrue(all(b[2].startswith("https://") for b in buttons))
 
     def test_short_push_style_can_be_switched_back_to_full(self):
         slate, me, view, t0 = self._slate(0.55, 0.36, arb_push_style="full")

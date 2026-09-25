@@ -163,6 +163,29 @@ def urls_of(result: Any) -> list[str]:
     return _urls(list(_g(result, "legs", []) or []))
 
 
+def order_buttons(result: Any, first: Optional[int] = None, max_prices: Optional[dict] = None) -> list[tuple[str, str]]:
+    """One tap-to-open button per order, in buying order, labelled with the order itself:
+    ``("1. Kalshi 25 ATL YES 22c", <Kalshi game page>)``. Plain ASCII (ntfy buttons travel in
+    an HTTP header)."""
+    legs = list(_g(result, "legs", []) or [])
+    order = list(range(len(legs)))
+    if first is not None and 0 <= first < len(legs):
+        order = [first] + [i for i in order if i != first]
+    out = []
+    for n, i in enumerate(order, 1):
+        leg = legs[i]
+        url = _g(leg, "url")
+        if not url:
+            continue
+        side = str(_g(leg, "side") or "").upper()
+        mp = (max_prices or {}).get(i)
+        price = float(_g(leg, "price", 0) or 0)
+        lim = f" up to {float(mp) * 100:g}c" if n > 1 and mp is not None and float(mp) > price + 1e-9 else ""
+        label = f"{n}. {_venue_name(_g(leg, 'venue', '?'))} {float(_g(leg, 'contracts', 0) or 0):g} {_g(leg, 'outcome') or '?'} {side} {price * 100:g}c{lim}"
+        out.append(("".join(ch for ch in label if ch.isascii() and ch not in ",;").strip(), str(url)))
+    return out
+
+
 def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB", sport: Optional[str] = None,
                first: Optional[int] = None, first_reason: str = "", max_prices: Optional[dict] = None, now: Optional[float] = None,
                window: str = "", guarantee: str = "") -> str:

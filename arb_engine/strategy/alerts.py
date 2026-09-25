@@ -121,6 +121,7 @@ class Alerter:
         headline = data.pop("ntfy_title", None)   # what the phone shows in bold; ``title`` stays the kind
         body = data.pop("ntfy_body", None)         # a shorter text for the phone; the journal keeps ``msg``
         actions = data.pop("ntfy_actions", None)   # [(label, url)]: tap-to-open buttons on the push
+        click = data.pop("ntfy_click", None)       # what tapping the notification itself opens
         steal = {k: data.pop(k) for k in STEAL_FIELDS + STEAL_EXTRA_FIELDS if k in data} if "outcome" in data and "venue" in data else {}
         if steal:
             ts = data.pop("ts", None)
@@ -152,11 +153,11 @@ class Alerter:
                 self.journal("webhook_error", error=str(e))
         if self.ntfy:
             self.push(title, body or msg, event=data.get("event") or data.get("event_key"), side=(steal.get("outcome") if steal else data.get("outcome")) or data.get("watch") or "", headline=headline,
-                      actions=actions)
+                      actions=actions, click=click)
 
     # ---- ntfy --------------------------------------------------------------------------------
     def push(self, title: str, msg: str, event: Any = None, side: Any = None, force: bool = False, headline: Optional[str] = None,
-             actions: Optional[list] = None) -> bool:
+             actions: Optional[list] = None, click: Optional[str] = None) -> bool:
         """One ntfy push for ``title`` unless its kind is not subscribed or the same
         (title, event, side) was pushed less than ``min_interval_s`` ago (HEDGE NOW always goes;
         ``NTFY_GAME_LEVEL`` kinds throttle per (title, event))."""
@@ -175,6 +176,8 @@ class Alerter:
         acts = [(str(lbl), str(url)) for lbl, url in (actions or [])[:3] if url and str(url).isascii() and "," not in str(url) and ";" not in str(url)]
         if acts:   # ntfy action buttons: "view, <label>, <url>" separated by ";"
             headers["Actions"] = "; ".join(f"view, {lbl}, {url}" for lbl, url in acts)
+        if click and str(click).isascii():
+            headers["Click"] = str(click)
         try:
             self._post(self.ntfy, msg[:3500].encode("utf-8"), headers)
             self.journal("ntfy", title=title, event=event, side=side)

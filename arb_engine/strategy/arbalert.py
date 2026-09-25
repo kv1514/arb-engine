@@ -219,7 +219,10 @@ class ArbAlerter:
                 extra = {}
                 if self.short_push:
                     extra["ntfy_body"] = ticket.arb_short(sized, first=first, max_prices=maxp, where=where)
-                    extra["ntfy_actions"] = [(_venue_label(u), u) for u in ticket.urls_of(sized)]
+                    buttons = ticket.order_buttons(sized, first=first, max_prices=maxp)
+                    extra["ntfy_actions"] = buttons
+                    if buttons:
+                        extra["ntfy_click"] = buttons[0][1]      # tapping the push opens the leg to buy first
                     head = f"{kind} +{margin * 100:.1f}c - {sport} {title}".replace("  ", " ")
                 else:
                     head = f"{kind} {sport}".strip()
