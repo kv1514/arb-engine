@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (851)
+python -m unittest discover -s tests -t .      # Python tests (852)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -161,6 +161,7 @@ When you declare a key, add its row here.
 | `lag_lock_tie_safe` | `LAG_LOCK_TIE_SAFE` | `True` | LAG lock watch: only lock pairs that pay at least $1 on a tie (a Kalshi YES + a Rothera YES pays $0.50). |
 | `arb_stake_fraction` | `ARB_STAKE_FRACTION` | `0.2` | Share of the bankroll a BIG ARB ticket is sized to, fees in (a locked set holds its cost until the game ends; on one $500 bankroll over 2026-09-20/21, 20 % per BIG ARB made $187 vs $92 all-in and $111 at 50 %). |
 | `arb_stake_fraction_arb` | `ARB_STAKE_FRACTION_ARB` | `0.05` | Share of the bankroll a 1-3c ARB ticket is sized to (legged by hand that tier returned -0.5 % per dollar, Kelly 0; 20 % BIG + 5 % ARB made $169 vs $80 at 20 % on every tier). 0 = do not alert that tier. |
+| `arb_push_style` | `ARB_PUSH_STYLE` | `short` | What an ARB / ARB CLOSE push shows on the phone: `short` (each leg's venue, shares, side and price, the cost and profit, a tie warning when a tie loses; Kalshi / Robinhood buttons) or `full` (the whole itemised ticket). The journal always keeps the full ticket. |
 | `arb_push_min_margin` | `ARB_PUSH_MIN_MARGIN` | `0.01` | Live slate: smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL (replayed by hand, arbs under 1c lost money). |
 | `arb_big_margin` | `ARB_BIG_MARGIN` | `0.03` | Live slate: ARB margin from which the push is titled BIG ARB at top priority (replayed by hand, arbs of 3c+ made money). |
 | `arb_near_margin` | `ARB_NEAR_MARGIN` | `0.03` | Live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert — the buffer that says "this pair is about to cross". |

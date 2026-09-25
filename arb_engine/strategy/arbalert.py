@@ -35,6 +35,7 @@ if _declare_setting is not None:
         _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
         _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=300.0, cast=float, doc="seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent")
         _declare_setting("arb_stake_fraction", env="ARB_STAKE_FRACTION", default=0.20, cast=float, doc="share of the bankroll one ARB ticket is sized to (fees in). A locked set holds its cost until the game ends, so an all-in ticket leaves nothing for the next arb; on the first recorded Sunday, 20 % per arb made about twice what all-in did")
+        _declare_setting("arb_push_style", env="ARB_PUSH_STYLE", default="short", cast=str, doc="what an ARB / ARB CLOSE push shows on the phone: 'short' (what to buy where at what price, and the result; the full ticket stays in the journal) or 'full' (the whole itemised ticket)")
         _declare_setting("arb_stake_fraction_arb", env="ARB_STAKE_FRACTION_ARB", default=0.05, cast=float, doc="share of the bankroll a 1-3c ARB ticket is sized to (BIG ARB uses arb_stake_fraction). Legged by hand the 1-3c tier returned -0.5 % per dollar on 2026-09-20/21 (Kelly: 0); on one bankroll, 20 % BIG + 5 % ARB made $169 vs $80 for 20 % on every tier. 0 = do not alert that tier")
         _declare_setting("arb_push_min_margin", env="ARB_PUSH_MIN_MARGIN", default=0.01, cast=float, doc="smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL. Replayed by hand (a person on the Robinhood leg), arbs under 1c lost money at every leg speed tested")
         _declare_setting("arb_big_margin", env="ARB_BIG_MARGIN", default=0.03, cast=float, doc="ARB margin from which the push is titled BIG ARB at top priority (replayed: arbs of 3c+ made money when legged by hand)")
@@ -89,6 +90,11 @@ def guarantee_line(rep: Any, sized: dict) -> str:
     return head
 
 
+def _venue_label(url: str) -> str:
+    u = str(url).lower()
+    return "Kalshi" if "kalshi" in u else ("Robinhood" if "robinhood" in u else ("Polymarket" if "polymarket" in u else "Open"))
+
+
 def _setting(settings: Optional[dict[str, Any]], key: str, default: Any) -> Any:
     try:
         from ..config import setting
@@ -125,6 +131,7 @@ class ArbAlerter:
         self.push_min = float(_setting(self.settings, "arb_push_min_margin", 0.01) or 0.0)
         self.big = float(_setting(self.settings, "arb_big_margin", 0.03) or 0.03)
         self.stake_fraction = float(_setting(self.settings, "arb_stake_fraction", 0.20) or 1.0)
+        self.short_push = str(_setting(self.settings, "arb_push_style", "short") or "short").strip().lower() != "full"
         self.stake_fraction_arb = min(self.stake_fraction, max(0.0, float(_setting(self.settings, "arb_stake_fraction_arb", 0.05) or 0.0)))
         self._staked: dict[str, float] = {}   # event -> the fraction its last analysis was sized to
         self._moves_fn = moves
@@ -209,9 +216,16 @@ class ArbAlerter:
                 # ARB SMALL is journalled, not pushed (not a default ntfy kind).
                 # The push is keyed by game (one per game per minute: a game's spread and total lines
                 # can arb together); the journal keeps the market.
-                _call(self.alerts.alert, kind, text, event=_game(me.event_key), market=me.event_key, ntfy_title=f"{kind} {sport}".strip(),
+                extra = {}
+                if self.short_push:
+                    extra["ntfy_body"] = ticket.arb_short(sized, first=first, max_prices=maxp, where=where)
+                    extra["ntfy_actions"] = [(_venue_label(u), u) for u in ticket.urls_of(sized)]
+                    head = f"{kind} +{margin * 100:.1f}c - {sport} {title}".replace("  ", " ")
+                else:
+                    head = f"{kind} {sport}".strip()
+                _call(self.alerts.alert, kind, text, event=_game(me.event_key), market=me.event_key, ntfy_title=head,
                       margin=sized.get("margin"), legs=sized.get("legs"), contracts=sized.get("contracts"),
-                      cost=sized.get("total_cost"), profit=sized.get("profit"))
+                      cost=sized.get("total_cost"), profit=sized.get("profit"), **extra)
         elif not stale and arb.get("margin") is not None and self.near_margin > 0 and -self.near_margin <= float(arb["margin"]) < 0:
             m = float(arb["margin"])
             last_t, last_m = self.near_last.get(me.event_key, (-1e18, -1.0))
@@ -220,7 +234,9 @@ class ArbAlerter:
                 text = ticket.near_arb_ticket(title, rep, m, sport=rep.sport or me.event_key, bankroll=self.bankroll or None)
                 out.append(("ARB CLOSE", text))
                 if self.push_near:
-                    _call(self.alerts.alert, "ARB CLOSE", text, event=_game(me.event_key), market=me.event_key, ntfy_title=f"ARB CLOSE {sport}".strip(), margin=m)
+                    extra = {"ntfy_body": ticket.near_arb_short(rep)} if self.short_push else {}
+                    head = (f"ARB CLOSE {abs(m) * 100:.1f}c away - {sport} {title}" if self.short_push else f"ARB CLOSE {sport}").strip()
+                    _call(self.alerts.alert, "ARB CLOSE", text, event=_game(me.event_key), market=me.event_key, ntfy_title=head, margin=m, **extra)
                 else:
                     _call(getattr(self.alerts, "info", lambda *a, **k: None), f"near-lock {m * 100:+.2f}c: {title}", event=me.event_key, margin=m)
         return out

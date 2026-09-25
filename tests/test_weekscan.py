@@ -77,7 +77,7 @@ class WeekScanTests(unittest.TestCase):
         ws, lane = self._ws([arb, near, far])
         res = ws.full_sweep(T0)
         self.assertEqual([k for k, _ in res["found"] if k != "ARB CLOSE"], ["BIG ARB"])
-        self.assertEqual([t for t, _ in self.sent], ["BIG ARB NFL"])       # only the arb reached the phone
+        self.assertEqual([t.split(" - ")[0] for t, _ in self.sent], ["BIG ARB +5.3c"])       # only the arb reached the phone
         self.assertIn("pre-game", self.sent[0][1])
         self.assertEqual(set(ws.watch), {arb.event_key, near.event_key})
         self.assertEqual(set(lane.seeded), set(ws.watch))
@@ -101,7 +101,7 @@ class WeekScanTests(unittest.TestCase):
         found = ws.step(T0 + 5)                                  # a fast step, not a sweep
         self.assertEqual(lane.steps, 1)
         self.assertIn("BIG ARB", [k for k, _ in found])
-        self.assertEqual([t for t, _ in self.sent], ["BIG ARB NFL"])
+        self.assertEqual([t.split(" - ")[0] for t, _ in self.sent], ["BIG ARB +5.3c"])
 
     def test_a_standing_pregame_arb_is_one_push_until_it_grows(self):
         arb = _event("nfl:DEN|KC:2026-09-27", 0.55, 0.36)

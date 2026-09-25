@@ -983,8 +983,23 @@ class NearArbAlertTests(unittest.TestCase):
             self.assertEqual(titles, [kind], (k, r))
             self.assertEqual(bool(sent), pushed, (k, r, sent))
             if kind == "BIG ARB":
-                self.assertEqual((sent[0][0], sent[0][1]), ("BIG ARB NFL", "5"))
-                self.assertIn("BIG ARB +5.3", sent[0][2])
+                self.assertEqual((sent[0][0], sent[0][1]), ("BIG ARB +5.3c - NFL DEN @ KC", "5"))
+                # The phone gets only what to buy, where, at what price, and the result ...
+                lines = sent[0][2].splitlines()
+                self.assertRegex(lines[0], r"^1\) (Kalshi|Robinhood): buy \d+ (KC|DEN) YES at \d+(\.\d+)?\u00a2$")
+                self.assertRegex(lines[1], r"^2\) (Kalshi|Robinhood): buy \d+ (KC|DEN) YES at \d+(\.\d+)?\u00a2")
+                self.assertRegex(lines[2], r"^Cost \$[0-9.,]+, pays \$[0-9.,]+ = \+\$[0-9.,]+$")
+                self.assertNotIn("fee", sent[0][2])
+                # ... while the journal keeps the full itemised ticket.
+                full = [e for e in slate.alerts.events if e["kind"] == "alert"][0]["msg"]
+                self.assertIn("+ Kalshi taker fee:", full)
+
+    def test_short_push_style_can_be_switched_back_to_full(self):
+        slate, me, view, t0 = self._slate(0.55, 0.36, arb_push_style="full")
+        sent = self._pushed(slate)
+        self._run(slate, me, view, t0 + 1)
+        self.assertEqual(sent[0][0], "BIG ARB NFL")
+        self.assertIn("+ Kalshi taker fee:", sent[0][2])
 
     def test_arb_ticket_says_which_leg_first_its_age_and_the_second_legs_limit(self):
         """Rothera moved (DEN cheaper there); Kalshi's KC has not followed: Kalshi is the stale
