@@ -54,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from arb_engine.config import load_dotenv  # noqa: E402
 from arb_engine.execution.kalshi import KalshiExecutor  # noqa: E402
-from arb_engine.execution.ledger import DONE, OrderLedger, fee_bound  # noqa: E402
+from arb_engine.execution.ledger import DONE, FeeMultipliers, OrderLedger, fee_bound  # noqa: E402
 from arb_engine.fees.kalshi import KalshiFees  # noqa: E402
 from arb_engine.venues.http import HttpError  # noqa: E402
 from arb_engine.venues.kalshi import KalshiClient, batch_cancel_reduced, parse_orderbook  # noqa: E402
@@ -181,7 +181,10 @@ def reconcile_until(led: OrderLedger, client: KalshiClient, intent_id: str, time
 
 def ledger_lost_answer(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: OrderLedger, ticker: str) -> Optional[str]:
     """Step 6: an order whose answer is discarded must be found by its client_order_id."""
-    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price="0.01", detail={"step": "lost answer"})
+    mult, why = FeeMultipliers(client).resolve(ticker)
+    if not chk.expect("the market's fee multiplier is known (GET /series/{series})", mult is not None, why or f"multiplier {mult}"):
+        return None
+    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price="0.01", fee_multiplier=mult, detail={"step": "lost answer"})
     if not chk.expect("ledger reserves the intent before the request", res.ok, res.reason):
         return None
     plan = ex.plan(ticker, "buy", "yes", 1, 0.01, exchange_index=0, time_in_force="immediate_or_cancel", note="demo check lost answer",
@@ -231,7 +234,10 @@ def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: Ord
         return []
     ticker, ser, ask, size, bid = pick
     print(f"  fill market: {ticker} ask {ask} x{size:g} bid {bid}  fee_type={ser.get('fee_type')} fee_multiplier={ser.get('fee_multiplier')}")
-    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price=str(ask), detail={"step": "fill"})
+    mult, why = FeeMultipliers(client).resolve(ticker, ser.get("fee_multiplier"))
+    if not chk.expect("the market's fee multiplier is known", mult is not None, why or f"multiplier {mult}"):
+        return []
+    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price=str(ask), fee_multiplier=mult, detail={"step": "fill"})
     if not chk.expect("ledger reserves the fill", res.ok, res.reason):
         return []
     plan = ex.plan(ticker, "buy", "yes", 1, ask, time_in_force="immediate_or_cancel", note="demo check fill", client_order_id=res.client_order_id)
@@ -258,7 +264,7 @@ def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: Ord
         which = "cent" if str(cent) == str(fee) or float(cent) == float(fee) else ("centicent" if float(centi) == float(fee) else "neither")
         print(f"  paid ${paid} for 1 contract, fee ${fee}; fee model: cent ${cent} / centicent ${centi} -> matches {which}")
         chk.expect("fee charged matches the engine's Kalshi fee model (cent or centicent rounding)", which != "neither", f"charged {fee}, model cent {cent} centicent {centi}")
-        chk.expect("fee charged is within the ledger's reserved fee bound", float(fee) <= float(fee_bound(ask, 1)), f"{fee} <= {fee_bound(ask, 1)}")
+        chk.expect("fee charged is within the ledger's reserved fee bound", float(fee) <= float(fee_bound(ask, 1, mult)), f"{fee} <= {fee_bound(ask, 1, mult)}")
         detail = [e for e in led.events(res.intent_id) if e["kind"] == "done"]
         print(f"  ledger done event: {detail[-1]['detail'] if detail else None}")
         if chk.record:
@@ -275,7 +281,8 @@ def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: Ord
             bid = None
         if bid:
             res2 = led.reserve(strategy="democheck", ticker=ticker, side="yes", action="sell", count=1, limit_price=str(bid),
-                               max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1), detail={"step": "flatten"})
+                               max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1, mult),
+                               fee_multiplier=mult, detail={"step": "flatten"})
             plan2 = ex.plan(ticker, "sell", "yes", 1, bid, time_in_force="immediate_or_cancel", note="demo check flatten", client_order_id=res2.client_order_id)
             r2 = chk.step(f"POST IOC sell 1 x {ticker} @ {bid} (flatten)", lambda: ex.execute(plan2, confirm=True))
             if r2 is not None:
@@ -355,8 +362,13 @@ def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: 
             print(f"  no demo bid for {t}: 1 contract stays in the demo account")
             continue
         bid = float(yb.bids[0].price)
+        t_mult, why = FeeMultipliers(client).resolve(t)
+        if t_mult is None:
+            print(f"  {why}: 1 contract of {t} stays in the demo account")
+            continue
         res = ex.ledger.reserve(strategy="democheck", ticker=t, side="yes", action="sell", count=1, limit_price=str(bid),
-                                max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1), detail={"step": "engine flatten"})
+                                max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1, t_mult),
+                                fee_multiplier=t_mult, detail={"step": "engine flatten"})
         kex = KalshiExecutor(client)
         r = chk.step(f"POST IOC sell 1 x {t} @ {bid} (engine flatten)", lambda t=t, bid=bid, res=res: kex.execute(
             kex.plan(t, "sell", "yes", 1, bid, time_in_force="immediate_or_cancel", client_order_id=res.client_order_id), confirm=True))

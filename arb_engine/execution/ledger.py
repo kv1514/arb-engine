@@ -33,9 +33,15 @@ shared by every process that trades it:
    An incomplete (truncated) listing proves nothing and never releases anything.
 
 Budgets are dollars **including fees**. An open intent counts at its worst case
-(``count x limit`` + :func:`fee_bound`), an accepted immediate-or-cancel order at its
-reported fills at the limit plus that bound, a reconciled one at its actual fill cost plus
-actual fees. A day is the local calendar date at reservation.
+(``count x limit`` + :func:`fee_bound` at the market's own fee multiplier), an accepted
+immediate-or-cancel order at its reported fills at the limit plus that bound, a reconciled
+one at its actual fill cost plus actual fees. A day is the local calendar date at
+reservation.
+
+The fee multiplier is the series' ``fee_multiplier`` as the exchange the order goes to
+reports it (:class:`FeeMultipliers`), never an assumed 1: every Kalshi series today has 1,
+0.5 or 0 (14,394 series on 2026-09-26), but a series with more would otherwise pay more
+than was reserved. An intent whose multiplier is unknown is not reserved (so not sent).
 """
 
 from __future__ import annotations
@@ -90,7 +96,7 @@ _SCHEMA = (
   tif TEXT NOT NULL, count INTEGER NOT NULL, limit_price TEXT NOT NULL, max_cost TEXT NOT NULL,
   state TEXT NOT NULL, order_id TEXT, fill_count TEXT, fill_cost TEXT, fees TEXT,
   req_ts REAL, resp_ts REAL, reconciled_ts REAL, checks INTEGER NOT NULL DEFAULT 0,
-  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT)""",
+  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT, fee_mult TEXT)""",
     """CREATE INDEX IF NOT EXISTS intents_open ON intents (state)""",
     """CREATE INDEX IF NOT EXISTS intents_day ON intents (strategy, day)""",
     """CREATE INDEX IF NOT EXISTS intents_game ON intents (strategy, game_key)""",
@@ -98,6 +104,10 @@ _SCHEMA = (
     """CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   intent_id TEXT, kind TEXT NOT NULL, detail TEXT)""",
 )
+
+
+# Columns added after the first ledgers were written (added in place on open).
+_MIGRATIONS = (("fee_mult", "TEXT"),)
 
 
 class LedgerError(RuntimeError):
@@ -176,20 +186,84 @@ def env_host_problem(env: str, base_url: str) -> Optional[str]:
     return None
 
 
-def fee_bound(limit: Any, count: Any, multiplier: Any = 1) -> Decimal:
+def fee_bound(limit: Any, count: Any, multiplier: Any) -> Decimal:
     """The most Kalshi can charge in taker fees for ``count`` contracts bought at prices
-    no higher than ``limit``: ``count`` x the one-contract fee at the dearest-fee price
-    ``min(limit, 0.5)`` (``p(1-p)`` peaks at 0.5), each rounded up to the cent. Rounding per
-    one contract bounds any split into fills: ``ceil(n x f) <= n x ceil(f)`` on the cent grid.
-    ``multiplier`` below 1 (a half-fee series) is ignored: the bound stays at the full rate."""
+    no higher than ``limit`` on a series with fee multiplier ``multiplier``: ``count`` x the
+    one-contract fee at the dearest-fee price ``min(limit, 0.5)`` (``p(1-p)`` peaks at 0.5),
+    each rounded up to the cent. Rounding per one contract bounds any split into fills and
+    either rounding rule: ``ceil(n x f) <= n x ceil(f)`` on the cent grid, and a centicent
+    rounding is never above a cent one. A multiplier below 1 (a half-fee or fee-free
+    series) still counts as 1; one above 1 counts in full. There is no default: the caller
+    must know the market's multiplier (:class:`FeeMultipliers`)."""
+    m = D(multiplier)
+    if not m.is_finite() or m < 0:
+        raise ValueError(f"fee multiplier {multiplier!r} must be a finite number >= 0")
     p = min(D(limit), HALF)
-    m = max(D(multiplier), Decimal(1))
-    return KalshiFees(multiplier=m).fee(p, 1, "taker") * D(count)
+    return KalshiFees(multiplier=max(m, Decimal(1))).fee(p, 1, "taker") * D(count)
 
 
-def worst_cost(limit: Any, count: Any) -> Decimal:
+def worst_cost(limit: Any, count: Any, multiplier: Any) -> Decimal:
     """``count x limit`` plus :func:`fee_bound`: the most a buy of ``count`` at ``limit`` costs."""
-    return D(limit) * D(count) + fee_bound(limit, count)
+    return D(limit) * D(count) + fee_bound(limit, count, multiplier)
+
+
+def series_ticker(market_ticker: str) -> str:
+    """The series of a Kalshi market ticker (``KXNFLGAME-26OCT01PITCLE-PIT`` -> ``KXNFLGAME``)."""
+    return str(market_ticker or "").split("-", 1)[0].split("#", 1)[0].upper()
+
+
+def quote_fee_multiplier(fee_params: Any) -> Optional[Decimal]:
+    """The multiplier a quote's fee parameters *state*, or None when they do not (missing,
+    or the adapter only assumed one because the series could not be read)."""
+    fp = dict(fee_params or {}) if isinstance(fee_params, dict) else {}
+    if not fp or fp.get("fee_multiplier_assumed") or ("fee_multiplier" not in fp and "fee_type" not in fp):
+        return None
+    if str(fp.get("fee_type") or "").lower() in ("none", "no_fees", "flat_zero"):
+        return Decimal(0)
+    if "fee_multiplier" not in fp:
+        return None
+    v = _dec(fp.get("fee_multiplier"))
+    return v if v is not None and v >= 0 else None
+
+
+class FeeMultipliers:
+    """Each series' fee multiplier as the exchange the orders go to reports it
+    (``GET /series/{ticker}``), cached for ``ttl_s``. ``resolve`` combines it with what a
+    quote states and keeps the larger: the reservation must not come in under the fee."""
+
+    def __init__(self, client: Any, ttl_s: float = 3600.0, clock: Any = time.time) -> None:
+        self.client, self.ttl_s, self.clock = client, float(ttl_s), clock
+        self._cache: dict[str, tuple[float, Optional[Decimal], Optional[str]]] = {}
+
+    def lookup(self, ticker: str) -> tuple[Optional[Decimal], Optional[str]]:
+        """(multiplier, None) or (None, why it is unknown)."""
+        series = series_ticker(ticker)
+        now = self.clock()
+        hit = self._cache.get(series)
+        if hit is not None and now - hit[0] < self.ttl_s and hit[1] is not None:
+            return hit[1], None
+        fn = getattr(self.client, "series", None)
+        if not callable(fn):
+            return None, "this client cannot read series"
+        try:
+            ser = fn(series) or {}
+        except Exception as e:  # noqa: BLE001
+            return None, f"GET /series/{series} failed ({e!r})"[:200]
+        mult = quote_fee_multiplier({k: ser.get(k) for k in ("fee_type", "fee_multiplier") if k in ser})
+        if mult is None:
+            return None, f"series {series} states no fee_multiplier"
+        self._cache[series] = (now, mult, None)
+        return mult, None
+
+    def resolve(self, ticker: str, stated: Any = None) -> tuple[Optional[Decimal], Optional[str]]:
+        """The larger of the exchange's multiplier and the one a quote states; (None, why)
+        when neither is known."""
+        looked, why = self.lookup(ticker)
+        stated_d = quote_fee_multiplier({"fee_multiplier": stated}) if stated is not None else None
+        known = [x for x in (looked, stated_d) if x is not None]
+        if not known:
+            return None, f"fee multiplier of {series_ticker(ticker)} unknown: {why}"
+        return max(known), None
 
 
 def default_path(env: str, directory: Optional[str] = None) -> str:
@@ -261,6 +335,10 @@ class OrderLedger:
             with self._tx() as c:
                 for stmt in _SCHEMA:
                     c.execute(stmt)
+                have = {r[1] for r in c.execute("PRAGMA table_info(intents)")}
+                for col, typ in _MIGRATIONS:
+                    if col not in have:            # a ledger written by an older version of this module
+                        c.execute(f"ALTER TABLE intents ADD COLUMN {col} {typ}")
                 row = c.execute("SELECT value FROM meta WHERE key='env'").fetchone()
                 if row is None:
                     c.execute("INSERT INTO meta VALUES ('env', ?)", (self.env,))
@@ -332,12 +410,13 @@ class OrderLedger:
             return (_dec(row["fill_cost"]) or ZERO) + (_dec(row["fees"]) or ZERO)
         if st == ACCEPTED and str(row["tif"]).lower() in IOC:
             n = _dec(row["fill_count"])
-            if n is not None:
-                return min(worst_cost(row["limit_price"], n), _dec(row["max_cost"]) or ZERO)
+            m = _dec(row["fee_mult"]) if "fee_mult" in row.keys() else None
+            if n is not None and m is not None:
+                return min(worst_cost(row["limit_price"], n, m), _dec(row["max_cost"]) or ZERO)
         return _dec(row["max_cost"]) or ZERO
 
     def _sum(self, c: sqlite3.Connection, where: str, args: tuple) -> Decimal:
-        rows = c.execute(f"SELECT state, tif, fill_count, fill_cost, fees, limit_price, max_cost FROM intents WHERE state != 'rejected' AND {where}", args).fetchall()
+        rows = c.execute(f"SELECT state, tif, fill_count, fill_cost, fees, limit_price, max_cost, fee_mult FROM intents WHERE state != 'rejected' AND {where}", args).fetchall()
         return sum((self.exposure_of(r) for r in rows), ZERO)
 
     def exposure(self, strategy: Optional[str] = None, day: Optional[str] = None, game_key: Optional[str] = None) -> Decimal:
@@ -392,8 +471,8 @@ class OrderLedger:
     def reserve(self, *, strategy: str, ticker: str, side: str, count: int, limit_price: Any, action: str = "buy",
                 tif: str = "immediate_or_cancel", event_key: Optional[str] = None, game_key: Optional[str] = None,
                 dedupe_key: Optional[str] = None, parent_id: Optional[str] = None, budget: Optional[Budget] = None,
-                max_cost_per_contract: Any = None, max_lock_attempts: int = 3, now: Optional[float] = None,
-                detail: Optional[dict] = None) -> Reservation:
+                max_cost_per_contract: Any = None, fee_multiplier: Any = None, max_lock_attempts: int = 3,
+                now: Optional[float] = None, detail: Optional[dict] = None) -> Reservation:
         """Record an intent and reserve its worst case, atomically; a refusal records nothing
         but an event. ``count`` shrinks to what the budget has room for (at least 1).
 
@@ -414,6 +493,12 @@ class OrderLedger:
         per = D(max_cost_per_contract) if max_cost_per_contract is not None else None
         if per is not None and (not per.is_finite() or per <= 0):
             return Reservation(False, "max_cost_per_contract must be a positive finite number")
+        mult = _dec(fee_multiplier) if fee_multiplier is not None else None
+        if fee_multiplier is not None and (mult is None or mult < 0):
+            return Reservation(False, f"fee multiplier {fee_multiplier!r} must be a finite number >= 0")
+        if per is None and mult is None:
+            # Without the market's multiplier the fee - and so the worst case - is not bounded.
+            return Reservation(False, "fee multiplier of the market unknown: the fee cannot be bounded")
         day = self.day_of(now)
 
         def txn(c: sqlite3.Connection) -> Reservation:
@@ -457,22 +542,24 @@ class OrderLedger:
                 if rooms:
                     room = min(rooms)
                     fit = n
-                    while fit > 0 and (unit * fit if unit is not None else worst_cost(limit, fit)) > room:
+                    while fit > 0 and (unit * fit if unit is not None else worst_cost(limit, fit, mult)) > room:
                         fit -= 1
                     if fit <= 0:
                         why = f"budget: ${max(room, ZERO):.2f} left of the {strategy} cap (fees included)"
                         self._event(c, now, None, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
                         return Reservation(False, why, room=room)
                     n = fit
-            max_cost = unit * n if unit is not None else worst_cost(limit, n)
+            max_cost = unit * n if unit is not None else worst_cost(limit, n, mult)
             iid, coid = uuid.uuid4().hex, str(uuid.uuid4())
             c.execute("""INSERT INTO intents (intent_id, client_order_id, dedupe_key, strategy, parent_id, env, host, owner,
-                created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail,
+                fee_mult)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                       (iid, coid, dedupe_key, strategy, parent_id, self.env, self.host, self.owner, now, now, day, event_key,
                        game_key, ticker, action, side, tif, n, str(limit), str(max_cost), PENDING,
-                       json.dumps(detail or {}, default=str, sort_keys=True)))
-            self._event(c, now, iid, "reserved", count=n, requested=count, limit=str(limit), max_cost=str(max_cost), room=_s(room))
+                       json.dumps(detail or {}, default=str, sort_keys=True), _s(mult)))
+            self._event(c, now, iid, "reserved", count=n, requested=count, limit=str(limit), max_cost=str(max_cost), room=_s(room),
+                        fee_multiplier=_s(mult))
             return Reservation(True, intent_id=iid, client_order_id=coid, count=n, max_cost=max_cost, room=room)
 
         return self._write(txn)
@@ -665,7 +752,7 @@ class OrderLedger:
         if filled > 0 and cost == 0:
             # No cost fields: price the fills at the limit (the most an IOC buy can pay) and
             # the fee at its bound, so the budget errs high.
-            cost, fees = D(r["limit_price"]) * filled, fee_bound(r["limit_price"], filled)
+            cost, fees = D(r["limit_price"]) * filled, fee_bound(r["limit_price"], filled, _dec(r.get("fee_mult")) or Decimal(1))
             detail["source"] = "order-without-cost-fields: limit x fills + fee bound"
         if filled > 0 and hasattr(client, "fills_v2"):
             try:

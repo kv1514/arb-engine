@@ -17,6 +17,7 @@ from unittest import mock
 from arb_engine.execution.kalshi import KalshiExecutor
 from arb_engine.execution.ledger import (Budget, LedgerError, OrderLedger, env_host_problem, fee_bound, host_env,
                                          worst_cost)
+from arb_engine.fees.base import D
 from arb_engine.fees.kalshi import KalshiFees
 from arb_engine.models import OutcomeQuote
 from arb_engine.strategy.lagexec import LagExecutor
@@ -58,6 +59,14 @@ class FakeKalshi:
         self.truncated = False
         self.cost_fields = True
         self.extra_fill_fee = Decimal("0")
+        self.multiplier = 1                          # the series' fee_multiplier (GET /series/{ticker})
+        self.rounding = "centicent"                  # what Kalshi's demo charged on 2026-09-26
+        self.series_error = None
+
+    def series(self, ticker):
+        if self.series_error is not None:
+            raise self.series_error
+        return {"ticker": ticker, "fee_type": "quadratic", "fee_multiplier": self.multiplier}
 
     def create_order(self, payload):
         self.creates.append(payload)
@@ -67,7 +76,7 @@ class FakeKalshi:
         yes = Decimal(payload["price"])
         price = yes if payload["side"] == "bid" else Decimal(1) - yes
         got = self.fill(n)
-        fee = KalshiFees().fee(price, got, "taker") if got else Decimal("0")
+        fee = KalshiFees(multiplier=D(self.multiplier), rounding=self.rounding).fee(price, got, "taker") if got else Decimal("0")
         oid = f"o{len(self.rows) + 1}"
         row = {"order_id": oid, "client_order_id": payload.get("client_order_id"), "ticker": payload["ticker"], "status": "executed" if got == n else "canceled",
                "outcome_side": "yes" if payload["side"] == "bid" else "no", "fill_count_fp": f"{got}.00", "remaining_count_fp": "0.00",
@@ -124,13 +133,114 @@ class FeeBoundTests(unittest.TestCase):
         fees = KalshiFees()
         for limit in ("0.03", "0.21", "0.49", "0.50", "0.61", "0.97"):
             for n in (1, 7, 50):
-                bound = fee_bound(limit, n)
+                bound = fee_bound(limit, n, 1)
                 # Any fill prices at or under the limit, split any way: never above the bound.
                 for price in (Decimal(limit), Decimal("0.50") if Decimal(limit) >= Decimal("0.5") else Decimal(limit), Decimal("0.01")):
                     for split in ([n], [1] * n, [n // 2, n - n // 2]):
                         charged = sum((fees.fee(price, k, "taker") for k in split if k), Decimal("0"))
                         self.assertLessEqual(charged, bound, (limit, n, price, split))
-        self.assertEqual(worst_cost("0.60", 50), Decimal("31.00"))   # 50 x 0.60 + 50 x 2c
+        self.assertEqual(worst_cost("0.60", 50, 1), Decimal("31.00"))   # 50 x 0.60 + 50 x 2c
+
+
+class FeeMultiplierTests(unittest.TestCase):
+    """The reserved fee must cover the fee a market can actually charge, whatever its multiplier."""
+
+    def test_the_bound_covers_any_multiplier_split_and_rounding(self):
+        for m in ("0", "0.5", "1", "1.5", "2", "3"):
+            for limit in ("0.03", "0.21", "0.49", "0.50", "0.61", "0.97"):
+                for n in (1, 7, 50):
+                    bound = fee_bound(limit, n, m)
+                    for rounding in ("cent", "centicent"):
+                        fees = KalshiFees(multiplier=D(m), rounding=rounding)
+                        for price in sorted({D(limit), min(D(limit), D("0.5")), D("0.01")}):
+                            for split in ([n], [1] * n, [n // 2, n - n // 2]):
+                                charged = sum((fees.fee(price, k, "taker") for k in split if k), Decimal("0"))
+                                self.assertLessEqual(charged, bound, (m, limit, n, rounding, price, split))
+
+    def test_an_assumed_multiplier_of_one_under_reserves_a_higher_one(self):
+        # Why the multiplier is resolved, never defaulted: at 2x, one order of 10 at $0.50
+        # costs $0.35 in fees; a bound built on 1x reserved $0.20.
+        charged = KalshiFees(multiplier=Decimal(2)).fee("0.50", 10, "taker")
+        self.assertGreater(charged, fee_bound("0.50", 10, 1))
+        self.assertLessEqual(charged, fee_bound("0.50", 10, 2))
+        for bad in ("-1", "nan", "inf"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                fee_bound("0.50", 10, bad)
+
+    def test_a_reservation_without_a_known_multiplier_is_refused(self):
+        led = OrderLedger(tmp(), "demo", DEMO_URL)
+        res = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=10, limit_price="0.50")
+        self.assertFalse(res.ok)
+        self.assertIn("fee multiplier", res.reason)
+        self.assertEqual(led.rows(), [])
+        led.close()
+
+    def test_the_executor_reserves_at_the_exchanges_multiplier_when_the_quote_says_less(self):
+        clock = Clock()
+        client = FakeKalshi(clock)
+        client.multiplier = 2                                   # the series, read from the exchange the order goes to
+        ex = executor(client, clock)
+        stated_one = {"kalshi": [OutcomeQuote("kalshi", TICKER, KEY, "KC", ask=0.60, bid=0.59, fee_params={"fee_type": "quadratic", "fee_multiplier": 1},
+                                              meta={"ticker": TICKER, "side": "yes"})]}
+        rec = ex.on_signal(sig(), stated_one)
+        self.assertEqual((rec["status"], rec["fee_multiplier"]), ("SUBMITTED", "2"))
+        row = ex.ledger.get(rec["intent_id"])
+        self.assertEqual(Decimal(row["max_cost"]), Decimal("32.00"))       # 50 x 0.60 + 50 x 4c (2 x 0.07 x 0.25 -> 0.035 -> 4c)
+        clock.t += 3
+        ex.reconcile(force=True)
+        row = ex.ledger.get(rec["intent_id"])
+        self.assertEqual(Decimal(row["fees"]), Decimal("1.68"))           # charged at 2x: 2 x 0.07 x 50 x 0.24
+        self.assertLessEqual(Decimal(row["fill_cost"]) + Decimal(row["fees"]), Decimal("32.00"))
+
+    def test_an_unknown_multiplier_sends_nothing(self):
+        clock = Clock()
+        client = FakeKalshi(clock)
+        client.series_error = HttpError(503, DEMO_URL, "down")
+        ex = executor(client, clock)
+        no_params = {"kalshi": [OutcomeQuote("kalshi", TICKER, KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": TICKER, "side": "yes"})]}
+        rec = ex.on_signal(sig(), no_params)
+        self.assertEqual(rec["status"], "skipped")
+        self.assertIn("fee multiplier of KXNFLGAME unknown", rec["reason"])
+        self.assertEqual(client.creates, [])
+        # An assumed multiplier (the adapter could not read the series) is not a stated one either.
+        assumed = {"kalshi": [OutcomeQuote("kalshi", TICKER, KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": TICKER, "side": "yes"},
+                                           fee_params={"fee_type": "quadratic", "fee_multiplier": 1, "fee_multiplier_assumed": True})]}
+        self.assertEqual(ex.on_signal(sig(ts=1001.0), assumed)["status"], "skipped")
+        self.assertEqual(client.creates, [])
+
+    def test_the_adapter_marks_a_multiplier_it_only_assumed(self):
+        from arb_engine.execution.ledger import quote_fee_multiplier
+        from arb_engine.venues.kalshi import KalshiAdapter
+
+        class Down:
+            def series(self, t):
+                raise HttpError(503, "u", "down")
+        info = KalshiAdapter(client=Down()).series_info("KXNFLGAME")
+        self.assertTrue(info["fee_multiplier_assumed"])
+        self.assertIsNone(quote_fee_multiplier({"fee_type": info["fee_type"], "fee_multiplier": info["fee_multiplier"], "fee_multiplier_assumed": True}))
+        self.assertEqual(quote_fee_multiplier({"fee_type": "quadratic", "fee_multiplier": 0.5}), Decimal("0.5"))
+        self.assertEqual(quote_fee_multiplier({"fee_type": "none"}), Decimal("0"))
+        self.assertIsNone(quote_fee_multiplier({}))
+
+    def test_the_manual_cap_is_checked_again_at_the_markets_multiplier(self):
+        from arb_engine.cli_plugins.kalshi_ops import run_kalshi
+
+        client = FakeKalshi(Clock())
+        client.multiplier = 2
+        args = argparse.Namespace(action="order", no_account_env=True, ticker=TICKER, price=0.61, count=40, max_notional=25.5, side_action="buy",
+                                  side="yes", post_only=False, exchange_index=None, time_in_force="immediate_or_cancel", confirm=True, status="resting")
+        with mock.patch("arb_engine.execution.kalshi.KalshiClient", return_value=client), \
+                mock.patch.dict(os.environ, {"ARB_ORDER_LEDGER_DIR": os.path.dirname(tmp())}), \
+                self.assertRaisesRegex(SystemExit, r"\$26.00 \(fees included, fee multiplier 2\)"):
+            run_kalshi(args)                                    # $25.20 at 1x fits under $25.50; $26.00 at 2x does not
+        self.assertEqual(client.creates, [])
+        client.series_error = HttpError(503, DEMO_URL, "down")
+        out = io.StringIO()
+        with mock.patch("arb_engine.execution.kalshi.KalshiClient", return_value=client), \
+                mock.patch.dict(os.environ, {"ARB_ORDER_LEDGER_DIR": os.path.dirname(tmp())}), redirect_stdout(out):
+            self.assertEqual(run_kalshi(argparse.Namespace(**{**vars(args), "count": 10})), 3)
+        self.assertIn("cannot be bounded", json.loads(out.getvalue())["status"])
+        self.assertEqual(client.creates, [])
 
 
 class HostEnvTests(unittest.TestCase):
@@ -323,8 +433,8 @@ class UnknownOutcomeTests(unittest.TestCase):
         clock.t = 1006.0
         ex.reconcile(force=True)
         row = ex.ledger.get(rec["intent_id"])
-        self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("7.20"), Decimal("0.21")))
-        self.assertAlmostEqual(ex.sent_notional, 7.41)                   # actual: 12 x 0.60 + ceil(0.07 x 12 x 0.24)
+        self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("7.20"), Decimal("0.2016")))
+        self.assertAlmostEqual(ex.sent_notional, 7.4016)                 # actual: 12 x 0.60 + 0.07 x 12 x 0.24 (centicent, as demo charges)
 
 
 class AccountingTests(unittest.TestCase):
@@ -381,7 +491,7 @@ class RestartTests(unittest.TestCase):
         # the answer: the ledger says pending, the exchange has the order.
         old = OrderLedger(path, "demo", DEMO_URL, clock=clock, owner="elsewhere:1")
         res = old.reserve(strategy="lag", ticker=TICKER, side="yes", count=50, limit_price="0.60", event_key=KEY, game_key=KEY,
-                          budget=Budget(daily=Decimal("500")))
+                          budget=Budget(daily=Decimal("500")), fee_multiplier=1)
         ex = KalshiExecutor(client)
         ex.execute(ex.plan(TICKER, "buy", "yes", 50, 0.60, time_in_force="immediate_or_cancel", client_order_id=res.client_order_id), confirm=True)
         old.close()
@@ -398,7 +508,7 @@ class RestartTests(unittest.TestCase):
         clock = Clock(1000.0)
         path = tmp()
         mine = OrderLedger(path, "demo", DEMO_URL, clock=clock)
-        mine.reserve(strategy="lag", ticker=TICKER, side="yes", count=5, limit_price="0.60")
+        mine.reserve(strategy="lag", ticker=TICKER, side="yes", count=5, limit_price="0.60", fee_multiplier=1)
         clock.t = 1010.0
         other = OrderLedger(path, "demo", DEMO_URL, clock=clock, owner="elsewhere:2")
         self.assertIsNone(other.blocked())                # in flight: its worst case is reserved, nothing is unknown
@@ -461,7 +571,7 @@ class ConcurrencyTests(unittest.TestCase):
             start.wait()
             for j in range(5):
                 r = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=10, limit_price="0.50", game_key=KEY,
-                                dedupe_key=f"w{i}-{j}", budget=Budget(daily=Decimal("20")))
+                                dedupe_key=f"w{i}-{j}", budget=Budget(daily=Decimal("20")), fee_multiplier=1)
                 results.append(r)
             led.close()
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
@@ -505,8 +615,8 @@ class ManualOrderTests(unittest.TestCase):
     def test_the_cap_includes_fees(self):
         from arb_engine.cli_plugins.kalshi_ops import _order_max_loss, run_kalshi
 
-        self.assertEqual(_order_max_loss("buy", 40, 0.61), Decimal("25.20"))       # 24.40 + 40 x 2c
-        self.assertEqual(_order_max_loss("sell", 10, 0.90), Decimal("1.10"))       # short 10 x 0.10 + 10 x 1c
+        self.assertEqual(_order_max_loss("buy", 40, 0.61, 1), Decimal("25.20"))       # 24.40 + 40 x 2c
+        self.assertEqual(_order_max_loss("sell", 10, 0.90, 1), Decimal("1.10"))       # short 10 x 0.10 + 10 x 1c
         with self.assertRaisesRegex(SystemExit, r"\$25.20 \(fees included\)"):
             run_kalshi(self.args(count=40, price=0.61))
 

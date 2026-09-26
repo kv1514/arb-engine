@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
-from ..execution.ledger import ACCEPTED, Budget, LedgerError, OrderLedger
+from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, OrderLedger, quote_fee_multiplier
 
 MODES = ("off", "intent", "demo", "live")
 BLOCK_ALERT_EVERY_S = 600.0
@@ -74,6 +74,7 @@ class LagExecutor:
     orders: list[dict[str, Any]] = field(default_factory=list)
     blocked_reason: Optional[str] = None  # the ledger is unusable: nothing is sent
     journal_errors: int = 0
+    fee_multipliers: Any = None          # execution.ledger.FeeMultipliers on the trading client (demo/live)
     _last_reconcile: float = field(default=-math.inf, repr=False)
     _last_alert: dict = field(default_factory=dict, repr=False)
 
@@ -89,6 +90,8 @@ class LagExecutor:
             env = str(getattr(self.executor.client, "env", "") or "").lower()
             if env != want:
                 raise RuntimeError(f"--execute-lag {self.mode} needs a Kalshi {want} client; this one is {env or 'unset'}")
+            if self.fee_multipliers is None:
+                self.fee_multipliers = FeeMultipliers(self.executor.client, clock=self.clock)
             if self.ledger is None:
                 try:
                     self.ledger = OrderLedger.for_client(self.executor.client, path=self.ledger_path, clock=self.clock)
@@ -236,6 +239,12 @@ class LagExecutor:
         except OSError:
             self.journal_errors += 1
 
+    def _fee_multiplier(self, ticker: str, quote: Any) -> tuple[Any, Optional[str]]:
+        """The market's fee multiplier for the reservation: the larger of what the quote
+        states and what the trading exchange reports; (None, why) when neither is known."""
+        stated = quote_fee_multiplier(getattr(quote, "fee_params", None)) if quote is not None else None
+        return self.fee_multipliers.resolve(ticker, stated)
+
     # ---- sending (demo / live) ----------------------------------------------------------
     def _send(self, res: Any, ticker: str, side: str, price: float, exchange_index: Optional[int], note: str) -> dict[str, Any]:
         """Submit a reserved intent and record the answer. Returns the fields for the record."""
@@ -302,10 +311,15 @@ class LagExecutor:
             rec.update(status="skipped", reason="lock leg without its entry intent: the inventory cannot be verified")
             self._journal(rec)
             return rec
+        mult, why = self._fee_multiplier(ticker, quote)
+        if mult is None:
+            rec.update(status="skipped", reason=why)
+            self._journal(rec)
+            return rec
         try:
             res = self.ledger.reserve(strategy="lock", ticker=ticker, side=side, count=int(count), limit_price=price, event_key=event_key,
                                       game_key=_game(event_key), parent_id=parent_id, max_lock_attempts=self.max_lock_attempts, now=now,
-                                      detail={"kind": "lock"})
+                                      fee_multiplier=mult, detail={"kind": "lock"})
         except LedgerError as e:
             rec.update(status="blocked", reason=f"order ledger: {e}")
             self._journal(rec)
@@ -365,12 +379,19 @@ class LagExecutor:
             self._journal(rec)
             return rec
         dedupe = f"lag:{sig.event_key}:{sig.outcome}:{sig.leader}:{float(sig.ts):.3f}" if isinstance(getattr(sig, "ts", None), (int, float)) else None
+        mult, why = self._fee_multiplier(ticker, self._kalshi_quote(sig, quotes_by_venue))
+        if mult is None:
+            rec.update(count=count, status="skipped", reason=why)
+            self._journal(rec)
+            return rec
+        rec["fee_multiplier"] = str(mult)
         try:
             res = self.ledger.reserve(strategy="lag", ticker=ticker, side=side, count=count, limit_price=sig.follower_ask, event_key=sig.event_key,
                                       game_key=_game(sig.event_key), dedupe_key=dedupe,
                                       budget=Budget(daily=Decimal(str(self.daily_notional)), per_game=Decimal(str(self.max_notional_per_game))),
-                                      now=now, detail={"leader": sig.leader, "edge": round(sig.edge, 4), "signal_ts": getattr(sig, "ts", None),
-                                                       "quote_age_s": rec.get("quote_age_s"), "leader_mid": getattr(sig, "leader_mid", None)})
+                                      fee_multiplier=mult, now=now,
+                                      detail={"leader": sig.leader, "edge": round(sig.edge, 4), "signal_ts": getattr(sig, "ts", None),
+                                              "quote_age_s": rec.get("quote_age_s"), "leader_mid": getattr(sig, "leader_mid", None)})
         except LedgerError as e:
             rec.update(count=count, status="blocked", reason=f"order ledger: {e}")
             self._journal(rec)

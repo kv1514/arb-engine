@@ -735,7 +735,7 @@ class LagExecutorTests(unittest.TestCase):
         return LagSignal(event_key=event, title="DEN @ KC", leader="robinhood", follower=follower, outcome="KC", label="Kansas City", lead_move=0.08, follower_move=0.0, leader_mid=0.675, follower_ask=ask, follower_all_in=ask + 0.017, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=ts)
 
     def _quotes(self):
-        return {"kalshi": [OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-KC", KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": "KXNFLGAME-26SEP21DENKC-KC", "side": "yes", "exchange_index": 3}), OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-DEN", KEY, "DEN", ask=0.41, bid=0.40, meta={"ticker": "KXNFLGAME-26SEP21DENKC-DEN", "side": "yes"})]}
+        return {"kalshi": [OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-KC", KEY, "KC", ask=0.60, bid=0.59, fee_params=KFEE, meta={"ticker": "KXNFLGAME-26SEP21DENKC-KC", "side": "yes", "exchange_index": 3}), OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-DEN", KEY, "DEN", ask=0.41, bid=0.40, fee_params=KFEE, meta={"ticker": "KXNFLGAME-26SEP21DENKC-DEN", "side": "yes"})]}
 
     def test_intent_mode_journals_without_an_executor(self):
         from arb_engine.strategy.lagexec import LagExecutor
@@ -796,7 +796,7 @@ class LagExecutorTests(unittest.TestCase):
         # The same signal delivered twice is one order.
         self.assertIn("duplicate", ex.on_signal(self._sig(ts=1000.0), self._quotes())["reason"])
         # Another game still has room under the daily cap ($100 - $44.64).
-        rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21", ts=1003.0), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, meta={"ticker": "T-KC", "side": "yes"})]})
+        rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21", ts=1003.0), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})]})
         self.assertEqual((rec4["status"], rec4["count"]), ("SUBMITTED", 50))
         self.assertAlmostEqual(ex.sent_notional, 75.64)
         self.assertEqual(len(sent), 3)

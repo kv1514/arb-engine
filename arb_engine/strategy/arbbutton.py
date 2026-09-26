@@ -85,6 +85,14 @@ def max_price(fee_model: Any, other_all_in: float, n: int, floor: float, cap: fl
     return best
 
 
+def _stated_multiplier(quote: Any) -> Optional[str]:
+    """The fee multiplier the Kalshi quote's fee params state (None when only assumed)."""
+    from ..execution.ledger import quote_fee_multiplier
+
+    m = quote_fee_multiplier(getattr(quote, "fee_params", None))
+    return str(m) if m is not None else None
+
+
 def _find_quote(quotes_by_venue: dict, venue: str, market_id: str) -> Any:
     for q in (quotes_by_venue or {}).get(venue, []) or []:
         if getattr(q, "venue_market_id", None) == market_id:
@@ -114,6 +122,7 @@ class ArbButton:
         self.spent_today, self.day = 0.0, None
         self.ledger_path: Optional[str] = None     # None: execution/ledger.default_path(env)
         self._ledger: Any = None
+        self._fee_mults: Any = None                # execution/ledger.FeeMultipliers, built with the executor
         self.journal_errors = 0
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
@@ -212,7 +221,8 @@ class ArbButton:
         spec = {
             "token": token, "created": now, "expires": now + self.ttl_s, "event_key": event_key, "title": title, "count": n,
             "practice": practice, "alert_margin": sized.get("margin"), "alert_cost": sized.get("total_cost"),
-            "kalshi": {"ticker": meta_k.get("ticker") or str(kl.get("market_id")).split("#")[0], "side": kl.get("side") or meta_k.get("side") or "yes",
+            "kalshi": {"fee_multiplier_stated": _stated_multiplier(kq),
+                       "ticker": meta_k.get("ticker") or str(kl.get("market_id")).split("#")[0], "side": kl.get("side") or meta_k.get("side") or "yes",
                        "label": label(kl, str(kl.get("side") or meta_k.get("side") or "yes").lower()), "outcome": kl.get("outcome"), "alert_ask": k_ask, "limit": k_limit,
                        "exchange_index": meta_k.get("exchange_index"), "url": kl.get("url")},
             "robinhood": {"contract_id": meta_r.get("contract_id") or str(rl.get("market_id")).split("#")[0], "side": rl.get("side") or meta_r.get("side") or "yes",
@@ -464,15 +474,20 @@ class ArbButton:
     def _send_real(self, spec: dict[str, Any], count: int, kfee: Any, now: float) -> dict[str, Any]:
         """Demo / live: reserve in the ledger, send the IOC with the ledger's id, record the
         answer. Returns the fields for the tap's record."""
-        from ..execution.ledger import ACCEPTED, Budget, LedgerError
+        from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError
         from ..matching.normalize import game_event_key
 
         k, token = spec["kalshi"], spec["token"]
         try:
             ex, led = self.executor(), self.ledger()
+            if self._fee_mults is None:
+                self._fee_mults = FeeMultipliers(ex.client, clock=self.clock)
+            mult, why = self._fee_mults.resolve(k["ticker"], k.get("fee_multiplier_stated"))
+            if mult is None:
+                return {"status": "skipped", "reason": why, "filled": 0}
             res = led.reserve(strategy="button", ticker=k["ticker"], side=str(k["side"]).lower(), count=count, limit_price=k["limit"],
                               event_key=spec["event_key"], game_key=game_event_key(spec["event_key"]), dedupe_key=f"button:{token}",
-                              budget=Budget(daily=Decimal(str(self.daily_notional))), now=now,
+                              budget=Budget(daily=Decimal(str(self.daily_notional))), fee_multiplier=mult, now=now,
                               detail={"token": token, "title": spec.get("title"), "rh": spec.get("robinhood", {}).get("contract_id")})
         except LedgerError as e:
             return {"status": "blocked", "reason": f"order ledger: {e}", "filled": 0}

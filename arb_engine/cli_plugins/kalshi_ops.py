@@ -89,16 +89,17 @@ def _finite(name: str, value: Any) -> float:
     return v
 
 
-def _order_max_loss(action: str, count: float, price: float) -> Decimal:
+def _order_max_loss(action: str, count: float, price: float, multiplier: Any) -> Decimal:
     """The most a manual order can lose, fees included: a buy pays ``count x price``, a sell
     of the side is short ``count x (1 - price)``; either pays at most ``fee_bound`` in taker
-    fees (a sell fills at or above its price, so its dearest-fee price mirrors to ``1 - p``)."""
+    fees at the market's fee ``multiplier`` (a sell fills at or above its price, so its
+    dearest-fee price mirrors to ``1 - p``)."""
     from ..execution.ledger import fee_bound
     from ..fees.base import D
 
     c, p = D(str(count)), D(str(price))
     exposed = p if action == "buy" else Decimal(1) - p
-    return c * exposed + fee_bound(exposed, c)
+    return c * exposed + fee_bound(exposed, c, multiplier)
 
 
 def _print(obj: Any) -> None:
@@ -128,7 +129,9 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
             raise SystemExit("--max-notional must be positive")
         if count <= 0 or not 0 < price < 1:
             raise SystemExit("--count must be positive and --price in (0, 1)")
-        max_loss = _order_max_loss(args.side_action, count, price)
+        # At multiplier 1 first - a lower bound on the fee - so an order too big even then is
+        # refused before any client exists; the market's own multiplier is checked below.
+        max_loss = _order_max_loss(args.side_action, count, price, 1)
         if max_loss > Decimal(str(max_notional)):
             raise SystemExit(f"manual order maximum loss ${max_loss:.2f} (fees included) exceeds --max-notional ${max_notional:.2f}")
     from ..execution.kalshi import KalshiExecutor
@@ -148,7 +151,18 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
         if truncated:
             result["note"] = "more pages exist than were read: this is not the whole list"
     elif action == "order":
-        return _manual_order(ex, args, max_loss)
+        from ..execution.ledger import FeeMultipliers
+
+        mult, why = FeeMultipliers(ex.client).resolve(args.ticker)
+        if mult is None:
+            if args.confirm:
+                _print({"status": f"BLOCKED: {why}; the fee - and so the maximum loss - cannot be bounded"})
+                return EXIT_BLOCKED
+        else:
+            max_loss = _order_max_loss(args.side_action, count, price, mult)
+            if max_loss > Decimal(str(max_notional)):
+                raise SystemExit(f"manual order maximum loss ${max_loss:.2f} (fees included, fee multiplier {mult}) exceeds --max-notional ${max_notional:.2f}")
+        return _manual_order(ex, args, max_loss, mult)
     elif action == "cancel":
         if not args.order_id:
             raise SystemExit("kalshi cancel requires --order-id")
@@ -178,13 +192,14 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
     return _status_code(result)
 
 
-def _manual_order(ex: Any, args: argparse.Namespace, max_loss: Decimal) -> int:
+def _manual_order(ex: Any, args: argparse.Namespace, max_loss: Decimal, mult: Any = None) -> int:
     plan = ex.plan(args.ticker, args.side_action, args.side, args.count, args.price,
                    post_only=args.post_only, exchange_index=args.exchange_index,
                    time_in_force=args.time_in_force)
     if not args.confirm:
         result = ex.execute(plan, confirm=False)
-        result["max_loss_fees_included"] = str(max_loss)
+        result["max_loss_fees_included"] = str(max_loss) if mult is not None else f"{max_loss} at fee multiplier 1 (the market's is unknown)"
+        result["fee_multiplier"] = str(mult) if mult is not None else None
         _print(result)
         return 0
     problem = ex.gate_problem()
@@ -200,7 +215,7 @@ def _manual_order(ex: Any, args: argparse.Namespace, max_loss: Decimal) -> int:
         led = OrderLedger.for_client(ex.client)
         res = led.reserve(strategy="manual", ticker=args.ticker, side=args.side, action=args.side_action, count=int(args.count),
                           limit_price=args.price, tif=args.time_in_force, max_cost_per_contract=max_loss / int(args.count),
-                          detail={"source": "kalshi order --confirm"})
+                          fee_multiplier=mult, detail={"source": "kalshi order --confirm"})
     except LedgerError as e:
         _print({"status": f"BLOCKED: order ledger: {e}"})
         return EXIT_BLOCKED

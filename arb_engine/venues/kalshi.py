@@ -509,7 +509,9 @@ class KalshiAdapter:
             try:
                 self._series_cache[ticker] = self.client.series(ticker)
             except Exception:
-                self._series_cache[ticker] = {"ticker": ticker, "fee_type": "quadratic", "fee_multiplier": 1}
+                # Priced as the common case, but marked: an order reservation must not take an
+                # assumed multiplier for the market's (execution/ledger.quote_fee_multiplier).
+                self._series_cache[ticker] = {"ticker": ticker, "fee_type": "quadratic", "fee_multiplier": 1, "fee_multiplier_assumed": True}
         return self._series_cache[ticker]
 
     def fetch(self, sport: str) -> VenueSnapshot:
@@ -522,6 +524,8 @@ class KalshiAdapter:
                 continue
             series = self.series_info(spec["series"])
             fee_params = {"fee_type": series.get("fee_type"), "fee_multiplier": series.get("fee_multiplier", 1), "series": spec["series"]}
+            if series.get("fee_multiplier_assumed") or "fee_multiplier" not in series:
+                fee_params["fee_multiplier_assumed"] = True
             self._ingest_markets(snap, sport, spec, markets, fee_params)
         if self.with_books:
             self._attach_books(snap)

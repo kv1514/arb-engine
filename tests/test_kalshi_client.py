@@ -569,6 +569,7 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "GET /portfolio/balance": _fx("balance"),
             "GET /markets?series_ticker=KXNFLGAME": {"markets": [{"ticker": "KXNFLGAME-26SEP20PHITEN-PHI"}], "cursor": ""},
             "GET /portfolio/orders?ticker=": by_ticker,
+            "GET /series/": {"series": {"ticker": "KXNFLGAME", "fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}},
             "GET /portfolio/orders/e6": {"order": {"order_id": "e6", "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00",
                                                    "taker_fill_cost_dollars": "0.000000", "maker_fill_cost_dollars": "0.000000",
                                                    "taker_fees_dollars": "0.000000", "maker_fees_dollars": "0.000000"}},
@@ -711,7 +712,7 @@ class RecordedFillTests(unittest.TestCase):
                 return _fx("fills_v2")["fills"]
         clock = [1000.0]
         led = OrderLedger(os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "l.sqlite3"), "demo", Exchange.base_url, clock=lambda: clock[0])
-        res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56")
+        res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56", fee_multiplier=1)
         led.accepted(res.intent_id, _fx("create_order_fill"))
         clock[0] += 3
         led.reconcile(Exchange())
