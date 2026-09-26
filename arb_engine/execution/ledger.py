@@ -23,7 +23,15 @@ shared by every process that trades it:
 3. **Unknown blocks new exposure.** While an intent is ambiguous - or pending longer than
    ``pending_stale_s`` (no request lives that long), or pending in a process that no longer
    exists - :meth:`reserve` refuses everything except an exempt lock leg of a *known* fill.
-4. **Reconciliation** (:meth:`reconcile`) finds each unresolved intent on the exchange by
+4. **One account per ledger.** Each intent records a fingerprint of the API key that sent
+   it and of the account behind it (SHA-256 of the key id and of the account's
+   ``GET /communications/id`` - never the identifiers themselves, and never a secret). A
+   ledger is bound to the first account it sees and refuses a client of another one; a key
+   rotated on the same account is recognised by its account and mapped (``keys`` table).
+   Reconciliation leaves another account's intents alone, and releases a never-seen order
+   only when the reconciling client is provably the account that sent it - an order absent
+   from *another* account's listing proves nothing.
+5. **Reconciliation** (:meth:`reconcile`) finds each unresolved intent on the exchange by
    its ``client_order_id`` (``GET /portfolio/orders?ticker=&min_ts=``, every page; Kalshi
    has no client_order_id filter) and reads each accepted order's final fills and fees
    (``GET /portfolio/orders/{id}``: ``fill_count_fp``, ``taker|maker_fill_cost_dollars``,
@@ -46,6 +54,7 @@ than was reserved. An intent whose multiplier is unknown is not reserved (so not
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -96,18 +105,19 @@ _SCHEMA = (
   tif TEXT NOT NULL, count INTEGER NOT NULL, limit_price TEXT NOT NULL, max_cost TEXT NOT NULL,
   state TEXT NOT NULL, order_id TEXT, fill_count TEXT, fill_cost TEXT, fees TEXT,
   req_ts REAL, resp_ts REAL, reconciled_ts REAL, checks INTEGER NOT NULL DEFAULT 0,
-  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT, fee_mult TEXT)""",
+  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT, fee_mult TEXT, key_fp TEXT, account_fp TEXT)""",
     """CREATE INDEX IF NOT EXISTS intents_open ON intents (state)""",
     """CREATE INDEX IF NOT EXISTS intents_day ON intents (strategy, day)""",
     """CREATE INDEX IF NOT EXISTS intents_game ON intents (strategy, game_key)""",
     """CREATE INDEX IF NOT EXISTS intents_parent ON intents (parent_id)""",
     """CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   intent_id TEXT, kind TEXT NOT NULL, detail TEXT)""",
+    """CREATE TABLE IF NOT EXISTS keys (key_fp TEXT PRIMARY KEY, account_fp TEXT NOT NULL, first_ts REAL, last_ts REAL)""",
 )
 
 
 # Columns added after the first ledgers were written (added in place on open).
-_MIGRATIONS = (("fee_mult", "TEXT"),)
+_MIGRATIONS = (("fee_mult", "TEXT"), ("key_fp", "TEXT"), ("account_fp", "TEXT"))
 
 
 class LedgerError(RuntimeError):
@@ -293,6 +303,40 @@ def _s(x: Optional[Decimal]) -> Optional[str]:
     return None if x is None else str(x)
 
 
+def fingerprint(kind: str, env: str, value: str) -> str:
+    """A one-way fingerprint of an identifier (an API key id, a communications id): what the
+    ledger stores instead of the identifier itself."""
+    return f"{kind}:" + hashlib.sha256(f"kalshi|{env}|{kind}|{value}".encode()).hexdigest()[:32]
+
+
+@dataclass(frozen=True)
+class Identity:
+    """Who a client trades as: fingerprints of its API key and of its account, and why the
+    account is unknown when it is."""
+    key_fp: Optional[str] = None
+    account_fp: Optional[str] = None
+    error: Optional[str] = None
+
+
+def client_identity(client: Any, env: Optional[str] = None) -> Identity:
+    """The client's key and account fingerprints. The account comes from ``GET
+    /communications/id`` (one id per account, whatever key signs); when that read fails the
+    account is unknown and only the key identifies the sender."""
+    env = str(env or getattr(client, "env", "") or "").lower()
+    api_key = getattr(client, "api_key", None)
+    key_fp = fingerprint("key", env, str(api_key)) if api_key else None
+    fn = getattr(client, "communications_id", None)
+    if not callable(fn):
+        return Identity(key_fp, None, "this client cannot read its account id")
+    try:
+        cid = fn()
+    except Exception as e:  # noqa: BLE001
+        return Identity(key_fp, None, f"GET /communications/id failed ({type(e).__name__})")
+    if not cid:
+        return Identity(key_fp, None, "GET /communications/id returned no id")
+    return Identity(key_fp, fingerprint("account", env, str(cid)), None)
+
+
 @dataclass
 class Budget:
     """Dollars (fees included) a strategy may commit per local day and per game."""
@@ -313,8 +357,11 @@ class Reservation:
 
 class OrderLedger:
     def __init__(self, path: str, env: str, host: str, clock: Any = time.time, owner: Optional[str] = None,
-                 pending_stale_s: float = 300.0, not_found_s: float = 30.0, settle_s: float = 2.0, max_checks: int = 120) -> None:
+                 pending_stale_s: float = 300.0, not_found_s: float = 30.0, settle_s: float = 2.0, max_checks: int = 120,
+                 owner_alive: Any = None) -> None:
         self.path, self.env, self.host, self.clock = path, str(env).lower(), str(host), clock
+        self.identity = Identity(error="not bound to a client")   # set by bind() / for_client()
+        self._owner_alive = owner_alive                            # owner -> bool | None; tests and other hosts
         self.owner = owner or f"{socket.gethostname()}:{os.getpid()}"
         # HttpClient re-sends a POST up to 3 times with 20 s timeouts (+curl slack): a pending
         # intent older than this is not in flight any more, whoever owns it.
@@ -351,13 +398,80 @@ class OrderLedger:
 
     @classmethod
     def for_client(cls, client: Any, path: Optional[str] = None, **kw: Any) -> "OrderLedger":
-        """The ledger of ``client``'s environment; refuses a host of another environment."""
+        """The ledger of ``client``'s environment, bound to its account; refuses a host of
+        another environment and a client of another account."""
         env = str(getattr(client, "env", "") or "").lower()
         base = str(getattr(client, "base_url", "") or "")
         problem = env_host_problem(env, base)
         if problem:
             raise LedgerError(problem)
-        return cls(path or default_path(env), env, base, **kw)
+        led = cls(path or default_path(env), env, base, **kw)
+        try:
+            led.bind(client_identity(client, env))
+        except LedgerError:
+            led.close()
+            raise
+        return led
+
+    # ---- identity ------------------------------------------------------------------------
+    def _mapped(self, c: sqlite3.Connection, key_fp: Optional[str]) -> Optional[str]:
+        if not key_fp:
+            return None
+        row = c.execute("SELECT account_fp FROM keys WHERE key_fp = ?", (key_fp,)).fetchone()
+        return row["account_fp"] if row is not None else None
+
+    def bind(self, identity: Identity, now: Optional[float] = None) -> Identity:
+        """Bind the ledger to ``identity``'s account (the first account seen owns the file).
+        A different account raises ``LedgerError``; a new key of the owning account is mapped
+        to it (key rotation). Returns the effective identity (the account filled in from the
+        key map when the account read failed)."""
+        now = self.clock() if now is None else float(now)
+
+        def txn(c: sqlite3.Connection) -> Identity:
+            owner_row = c.execute("SELECT value FROM meta WHERE key='account_fp'").fetchone()
+            owner = owner_row["value"] if owner_row is not None else None
+            mapped = self._mapped(c, identity.key_fp)
+            if identity.account_fp and mapped and mapped != identity.account_fp:
+                raise LedgerError("this API key was recorded for another Kalshi account in this ledger")
+            acct = identity.account_fp or mapped
+            if acct and owner and acct != owner:
+                raise LedgerError(f"{self.path} belongs to another Kalshi account; point ARB_ORDER_LEDGER_DIR at a separate "
+                                  "directory for this one (budgets and reconciliation never mix accounts)")
+            if acct and not owner:
+                c.execute("INSERT INTO meta VALUES ('account_fp', ?)", (acct,))
+            if acct and identity.key_fp:
+                c.execute("INSERT INTO keys VALUES (?,?,?,?) ON CONFLICT(key_fp) DO UPDATE SET last_ts = excluded.last_ts",
+                          (identity.key_fp, acct, now, now))
+            eff = Identity(identity.key_fp, acct, None if acct else identity.error)
+            self._event(c, now, None, "bind", key=identity.key_fp and identity.key_fp[:12], account=acct and acct[:12],
+                        account_known=bool(acct), note=None if acct else identity.error)
+            return eff
+
+        eff = self._write(txn)
+        self.identity = eff
+        return eff
+
+    def _identity_for(self, client: Any) -> Identity:
+        """The reconciling client's identity: the bound one when it is the same key, else read
+        (and completed from the key map), never bound."""
+        env_key = getattr(client, "api_key", None)
+        if self.identity.key_fp and env_key and fingerprint("key", self.env, str(env_key)) == self.identity.key_fp:
+            return self.identity
+        ident = client_identity(client, self.env)
+        with self._lock:
+            mapped = self._mapped(self.conn, ident.key_fp)
+        return Identity(ident.key_fp, ident.account_fp or mapped, ident.error)
+
+    def _relation(self, row: Any, ident: Identity) -> str:
+        """``same`` (provably the account that sent it), ``other`` (provably not) or
+        ``unknown``."""
+        with self._lock:
+            r_acct = row["account_fp"] or self._mapped(self.conn, row["key_fp"])
+        if r_acct and ident.account_fp:
+            return "same" if r_acct == ident.account_fp else "other"
+        if row["key_fp"] and ident.key_fp and row["key_fp"] == ident.key_fp:
+            return "same"                                  # one key never spans two accounts
+        return "unknown"
 
     def close(self) -> None:
         try:
@@ -433,6 +547,10 @@ class OrderLedger:
 
     # ---- blocking ------------------------------------------------------------------------
     def _owner_gone(self, owner: str) -> bool:
+        if self._owner_alive is not None:
+            alive = self._owner_alive(owner)
+            if alive is not None:
+                return not alive
         host, _, pid = str(owner).rpartition(":")
         if owner == self.owner or host != socket.gethostname():
             return False
@@ -553,11 +671,11 @@ class OrderLedger:
             iid, coid = uuid.uuid4().hex, str(uuid.uuid4())
             c.execute("""INSERT INTO intents (intent_id, client_order_id, dedupe_key, strategy, parent_id, env, host, owner,
                 created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail,
-                fee_mult)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                fee_mult, key_fp, account_fp)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                       (iid, coid, dedupe_key, strategy, parent_id, self.env, self.host, self.owner, now, now, day, event_key,
                        game_key, ticker, action, side, tif, n, str(limit), str(max_cost), PENDING,
-                       json.dumps(detail or {}, default=str, sort_keys=True), _s(mult)))
+                       json.dumps(detail or {}, default=str, sort_keys=True), _s(mult), self.identity.key_fp, self.identity.account_fp))
             self._event(c, now, iid, "reserved", count=n, requested=count, limit=str(limit), max_cost=str(max_cost), room=_s(room),
                         fee_multiplier=_s(mult))
             return Reservation(True, intent_id=iid, client_order_id=coid, count=n, max_cost=max_cost, room=room)
@@ -630,6 +748,17 @@ class OrderLedger:
 
         self._write(txn)
 
+    def release(self, intent_id: str, reason: str, now: Optional[float] = None) -> dict:
+        """An operator's decision, after checking the exchange by hand: this open intent was
+        never accepted (or is dealt with) - release its reservation. Recorded as such."""
+        if not str(reason or "").strip():
+            raise LedgerError("a manual release needs a reason")
+        row = self.get(intent_id)
+        if row is None or row["state"] not in (PENDING, AMBIGUOUS, ACCEPTED):
+            raise LedgerError(f"no open intent {intent_id}")
+        self.rejected(intent_id, f"released by hand: {reason}", now=now, manual=True, was=row["state"])
+        return self.get(intent_id) or {}
+
     def note(self, intent_id: Optional[str], kind: str, now: Optional[float] = None, **detail: Any) -> None:
         now = self.clock() if now is None else float(now)
         self._write(lambda c: self._event(c, now, intent_id, kind, **detail))
@@ -665,8 +794,12 @@ class OrderLedger:
             by_state = {r[0]: r[1] for r in self.conn.execute("SELECT state, COUNT(*) FROM intents GROUP BY state")}
             strategies = [r[0] for r in self.conn.execute("SELECT DISTINCT strategy FROM intents")]
             today = {s: str(self._sum(self.conn, "strategy = ? AND day = ?", (s, day))) for s in strategies}
+        with self._lock:
+            owner = self.conn.execute("SELECT value FROM meta WHERE key='account_fp'").fetchone()
+            nkeys = self.conn.execute("SELECT COUNT(*) FROM keys").fetchone()[0]
         return {"env": self.env, "path": self.path, "day": day, "by_state": by_state, "committed_today": today,
-                "blocked": self.blocked(now)}
+                "blocked": self.blocked(now), "account": (owner["value"][:12] + "…") if owner is not None else None, "keys_seen": nkeys,
+                "this_key_account_known": bool(self.identity.account_fp)}
 
     # ---- 4. reconciliation ---------------------------------------------------------------
     def reconcile(self, client: Any, now: Optional[float] = None) -> list[dict]:
@@ -675,6 +808,11 @@ class OrderLedger:
         (an ambiguous one stays blocking) and are reported, never raised."""
         self._check_client(client)
         now = self.clock() if now is None else float(now)
+        ident = self._identity_for(client)
+        with self._lock:
+            owner_row = self.conn.execute("SELECT value FROM meta WHERE key='account_fp'").fetchone()
+        if ident.account_fp and owner_row is not None and owner_row["value"] != ident.account_fp:
+            raise LedgerError(f"{self.path} belongs to another Kalshi account: not reconciled with this client")
         with self._lock:
             rows = self.conn.execute("SELECT * FROM intents WHERE state IN ('pending', 'ambiguous', 'accepted') ORDER BY created_ts").fetchall()
             unknown = {r["intent_id"] for r in self._unknown(self.conn, now)}
@@ -682,13 +820,18 @@ class OrderLedger:
         for r in rows:
             if r["state"] == PENDING and r["intent_id"] not in unknown:
                 continue                           # still in flight in a live process
+            rel = self._relation(r, ident)
+            if rel == "other":
+                out.append({"intent_id": r["intent_id"], "strategy": r["strategy"], "ticker": r["ticker"], "before": r["state"],
+                            "after": r["state"], "note": "sent by another Kalshi account: not reconciled with this client"})
+                continue
             if r["state"] == ACCEPTED and int(r["checks"] or 0) >= self.max_checks:
                 continue                           # known order, exposure bounded: stop polling it
             since = float(r["resp_ts"] or r["updated_ts"] or r["created_ts"])
             if now - since < self.settle_s:
                 continue                           # Kalshi's read side trails its writes
             try:
-                note = self._reconcile_one(client, dict(r), now)
+                note = self._reconcile_one(client, dict(r), now, release_ok=(rel == "same"))
             except Exception as e:  # noqa: BLE001 - reported, the intent keeps blocking
                 note = f"error: {e!r}"[:300]
                 self._write(lambda c, iid=r["intent_id"], n=note: (
@@ -699,7 +842,7 @@ class OrderLedger:
                         "after": after.get("state"), "note": note})
         return out
 
-    def _reconcile_one(self, client: Any, r: dict, now: float) -> str:
+    def _reconcile_one(self, client: Any, r: dict, now: float, release_ok: bool = True) -> str:
         iid = r["intent_id"]
         order: Optional[dict] = None
         if r["order_id"]:
@@ -717,6 +860,11 @@ class OrderLedger:
                 if truncated:
                     self._bump(iid, now, "listing truncated: not conclusive")
                     return "listing truncated"
+                if not release_ok:
+                    # Absent from a listing of an account that may not be the sender's: that
+                    # proves nothing, so the reservation stays (and keeps blocking).
+                    self._bump(iid, now, "absent from this client's listing, but its account is not the sender's provably: not released")
+                    return "not released: sender's account not verified"
                 misses = int(r["misses"] or 0) + 1
                 sent = float(r["req_ts"] or r["created_ts"])
                 # A definitive client error (4xx other than 409 conflict / 429) is very likely a

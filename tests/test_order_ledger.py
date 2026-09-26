@@ -49,8 +49,10 @@ class FakeKalshi:
 
     env, base_url, has_credentials = "demo", DEMO_URL, True
 
-    def __init__(self, clock, fill=lambda n: n):
+    def __init__(self, clock, fill=lambda n: n, api_key="key-id-A1", account="comms-id-A"):
         self.clock, self.fill = clock, fill
+        self.api_key, self.account = api_key, account   # the key id and GET /communications/id
+        self.comms_error = None
         self.rows, self.fill_rows, self.creates = {}, [], []
         self.lose_answer = None      # an exception to raise after the order is on the book
         self.fail_before = None      # an exception to raise before anything is recorded
@@ -62,6 +64,11 @@ class FakeKalshi:
         self.multiplier = 1                          # the series' fee_multiplier (GET /series/{ticker})
         self.rounding = "centicent"                  # what Kalshi's demo charged on 2026-09-26
         self.series_error = None
+
+    def communications_id(self):
+        if self.comms_error is not None:
+            raise self.comms_error
+        return self.account
 
     def series(self, ticker):
         if self.series_error is not None:
@@ -140,6 +147,128 @@ class FeeBoundTests(unittest.TestCase):
                         charged = sum((fees.fee(price, k, "taker") for k in split if k), Decimal("0"))
                         self.assertLessEqual(charged, bound, (limit, n, price, split))
         self.assertEqual(worst_cost("0.60", 50, 1), Decimal("31.00"))   # 50 x 0.60 + 50 x 2c
+
+
+class AccountIdentityTests(unittest.TestCase):
+    """A ledger belongs to one Kalshi account: its budgets and its reconciliation never mix
+    accounts, a rotated key of the same account carries on, and no identifier is stored."""
+
+    def _ambiguous(self, client, clock, path, fail=HttpError(503, DEMO_URL, "unavailable")):
+        client.fail_before = fail                                    # never reached the exchange
+        ex = executor(client, clock, path=path)
+        rec = ex.on_signal(sig(ts=clock.t), quotes())
+        client.fail_before = None
+        self.assertEqual(rec["state"], "ambiguous")
+        return ex, rec
+
+    def test_a_ledger_refuses_a_client_of_another_account(self):
+        clock, path = Clock(), tmp()
+        a = FakeKalshi(clock)
+        executor(a, clock, path=path).on_signal(sig(), quotes())
+        b = FakeKalshi(clock, api_key="key-id-B1", account="comms-id-B")
+        ex_b = executor(b, clock, path=path)
+        self.assertIn("belongs to another Kalshi account", ex_b.blocked_reason)
+        self.assertEqual(ex_b.on_signal(sig(ts=1001.0), quotes())["status"], "blocked")
+        self.assertEqual(b.creates, [])
+        with self.assertRaises(LedgerError):
+            OrderLedger.for_client(b, path=path)
+
+    def test_another_accounts_client_cannot_reconcile_or_release(self):
+        clock, path = Clock(1000.0), tmp()
+        a = FakeKalshi(clock)
+        ex, rec = self._ambiguous(a, clock, path)
+        b = FakeKalshi(clock, api_key="key-id-B1", account="comms-id-B")
+        clock.t = 1100.0
+        with self.assertRaises(LedgerError):
+            ex.ledger.reconcile(b)                                    # B's listing says nothing about A's orders
+        self.assertEqual(ex.ledger.get(rec["intent_id"])["state"], "ambiguous")
+
+    def test_an_unverified_account_never_releases_what_it_cannot_see(self):
+        clock, path = Clock(1000.0), tmp()
+        a = FakeKalshi(clock)
+        ex, rec = self._ambiguous(a, clock, path)
+        # Another key whose account cannot be read: it may be A's, it may not.
+        stranger = FakeKalshi(clock, api_key="key-id-X9")
+        stranger.comms_error = HttpError(503, DEMO_URL, "down")
+        for t in (1003.0, 1040.0, 1200.0):
+            clock.t = t
+            res = ex.ledger.reconcile(stranger)
+        self.assertEqual(ex.ledger.get(rec["intent_id"])["state"], "ambiguous")
+        self.assertIn("not released", res[0]["note"])
+        # The key that sent it can: one key never spans two accounts.
+        for t in (1203.0, 1240.0):
+            clock.t = t
+            ex.ledger.reconcile(a)
+        self.assertEqual(ex.ledger.get(rec["intent_id"])["state"], "rejected")
+
+    def test_a_rotated_key_of_the_same_account_carries_on(self):
+        clock, path = Clock(1000.0), tmp()
+        old_key = FakeKalshi(clock)
+        ex, rec = self._ambiguous(old_key, clock, path)
+        new_key = FakeKalshi(clock, api_key="key-id-A2")                 # same account, new key
+        clock.t = 1003.0
+        ex2 = executor(new_key, clock, path=path)                       # start-up reconciles with the new key
+        self.assertIsNone(ex2.blocked_reason)
+        clock.t = 1040.0
+        ex2.reconcile(force=True)
+        self.assertEqual(ex2.ledger.get(rec["intent_id"])["state"], "rejected")
+        self.assertEqual(ex2.ledger.status()["keys_seen"], 2)
+
+    def test_a_key_whose_account_was_unreadable_is_mapped_once_it_is_read(self):
+        clock, path = Clock(1000.0), tmp()
+        k1 = FakeKalshi(clock)
+        k1.comms_error = HttpError(503, DEMO_URL, "down")               # account unknown when the order went out
+        ex, rec = self._ambiguous(k1, clock, path)
+        self.assertIsNone(ex.ledger.get(rec["intent_id"])["account_fp"])
+        k1.comms_error = None
+        OrderLedger.for_client(k1, path=path).close()                   # later the same key reads its account: mapped
+        k2 = FakeKalshi(clock, api_key="key-id-A2")
+        led = OrderLedger.for_client(k2, path=path, clock=clock)
+        for t in (1003.0, 1040.0):
+            clock.t = t
+            led.reconcile(k2)
+        self.assertEqual(led.get(rec["intent_id"])["state"], "rejected")
+        led.close()
+
+    def test_no_key_id_or_account_id_is_written_to_disk(self):
+        clock, path = Clock(1000.0), tmp()
+        a = FakeKalshi(clock, api_key="KEYID-7f3e-SECRETISH", account="COMMS-ID-91c2")
+        ex = executor(a, clock, path=path)
+        ex.on_signal(sig(), quotes())
+        clock.t += 3
+        ex.reconcile(force=True)
+        ex.ledger.close()
+        blob = b"".join(open(f, "rb").read() for f in (path, path + "-wal") if os.path.exists(f))
+        self.assertNotIn(b"KEYID-7f3e-SECRETISH", blob)
+        self.assertNotIn(b"COMMS-ID-91c2", blob)
+        self.assertIn(b"account:", blob)                                 # the fingerprints are there
+
+    def test_a_stuck_intent_can_be_released_by_hand_with_a_reason(self):
+        from arb_engine.cli_plugins.kalshi_ops import run_kalshi
+
+        clock = Clock(1000.0)
+        path = tmp("kalshi_demo_ledger.sqlite3")                          # where the CLI looks under ARB_ORDER_LEDGER_DIR
+        a = FakeKalshi(clock)
+        ex, rec = self._ambiguous(a, clock, path)
+        with self.assertRaises(LedgerError):
+            ex.ledger.release(rec["intent_id"], " ")
+        base = dict(action="release", no_account_env=True, intent_id=rec["intent_id"], reason="checked on kalshi.com: never placed",
+                    confirm=False, status="resting")
+        out = io.StringIO()
+        with mock.patch("arb_engine.execution.kalshi.KalshiClient", return_value=a), \
+                mock.patch.dict(os.environ, {"ARB_ORDER_LEDGER_DIR": os.path.dirname(path)}), redirect_stdout(out):
+            self.assertEqual(run_kalshi(argparse.Namespace(**base)), 0)                     # dry run
+        self.assertEqual(ex.ledger.get(rec["intent_id"])["state"], "ambiguous")
+        out = io.StringIO()
+        with mock.patch("arb_engine.execution.kalshi.KalshiClient", return_value=a), \
+                mock.patch.dict(os.environ, {"ARB_ORDER_LEDGER_DIR": os.path.dirname(path)}), redirect_stdout(out):
+            self.assertEqual(run_kalshi(argparse.Namespace(**{**base, "confirm": True})), 0)
+        led = OrderLedger(path, "demo", DEMO_URL)
+        row = led.get(rec["intent_id"])
+        self.assertEqual(row["state"], "rejected")
+        self.assertIn("released by hand: checked on kalshi.com", row["reason"])
+        self.assertIsNone(led.blocked())
+        led.close()
 
 
 class FeeMultiplierTests(unittest.TestCase):

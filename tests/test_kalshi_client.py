@@ -569,6 +569,7 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "GET /portfolio/balance": _fx("balance"),
             "GET /markets?series_ticker=KXNFLGAME": {"markets": [{"ticker": "KXNFLGAME-26SEP20PHITEN-PHI"}], "cursor": ""},
             "GET /portfolio/orders?ticker=": by_ticker,
+            "GET /communications/id": {"communications_id": "offline-demo-account"},
             "GET /series/": {"series": {"ticker": "KXNFLGAME", "fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}},
             "GET /portfolio/orders/e6": {"order": {"order_id": "e6", "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00",
                                                    "taker_fill_cost_dollars": "0.000000", "maker_fill_cost_dollars": "0.000000",
@@ -590,10 +591,13 @@ class DemoCheckOfflineTests(unittest.TestCase):
         mod = mod or self._script()
         client = _client(routes)
         out = io.StringIO()
-        import functools
+        class FastLedger(mod.OrderLedger):                     # no read-lag wait against a fake exchange
+            def __init__(self, *a, **kw):
+                kw.setdefault("settle_s", 0.0)
+                super().__init__(*a, **kw)
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(mod, "KalshiClient", lambda: client), mock.patch.object(mod, "FIXTURES", Path(tmp)), mock.patch.object(mod, "load_dotenv", lambda: None), \
-                mock.patch.object(mod, "OrderLedger", functools.partial(mod.OrderLedger, settle_s=0.0)), contextlib.redirect_stdout(out):
+                mock.patch.object(mod, "OrderLedger", FastLedger), contextlib.redirect_stdout(out):
             rc = mod.main(argv)
             written = {p.name: json.loads(p.read_text()) for p in Path(tmp).glob("*.json")}
         return rc, out.getvalue(), written
@@ -607,6 +611,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertIn("PASS POST immediate_or_cancel buy $0.01 x1", text)
         self.assertIn("PASS IOC payload (the LAG executor's) has no expiration_time and no post_only", text)
         # The ledger step: the "lost" answer blocks, and the listing by client_order_id resolves it.
+        self.assertIn("PASS the ledger is bound to this key's account", text)
+        self.assertNotIn("offline-demo-account", text)                     # a fingerprint is printed, never the id
         self.assertIn("PASS an order with an unknown outcome blocks new exposure", text)
         self.assertIn("PASS reconciliation found it by client_order_id in the orders listing: state=done order_id=i5", text)
         self.assertIn("PASS and new exposure is unblocked", text)

@@ -258,6 +258,13 @@ class KalshiClient:
     def balance(self) -> dict:
         return self.get("/portfolio/balance", auth=True)
 
+    def communications_id(self) -> Optional[str]:
+        """``GET /communications/id``: "a public communications ID which is used to identify
+        the user" - the same for every API key of an account, so the order ledger binds to
+        (a hash of) it rather than to a key (execution/ledger.client_identity)."""
+        cid = (self.get("/communications/id", auth=True) or {}).get("communications_id")
+        return str(cid) if cid else None
+
     def positions(self, **params: Any) -> dict:
         return self.get("/portfolio/positions", params or None, auth=True)
 

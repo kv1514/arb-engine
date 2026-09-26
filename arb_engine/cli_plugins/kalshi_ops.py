@@ -16,7 +16,9 @@ demo gates at a production host).
 * ``orders`` / ``fills`` walk every page up to the client's limit and say whether the
   listing was truncated; ``positions`` says whether a further page exists.
 * ``reconcile`` resolves the ledger's open orders against the exchange (reads only);
-  ``ledger`` prints the ledger's state and its open orders.
+  ``ledger`` prints the ledger's state and its open orders; ``release --intent-id X --reason
+  "..." --confirm`` releases one open intent by hand after you checked the exchange yourself
+  (the escape hatch for an order the engine cannot prove either way; recorded as such).
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ def register(subparsers: Any, existing_parsers: Mapping[str, argparse.ArgumentPa
         return {}
     action = next((a for a in parser._actions if a.dest == "action"), None)
     if action is not None:
-        action.choices = ["balance", "positions", "orders", "fills", "order", "cancel", "cancel-all", "reconcile", "ledger"]
+        action.choices = ["balance", "positions", "orders", "fills", "order", "cancel", "cancel-all", "reconcile", "ledger", "release"]
     additions = (
         ("--order-id", {"help": "order id for cancel"}),
         ("--status", {"default": "resting", "help": "order status filter (default resting; use all for no filter)"}),
@@ -51,6 +53,8 @@ def register(subparsers: Any, existing_parsers: Mapping[str, argparse.ArgumentPa
         ("--subaccount", {"type": int, "help": "optional subaccount for cancel-all"}),
         ("--max-notional", {"type": float, "default": 25.0, "help": "maximum loss of a submitted manual order, Kalshi fees included (default $25)"}),
         ("--no-account-env", {"action": "store_true", "help": "do not read ~/.kalshi/env"}),
+        ("--intent-id", {"help": "release: the order-ledger intent to release by hand"}),
+        ("--reason", {"help": "release: why (what you checked on the exchange)"}),
     )
     for option, kwargs in additions:
         if not _has_option(parser, option):
@@ -172,6 +176,25 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
                            exchange_index=args.exchange_index, subaccount=args.subaccount)
     elif action == "cancel-all":
         result = ex.cancel_all(confirm=args.confirm, subaccount=args.subaccount)
+    elif action == "release":
+        from ..execution.ledger import LedgerError, OrderLedger
+
+        if not getattr(args, "intent_id", None) or not str(getattr(args, "reason", "") or "").strip():
+            raise SystemExit("kalshi release requires --intent-id and --reason")
+        try:
+            led = OrderLedger.for_client(ex.client)
+        except LedgerError as e:
+            _print({"status": f"BLOCKED: {e}"})
+            return EXIT_BLOCKED
+        row = led.get(args.intent_id)
+        if not args.confirm:
+            _print({"status": "DRY_RUN (pass --confirm to release)", "intent": {k: (row or {}).get(k) for k in ("intent_id", "strategy", "ticker", "count", "state", "reason")}})
+            return 0
+        try:
+            result = {"status": "RELEASED", "intent": led.release(args.intent_id, args.reason)}
+        except LedgerError as e:
+            _print({"status": f"BLOCKED: {e}"})
+            return EXIT_BLOCKED
     elif action in ("reconcile", "ledger"):
         from ..execution.ledger import LedgerError, OrderLedger
 

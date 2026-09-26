@@ -316,7 +316,7 @@ def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: 
     else:
         ticker, price = pick_ticker(client, series_list[0]), 0.01
     ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "lag.jsonl"),
-                     ledger=OrderLedger(led_path, "demo", client.base_url), max_contracts=1, max_notional_per_game=5.0, daily_notional=5.0)
+                     ledger=OrderLedger.for_client(client, path=led_path), max_contracts=1, max_notional_per_game=5.0, daily_notional=5.0)
     key = f"democheck:{ticker}"
     sig = LagSignal(event_key=key, title="demo check", leader="robinhood", follower="kalshi", outcome="A", label=ticker, lead_move=0.05, follower_move=0.0,
                     leader_mid=min(0.99, price + 0.05), follower_ask=price, follower_all_in=price, edge=0.05, depth=1, suggested_contracts=1, lag_s=0.0, ts=time.time())
@@ -492,8 +492,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             more.append(io)   # the final check proves it did not rest
     import tempfile
 
-    led = OrderLedger(args.ledger or os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "ledger.sqlite3"), "demo", client.base_url)
+    led = OrderLedger.for_client(client, path=args.ledger or os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "ledger.sqlite3"))
     print(f"  ledger: {led.path}")
+    chk.expect("the ledger is bound to this key's account (GET /communications/id; fingerprints only)", bool(led.identity.account_fp),
+               led.identity.error or f"account {led.identity.account_fp[:14]}...")
     lost = ledger_lost_answer(chk, client, ex, led, ticker)
     if lost:
         more.append(lost)
