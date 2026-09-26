@@ -1,0 +1,10 @@
+{
+ "_fixture": "recorded, 2026-09-26 demo external-api.demo.kalshi.co",
+ "average_fee_paid": "0.0173",
+ "average_fill_price": "0.5600",
+ "client_order_id": "7d64f330-ee80-444d-b4e9-41b6e7fc2979",
+ "fill_count": "1.00",
+ "order_id": "01a0df2d-c590-7b59-b285-98a97491e27c",
+ "remaining_count": "0.00",
+ "ts_ms": 1790450714114
+}

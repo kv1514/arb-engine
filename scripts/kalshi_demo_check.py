@@ -15,20 +15,32 @@ Steps (each prints PASS/FAIL and the HTTP status; the script refuses to run on p
 5. POST an immediate_or_cancel buy at $0.01 x1                -> the order shape --execute-lag sends (no
                                                                   expiry, no post_only) is accepted and rests nothing
    GET /portfolio/fills (page 1)                               -> fills read path
-6. GET resting orders: must be zero at the end                 -> nothing orphaned
+6. The order ledger against the real exchange (execution/ledger.py): an IOC $0.01 x1 is
+   sent with the ledger's client_order_id and its answer is thrown away on purpose - the
+   ledger must block new exposure, then find the order in GET /portfolio/orders?ticker=
+   &min_ts= by that client_order_id and resolve it                -> unknown-outcome recovery works
+7. (--fill --confirm-demo) buy 1 contract IOC at a demo market's ask through the ledger,
+   reconcile it (fill count, fill cost, fees from the order row; /portfolio/fills?order_id=
+   cross-check) and compare the fee charged with the engine's Kalshi fee model (cent vs
+   centicent rounding: one contract tells them apart), then sell it back IOC at the bid
+                                                                 -> actual fill and fee accounting
+8. GET resting orders: must be zero at the end                 -> nothing orphaned
 
 ``--sweep`` only lists and batch-cancels every resting order (run it after a ``kill -9`` of
 ``python -m arb_engine maker --mode kalshi`` to prove the orphan path; with
 ``KALSHI_GTD_HORIZON_S`` the exchange expires them by itself even without this).
 ``--record`` writes trimmed responses into ``tests/fixtures/kalshi_orders/`` replacing the
 "assumed" fixtures with real shapes (secrets and user ids are stripped). Nothing here is
-run by the unit tests.
+run by the unit tests. The ledger steps use their own temporary ledger file (``--ledger``
+to keep it), never the engine's ``out/orders`` ledger. Demo orders only: step 7 spends at
+most ``--max-price`` of play money per contract and only with ``--confirm-demo``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -38,8 +50,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from arb_engine.config import load_dotenv  # noqa: E402
 from arb_engine.execution.kalshi import KalshiExecutor  # noqa: E402
+from arb_engine.execution.ledger import DONE, OrderLedger, fee_bound  # noqa: E402
+from arb_engine.fees.kalshi import KalshiFees  # noqa: E402
 from arb_engine.venues.http import HttpError  # noqa: E402
-from arb_engine.venues.kalshi import KalshiClient, batch_cancel_reduced  # noqa: E402
+from arb_engine.venues.kalshi import KalshiClient, batch_cancel_reduced, parse_orderbook  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "kalshi_orders"
 STRIP = {"user_id", "member_id", "api_key", "token"}
@@ -150,6 +164,127 @@ class Check:
             print(f"wrote {FIXTURES / (name + '.json')}")
 
 
+def reconcile_until(led: OrderLedger, client: KalshiClient, intent_id: str, timeout: float = READ_SETTLE_S + 20.0) -> dict:
+    """Reconcile until the intent is resolved (done / rejected) or ``timeout``; the row."""
+    t0 = time.time()
+    while True:
+        led.reconcile(client)
+        row = led.get(intent_id) or {}
+        if row.get("state") in (DONE, "rejected") or time.time() - t0 >= timeout:
+            return row
+        time.sleep(1.0)
+
+
+def ledger_lost_answer(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: OrderLedger, ticker: str) -> Optional[str]:
+    """Step 6: an order whose answer is discarded must be found by its client_order_id."""
+    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price="0.01", detail={"step": "lost answer"})
+    if not chk.expect("ledger reserves the intent before the request", res.ok, res.reason):
+        return None
+    plan = ex.plan(ticker, "buy", "yes", 1, 0.01, exchange_index=0, time_in_force="immediate_or_cancel", note="demo check lost answer",
+                   client_order_id=res.client_order_id)
+    t_req = time.time()
+    r = chk.step("POST IOC $0.01 x1 whose answer the ledger then treats as lost", lambda: ex.execute(plan, confirm=True))
+    if r is None:
+        led.rejected(res.intent_id, "demo check: the request itself failed")
+        return None
+    od = (r.get("response") or {})
+    oid = str((od.get("order") or od).get("order_id") or "")
+    led.ambiguous(res.intent_id, "demo check: answer discarded on purpose", req_ts=t_req)
+    chk.expect("an order with an unknown outcome blocks new exposure", led.blocked() is not None, led.blocked() or "not blocked")
+    row = reconcile_until(led, client, res.intent_id)
+    chk.expect("reconciliation found it by client_order_id in the orders listing", row.get("state") == DONE and row.get("order_id") == oid,
+               f"state={row.get('state')} order_id={row.get('order_id')} (sent {oid}) fill={row.get('fill_count')}")
+    chk.expect("and new exposure is unblocked", led.blocked() is None, led.blocked() or "")
+    return oid or None
+
+
+def pick_fillable(client: KalshiClient, series_list: list[str], max_price: float) -> Optional[tuple[str, dict, float, float, Optional[float]]]:
+    """(ticker, series, ask, ask size, bid) of the first open demo market whose YES ask is at
+    most ``max_price`` with at least one contract shown."""
+    for series in series_list:
+        try:
+            ser = client.series(series)
+            markets = client.markets(series, status="open", limit=100, max_pages=1)
+        except Exception:  # noqa: BLE001 - a series missing on demo is not a failure
+            continue
+        for m in markets:
+            try:
+                yes_book, _ = parse_orderbook(client.orderbook(m["ticker"], depth=3))
+            except Exception:  # noqa: BLE001
+                continue
+            if yes_book.asks and 0.02 <= yes_book.asks[0].price <= max_price and yes_book.asks[0].size >= 1:
+                bid = yes_book.bids[0].price if yes_book.bids else None
+                return m["ticker"], ser, float(yes_book.asks[0].price), float(yes_book.asks[0].size), bid
+    return None
+
+
+def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: OrderLedger, series_list: list[str], max_price: float) -> list[str]:
+    """Step 7: one real (play-money) fill through the ledger, its fees against the fee model,
+    then flat again. Returns the order ids it created."""
+    pick = pick_fillable(client, series_list, max_price)
+    if pick is None:
+        print(f"SKIP fill: no open demo market in {', '.join(series_list)} shows a YES ask <= ${max_price:.2f}")
+        return []
+    ticker, ser, ask, size, bid = pick
+    print(f"  fill market: {ticker} ask {ask} x{size:g} bid {bid}  fee_type={ser.get('fee_type')} fee_multiplier={ser.get('fee_multiplier')}")
+    res = led.reserve(strategy="democheck", ticker=ticker, side="yes", count=1, limit_price=str(ask), detail={"step": "fill"})
+    if not chk.expect("ledger reserves the fill", res.ok, res.reason):
+        return []
+    plan = ex.plan(ticker, "buy", "yes", 1, ask, time_in_force="immediate_or_cancel", note="demo check fill", client_order_id=res.client_order_id)
+    t_req = time.time()
+    r = chk.step(f"POST IOC buy 1 x {ticker} @ {ask} (fills)", lambda: ex.execute(plan, confirm=True))
+    if r is None:
+        led.ambiguous(res.intent_id, "demo check: create failed", req_ts=t_req)
+        return []
+    resp = r.get("response") or {}
+    if chk.record:
+        chk.recorded["create_order_fill"] = dict({"_fixture": f"recorded, {time.strftime('%Y-%m-%d')} demo {client.base_url.split('/')[2]}"}, **_trim(resp))
+    led.accepted(res.intent_id, resp, req_ts=t_req)
+    od = resp.get("order") or resp
+    print(f"  create answer: fill_count={od.get('fill_count')} average_fill_price={od.get('average_fill_price')} average_fee_paid={od.get('average_fee_paid')}")
+    ids = [str(od.get("order_id") or "")]
+    row = reconcile_until(led, client, res.intent_id)
+    filled = float(row.get("fill_count") or 0)
+    chk.expect("reconciled from the order row", row.get("state") == DONE, f"state={row.get('state')} checks={row.get('checks')}")
+    if filled >= 1:
+        paid = float(row["fill_cost"])
+        fee = row["fees"]
+        cent = KalshiFees.from_series(ser).fee(paid, 1, "taker")
+        centi = KalshiFees.from_series(ser, rounding="centicent").fee(paid, 1, "taker")
+        which = "cent" if str(cent) == str(fee) or float(cent) == float(fee) else ("centicent" if float(centi) == float(fee) else "neither")
+        print(f"  paid ${paid} for 1 contract, fee ${fee}; fee model: cent ${cent} / centicent ${centi} -> matches {which}")
+        chk.expect("fee charged matches the engine's Kalshi fee model (cent or centicent rounding)", which != "neither", f"charged {fee}, model cent {cent} centicent {centi}")
+        chk.expect("fee charged is within the ledger's reserved fee bound", float(fee) <= float(fee_bound(ask, 1)), f"{fee} <= {fee_bound(ask, 1)}")
+        detail = [e for e in led.events(res.intent_id) if e["kind"] == "done"]
+        print(f"  ledger done event: {detail[-1]['detail'] if detail else None}")
+        if chk.record:
+            try:
+                chk.recorded["order_filled"] = dict({"_fixture": f"recorded, {time.strftime('%Y-%m-%d')} demo"}, **_trim({"order": client.order(ids[0])}))
+                chk.recorded["fills_v2"] = dict({"_fixture": f"recorded, {time.strftime('%Y-%m-%d')} demo"}, **_trim({"fills": client.fills_v2(order_id=ids[0]), "cursor": ""}))
+            except Exception as e:  # noqa: BLE001
+                print(f"  (could not record the filled order / fills: {e!r})")
+        # Flat again: sell the contract back at the bid (play money either way).
+        try:
+            yes_book, _ = parse_orderbook(client.orderbook(ticker, depth=3))
+            bid = yes_book.bids[0].price if yes_book.bids else None
+        except Exception:  # noqa: BLE001
+            bid = None
+        if bid:
+            res2 = led.reserve(strategy="democheck", ticker=ticker, side="yes", action="sell", count=1, limit_price=str(bid),
+                               max_cost_per_contract=str(round(1 - bid, 4) + float(fee_bound(1 - bid, 1))), detail={"step": "flatten"})
+            plan2 = ex.plan(ticker, "sell", "yes", 1, bid, time_in_force="immediate_or_cancel", note="demo check flatten", client_order_id=res2.client_order_id)
+            r2 = chk.step(f"POST IOC sell 1 x {ticker} @ {bid} (flatten)", lambda: ex.execute(plan2, confirm=True))
+            if r2 is not None:
+                led.accepted(res2.intent_id, r2.get("response") or {})
+                od2 = (r2.get("response") or {}).get("order") or r2.get("response") or {}
+                ids.append(str(od2.get("order_id") or ""))
+                row2 = reconcile_until(led, client, res2.intent_id)
+                print(f"  flatten: state={row2.get('state')} filled={row2.get('fill_count')} proceeds={row2.get('fill_cost')} fees={row2.get('fees')}")
+        else:
+            print("  no demo bid to sell into: the contract stays in the demo account")
+    return [i for i in ids if i]
+
+
 def pick_ticker(client: KalshiClient, series: str) -> str:
     ms = client.markets(series, status="open", limit=5, max_pages=1)
     if not ms:
@@ -164,7 +299,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--series", default="KXNFLGAME")
     ap.add_argument("--record", action="store_true", help="overwrite tests/fixtures/kalshi_orders/*.json with trimmed real responses")
     ap.add_argument("--sweep", action="store_true", help="only list and batch-cancel every resting order, then exit")
+    ap.add_argument("--ledger", help="order-ledger file for the ledger steps (default: a new temporary file, never out/orders)")
+    ap.add_argument("--fill", action="store_true", help="step 7: buy 1 contract IOC at a demo ask through the ledger, check its fees, sell it back")
+    ap.add_argument("--confirm-demo", action="store_true", help="required with --fill: yes, spend demo play money on a filling order")
+    ap.add_argument("--max-price", type=float, default=0.95, help="--fill: most to pay for the one contract (default $0.95)")
+    ap.add_argument("--fill-series", default="KXNFLGAME,KXNCAAFGAME,KXMLBGAME,KXNHLGAME,KXNBAGAME", help="--fill: series searched for a demo ask")
     args = ap.parse_args(argv)
+    if args.fill and not args.confirm_demo:
+        print("refusing: --fill places a filling order on the demo exchange; add --confirm-demo")
+        return 2
 
     client = KalshiClient()
     if client.env != "demo":
@@ -253,7 +396,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"  order_id={io}  fill_count={od.get('fill_count')}  remaining_count={od.get('remaining_count')}")
         if io:
             more.append(io)   # the final check proves it did not rest
-    chk.step("GET /portfolio/fills", lambda: client.fills_v2(limit=5), "fills_v2")
+    import tempfile
+
+    led = OrderLedger(args.ledger or os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "ledger.sqlite3"), "demo", client.base_url)
+    print(f"  ledger: {led.path}")
+    lost = ledger_lost_answer(chk, client, ex, led, ticker)
+    if lost:
+        more.append(lost)
+    if args.fill:
+        more.extend(ledger_fill(chk, client, ex, led, [x.strip() for x in args.fill_series.split(",") if x.strip()], args.max_price))
+    if not args.fill or "fills_v2" not in chk.recorded:
+        chk.step("GET /portfolio/fills", lambda: client.fills_v2(limit=5), "fills_v2" if not args.fill else None)
     ids = {oid, *more}
     resting = chk.step("GET resting orders at the end (waits for the cancels to show)", lambda: settle(lambda: client.orders_v2(status="resting"), lambda r: not [o for o in r or [] if str(o.get("order_id") or o.get("id")) in ids])[0]) or []
     ours = [o for o in resting if str(o.get("order_id") or o.get("id")) in {oid, *more}]

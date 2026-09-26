@@ -283,16 +283,47 @@ python3 -m arb_engine kalshi cancel-all                               # dry-run 
 python3 -m arb_engine kalshi cancel-all --confirm
 ```
 
-   Production keeps the third gate: `KALSHI_ENV=prod` plus `--confirm` is still blocked unless
-   `ARB_LIVE_TRADING=1` is exported. Never put that opt-in in a committed file.
+   Production keeps its gate: `KALSHI_ENV=prod` plus `--confirm` is still blocked unless
+   `ARB_LIVE_TRADING=1` is exported. Never put that opt-in in a committed file. The cap
+   (`--max-notional`) counts the most Kalshi's fee can be, and a `KALSHI_BASE_URL` that points
+   at the other environment's host (or an unknown host) blocks every mutation. Exit status:
+   0 done or dry-run, 3 blocked, 4 the order's outcome is unknown.
+
+5. **Demo-readiness check (≈2 minutes, demo only, repeat after any executor change).** The
+   script refuses to run unless `KALSHI_ENV=demo`, reads `~/.kalshi/env` only through your
+   shell, and uses its own temporary order ledger (never `out/orders`):
+
+```bash
+set -a; eval "$(sed -n 's/^export //p' ~/.kalshi/env)"; set +a
+python3 scripts/kalshi_demo_check.py                            # resting orders, cancels, the IOC shape, the ledger's lost-answer recovery
+python3 scripts/kalshi_demo_check.py --fill --confirm-demo      # + one play-money fill: fees vs the fee model, then sold back
+```
+
+   `ALL PASS` means: signing and hosts work; the exchange-side expiry exists; single and
+   batched cancels are confirmed; an IOC answer thrown away on purpose blocks new exposure and
+   is found again by its `client_order_id`; a real fill is booked at its actual cost and fee.
+   The demo exchange answers `500` on signed reads now and then: run it again before digging.
+
+6. **The order ledger.** Every automatic order (LAG entries and lock legs, the "Robinhood
+   done" button) and every confirmed manual order is written to
+   `out/orders/kalshi_<env>_ledger.sqlite3` *before* it is sent (`execution/ledger.py`). Its
+   budgets (fees included) survive restarts and are shared by the NFL and college processes;
+   an order whose answer never came back blocks every new order (pushes say `BLOCKED` /
+   `UNKNOWN`) until the engine finds it on the exchange. To look, or to resolve by hand:
+
+```bash
+python3 -m arb_engine kalshi ledger          # state, today's committed dollars, open orders, the block if any
+python3 -m arb_engine kalshi reconcile       # find open orders on the exchange (reads only; exit 3 while still blocked)
+```
 
 ## 1c. Acting on LAG automatically (needs your Kalshi API key)
 
 A LAG lives ~23 s; reading a push and typing an order is slower. `live --execute-lag` sends
 an **immediate-or-cancel buy** of the laggard's own Kalshi market at the ask the signal saw,
-sized like the signal and capped (`--lag-max-contracts 50`, `--lag-max-per-game 100`,
-`--lag-daily 500`; the caps count what *filled*, so an order that found nothing does not use
-them up). Modes: `intent` writes what it would send to
+sized like the signal and capped (`--lag-max-contracts 50`, `--lag-max-per-game 100` per
+game across its markets, `--lag-daily 500`; dollars **with fees**, kept in the order ledger so
+a restart or a second process does not reset them; an order that found nothing does not use
+them up, one whose outcome is unknown counts at its worst case and blocks new orders). Modes: `intent` writes what it would send to
 `out/orders/lag_intents.jsonl` (start here; no key needed), `demo` sends to Kalshi's demo
 exchange (`KALSHI_ENV=demo` + `KALSHI_API_KEY` + `KALSHI_PRIVATE_KEY_PATH`), `live` sends to
 production and also needs `ARB_LIVE_TRADING=1`. The launcher passes extras after `--`:
@@ -312,7 +343,8 @@ the other outcome already *locks* the pair (with the price it would need otherwi
 every filled LAG position, paper or demo, is watched for `lag_lock_watch_s` (10 min): when
 the other outcome gets cheap enough that the pair costs <= $1 with fees, the paper book
 records the lock and the demo executor sends the lock leg itself when it is on Kalshi (an
-IOC exempt from the caps: it cuts exposure). A lock available only on Robinhood is logged as
+IOC exempt from the caps: it cuts exposure; at most 3 tries per position, 10 s apart, and
+never more contracts than the entry verifiably filled minus those already hedged). A lock available only on Robinhood is logged as
 `lockable`. Pairs that lose on a tie are skipped (`lag_lock_tie_safe`). `lag_locks` holds
 every position; the FINAL line reports locks per game; `scripts/microstructure_eval.py`
 reports the conversion and compares locking with simply holding the same entries.

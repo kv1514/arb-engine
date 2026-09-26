@@ -47,7 +47,11 @@ class _RoutedFakeHttp:
                     payload = payload.pop(0) if len(payload) > 1 else payload[0]
                 if isinstance(payload, BaseException):
                     raise payload
-                return payload() if callable(payload) else payload
+                if callable(payload):
+                    import inspect
+
+                    return payload(body) if inspect.signature(payload).parameters else payload()
+                return payload
         raise AssertionError(f"unexpected {method} {url}")
 
     def request(self, method: str, url: str, params=None, json_body=None, headers=None, raw=False):
@@ -206,7 +210,7 @@ class ClientOrderPathTests(unittest.TestCase):
         self.assertEqual([o["order_id"] for o in orders][-1], "x3")
         self.assertEqual(len(orders), 3)
         fills = c.fills_v2()
-        self.assertEqual(fills[0]["order_id"], "0b3c7a2e-demo-4c1f-9a11-000000000003")
+        self.assertEqual(fills[0]["order_id"], _fx("fills_v2")["fills"][0]["order_id"])
         od = c.order_v2("0b3c7a2e-demo-4c1f-9a11-000000000001")
         self.assertEqual(od["outcome_side"], "yes")
         self.assertIs(KalshiClient.order_v2, KalshiClient.order)
@@ -448,12 +452,28 @@ class DemoCheckOfflineTests(unittest.TestCase):
 
     def _routes(self, order_row: dict) -> dict:
         oid = "0b3c7a2e-demo-4c1f-9a11-000000000001"
-        create = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"},
-                  {"order_id": "i4", "fill_count": "0.00", "remaining_count": "0.00"}]   # the IOC: nothing at $0.01, nothing rests
+        answers = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"},
+                   {"order_id": "i4", "fill_count": "0.00", "remaining_count": "0.00"},    # the IOC: nothing at $0.01, nothing rests
+                   {"order_id": "i5", "fill_count": "0.00", "remaining_count": "0.00"}]    # the ledger step's IOC, answer "lost"
+        posted: list = []
+
+        def create(body):
+            posted.append(body)
+            return dict(answers[min(len(posted), len(answers)) - 1], client_order_id=body.get("client_order_id"))
+
+        def by_ticker(_body):
+            # GET /portfolio/orders?ticker=&min_ts= (the ledger's reconciliation): every order
+            # posted so far, as the exchange lists them, with the client_order_id they carried.
+            rows = [{"order_id": answers[min(i, len(answers) - 1)]["order_id"], "client_order_id": b.get("client_order_id"), "ticker": b["ticker"],
+                     "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00", "taker_fill_cost_dollars": "0.000000",
+                     "maker_fill_cost_dollars": "0.000000", "taker_fees_dollars": "0.000000", "maker_fees_dollars": "0.000000"}
+                    for i, b in enumerate(posted)]
+            return {"orders": rows, "cursor": ""}
         return {
             "GET /exchange/status": {"exchange_active": True, "trading_active": True},
             "GET /portfolio/balance": _fx("balance"),
             "GET /markets?series_ticker=KXNFLGAME": {"markets": [{"ticker": "KXNFLGAME-26SEP20PHITEN-PHI"}], "cursor": ""},
+            "GET /portfolio/orders?ticker=": by_ticker,
             "POST /portfolio/events/orders": create,
             f"GET /portfolio/orders/{oid}": {"order": order_row},
             "GET /portfolio/orders?status=resting": [{"orders": [order_row], "cursor": ""}, {"orders": [], "cursor": ""}],
@@ -471,7 +491,10 @@ class DemoCheckOfflineTests(unittest.TestCase):
         mod = mod or self._script()
         client = _client(routes)
         out = io.StringIO()
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(mod, "KalshiClient", lambda: client), mock.patch.object(mod, "FIXTURES", Path(tmp)), mock.patch.object(mod, "load_dotenv", lambda: None), contextlib.redirect_stdout(out):
+        import functools
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(mod, "KalshiClient", lambda: client), mock.patch.object(mod, "FIXTURES", Path(tmp)), mock.patch.object(mod, "load_dotenv", lambda: None), \
+                mock.patch.object(mod, "OrderLedger", functools.partial(mod.OrderLedger, settle_s=0.0)), contextlib.redirect_stdout(out):
             rc = mod.main(argv)
             written = {p.name: json.loads(p.read_text()) for p in Path(tmp).glob("*.json")}
         return rc, out.getvalue(), written
@@ -484,6 +507,10 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertEqual(set(written), {"balance.json", "create_order.json", "create_order_ioc.json", "order.json", "orders_v2.json", "cancel_order.json", "cancel_batched.json", "fills_v2.json"})
         self.assertIn("PASS POST immediate_or_cancel buy $0.01 x1", text)
         self.assertIn("PASS IOC payload (the LAG executor's) has no expiration_time and no post_only", text)
+        # The ledger step: the "lost" answer blocks, and the listing by client_order_id resolves it.
+        self.assertIn("PASS an order with an unknown outcome blocks new exposure", text)
+        self.assertIn("PASS reconciliation found it by client_order_id in the orders listing: state=done order_id=i5", text)
+        self.assertIn("PASS and new exposure is unblocked", text)
         self.assertIn("order", written["order.json"])  # the client unwraps; --record re-wraps
         self.assertEqual(written["order.json"]["order"]["outcome_side"], "yes")
         self.assertTrue(written["order.json"]["_fixture"].startswith("recorded, "))
@@ -543,6 +570,55 @@ class DemoCheckOfflineTests(unittest.TestCase):
         rc, text, _ = self._run({"GET /portfolio/orders?status=resting": HttpError(404, "u", "nf")}, ["--sweep"])
         self.assertEqual(rc, 1)
         self.assertIn("listing failed", text)
+
+
+class RecordedFillTests(unittest.TestCase):
+    """A real demo fill (scripts/kalshi_demo_check.py --fill --confirm-demo --record, 2026-09-26):
+    the create answer, the order row and the fill row the order ledger reconciles from."""
+
+    def test_the_create_answer_reports_average_price_and_fee_per_contract(self):
+        fx = _fx("create_order_fill")
+        self.assertTrue(fx["_fixture"].startswith("recorded, 2026-09-26 demo"))
+        self.assertEqual((fx["fill_count"], fx["average_fill_price"], fx["average_fee_paid"]), ("1.00", "0.5600", "0.0173"))
+
+    def test_the_order_row_and_the_fill_agree_and_the_fee_is_rounded_to_the_centicent(self):
+        from decimal import Decimal
+
+        from arb_engine.fees.kalshi import KalshiFees
+
+        od, fill = _fx("order_filled")["order"], _fx("fills_v2")["fills"][0]
+        self.assertEqual((od["status"], od["fill_count_fp"], od["taker_fill_cost_dollars"], od["taker_fees_dollars"]), ("executed", "1.00", "0.560000", "0.017300"))
+        self.assertEqual((fill["order_id"], fill["count_fp"], fill["fee_cost"], fill["is_taker"]), (od["order_id"], "1.00", "0.017300", True))
+        # 0.07 x 0.56 x 0.44 = 0.017248: Kalshi (demo) charged it rounded up to $0.0001, not the cent.
+        self.assertEqual(KalshiFees(rounding="centicent").fee("0.56", 1, "taker"), Decimal(od["taker_fees_dollars"]).normalize())
+        self.assertEqual(KalshiFees().fee("0.56", 1, "taker"), Decimal("0.02"))       # the conservative default
+
+    def test_the_ledger_books_the_recorded_fill_at_what_was_paid(self):
+        import tempfile
+        from decimal import Decimal
+
+        from arb_engine.execution.ledger import OrderLedger
+
+        od = _fx("order_filled")["order"]
+
+        class Exchange:
+            env, base_url = "demo", "https://external-api.demo.kalshi.co/trade-api/v2"
+
+            def order(self, oid):
+                return od
+
+            def fills_v2(self, **params):
+                return _fx("fills_v2")["fills"]
+        clock = [1000.0]
+        led = OrderLedger(os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "l.sqlite3"), "demo", Exchange.base_url, clock=lambda: clock[0])
+        res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56")
+        led.accepted(res.intent_id, _fx("create_order_fill"))
+        clock[0] += 3
+        led.reconcile(Exchange())
+        row = led.get(res.intent_id)
+        self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("0.56"), Decimal("0.0173")))
+        self.assertEqual(led.exposure(), Decimal("0.5773"))
+        led.close()
 
 
 class FixtureShapeTests(unittest.TestCase):
