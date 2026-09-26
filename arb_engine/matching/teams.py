@@ -107,6 +107,46 @@ def team_name(sport: str, code: Optional[str]) -> str:
     return (info or {}).get("name") or (code or "")
 
 
+_TICKER_CODES: dict[str, set[str]] = {}
+
+
+def ticker_codes(sport: str) -> set[str]:
+    """Codes that can appear in a concatenated Kalshi/Rothera ticker: every canonical
+    code, plus ``info['kalshi']`` when the venue spells the team differently."""
+    if sport not in _TICKER_CODES:
+        codes: set[str] = set()
+        for code, info in team_table(sport).items():
+            codes.add(str(code).upper())
+            k = (info or {}).get("kalshi")
+            if k:
+                codes.add(str(k).upper())
+        _TICKER_CODES[sport] = codes
+    return _TICKER_CODES[sport]
+
+
+def canonical_from_ticker(sport: str, code: Optional[str]) -> Optional[str]:
+    """Map one ticker slice to a canonical code. A Kalshi spelling (``MURR``) resolves
+    to the team that owns it; two owners for the same spelling resolve to nothing."""
+    if not code:
+        return None
+    raw = str(code).strip().upper()
+    table = team_table(sport)
+    if not table:
+        return team_code(sport, raw)
+    owners: list[str] = []
+    if raw in table:
+        owners.append(raw)
+    for canon, info in table.items():
+        k = str((info or {}).get("kalshi") or "").upper()
+        if k == raw and canon not in owners:
+            owners.append(canon)
+    if len(owners) == 1:
+        return owners[0]
+    if len(owners) > 1:
+        return None
+    return team_code(sport, raw)
+
+
 def ncaaf_team_code(name: Optional[str]) -> Optional[str]:
     return team_code("ncaaf", name)
 
