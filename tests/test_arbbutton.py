@@ -264,6 +264,7 @@ class AlerterIntegrationTests(unittest.TestCase):
         arbs.button.http_get = False                       # no poller in a test
         arbs.button.auto_practice_s = None                 # nor a timer
         arbs.button.live_prices = lambda spec: {"kalshi_asks": [(0.55, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active", "at": T0 + 1}
+        arbs.button.clock = lambda: T0 + 1
         arbs.last.clear()
         arbs.handle(me, rep, "DEN @ KC", T0 + 1)
         kind, full, data = arbs.alerts.pushes[-1]
@@ -292,6 +293,7 @@ class AlerterIntegrationTests(unittest.TestCase):
         arbs.button.http_get, arbs.button.auto_practice_s = False, None
         arbs.button.journal_path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"button_gate_{os.getpid()}.jsonl")
         arbs.button.live_prices = lambda spec: dict(live, at=T0)
+        arbs.button.clock = lambda: T0
         return arbs, me, arbs.analyse(me, T0)
 
     def test_an_arb_gone_from_the_live_book_is_journalled_not_pushed(self):
@@ -312,6 +314,7 @@ class AlerterIntegrationTests(unittest.TestCase):
         self.assertEqual(len(arbs.alerts.pushes), n)
         # ... and once the book agrees the arb goes out with its button.
         arbs.button.live_prices = lambda spec: {"kalshi_asks": [(0.55, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active", "at": T0 + 6}
+        arbs.button.clock = lambda: T0 + 6
         arbs.handle(me, rep, "DEN @ KC", T0 + 6)
         kind, _, data = arbs.alerts.pushes[-1]
         self.assertEqual(kind, "BIG ARB")
@@ -327,6 +330,14 @@ class AlerterIntegrationTests(unittest.TestCase):
         arbs, me, rep = self._started({"kalshi_asks": [], "kalshi_error": "HTTPError(429)", "rh_ask": 0.36, "rh_state": "active"})
         arbs.handle(me, rep, "DEN @ KC", T0)
         self.assertEqual(arbs.alerts.pushes[-1][0], "BIG ARB")
+
+    def test_a_check_that_hung_is_too_old_to_push(self):
+        # Clamshell sleep mid-request: the Robinhood read came back 963 s later, failed.
+        arbs, me, rep = self._started({"kalshi_asks": [(0.55, 500.0)], "rh_error": "HttpError('HTTP 0 ...')", "rh_state": None})
+        arbs.button.live_prices = lambda spec: {"kalshi_asks": [(0.55, 500.0)], "rh_error": "HttpError('HTTP 0 ...')", "at": T0 + 963}
+        arbs.handle(me, rep, "DEN @ KC", T0)
+        self.assertEqual(arbs.alerts.pushes[-1][0], "ARB GONE")
+        self.assertIn("the live check took 963s", arbs.alerts.pushes[-1][1])
 
     def test_the_book_check_can_be_turned_off(self):
         from arb_engine.strategy.arbalert import ArbAlerter

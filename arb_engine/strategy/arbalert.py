@@ -179,6 +179,10 @@ class ArbAlerter:
             chk = self.button.confirm(spec["token"])
         except Exception:
             return None
+        if chk and float(chk.get("check_s") or 0.0) > 10.0:
+            # The read hung (the Mac slept mid-request on 2026-09-26: 963 s): whatever it says,
+            # the alert's prices are that old.
+            return f"the live check took {float(chk['check_s']):.0f}s - the alert's prices are that old"
         if not chk or chk.get("kalshi_error") or chk.get("rh_error") or chk.get("kalshi_live_ask") is None or chk.get("rh_live_ask") is None:
             return None
         if chk.get("would_lock"):
