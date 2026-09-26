@@ -4,6 +4,7 @@
     python3 scripts/arb_button_practice.py --sport ncaaf [--pairs 5] [--wait 6] [--stake 100]
     python3 scripts/arb_button_practice.py --sport nfl --push              # also send the practice push to your phone
     python3 scripts/arb_button_practice.py --sport ncaaf --push --self-tap # ... and tap it through ntfy (end to end)
+    python3 scripts/arb_button_practice.py --sport ncaaf --phone --pairs 1 # push one to your phone; wait for YOUR tap
 
 For the Kalshi + Robinhood pairs closest to an arb in the games on right now, it does what an
 ARB alert would: prices the set at the current asks, issues a button (practice mode), waits
@@ -83,8 +84,12 @@ def main(argv=None) -> int:
     ap.add_argument("--live-only", action="store_true", help="only games in play")
     ap.add_argument("--push", action="store_true", help="send each practice push (with its button) to your ntfy topic")
     ap.add_argument("--self-tap", action="store_true", help="tap through ntfy yourself: POST the command and let the listener act")
+    ap.add_argument("--phone", action="store_true", help="push the practice button to your phone and wait for your own tap on it (the phone round trip)")
+    ap.add_argument("--tap-wait", type=float, default=900.0, help="with --phone: seconds to wait for your tap (the button lives this long)")
     ap.add_argument("--journal", default=str(ROOT / "out/orders/arb_button.jsonl"))
     a = ap.parse_args(argv)
+    if a.phone:
+        a.push = True
     from arb_engine.venues.kalshi import KalshiAdapter
     from arb_engine.venues.robinhood import RobinhoodAdapter
 
@@ -98,8 +103,9 @@ def main(argv=None) -> int:
     else:
         alerts = _Printer()
     button = ArbButton("paper", alerts=alerts, cmd_url=(ntfy + "-cmd") if ntfy else "local", fee_for=fee_model_for_quote,
-                       journal_path=a.journal, http_get=None if a.self_tap else False)
-    if a.self_tap:
+                       journal_path=a.journal, http_get=None if (a.self_tap or a.phone) else False,
+                       ttl_s=max(180.0, a.tap_wait) if a.phone else 180.0)
+    if a.self_tap or a.phone:
         button.start()                       # the real listener: one streaming subscription
         time.sleep(2)
     t0 = time.time()
@@ -122,8 +128,19 @@ def main(argv=None) -> int:
             body = ticket.arb_button_short(sized, spec, where="PRACTICE - not an alert", mode="paper")
             alerts.push("ARB FILL", body, event=ek, side=spec["token"], force=True, headline=f"PRACTICE button - {title}",
                         actions=[spec["action"], (f"Robinhood {spec['robinhood']['label']}", spec["robinhood"]["url"])])
-        time.sleep(a.wait)
-        if a.self_tap:
+        if a.phone:
+            # Your tap on the phone reaches this process's listener like any real one.
+            print(f"  pushed {title}: tap \"Robinhood done\" on your phone (waiting up to {a.tap_wait:.0f}s)", flush=True)
+            deadline = time.time() + a.tap_wait
+            while time.time() < deadline and spec["token"] not in button.results:
+                time.sleep(0.5)
+            rec = button.results.get(spec["token"])
+            if rec is None:
+                print(f"  {ek}: no tap from the phone within {a.tap_wait:.0f}s")
+                continue
+        else:
+            time.sleep(a.wait)
+        if a.self_tap and not a.phone:
             import urllib.request
 
             # The tap exactly as the phone sends it: one POST to the command topic. The listener
@@ -136,7 +153,7 @@ def main(argv=None) -> int:
             if rec is None:
                 print(f"  {ek}: the tap did not come back through ntfy within 30 s")
                 continue
-        else:
+        elif not a.phone:
             rec = button.fire(spec["token"])
         k, r = spec["kalshi"], spec["robinhood"]
         rows.append(rec)
