@@ -67,9 +67,10 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 
 | Item | Value | Source |
 |---|---|---|
-| Fee | `θ × C × P × (1−P)`, banker's rounding to the cent; taker θ = 0.06 → **0.0695 from 2026-09-16**; maker rebate θ = −0.0125; volume rebates 10/25/50% above $250K/$1M/$10M prior-month taker volume | docs.polymarket.us/fees |
-| Worked example (pinned) | 1,000 contracts at $0.50: taker 0.0695 × 1,000 × 0.25 = $17.375 → **$17.38**; maker rebate −0.0125 × 1,000 × 0.25 = −$3.125 → **−$3.12** (banker's rounding both ways). `POLY_US_WORKED_EXAMPLE` in `fees/polymarket.py`, checked by `tests/test_fees.py` and the JS twin | docs.polymarket.us/fees, verified 2026-09-19 |
-| Adapter | none yet (`venue_rules.json`: `polymarket_us` executable for US persons, `adapter: false`), so it never appears in a scan. Reopen when the public market-data gateway is confirmed by hand (`docs/ROADMAP.md`) | — |
+| Fee | `θ × C × P × (1−P)`, banker's rounding to the cent; taker θ = 0.06 through 2026-09-24 ET, **0.0695 from 12:00 AM ET on 2026-09-25**; maker rebate θ = −0.0125; volume rebates 10/25/50% above $250K/$1M/$10M prior-month taker volume. The 100-lot price table and the five 1,000-contract examples on the page match `PolymarketUSFees` | docs.polymarket.us/fees, read 2026-09-26 (the 2026-09-19 reading of the same page had the theta change on 2026-09-16) |
+| Worked example (pinned) | 1,000 contracts at $0.50: taker 0.0695 × 1,000 × 0.25 = $17.375 → **$17.38**; maker rebate −0.0125 × 1,000 × 0.25 = −$3.125 → **−$3.12** (banker's rounding both ways). `POLY_US_WORKED_EXAMPLE` in `fees/polymarket.py`, checked by `tests/test_fees.py` and the JS twin | docs.polymarket.us/fees, read 2026-09-26 |
+| Public books | `GET https://gateway.polymarket.us/v1/markets/{slug}/book` (no API key; `security: []`). Response is `marketData.bids` / `offers` of `{px: {value, currency}, qty}`, plus `state`. List: `GET /v1/markets?active=true&closed=false`. Authenticated trading is a different host, `https://api.polymarket.us`. A live read on 2026-09-26 returned an open book (14 bids, 18 offers) for `tec-mlb-nlchamp-2026-09-27-atl` | docs.polymarket.us/api-reference/introduction and get-market-book, read 2026-09-26 |
+| Adapter | none yet (`venue_rules.json`: `polymarket_us` executable for US persons, `adapter: false`), so a scan still never sees these books. The public gateway above is the read path an adapter would use | — |
 
 ## Settlement registry (`arb_engine/data/settlement_rules.json`, 2026-09-19)
 

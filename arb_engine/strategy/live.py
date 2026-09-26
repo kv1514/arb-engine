@@ -413,6 +413,7 @@ class LiveSlate:
     def run(self, interval: Optional[float] = None, duration: float = 6 * 3600, max_iterations: Optional[int] = None, printer=print) -> None:
         interval = self.interval if interval is None else float(interval)
         self.interval = interval
+        self.arbs.start_button()
         for f in self._fresh.values():
             f.interval_s = interval
         t_end = time.time() + duration

@@ -194,6 +194,34 @@ scripts/sunday.sh restart live                  # if the recorders are already r
    schedule again. A `tie:` line that says **LOSES on a tie** is a Kalshi-YES + Rothera-YES
    pair, where a tie pays $0.50 total - take the Rothera NO of the same side instead.
 
+   **The "Robinhood done" button** (`arb_button_mode`, default `paper`). A Kalshi + Robinhood
+   ARB push reads "1) Robinhood: buy 25 Green Bay YES at 72c (max 73c) - 2) Tap *Robinhood
+   done*: the bot buys 25 Atlanta YES on Kalshi, up to 23c". Buy the Robinhood leg, tap the
+   button; within a couple of seconds the engine re-reads Kalshi's live order book and
+   Robinhood's live quote, reports whether they still match the push, and buys the Kalshi leg
+   immediate-or-cancel at no more than the limit (the most it can pay and still lock, given
+   Robinhood at the max). The answer is an **ARB FILL** push: OK / PARTIAL / MISSED, the live
+   prices, what locked, and anything left unhedged on Robinhood. Modes: `paper` (practice: the
+   Kalshi buy is simulated against the live book, nothing is sent), `demo` (Kalshi demo
+   exchange), `live` (a real order: the production key via `kalshi_install_key.sh ... prod`,
+   `KALSHI_ENV=prod` and `ARB_LIVE_TRADING=1` - yours to switch on). Practise any time:
+
+       python3 scripts/arb_button_practice.py --sport ncaaf --mid --live-only
+       python3 scripts/arb_button_practice.py --sport nfl --push --self-tap   # end to end through ntfy
+       python3 scripts/arb_button_practice.py --sport ncaaf --phone --pairs 1 # push one; YOU tap it
+       python3 scripts/arb_button_report.py --games                         # how the arbs held up
+
+   Every such arb is checked on the live book **before** it is pushed (`arb_confirm_book`):
+   Kalshi's `/markets` price, which the scans read, trails its order book by 5-10 s while a
+   game moves, so an arb seen there can already be gone. One that would not lock on the book at
+   full size is journalled as **ARB GONE** and never reaches the phone.
+
+   **ntfy's quota.** ntfy.sh lets an anonymous sender publish 250 messages a day per IP, shared
+   by every process on the Mac (`curl https://ntfy.sh/v1/account` shows what is left). Over it,
+   pushes are refused (429) - now journalled as `ntfy_error`, never as sent. Low-priority kinds
+   (ARB CLOSE, FINAL, LAG) stop when fewer than `ARB_ALERT_NTFY_RESERVE` (80) remain, so arbs,
+   button results and errors keep getting through; button taps come from your phone's quota.
+
    An **ARB CLOSE** body prints what each leg costs now and the price it has to reach, so the
    limit order can be parked before the move:
 

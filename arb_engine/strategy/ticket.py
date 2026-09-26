@@ -104,6 +104,117 @@ def _urls(legs: Sequence[Any]) -> list[str]:
     return seen[:MAX_URLS]
 
 
+def _venue_name(v: Any) -> str:
+    return {"kalshi": "Kalshi", "robinhood": "Robinhood", "polymarket": "Polymarket"}.get(str(v).lower(), str(v).title())
+
+
+def _price_c(p: Any) -> str:
+    return f"{float(p) * 100:g}\u00a2"
+
+
+def arb_short(result: Any, first: Optional[int] = None, max_prices: Optional[dict] = None, where: str = "") -> str:
+    """The phone push for an arb: only what to buy, where, at what price, and the result.
+
+        1) Kalshi: buy 25 Atlanta YES at 22¢
+        2) Robinhood: buy 25 Green Bay YES at 72¢ (ok up to 74¢)
+        Cost $24.31, pays $25.00 = +$0.69
+        If the game ends in a tie you lose $11.81 (rare)
+
+    The full itemised ticket (fees, depth, timing) stays in the journal."""
+    legs = list(_g(result, "legs", []) or [])
+    order = list(range(len(legs)))
+    if first is not None and 0 <= first < len(legs):
+        order = [first] + [i for i in order if i != first]
+    lines = []
+    for n, i in enumerate(order, 1):
+        leg = legs[i]
+        side = _g(leg, "side")
+        mp = (max_prices or {}).get(i)
+        extra = f" (ok up to {_price_c(mp)})" if n > 1 and mp is not None and float(mp) > float(_g(leg, "price", 0) or 0) + 1e-9 else ""
+        lines.append(f"{n}) {_venue_name(_g(leg, 'venue', '?'))}: buy {float(_g(leg, 'contracts', 0) or 0):g} "
+                     f"{_g(leg, 'label') or _g(leg, 'outcome') or '?'}{(' ' + str(side).upper()) if side else ''} at {_price_c(_g(leg, 'price', 0))}{extra}")
+    contracts = float(_g(result, "contracts", 0) or 0)
+    cost = float(_g(result, "total_cost", 0) or 0)
+    payout = float(_g(result, "payout", contracts) or 0)
+    profit = float(_g(result, "profit", payout - cost) or 0)
+    lines.append(f"Cost {money(cost)}, pays {money(payout)} = {'+' if profit >= 0 else ''}{money(profit)}")
+    tie_margin = _g(result, "tie_margin")
+    if tie_margin is not None and float(tie_margin) < 0:
+        lines.append(f"If the game ends in a tie you lose {money(-float(tie_margin) * contracts)} (rare)")
+    if where:
+        lines.append(where)
+    return "\n".join(lines)
+
+
+def arb_button_short(result: Any, spec: dict, where: str = "", mode: str = "paper") -> str:
+    """The push for a Kalshi + Robinhood arb with the "Robinhood done" button: you buy
+    Robinhood first, then tap; the bot buys Kalshi (``strategy/arbbutton.py``).
+
+        1) Robinhood: buy 25 Green Bay YES at 72¢ (max 73¢)
+        2) Tap "Robinhood done": the bot buys 25 Atlanta YES on Kalshi, up to 23¢
+        Cost $24.31, pays $25.00 = +$0.69
+    """
+    k, r, n = spec["kalshi"], spec["robinhood"], spec["count"]
+    mx = f" (max {_price_c(r['max'])})" if r["max"] > r["alert_ask"] + 1e-9 else ""
+    lines = [f"1) Robinhood: buy {n:g} {r['label']} {str(r['side']).upper()} at {_price_c(r['alert_ask'])}{mx}",
+             f"2) Tap \"Robinhood done\": the bot buys {n:g} {k['label']} {str(k['side']).upper()} on Kalshi, up to {_price_c(k['limit'])}"]
+    contracts = float(_g(result, "contracts", 0) or 0)
+    cost = float(_g(result, "total_cost", 0) or 0)
+    payout = float(_g(result, "payout", contracts) or 0)
+    profit = float(_g(result, "profit", payout - cost) or 0)
+    lines.append(f"Cost {money(cost)}, pays {money(payout)} = {'+' if profit >= 0 else ''}{money(profit)}")
+    tie_margin = _g(result, "tie_margin")
+    if tie_margin is not None and float(tie_margin) < 0:
+        lines.append(f"If the game ends in a tie you lose {money(-float(tie_margin) * contracts)} (rare)")
+    if mode == "paper":
+        lines.append("Practice mode: the bot checks live prices and simulates the Kalshi buy - nothing is sent")
+    elif mode == "demo":
+        lines.append("Demo mode: the Kalshi order goes to the demo exchange")
+    if where:
+        lines.append(where)
+    return "\n".join(lines)
+
+
+def near_arb_short(report: Any) -> str:
+    """The phone push for "nearly an arb": each side's price now and the price that locks it."""
+    lines = []
+    for o in list(_g(report, "outcomes", []) or []):
+        v = _best_venue_price(o)
+        if v is None or _g(v, "ask") is None:
+            continue
+        trig = _g(v, "max_buy_price")
+        lines.append(f"{_venue_name(_g(v, 'venue', '?'))} {_g(o, 'label') or _g(o, 'outcome')}: {_price_c(_g(v, 'ask'))} now"
+                     + (f", locks at {_price_c(trig)}" if trig is not None else ""))
+    return "\n".join(lines)
+
+
+def urls_of(result: Any) -> list[str]:
+    return _urls(list(_g(result, "legs", []) or []))
+
+
+def order_buttons(result: Any, first: Optional[int] = None, max_prices: Optional[dict] = None) -> list[tuple[str, str]]:
+    """One tap-to-open button per order, in buying order, labelled with the order itself:
+    ``("1. Kalshi 25 ATL YES 22c", <Kalshi game page>)``. Plain ASCII (ntfy buttons travel in
+    an HTTP header)."""
+    legs = list(_g(result, "legs", []) or [])
+    order = list(range(len(legs)))
+    if first is not None and 0 <= first < len(legs):
+        order = [first] + [i for i in order if i != first]
+    out = []
+    for n, i in enumerate(order, 1):
+        leg = legs[i]
+        url = _g(leg, "url")
+        if not url:
+            continue
+        side = str(_g(leg, "side") or "").upper()
+        mp = (max_prices or {}).get(i)
+        price = float(_g(leg, "price", 0) or 0)
+        lim = f" up to {float(mp) * 100:g}c" if n > 1 and mp is not None and float(mp) > price + 1e-9 else ""
+        label = f"{n}. {_venue_name(_g(leg, 'venue', '?'))} {float(_g(leg, 'contracts', 0) or 0):g} {_g(leg, 'outcome') or '?'} {side} {price * 100:g}c{lim}"
+        out.append(("".join(ch for ch in label if ch.isascii() and ch not in ",;").strip(), str(url)))
+    return out
+
+
 def arb_ticket(title: str, result: Any, size_note: str = "", header: str = "ARB", sport: Optional[str] = None,
                first: Optional[int] = None, first_reason: str = "", max_prices: Optional[dict] = None, now: Optional[float] = None,
                window: str = "", guarantee: str = "") -> str:

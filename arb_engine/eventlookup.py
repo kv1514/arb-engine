@@ -36,7 +36,7 @@ from typing import Any, Callable, Optional
 
 from .fees.registry import fee_model_for
 from .fees.robinhood import exchange_from_symbol_or_enum
-from .matching.normalize import fmt_line, kalshi_ticker_date, person_key, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, ticker_pair, total_event_key
+from .matching.normalize import fmt_line, kalshi_ticker_date, person_key, person_keys, push_rule_for_line, split_ticker_pair, spread_event_key, spread_outcomes, strip_digits, ticker_pair, total_event_key
 from .matching.teams import nfl_team_city, nfl_team_code, team_code, team_name
 from .models import EventInfo, OutcomeQuote
 from .quant.arbitrage import Leg, best_leg_per_outcome, evaluate, max_price_for_leg
@@ -919,15 +919,11 @@ class EventAnalyzer:
         if not p0:
             return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name")}, "analysis": None, "note": "unrecognised contract symbols"}
         pair = p0["pair"]
-        codes: list[str] = []
-        for cut in range(2, len(pair) - 1):
-            a, b = pair[:cut], pair[cut:]
-            if nfl_team_code(a) and nfl_team_code(b):
-                codes = [nfl_team_code(a), nfl_team_code(b)]  # type: ignore[list-item]
-                break
-        if not codes:
+        split = split_ticker_pair(pair, "nfl")
+        if not split:
             return {"ok": True, "event": {"id": ev.get("id"), "name": ev.get("name")}, "analysis": None, "note": f"could not split team pair {pair}"}
-        away, home = codes
+        away, home = split
+        codes = [away, home]
         date = p0["date"] or ""
         ssr = pp.get("quotes") or {}
         ids = [c["id"] for c in contracts_raw]
@@ -1004,7 +1000,8 @@ class EventAnalyzer:
             if mtype == "spread":
                 team_raw = strip_digits(sym.rsplit("-", 1)[-1])
                 fav = nfl_team_code(team_raw)
-                dog = nfl_team_code(split_pair(pair, team_raw) or "")
+                sides = split_ticker_pair(pair, "nfl", known=team_raw)
+                dog = (sides[1] if fav == sides[0] else sides[0]) if sides and fav in sides else None
                 if not fav or not dog:
                     continue
                 key = spread_event_key("nfl", [fav, dog], date, fav, line)

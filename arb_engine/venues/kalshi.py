@@ -39,6 +39,7 @@ from ..matching.normalize import (
     person_keys,
     push_rule_for_line,
     split_pair,
+    split_ticker_pair,
     spread_event_key,
     spread_outcomes,
     strip_digits,
@@ -617,9 +618,7 @@ class KalshiAdapter:
             url = f"https://kalshi.com/markets/{spec['series'].lower()}/{event_ticker.lower()}"
             if mtype == "spread":
                 team_raw = strip_digits(m["ticker"].rsplit("-", 1)[-1])
-                other_raw = split_pair(pair, team_raw)
-                fav = team_code(sport, team_raw) if sport in TEAM_SPORTS else team_raw
-                dog = (team_code(sport, other_raw) if sport in TEAM_SPORTS else other_raw) if other_raw else None
+                fav, dog = _spread_sides(pair, sport, team_raw)
                 if not fav or not dog:
                     continue
                 key = spread_event_key(sport, [fav, dog], date, fav, line)
@@ -627,14 +626,9 @@ class KalshiAdapter:
                 labels = {yes_key: f"{team_name(sport, fav) if sport in TEAM_SPORTS else fav} -{fmt_line(line)}", no_key: f"{team_name(sport, dog) if sport in TEAM_SPORTS else dog} +{fmt_line(line)}"}
                 outcomes = [yes_key, no_key]
             else:
-                codes: list[str] = []
-                for cut in range(2, len(pair) - 1):  # split 'DETBUF' into two known codes
-                    a, b = pair[:cut], pair[cut:]
-                    if sport in TEAM_SPORTS and team_code(sport, a) and team_code(sport, b):
-                        codes = [team_code(sport, a), team_code(sport, b)]  # type: ignore[list-item]
-                        break
+                codes = _total_codes(pair, sport)
                 if not codes:
-                    codes = [pair[: len(pair) // 2], pair[len(pair) // 2:]]
+                    continue
                 key = total_event_key(sport, codes, date, line)
                 yes_key, no_key = "over", "under"
                 labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
@@ -656,10 +650,34 @@ class KalshiAdapter:
             snap.quotes.append(OutcomeQuote(venue_market_id=m["ticker"] + "#no", outcome=no_key, outcome_label=labels[no_key], ask=no_ask if no_ask and no_ask < 1 else None, bid=no_bid if no_bid and no_bid > 0 else None, ask_size=_f(m.get("yes_bid_size_fp")), bid_size=_f(m.get("yes_ask_size_fp")), meta={"ticker": m["ticker"], "side": "no", "exchange_index": m.get("exchange_index"), "line": line}, **common))
 
 
+def _spread_sides(pair: str, sport: str, team_raw: str) -> tuple[Optional[str], Optional[str]]:
+    """Favourite and underdog for a concatenated ticker. Ambiguous college pairs
+    (``MURMU``) are skipped rather than paired with the wrong program."""
+    if sport in TEAM_SPORTS:
+        split = split_ticker_pair(pair, sport, known=team_raw)
+        fav = team_code(sport, team_raw)
+        if not split or not fav or fav not in split:
+            return None, None
+        dog = split[1] if fav == split[0] else split[0]
+        return fav, dog
+    other = split_pair(pair, team_raw)
+    if not team_raw or not other:
+        return None, None
+    return team_raw, other
+
+
+def _total_codes(pair: str, sport: str) -> list[str]:
+    """Away, home for a total. No midpoint fallback: a blob with two valid cuts
+    (``BENCAPU`` is Benedict+Capital or Benedictine+Azusa Pacific) is not a game."""
+    if sport not in TEAM_SPORTS:
+        return []
+    split = split_ticker_pair(pair, sport)
+    return list(split) if split else []
+
+
 def _pair_title(pair: str, sport: str) -> str:
     """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
-    for cut in range(2, len(pair) - 1):
-        a, b = pair[:cut], pair[cut:]
-        if sport not in TEAM_SPORTS or (team_code(sport, a) and team_code(sport, b)):
-            return f"{a} @ {b}"
+    split = split_ticker_pair(pair, sport) if sport in TEAM_SPORTS else None
+    if split:
+        return f"{split[0]} @ {split[1]}"
     return pair

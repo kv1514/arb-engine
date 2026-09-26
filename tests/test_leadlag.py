@@ -187,6 +187,50 @@ class NtfyTests(unittest.TestCase):
         b.alert("STEAL", "y", event="nfl:PHI|TEN")
         self.assertEqual(len(self.sent), 2)
 
+    def test_a_refused_push_is_an_error_not_a_sent_push(self):
+        import urllib.error
+
+        def refuse(url, body, headers):
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", {}, None)
+        a = Alerter(journal_path=self.path, quiet=True, desktop=False, webhook="", ntfy="arb-test-topic", transport=refuse)
+        self.assertFalse(a.push("ARB", "x", event="e1"))
+        kinds = [e["kind"] for e in a.events]
+        self.assertIn("ntfy_error", kinds)
+        self.assertNotIn("ntfy", kinds)
+        self.assertIn("429", [e for e in a.events if e["kind"] == "ntfy_error"][0]["error"])
+        # After a 429, low-priority kinds stop spending requests for a while; arbs still try.
+        self.assertFalse(a.push("ARB CLOSE", "y", event="e2"))
+        self.assertEqual(a.events[-1]["kind"], "ntfy_saved")
+        a.push("BIG ARB", "z", event="e3")
+        self.assertEqual(a.events[-1]["kind"], "ntfy_error")          # it was attempted
+
+    def test_the_quota_is_kept_for_arbs(self):
+        a = self._alerter()
+        a._transport_backup = a._transport
+        a.ntfy_remaining = lambda now=None: 50                       # below the 80 reserve
+        self.assertFalse(a.push("ARB CLOSE", "near", event="e1"))
+        self.assertFalse(a.push("FINAL", "final", event="e1"))
+        self.assertTrue(a.push("ARB", "arb", event="e1"))
+        self.assertTrue(a.push("ARB FILL", "fill", event="e1", force=True))
+        self.assertEqual([h["Title"] for _, _, h in self.sent], ["ARB", "ARB FILL"])
+        a.ntfy_remaining = lambda now=None: 200
+        self.assertTrue(a.push("ARB CLOSE", "near", event="e4"))
+
+    def test_curl_fallback_fails_on_http_errors(self):
+        import subprocess
+        from unittest import mock
+
+        a = Alerter(journal_path=self.path, quiet=True, desktop=False, webhook="", ntfy="arb-test-topic")
+        seen = {}
+
+        def run(cmd, **kw):
+            seen["cmd"] = cmd
+            raise subprocess.CalledProcessError(22, cmd)             # curl -f: HTTP >= 400
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("proxy reset")), mock.patch("subprocess.run", run):
+            self.assertFalse(a.push("ARB", "x", event="e1"))
+        self.assertIn("-f", seen["cmd"])
+        self.assertEqual(a.events[-1]["kind"], "ntfy_error")
+
     def test_lag_is_journalled_but_not_pushed_unless_opted_in(self):
         # A LAG is a one-sided bet, not an arb, and failed the executable re-run: it runs in
         # the background (journal, paper book, demo executor) and is pushed only on request.
@@ -921,8 +965,10 @@ class NearArbAlertTests(unittest.TestCase):
 
         t0 = 1_800_000_000.0
         info = EventInfo(event_key=KEY, sport="nfl", market_type="moneyline", outcomes=OUT, labels=LABELS, in_play=True)
-        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=kalshi_ask, bid=kalshi_ask - 0.01, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"})]
-        rq = [OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=rh_ask, bid=rh_ask - 0.01, ask_size=120, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera")]
+        kq = [OutcomeQuote("kalshi", "T-KC", KEY, "KC", ask=kalshi_ask, bid=kalshi_ask - 0.01, ask_size=400, ts=t0, fee_params=KFEE, meta={"ticker": "T-KC", "side": "yes"},
+                           url="https://kalshi.com/markets/kxnflgame/kxnflgame-26sep20denkc")]
+        rq = [OutcomeQuote("robinhood", "c2", KEY, "DEN", ask=rh_ask, bid=rh_ask - 0.01, ask_size=120, ts=t0, quote_time=t0, fee_params={"exchange": "rothera"}, meta={"contract_id": "c2", "side": "yes", "exchange": "rothera"}, book_id="rothera",
+                           url="https://robinhood.com/us/en/prediction-markets/nfl/events/denver-vs-kansas-city-sep-20-2026/")]
         me = MergedEvent(KEY, info, {"kalshi": kq, "robinhood": rq})
         view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
         alerts = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"near_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="")
@@ -969,7 +1015,8 @@ class NearArbAlertTests(unittest.TestCase):
     def _pushed(self, slate):
         sent = []
         slate.alerts.ntfy = "https://ntfy.sh/t"
-        slate.alerts._post = lambda url, body, headers: sent.append((headers["Title"], headers["Priority"], body.decode()))
+        slate.alerts._post = lambda url, body, headers: (sent.append((headers["Title"], headers["Priority"], body.decode())),
+                                                         self.__dict__.setdefault("_headers", []).append(headers))
         return sent
 
     def test_arb_tiers_small_is_logged_normal_pushed_big_is_top_priority(self):
@@ -983,8 +1030,32 @@ class NearArbAlertTests(unittest.TestCase):
             self.assertEqual(titles, [kind], (k, r))
             self.assertEqual(bool(sent), pushed, (k, r, sent))
             if kind == "BIG ARB":
-                self.assertEqual((sent[0][0], sent[0][1]), ("BIG ARB NFL", "5"))
-                self.assertIn("BIG ARB +5.3", sent[0][2])
+                self.assertEqual((sent[0][0], sent[0][1]), ("BIG ARB +5.3c - NFL DEN @ KC", "5"))
+                # The phone gets only what to buy, where, at what price, and the result ...
+                lines = sent[0][2].splitlines()
+                self.assertRegex(lines[0], r"^1\) (Kalshi|Robinhood): buy \d+ (KC|DEN) YES at \d+(\.\d+)?\u00a2$")
+                self.assertRegex(lines[1], r"^2\) (Kalshi|Robinhood): buy \d+ (KC|DEN) YES at \d+(\.\d+)?\u00a2")
+                self.assertRegex(lines[2], r"^Cost \$[0-9.,]+, pays \$[0-9.,]+ = \+\$[0-9.,]+$")
+                self.assertNotIn("fee", sent[0][2])
+                # ... while the journal keeps the full itemised ticket.
+                full = [e for e in slate.alerts.events if e["kind"] == "alert"][0]["msg"]
+                self.assertIn("+ Kalshi taker fee:", full)
+                # One button per order, labelled with the order, in buying order; tapping the push
+                # opens the leg to buy first.
+                h = self._headers[-1]
+                buttons = [b.strip().split(", ") for b in h["Actions"].split(";")]
+                self.assertEqual([b[0] for b in buttons], ["view", "view"])
+                self.assertRegex(buttons[0][1], r"^1\. (Kalshi|Robinhood) \d+ (KC|DEN) YES \d+(\.\d+)?c$")
+                self.assertRegex(buttons[1][1], r"^2\. (Kalshi|Robinhood) \d+ (KC|DEN) YES \d+(\.\d+)?c")
+                self.assertEqual(h["Click"], buttons[0][2])
+                self.assertTrue(all(b[2].startswith("https://") for b in buttons))
+
+    def test_short_push_style_can_be_switched_back_to_full(self):
+        slate, me, view, t0 = self._slate(0.55, 0.36, arb_push_style="full")
+        sent = self._pushed(slate)
+        self._run(slate, me, view, t0 + 1)
+        self.assertEqual(sent[0][0], "BIG ARB NFL")
+        self.assertIn("+ Kalshi taker fee:", sent[0][2])
 
     def test_arb_ticket_says_which_leg_first_its_age_and_the_second_legs_limit(self):
         """Rothera moved (DEN cheaper there); Kalshi's KC has not followed: Kalshi is the stale
