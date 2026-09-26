@@ -1,6 +1,7 @@
 """strategy/arbbutton.py: the "Robinhood done" button - issue, tap, verify live prices, buy (or practice)."""
 import json
 import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -70,7 +71,16 @@ def _button(mode="paper", book=None, rh=None, **kw):
     clock = kw.pop("clock", lambda: T0)
     b = ArbButton(mode, alerts=_Alerts(), cmd_url="https://ntfy.sh/t-cmd", fee_for=fee_model_for_quote, data_client=book or _Book([(0.55, 60), (0.56, 100)]),
                   robinhood=rh or _RH(), journal_path=path, http_get=False, clock=clock, **kw)
+    b.ledger_path = os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "ledger.sqlite3")   # never out/orders
+    b._reconcile_later = lambda *delays: None                                              # no timers in a test
     return b, path
+
+
+class _DemoClient:
+    env, base_url, has_credentials = "demo", "https://external-api.demo.kalshi.co/trade-api/v2", True
+
+    def orders_v2(self, **params):
+        return []
 
 
 class IssueTests(unittest.TestCase):
@@ -92,7 +102,8 @@ class IssueTests(unittest.TestCase):
         self.assertGreater(all_in(kf, round(k["limit"] + .01, 2), n) + all_in(rf, r["max"], n), 1.0)
         self.assertEqual(spec["action"], {"action": "http", "label": "Robinhood done - buy Kalshi", "url": "https://ntfy.sh/t-cmd",
                                           "method": "POST", "body": f"arb {spec['token']}", "clear": True})
-        self.assertEqual(json.loads(open(path).readline())["event"], "issued")
+        with open(path) as f:
+            self.assertEqual(json.loads(f.readline())["event"], "issued")
 
     def test_no_button_without_a_kalshi_and_a_non_kalshi_robinhood_leg(self):
         b, _ = _button()
@@ -230,8 +241,10 @@ class TapTests(unittest.TestCase):
         sent = []
 
         class _Ex:
+            client = _DemoClient()
+
             def plan(self, ticker, action, side, count, price, **kw):
-                sent.append((ticker, action, side, count, price, kw["time_in_force"]))
+                sent.append((ticker, action, side, count, price, kw["time_in_force"], kw["client_order_id"]))
                 return "plan"
 
             def execute(self, plan, confirm=False):
@@ -239,8 +252,36 @@ class TapTests(unittest.TestCase):
         b, _ = _button(mode="demo", executor=_Ex())
         spec = self._spec(b)
         rec = b.fire(spec["token"], now=T0 + 6)
-        self.assertEqual(sent, [("KXNFLGAME-26SEP27DENKC-KC", "buy", "yes", spec["count"], spec["kalshi"]["limit"], "immediate_or_cancel")])
+        self.assertEqual([x[:6] for x in sent], [("KXNFLGAME-26SEP27DENKC-KC", "buy", "yes", spec["count"], spec["kalshi"]["limit"], "immediate_or_cancel")])
         self.assertEqual((rec["status"], rec["order_id"], rec["filled"]), ("SUBMITTED", "o1", 40))
+        # The order carries the ledger's id and is recorded there against the button budget.
+        row = b.ledger().get(rec["intent_id"])
+        self.assertEqual((row["client_order_id"], row["state"], row["strategy"]), (sent[0][6], "accepted", "button"))
+
+    def test_a_demo_tap_whose_outcome_is_unknown_says_so_and_blocks_the_next(self):
+        from arb_engine.venues.http import HttpError
+
+        calls = []
+
+        class _Ex:
+            client = _DemoClient()
+
+            def plan(self, ticker, action, side, count, price, **kw):
+                return "plan"
+
+            def execute(self, plan, confirm=False):
+                calls.append(plan)
+                raise HttpError(0, "https://external-api.demo.kalshi.co/trade-api/v2/portfolio/events/orders", "curl: (28) Operation timed out")
+        b, _ = _button(mode="demo", executor=_Ex())
+        spec = self._spec(b)
+        rec = b.fire(spec["token"], now=T0 + 6)
+        self.assertEqual((rec["status"], rec["unhedged"], rec["would_lock"]), ("UNKNOWN", None, False))
+        self.assertIn("UNKNOWN", rec["title_text"])
+        self.assertIn("Check Kalshi's orders before selling the Robinhood leg", rec["body_text"])
+        spec2 = self._spec(b)
+        rec2 = b.fire(spec2["token"], now=T0 + 8)
+        self.assertEqual(rec2["status"], "blocked")
+        self.assertEqual(len(calls), 1)
 
 
 class AlerterIntegrationTests(unittest.TestCase):
@@ -261,6 +302,7 @@ class AlerterIntegrationTests(unittest.TestCase):
         arbs.start_button()
         self.assertEqual(arbs.button.auto_practice_s, 10.0)
         arbs.button.http_get = False                       # no poller in a test
+        arbs.button.journal_path = os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "arb_button.jsonl")   # never out/orders
         arbs.button.auto_practice_s = None                 # nor a timer
         arbs.last.clear()
         arbs.handle(me, rep, "DEN @ KC", T0 + 1)

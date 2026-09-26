@@ -17,10 +17,20 @@ data flow.
    optional dependency, for Kalshi request signing). No pandas/requests/pydantic.
 3. **Never place orders by default.** Anything that can submit an order must be dry-run
    unless `confirm=True` *and* the environment is demo, or `KALSHI_ENV=prod` with
-   `ARB_LIVE_TRADING=1`. Keep the three gates in `arb_engine/execution/kalshi.py` and
-   `strategy/broker.py` (`KalshiBroker` refuses to construct without them). The maker
-   runner must cancel everything on shutdown and must never rest on a market whose hedge
-   has disappeared.
+   `ARB_LIVE_TRADING=1`. Keep the gates in `arb_engine/execution/kalshi.py` and
+   `strategy/broker.py` (`KalshiBroker` refuses to construct without them), including the
+   host check: a mutation only goes to a known Kalshi host *of the client's environment*
+   (`execution/ledger.env_host_problem`), so `KALSHI_BASE_URL` cannot move the demo gates
+   onto production. The maker runner must cancel everything on shutdown and must never rest
+   on a market whose hedge has disappeared.
+3a. **Every automatic order goes through the order ledger** (`execution/ledger.py`): the
+   intent and its worst-case cost (fees included) are written and reserved against the
+   budget before the request, the ledger's `client_order_id` goes on the order, an answer
+   that never came back is `ambiguous` and blocks new exposure until reconciliation finds
+   the order on the exchange, and actual fills and fees replace the reservation. Budgets
+   are sums over the ledger, so they survive restarts and span processes. Lock legs are
+   bounded by the entry's verified fill and a maximum number of attempts. Tests pass a
+   temporary ledger path and never write to `out/`.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
    Those quotes carry `book_id="kalshi"` and must never be arbed against Kalshi direct;
@@ -74,7 +84,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (887)
+python3 -m unittest discover -s tests -t .     # Python tests (931)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -183,6 +193,7 @@ When you declare a key, add its row here.
 | `inplay_slate_cap` | `INPLAY_SLATE_CAP` | `None` | Dollars the live slate may deploy per tick across every STEAL (default: the bankroll); stakes scale proportionally. |
 | `maker_hedge_cash` | `MAKER_HEDGE_CASH` | `250.0` | Max dollars of hand-executed hedge legs the maker may leave resting at once (sum of size × hedge ask). |
 | `maker_hedge_venues` | `MAKER_HEDGE_VENUES` | `robinhood` | Comma list of maker hedge venues; naming `polymarket` is the explicit opt-in to a non-executable hedge. |
+| `order_ledger_dir` | `ARB_ORDER_LEDGER_DIR` | `out/orders` | Directory of the durable Kalshi order ledgers (`execution/ledger.py`): one SQLite file per environment (`kalshi_<env>_ledger.sqlite3`), shared by every process that sends orders. Tests always pass their own path. |
 
 ## CLI plugins (`arb_engine/cli_plugins/`)
 

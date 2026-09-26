@@ -13,10 +13,14 @@ size, fees in (``FeeModel.fee`` at the real count), and locks when
 
 * paper positions lock on paper when the other outcome's ask shows enough size;
 * demo / live positions whose cheapest lock is on Kalshi send an immediate-or-cancel buy
-  through the LAG executor (``LagExecutor.buy_lock``); only a fill locks, an unfilled IOC
-  keeps watching. A lock on a venue the engine cannot trade (Robinhood) is recorded as
-  ``lockable`` for a person to act on. Lock orders are exempt from the LAG notional caps:
-  they cut exposure, and a cap that blocked a hedge would leave the position naked.
+  through the LAG executor (``LagExecutor.buy_lock``) for the contracts not yet hedged; only
+  fills lock, an unfilled IOC keeps watching, a partial fill keeps watching for the rest.
+  The executor bounds every lock by the entry's verified fill (the order ledger) and a
+  maximum number of attempts, so an unknown or partial lock result can never over-hedge;
+  when it refuses (attempts used up, nothing left to hedge) the watch closes. A lock on a
+  venue the engine cannot trade (Robinhood) is recorded as ``lockable`` for a person to act
+  on. Lock orders are exempt from the LAG notional caps: they cut exposure, and a cap that
+  blocked a hedge would leave the position naked.
 
 The tie case is reported, not hidden: Kalshi YES + Kalshi YES pays $0.50 + $0.50, but a
 Kalshi YES + a Rothera YES pays $0.50 on a tie (Rothera's YES pays nothing) and loses.
@@ -52,7 +56,9 @@ class LockPosition:
     opened: float
     source: str                       # paper | demo | live
     entry_tie: Optional[float] = None  # what the entry contract pays on a tie
-    status: str = "watching"          # watching | locked | lockable | expired
+    status: str = "watching"          # watching | locked | lockable | expired | partial
+    parent_id: Optional[str] = None   # demo/live: the entry's order-ledger intent (bounds the lock legs)
+    locked_contracts: int = 0         # contracts of the lock outcome bought so far
     locked_at: Optional[float] = None
     lock_venue: Optional[str] = None
     lock_ask: Optional[float] = None
@@ -98,7 +104,7 @@ class LagLockBook:
 
         row = (p.key, p.event_key, p.outcome, p.lock_outcome, p.venue, p.contracts, p.entry_price, p.entry_all_in, p.opened, p.source,
                p.status, p.locked_at, p.lock_venue, p.lock_ask, p.lock_all_in, p.lock_margin, p.lock_tie_sum, p.closed_at,
-               json.dumps({"order": p.order, "entry_tie": p.entry_tie}, default=str))
+               json.dumps({"order": p.order, "entry_tie": p.entry_tie, "parent_id": p.parent_id, "locked_contracts": p.locked_contracts}, default=str))
         lock = getattr(self.store, "_lock", None)
         sql = "INSERT OR REPLACE INTO lag_locks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         if lock is not None:
@@ -110,13 +116,15 @@ class LagLockBook:
 
     # ---- lifecycle --------------------------------------------------------------------
     def open(self, key: str, event_key: str, outcome: str, lock_outcome: str, venue: str, contracts: int, entry_price: float,
-             entry_all_in: float, now: float, source: str, entry_tie: Optional[float] = None) -> Optional[LockPosition]:
-        """Start watching a filled LAG position (once per key)."""
+             entry_all_in: float, now: float, source: str, entry_tie: Optional[float] = None, parent_id: Optional[str] = None) -> Optional[LockPosition]:
+        """Start watching a filled LAG position (once per key). ``parent_id`` is the entry's
+        order-ledger intent for demo / live positions."""
         if key in self._keys or contracts <= 0:
             return None
         self._keys.add(key)
         p = LockPosition(key=key, event_key=event_key, outcome=outcome, lock_outcome=lock_outcome, venue=venue, contracts=int(contracts),
-                         entry_price=float(entry_price), entry_all_in=float(entry_all_in), opened=float(now), source=source, entry_tie=entry_tie)
+                         entry_price=float(entry_price), entry_all_in=float(entry_all_in), opened=float(now), source=source, entry_tie=entry_tie,
+                         parent_id=parent_id)
         self.positions.append(p)
         self._save(p)
         return p
@@ -164,9 +172,10 @@ class LagLockBook:
             if p.event_key != event_key or not p.open:
                 continue
             if now - p.opened > self.watch_s:
-                p.status, p.closed_at = "expired", now
+                p.status, p.closed_at = ("partial" if p.locked_contracts else "expired"), now
                 self._save(p)
-                out.append(f"LAG lock watch expired unlocked after {self.watch_s:.0f}s: {p.contracts} x {p.outcome} on {p.venue} @ {p.entry_price:.2f}")
+                out.append(f"LAG lock watch expired after {self.watch_s:.0f}s with {p.locked_contracts} of {p.contracts} hedged: "
+                           f"{p.contracts} x {p.outcome} on {p.venue} @ {p.entry_price:.2f}")
                 continue
             best = self._cheapest(p, quotes_by_venue, now)
             if best is None:
@@ -185,12 +194,26 @@ class LagLockBook:
                         self._save(p)
                         out.append(self._line(p, "LOCKABLE (needs a person on " + v + ")"))
                     continue
-                rec = self.executor.buy_lock(q, p.contracts, ask, p.event_key, now)
+                remaining = p.contracts - p.locked_contracts
+                rec = self.executor.buy_lock(q, remaining, ask, p.event_key, now, parent_id=p.parent_id)
                 p.order = rec
-                filled = _num((rec or {}).get("fill_count"))
-                if not rec or rec.get("status") != "SUBMITTED" or not filled or filled < p.contracts:
+                filled = _num((rec or {}).get("fill_count")) if (rec or {}).get("status") == "SUBMITTED" else None
+                if filled:
+                    p.locked_contracts += int(filled)
+                if p.locked_contracts < p.contracts:
+                    if (rec or {}).get("status") == "skipped" and p.locked_contracts == 0 and "attempts" not in str(rec.get("reason")) and "hedged" not in str(rec.get("reason")):
+                        self._save(p)     # e.g. no entry intent: nothing sent, keep watching
+                        out.append(f"LAG lock not sent ({rec.get('reason')}); still watching {p.lock_outcome}")
+                        continue
+                    if (rec or {}).get("status") == "skipped":
+                        # The executor refuses more lock legs (attempts used up / nothing left
+                        # unhedged): the watch ends with what was hedged.
+                        p.status, p.closed_at = ("partial" if p.locked_contracts else "expired"), now
+                        self._save(p)
+                        out.append(f"LAG lock watch closed with {p.locked_contracts} of {p.contracts} hedged: {rec.get('reason')}")
+                        continue
                     self._save(p)
-                    out.append(f"LAG lock order not filled ({(rec or {}).get('status')}, filled {filled}); still watching {p.lock_outcome}")
+                    out.append(f"LAG lock order {(rec or {}).get('status')} (filled {filled or 0}; {p.locked_contracts} of {p.contracts} hedged); still watching {p.lock_outcome}")
                     continue
             self._lock(p, v, ask, all_in, tie_sum, now)
             out.append(self._line(p, "LOCKED"))
@@ -219,6 +242,7 @@ class LagLockBook:
         locked = [p for p in ps if p.status == "locked"]
         done = [p for p in ps if not p.open]
         out: dict[str, Any] = {"positions": len(ps), "locked": len(locked), "lockable": sum(1 for p in ps if p.status == "lockable"),
+                               "partial": sum(1 for p in ps if p.status == "partial"),
                                "expired": sum(1 for p in ps if p.status == "expired"), "watching": sum(1 for p in ps if p.open),
                                "conversion": (len(locked) / len(done)) if done else None}
         if locked:

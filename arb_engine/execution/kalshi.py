@@ -6,12 +6,16 @@ preview shows the exact V2 payload (including the expiry) that ``confirm=True`` 
 
 from __future__ import annotations
 
+import math
 import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 from ..venues.kalshi import IOC_TIFS, KalshiClient, build_order_payload, order_expiration
+from .ledger import env_host_problem
+
+DRY_RUN = "DRY_RUN (pass confirm=True / --confirm to submit)"
 
 # How long a resting (GTC) order may live without the process that hedges it re-affirming it.
 # Kalshi's ``expiration_time`` is the exchange-side backstop for a killed maker: the order
@@ -72,11 +76,13 @@ class OrderPlan:
 
 
 class KalshiExecutor:
-    """Three safety gates before anything reaches the exchange:
+    """Four safety gates before anything reaches the exchange:
 
     1. ``confirm=True`` must be passed (the CLI flag ``--confirm``).
     2. The client targets the DEMO environment unless ``KALSHI_ENV=prod``.
-    3. On prod, ``ARB_LIVE_TRADING=1`` must also be set.
+    3. The host is a known Kalshi host *of that environment* (``KALSHI_BASE_URL`` can move
+       the host without changing ``KALSHI_ENV``; see ``ledger.env_host_problem``).
+    4. On prod, ``ARB_LIVE_TRADING=1`` must also be set.
     """
 
     def __init__(self, client: Optional[KalshiClient] = None):
@@ -85,32 +91,55 @@ class KalshiExecutor:
     def _mutation_preview(self, operation: str, **fields: Any) -> dict[str, Any]:
         return {"env": self.client.env, "base_url": self.client.base_url, "operation": operation, **fields}
 
+    def gate_problem(self) -> Optional[str]:
+        """Why a *confirmed* mutation would be blocked (gates 2-4), or None."""
+        problem = env_host_problem(self.client.env, self.client.base_url)
+        if problem:
+            return problem
+        if self.client.env == "prod" and os.environ.get("ARB_LIVE_TRADING") != "1":
+            return "KALSHI_ENV=prod requires ARB_LIVE_TRADING=1"
+        return None
+
     def _mutation_allowed(self, preview: dict[str, Any], confirm: bool) -> bool:
         if not confirm:
-            preview["status"] = "DRY_RUN (pass confirm=True / --confirm to submit)"
+            preview["status"] = DRY_RUN
             return False
-        if self.client.env == "prod" and os.environ.get("ARB_LIVE_TRADING") != "1":
-            preview["status"] = "BLOCKED: KALSHI_ENV=prod requires ARB_LIVE_TRADING=1"
+        problem = self.gate_problem()
+        if problem:
+            preview["status"] = f"BLOCKED: {problem}"
             return False
         return True
 
-    def plan(self, ticker: str, action: str, side: str, count: float, price: float, post_only: bool = False, exchange_index: Optional[int] = None, note: str = "", *, time_in_force: str = "good_till_canceled", kickoff: Optional[float] = None, expiration_time: Optional[int] = None, cancel_order_on_pause: bool = True, order_group_id: Optional[str] = None) -> OrderPlan:
+    def plan(self, ticker: str, action: str, side: str, count: float, price: float, post_only: bool = False, exchange_index: Optional[int] = None, note: str = "", *, time_in_force: str = "good_till_canceled", kickoff: Optional[float] = None, expiration_time: Optional[int] = None, cancel_order_on_pause: bool = True, order_group_id: Optional[str] = None, client_order_id: Optional[str] = None) -> OrderPlan:
         if not str(ticker or "").strip():
             raise ValueError("ticker is required")
         if action not in ("buy", "sell"):
             raise ValueError("action must be buy or sell")
         if side not in ("yes", "no"):
             raise ValueError("side must be yes or no")
-        if not (0 < price < 1):
-            raise ValueError("price must be in (0, 1) dollars")
-        if count <= 0:
-            raise ValueError("count must be positive")
+        try:
+            price, count = float(price), float(count)
+        except (TypeError, ValueError):
+            raise ValueError("price and count must be numbers") from None
+        # NaN fails every comparison and inf passes "> 0": both must be refused explicitly,
+        # or a NaN count slips past a notional cap (NaN > cap is False).
+        if not math.isfinite(price) or not (0 < price < 1):
+            raise ValueError("price must be a finite number in (0, 1) dollars")
+        if not math.isfinite(count) or count <= 0:
+            raise ValueError("count must be a finite positive number")
+        if round(count, 2) != count:
+            raise ValueError("count has at most 2 decimals (Kalshi fixed-point)")
+        if exchange_index is not None and (isinstance(exchange_index, bool) or int(exchange_index) != exchange_index or exchange_index < 0):
+            raise ValueError("exchange_index must be a non-negative integer")
         tif = time_in_force.lower()
         if tif not in {"good_till_canceled", "immediate_or_cancel", "fill_or_kill", "ioc", "fok"}:
             raise ValueError("unsupported time_in_force")
         if post_only and tif in IOC_TIFS:
             raise ValueError("post_only cannot be combined with IOC/FOK")
-        return OrderPlan(venue="kalshi", ticker=ticker, action=action, side=side, count=count, price=round(price, 4), post_only=post_only, time_in_force=time_in_force, exchange_index=exchange_index, note=note, kickoff=kickoff, expiration_time=expiration_time, cancel_order_on_pause=cancel_order_on_pause, order_group_id=order_group_id)
+        plan = OrderPlan(venue="kalshi", ticker=ticker, action=action, side=side, count=count, price=round(price, 4), post_only=post_only, time_in_force=time_in_force, exchange_index=exchange_index, note=note, kickoff=kickoff, expiration_time=expiration_time, cancel_order_on_pause=cancel_order_on_pause, order_group_id=order_group_id)
+        if client_order_id:
+            plan.client_order_id = str(client_order_id)   # the ledger's id: reconciliation finds the order by it
+        return plan
 
     def execute(self, plan: OrderPlan, confirm: bool = False) -> dict[str, Any]:
         payload = plan.payload()
@@ -152,6 +181,6 @@ class KalshiExecutor:
         for plan in plans:
             res = self.execute(plan, confirm=confirm)
             out.append(res)
-            if res.get("status") not in ("SUBMITTED", "DRY_RUN (pass confirm=True / --confirm to submit)"):
+            if res.get("status") not in ("SUBMITTED", DRY_RUN):
                 break
         return out

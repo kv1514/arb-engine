@@ -9,6 +9,14 @@ from arb_engine.strategy.alerts import Alerter, ntfy_url
 from arb_engine.strategy.leadlag import LeadLagTracker
 
 KEY = "nfl:DEN|KC:2026-09-21"
+DEMO_URL = "https://external-api.demo.kalshi.co/trade-api/v2"
+
+
+def tmpdir():
+    """A fresh directory per call: executor tests never share (or leave) a ledger in out/."""
+    import tempfile
+
+    return tempfile.mkdtemp(prefix="arb_test_")
 KFEE = {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}
 
 
@@ -722,9 +730,9 @@ class RepricingTests(unittest.TestCase):
 class LagExecutorTests(unittest.TestCase):
     """strategy/lagexec.py: intents, caps, IOC plans through a fake executor."""
 
-    def _sig(self, follower="kalshi", ask=0.60, edge=0.058, contracts=100, depth=300, event=KEY):
+    def _sig(self, follower="kalshi", ask=0.60, edge=0.058, contracts=100, depth=300, event=KEY, ts=1000.0):
         from arb_engine.strategy.leadlag import LagSignal
-        return LagSignal(event_key=event, title="DEN @ KC", leader="robinhood", follower=follower, outcome="KC", label="Kansas City", lead_move=0.08, follower_move=0.0, leader_mid=0.675, follower_ask=ask, follower_all_in=ask + 0.017, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=1000.0)
+        return LagSignal(event_key=event, title="DEN @ KC", leader="robinhood", follower=follower, outcome="KC", label="Kansas City", lead_move=0.08, follower_move=0.0, leader_mid=0.675, follower_ask=ask, follower_all_in=ask + 0.017, edge=edge, depth=depth, suggested_contracts=contracts, lag_s=0.0, ts=ts)
 
     def _quotes(self):
         return {"kalshi": [OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-KC", KEY, "KC", ask=0.60, bid=0.59, meta={"ticker": "KXNFLGAME-26SEP21DENKC-KC", "side": "yes", "exchange_index": 3}), OutcomeQuote("kalshi", "KXNFLGAME-26SEP21DENKC-DEN", KEY, "DEN", ask=0.41, bid=0.40, meta={"ticker": "KXNFLGAME-26SEP21DENKC-DEN", "side": "yes"})]}
@@ -761,16 +769,16 @@ class LagExecutorTests(unittest.TestCase):
         sent = []
 
         class Client:
-            env, base_url, has_credentials = "demo", "https://demo", True
+            env, base_url, has_credentials = "demo", DEMO_URL, True
 
             def create_order(self, payload):
                 sent.append(payload)
                 return {"order_id": f"o{len(sent)}", "fill_count": int(float(payload["count"])), "remaining_count": 0}  # V2 sends counts as fixed-point strings
-        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_demo_{os.getpid()}.jsonl"), max_contracts=50, max_notional_per_game=45.0, daily_notional=100.0, clock=lambda: 1000.0)
-        rec = ex.on_signal(self._sig(), self._quotes())
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lag_demo.jsonl"), ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"),
+                         max_contracts=50, max_notional_per_game=45.0, daily_notional=100.0, clock=lambda: 1000.0)
+        rec = ex.on_signal(self._sig(ts=1000.0), self._quotes())
         self.assertEqual(rec["status"], "SUBMITTED")
         self.assertEqual((rec["count"], rec["fill_count"], rec["order_id"]), (50, 50, "o1"))
-        self.assertEqual(rec["count"] * 0.60, 30.0)
         p = sent[0]
         # V2 spells a YES buy as side=bid with fixed-point strings; IOC never rests, so no expiry.
         self.assertEqual((p["ticker"], p["side"], int(float(p["count"])), p["price"]), ("KXNFLGAME-26SEP21DENKC-KC", "bid", 50, "0.6000"))
@@ -778,26 +786,35 @@ class LagExecutorTests(unittest.TestCase):
         self.assertFalse(p.get("post_only"))
         self.assertNotIn("expiration_time", p)
         self.assertEqual(p.get("exchange_index"), 3)
-        # Per-game cap: $45 with $30 already sent leaves $15 -> 25 contracts at 0.60.
-        rec2 = ex.on_signal(self._sig(), self._quotes())
-        self.assertEqual((rec2["status"], rec2["count"]), ("SUBMITTED", 25))
-        self.assertEqual(ex.on_signal(self._sig(), self._quotes())["reason"], "notional cap reached")
-        # Another game still has room under the daily cap ($100 - $45).
-        rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21"), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, meta={"ticker": "T-KC", "side": "yes"})]})
+        self.assertEqual(p["client_order_id"], rec["client_order_id"])        # the ledger's id goes on the order
+        # Caps include fees: 50 at 0.60 + at most 2c fee each = $31.00 committed.
+        self.assertAlmostEqual(ex.game_notional(KEY), 31.0)
+        # Per-game cap: $45 with $31 committed leaves $14 -> 22 contracts at 0.62 worst case.
+        rec2 = ex.on_signal(self._sig(ts=1001.0), self._quotes())
+        self.assertEqual((rec2["status"], rec2["count"]), ("SUBMITTED", 22))
+        self.assertTrue(ex.on_signal(self._sig(ts=1002.0), self._quotes())["reason"].startswith("notional cap reached"))
+        # The same signal delivered twice is one order.
+        self.assertIn("duplicate", ex.on_signal(self._sig(ts=1000.0), self._quotes())["reason"])
+        # Another game still has room under the daily cap ($100 - $44.64).
+        rec4 = ex.on_signal(self._sig(event="nfl:BUF|MIA:2026-09-21", ts=1003.0), {"kalshi": [OutcomeQuote("kalshi", "T-KC", "nfl:BUF|MIA:2026-09-21", "KC", ask=0.60, bid=0.59, meta={"ticker": "T-KC", "side": "yes"})]})
         self.assertEqual((rec4["status"], rec4["count"]), ("SUBMITTED", 50))
-        self.assertAlmostEqual(ex.sent_notional, 75.0)
+        self.assertAlmostEqual(ex.sent_notional, 75.64)
+        self.assertEqual(len(sent), 3)
 
-    def _demo(self, create_order, alerter=None):
+    def _demo(self, create_order, alerter=None, **kw):
         from arb_engine.execution.kalshi import KalshiExecutor
         from arb_engine.strategy.lagexec import LagExecutor
 
         class Client:
-            env, base_url, has_credentials = "demo", "https://demo", True
+            env, base_url, has_credentials = "demo", DEMO_URL, True
+
+            def orders_v2(self, **params):
+                return []
 
         c = Client()
         c.create_order = create_order
-        return LagExecutor(mode="demo", executor=KalshiExecutor(c), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_x_{os.getpid()}.jsonl"),
-                           max_contracts=50, max_notional_per_game=100.0, daily_notional=500.0, alerter=alerter, clock=lambda: 1000.0)
+        return LagExecutor(mode="demo", executor=KalshiExecutor(c), intents_path=os.path.join(tmpdir(), "lag_x.jsonl"), ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"),
+                           max_contracts=50, max_notional_per_game=100.0, daily_notional=500.0, alerter=alerter, clock=kw.pop("clock", lambda: 1000.0), **kw)
 
     def test_caps_count_what_filled_not_what_was_sent(self):
         # An immediate-or-cancel order that finds nothing is no exposure: it must not eat the cap.
@@ -807,29 +824,33 @@ class LagExecutorTests(unittest.TestCase):
         self.assertEqual(ex.sent_notional, 0.0)
         ex2 = self._demo(lambda payload: {"order_id": "o2", "fill_count": "12.00", "remaining_count": "0.00"})
         ex2.on_signal(self._sig(), self._quotes())
-        self.assertAlmostEqual(ex2.sent_notional, 12 * 0.60)
+        self.assertAlmostEqual(ex2.sent_notional, 12 * 0.62)                  # fills at the limit + the fee bound
         ex3 = self._demo(lambda payload: {"order_id": "o3"})           # no fill count reported: count it all
         ex3.on_signal(self._sig(), self._quotes())
-        self.assertAlmostEqual(ex3.sent_notional, 50 * 0.60)
+        self.assertAlmostEqual(ex3.sent_notional, 50 * 0.62)
 
     def test_a_failed_order_is_pushed_as_exec_error_and_described(self):
         from arb_engine.venues.http import HttpError
 
         pushed = []
-        alerts = Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_err_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy="t", transport=lambda url, body, headers: pushed.append((headers["Title"], body.decode())))
+        alerts = Alerter(journal_path=os.path.join(tmpdir(), "lag_err.jsonl"), quiet=True, desktop=False, webhook="", ntfy="t", transport=lambda url, body, headers: pushed.append((headers["Title"], body.decode())))
 
         def reject(payload):
             raise HttpError(400, "https://demo/portfolio/events/orders", '{"error":{"code":"invalid_parameters"}}')
         ex = self._demo(reject, alerter=alerts)
         rec = ex.on_signal(self._sig(), self._quotes())
-        self.assertEqual(rec["status"], "error")
+        # An exception after the request left is never "nothing happened": the ledger holds
+        # the order as unknown until the exchange's own listing says otherwise.
+        self.assertEqual((rec["status"], rec["state"]), ("UNKNOWN", "ambiguous"))
         self.assertEqual(len(pushed), 1)
         self.assertEqual(pushed[0][0], "EXEC ERROR")
-        self.assertIn("LAG auto-trade (demo) failed", pushed[0][1])
+        self.assertIn("LAG auto-trade (demo) outcome unknown", pushed[0][1])
         self.assertIn("invalid_parameters", pushed[0][1])
-        self.assertTrue(ex.describe(rec).startswith("AUTO (demo): FAILED"))
-        # A second failure in the same game inside a minute is not a second buzz.
-        ex.on_signal(self._sig(ask=0.61), self._quotes())
+        self.assertTrue(ex.describe(rec).startswith("AUTO (demo): UNKNOWN"))
+        # While it is unknown, nothing new is sent; and a second buzz in the same game inside a
+        # minute is not pushed.
+        rec2 = ex.on_signal(self._sig(ask=0.61, ts=1001.0), self._quotes())
+        self.assertEqual(rec2["status"], "blocked")
         self.assertEqual(len(pushed), 1)
 
     def test_describe_says_what_the_bot_did(self):
@@ -838,7 +859,7 @@ class LagExecutorTests(unittest.TestCase):
         ex = self._demo(lambda payload: {"order_id": "o1", "fill_count": "12.00", "remaining_count": "0.00"})
         line = ex.describe(ex.on_signal(self._sig(), self._quotes()))
         self.assertEqual(line, "AUTO (demo): sent IOC buy 50 x KXNFLGAME-26SEP21DENKC-KC @ 0.6 -> filled 12.00 ($7.20)")
-        intent = LagExecutor(mode="intent", intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lag_i3_{os.getpid()}.jsonl"))
+        intent = LagExecutor(mode="intent", intents_path=os.path.join(tmpdir(), "lag_i3.jsonl"))
         self.assertTrue(intent.describe(intent.on_signal(self._sig(), self._quotes())).startswith("AUTO (intent): would send IOC buy 50"))
         self.assertIsNone(LagExecutor(mode="off").describe({"status": "intent"}))
 
@@ -1156,24 +1177,63 @@ class LagLockTests(unittest.TestCase):
         from arb_engine.execution.kalshi import KalshiExecutor
         from arb_engine.strategy.lagexec import LagExecutor
 
-        fills = ["0.00", "10.00"]
+        fills = ["10.00", "0.00", "4.00", "6.00"]
         sent = []
 
         class Client:
-            env, base_url, has_credentials = "demo", "https://demo", True
+            env, base_url, has_credentials = "demo", DEMO_URL, True
 
             def create_order(self, payload):
                 sent.append(payload)
                 return {"order_id": f"o{len(sent)}", "fill_count": fills.pop(0), "remaining_count": "0.00"}
-        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lock_{os.getpid()}.jsonl"),
-                         max_notional_per_game=0.01, clock=lambda: 0.0)   # caps exhausted: a lock leg must still go
+        # Room for the 10-contract entry only ($6.20 worst case): the caps are then exhausted,
+        # and the lock leg must still go.
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock.jsonl"),
+                         ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"), max_notional_per_game=6.30, clock=lambda: 0.0)
+        entry = ex.on_signal(LagExecutorTests._sig(self, contracts=10, ts=0.0), LagExecutorTests._quotes(self), 0.0)
+        self.assertEqual((entry["status"], entry["fill_count"]), ("SUBMITTED", "10.00"))
         b = self._book(executor=ex)
-        b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5)
+        b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5, parent_id=entry["intent_id"])
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 5.0)]}, 5.0)          # IOC found nothing
         self.assertEqual(b.positions[0].status, "watching")
-        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # filled: locked
-        self.assertEqual(b.positions[0].status, "locked")
-        self.assertEqual([(p["ticker"], p["time_in_force"], int(float(p["count"]))) for p in sent], [("T-DEN", "immediate_or_cancel", 10)] * 2)
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # 4 of 10 filled
+        self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("watching", 4))
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 7.0)]}, 7.0)          # the other 6: locked
+        self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("locked", 10))
+        # Only the unhedged remainder is ever asked for: 10, 10, then 6 - never more than the entry.
+        self.assertEqual([(p["ticker"], p["time_in_force"], int(float(p["count"]))) for p in sent[1:]],
+                         [("T-DEN", "immediate_or_cancel", 10), ("T-DEN", "immediate_or_cancel", 10), ("T-DEN", "immediate_or_cancel", 6)])
+
+    def test_lock_legs_without_a_verified_entry_or_past_their_attempts_are_refused(self):
+        from arb_engine.execution.kalshi import KalshiExecutor
+        from arb_engine.strategy.lagexec import LagExecutor
+
+        sent = []
+
+        class Client:
+            env, base_url, has_credentials = "demo", DEMO_URL, True
+
+            def create_order(self, payload):
+                sent.append(payload)
+                return {"order_id": f"o{len(sent)}", "fill_count": "10.00" if len(sent) == 1 else "0.00", "remaining_count": "0.00"}
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock3.jsonl"),
+                         ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"), max_lock_attempts=2, clock=lambda: 0.0)
+        q = self._q("kalshi", "DEN", 0.36, 5.0)
+        self.assertIn("inventory cannot be verified", ex.buy_lock(q, 10, 0.36, KEY, 5.0)["reason"])
+        self.assertEqual(sent, [])
+        entry = ex.on_signal(LagExecutorTests._sig(self, contracts=10, ts=0.0), LagExecutorTests._quotes(self), 0.0)
+        # Asking for more than the entry filled is cut to the fill.
+        self.assertEqual(ex.buy_lock(q, 25, 0.36, KEY, 5.0, parent_id=entry["intent_id"])["count"], 10)
+        ex.buy_lock(q, 10, 0.36, KEY, 6.0, parent_id=entry["intent_id"])
+        third = ex.buy_lock(q, 10, 0.36, KEY, 7.0, parent_id=entry["intent_id"])
+        self.assertEqual(third["status"], "skipped")
+        self.assertIn("attempts", third["reason"])
+        self.assertEqual(len(sent), 3)
+        b = self._book(executor=ex)
+        b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5, parent_id=entry["intent_id"])
+        lines = b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 8.0)]}, 8.0)
+        self.assertEqual(b.positions[0].status, "expired")                     # the watch ends: no more lock legs
+        self.assertIn("closed with 0 of 10 hedged", lines[0])
 
     def test_a_lock_only_on_robinhood_is_flagged_for_a_person(self):
         from arb_engine.strategy.lagexec import LagExecutor

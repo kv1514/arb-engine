@@ -27,7 +27,13 @@ Modes (``arb_button_mode``), from safest up:
 * ``live``  - a real immediate-or-cancel order on your Kalshi account. Needs the production
               key (``KALSHI_ENV=prod``) *and* ``ARB_LIVE_TRADING=1``.
 
-Every step is journalled to ``out/orders/arb_button.jsonl``.
+Every step is journalled to ``out/orders/arb_button.jsonl``. Demo / live Kalshi orders
+also go through the environment's durable order ledger (``execution/ledger.py``, shared with
+the LAG executor): the order is reserved against ``daily_notional`` (fees included) before
+it is sent, carries the ledger's ``client_order_id``, a tap is sent at most once per token
+even across processes, and an order whose outcome is unknown (timeout, 5xx) is reported as
+UNKNOWN - check Kalshi before touching the Robinhood leg - and blocks every new order until
+the ledger finds it on the exchange (reconciled a few seconds after each real order).
 """
 from __future__ import annotations
 
@@ -106,6 +112,9 @@ class ArbButton:
         self.auto_results: dict[str, dict[str, Any]] = {}
         self.auto_practice_s = auto_practice_s
         self.spent_today, self.day = 0.0, None
+        self.ledger_path: Optional[str] = None     # None: execution/ledger.default_path(env)
+        self._ledger: Any = None
+        self.journal_errors = 0
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -132,6 +141,34 @@ class ArbButton:
 
             self._executor = KalshiExecutor(KalshiClient(env="prod" if self.mode == "live" else "demo"))
         return self._executor
+
+    def ledger(self) -> Any:
+        """The order ledger of the executor's environment (demo / live only); raises
+        ``LedgerError`` when it cannot be opened (then nothing is sent)."""
+        if self._ledger is None:
+            from ..execution.ledger import OrderLedger
+
+            self._ledger = OrderLedger.for_client(self.executor().client, path=self.ledger_path, clock=self.clock)
+        return self._ledger
+
+    def reconcile(self) -> list:
+        """Resolve this environment's open orders against the exchange (never raises)."""
+        if self.mode not in ("demo", "live"):
+            return []
+        try:
+            res = self.ledger().reconcile(self.executor().client, self.clock())
+        except Exception as e:  # noqa: BLE001
+            res = [{"error": repr(e)[:300]}]
+        changed = [r for r in res if r.get("before") != r.get("after") or r.get("error")]
+        if changed:
+            self._journal({"event": "reconcile", "results": changed})
+        return res
+
+    def _reconcile_later(self, *delays: float) -> None:
+        for d in delays:
+            t = threading.Timer(float(d), self.reconcile)
+            t.daemon = True
+            t.start()
 
     # ---- 1. an arb is pushed: issue a button ---------------------------------------------
     def register(self, event_key: str, title: str, sized: dict, quotes_by_venue: dict, now: Optional[float] = None,
@@ -362,9 +399,10 @@ class ArbButton:
         # Could Robinhood still be bought at or under the push's max?
         if rec["rh_live_ask"] is not None:
             rec["rh_within_max"] = rec["rh_live_ask"] <= r["max"] + 1e-9
-        # Caps
+        # Caps: a real order is reserved against the ledger's daily budget (fees included,
+        # shared across processes and restarts) in _send_real; practice has no exposure.
         self._roll_day(now)
-        room = self.daily_notional - self.spent_today if capped else float("inf")
+        room = self.daily_notional - self.spent_today if (capped and simulate) else float("inf")
         count = n if room >= n * k["limit"] else int(room // k["limit"])
         if count <= 0:
             rec.update(status="skipped", reason="daily notional cap reached", filled=0, unhedged=n)
@@ -383,21 +421,13 @@ class ArbButton:
                 cost += Decimal(str(px)) * take + Decimal(str(kfee.fee(px, take, "taker")))
             rec.update(status="simulated", filled=filled, levels=levels, kalshi_cost=float(cost))
         else:
-            try:
-                ex = self.executor()
-                plan = ex.plan(k["ticker"], "buy", k["side"], count, float(k["limit"]), post_only=False, exchange_index=k.get("exchange_index"),
-                               note=f"arb button {token}", time_in_force="immediate_or_cancel")
-                res = ex.execute(plan, confirm=True)
-                od = (res.get("response") or {}).get("order") or res.get("response") or {}
-                filled = int(_f(od.get("fill_count")) or 0)
-                avg = _f(od.get("taker_fill_cost_dollars") or od.get("fill_cost_dollars"))
-                rec.update(status=res.get("status"), order_id=od.get("order_id") or od.get("id"), filled=filled,
-                           kalshi_cost=(avg if avg is not None else filled * k["limit"] + float(kfee.fee(k["limit"], max(filled, 1), "taker")) * (filled > 0)))
-            except Exception as e:
-                rec.update(status="error", reason=repr(e)[:300], filled=0)
+            rec.update(self._send_real(spec, count, kfee, now))
+            if rec.get("status") == "UNKNOWN":
+                rec["unhedged"] = None      # the Kalshi leg may or may not be bought: say so, not a number
+                rec["would_lock"] = False
+                return rec
         rec["unhedged"] = n - int(rec.get("filled") or 0)
         spent = float(rec.get("kalshi_cost") or 0.0)
-        self.spent_today += spent if not simulate else 0.0
         if rec.get("filled"):
             f = int(rec["filled"])
             rh_cost = float(Decimal(str(r["alert_ask"])) * f + Decimal(str(rfee.fee(r["alert_ask"], f, "taker"))))
@@ -407,6 +437,68 @@ class ArbButton:
             rec["profit_at_rh_max"] = round(f - rh_cost_max - spent, 2)
         rec["would_lock"] = bool(rec.get("rh_within_max")) and rec["unhedged"] == 0
         return rec
+
+    def _send_real(self, spec: dict[str, Any], count: int, kfee: Any, now: float) -> dict[str, Any]:
+        """Demo / live: reserve in the ledger, send the IOC with the ledger's id, record the
+        answer. Returns the fields for the tap's record."""
+        from ..execution.ledger import ACCEPTED, Budget, LedgerError
+        from ..matching.normalize import game_event_key
+
+        k, token = spec["kalshi"], spec["token"]
+        try:
+            ex, led = self.executor(), self.ledger()
+            res = led.reserve(strategy="button", ticker=k["ticker"], side=str(k["side"]).lower(), count=count, limit_price=k["limit"],
+                              event_key=spec["event_key"], game_key=game_event_key(spec["event_key"]), dedupe_key=f"button:{token}",
+                              budget=Budget(daily=Decimal(str(self.daily_notional))), now=now,
+                              detail={"token": token, "title": spec.get("title"), "rh": spec.get("robinhood", {}).get("contract_id")})
+        except LedgerError as e:
+            return {"status": "blocked", "reason": f"order ledger: {e}", "filled": 0}
+        except Exception as e:  # noqa: BLE001 - e.g. no credentials: nothing sent
+            return {"status": "error", "reason": repr(e)[:300], "filled": 0}
+        if not res.ok:
+            blocked = "unknown outcome" in res.reason
+            return {"status": "blocked" if blocked else "skipped", "reason": res.reason, "filled": 0}
+        out: dict[str, Any] = {"intent_id": res.intent_id, "client_order_id": res.client_order_id, "sent_count": res.count}
+        req_ts = self.clock()
+        try:
+            plan = ex.plan(k["ticker"], "buy", str(k["side"]).lower(), res.count, float(k["limit"]), post_only=False, exchange_index=k.get("exchange_index"),
+                           note=f"arb button {token}", time_in_force="immediate_or_cancel", client_order_id=res.client_order_id)
+        except Exception as e:  # noqa: BLE001 - refused before sending
+            led.rejected(res.intent_id, f"plan refused: {e!r}")
+            return {**out, "status": "error", "reason": f"plan refused: {e!r}"[:300], "filled": 0}
+        try:
+            result = ex.execute(plan, confirm=True)
+        except Exception as e:  # noqa: BLE001 - the request may have reached the exchange
+            hint = getattr(e, "status", None)
+            try:
+                led.ambiguous(res.intent_id, f"{type(e).__name__}: {e}"[:300], req_ts=req_ts, hint=hint if isinstance(hint, int) else None)
+            except LedgerError:
+                pass
+            self._reconcile_later(3.0, 15.0, 45.0)
+            return {**out, "status": "UNKNOWN", "reason": f"{type(e).__name__}: {e}"[:300], "filled": None, "req_ts": req_ts, "resp_ts": self.clock()}
+        resp_ts = self.clock()
+        if result.get("status") != "SUBMITTED":     # a gate refused it: nothing was sent
+            led.rejected(res.intent_id, f"executor returned {result.get('status')!r}")
+            return {**out, "status": "error", "reason": f"executor returned {result.get('status')!r}", "filled": 0}
+        resp = result.get("response") or {}
+        try:
+            state = led.accepted(res.intent_id, resp, now=resp_ts, req_ts=req_ts)
+        except LedgerError as e:
+            state = f"unrecorded: {e}"
+        self._reconcile_later(3.0, 15.0)
+        od = resp.get("order") if isinstance(resp.get("order"), dict) else resp
+        if state != ACCEPTED:
+            return {**out, "status": "UNKNOWN", "reason": "create response without an order id" if not str(state).startswith("unrecorded") else state,
+                    "filled": None, "req_ts": req_ts, "resp_ts": resp_ts}
+        filled = int(_f(od.get("fill_count")) or 0)
+        avg = _f(od.get("average_fill_price"))
+        # Provisional until the ledger reads the order back: fills at the reported average
+        # price (else the limit) plus the fee model's fee; the ledger keeps the exchange's.
+        px = avg if avg is not None else float(k["limit"])
+        cost = filled * px + (float(kfee.fee(px, filled, "taker")) if filled > 0 else 0.0)
+        return {**out, "status": "SUBMITTED", "order_id": od.get("order_id") or od.get("id"), "filled": filled, "kalshi_cost": round(cost, 4),
+                "kalshi_cost_provisional": True, "average_fill_price": od.get("average_fill_price"), "average_fee_paid": od.get("average_fee_paid"),
+                "req_ts": req_ts, "resp_ts": resp_ts, "latency_ms": round((resp_ts - req_ts) * 1000, 1)}
 
     def _roll_day(self, now: float) -> None:
         day = time.strftime("%Y-%m-%d", time.localtime(now))
@@ -425,6 +517,13 @@ class ArbButton:
         if st == "expired":
             title = f"{tag} button expired - {spec['title']}"
             lines.append(f"Tapped {rec['tap_after_s']:.0f}s after the alert (limit {self.ttl_s:.0f}s): nothing bought on Kalshi.")
+        elif st == "UNKNOWN":
+            title = f"{tag} UNKNOWN - {spec['title']}"
+            lines.append(f"Kalshi: the order for {rec.get('sent_count') or n} {k['label']} {str(k['side']).upper()} (limit {_c(k['limit'])}) was sent but its result is unknown "
+                         f"({rec.get('reason')}). Check Kalshi's orders before selling the Robinhood leg; no new order is sent until the engine finds it.")
+        elif st == "blocked":
+            title = f"{tag} BLOCKED - {spec['title']}"
+            lines.append(f"Kalshi: nothing sent - {rec.get('reason')}")
         elif filled >= n:
             title = f"{tag} OK - {spec['title']}"
             lines.append(f"Kalshi: {verb} {filled} {k['label']} {str(k['side']).upper()} {self._at(rec, k)}")
@@ -442,7 +541,7 @@ class ArbButton:
         if rec.get("locked_sets"):
             lines.append(f"Locked {rec['locked_sets']} sets: {_money(rec['profit_at_alert_rh_price'])} if you paid {_c(r['alert_ask'])} on Robinhood "
                          f"({_money(rec['profit_at_rh_max'])} at {_c(r['max'])})")
-        if rec.get("unhedged") and st != "expired":
+        if rec.get("unhedged") and st not in ("expired", "UNKNOWN"):
             lines.append(f"Unhedged: {rec['unhedged']} {r['label']} {str(r['side']).upper()} on Robinhood - sell them (bid {_c(rec.get('rh_live_bid'))}) or wait")
         if self.mode == "paper":
             lines.append("Practice: no order was sent.")
@@ -474,5 +573,10 @@ class ArbButton:
             os.makedirs(os.path.dirname(self.journal_path) or ".", exist_ok=True)
             with open(self.journal_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps({"ts": self.clock(), **rec}, default=str) + "\n")
-        except OSError:
-            pass
+        except OSError as e:
+            self.journal_errors += 1
+            if self.journal_errors == 1 and self.alerts is not None:   # once: the ledger keeps real orders
+                try:
+                    self.alerts.info(f"arb button journal {self.journal_path} not writable: {e!r}")
+                except Exception:
+                    pass

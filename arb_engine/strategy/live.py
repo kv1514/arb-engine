@@ -251,6 +251,13 @@ class LiveSlate:
         errors: list[str] = []
         games = self.wanted_games(self.feed.games(), now)
         out = SlateTick(at=now, views=[], games=len(games), errors=errors, quiet=self.quiet)
+        if self.lag_executor is not None and hasattr(self.lag_executor, "reconcile"):
+            # Open orders are resolved every tick, games or not: an unknown order blocks new
+            # ones until the exchange says what became of it (execution/ledger.py).
+            try:
+                self.lag_executor.reconcile(now)
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"lag-exec reconcile: {e!r}")
         if not games:
             return out
         self._fetch_pinned_now = pinned
@@ -422,9 +429,9 @@ class LiveSlate:
                                 text = f"{text}\n{line}"
                             filled = _fill_count(rec)
                             if rec.get("status") == "SUBMITTED" and filled and len(others.get(sig.outcome, [])) == 1:
-                                self.laglock.open(f"exec:{rec.get('order_id') or now}", sig.event_key, sig.outcome, others[sig.outcome][0], sig.follower,
+                                self.laglock.open(f"exec:{rec.get('intent_id') or rec.get('order_id') or now}", sig.event_key, sig.outcome, others[sig.outcome][0], sig.follower,
                                                   filled, sig.follower_ask, _all_in_at(sig, me.quotes_by_venue, filled, self.settings), now,
-                                                  self.lag_executor.mode, getattr(sig, "tie_value", None))
+                                                  self.lag_executor.mode, getattr(sig, "tie_value", None), parent_id=rec.get("intent_id"))
                     except Exception as e:
                         out.errors.append(f"lag-exec: {e!r}")
                 # ``signal_kind`` (not ``kind``: Alerter.journal's first positional is ``kind``) lands in

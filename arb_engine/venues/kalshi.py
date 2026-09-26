@@ -141,6 +141,7 @@ class KalshiClient:
         self.private_key_path = private_key_path or os.environ.get("KALSHI_PRIVATE_KEY_PATH")
         self.http = http or HttpClient(rate_limit=float(os.environ.get("KALSHI_RATE_LIMIT", str(DEFAULT_RATE_LIMIT))), retries=3)
         self._private_key = None
+        self.last_truncated = False   # set by every cursor-paged read (orders_v2 / fills_v2)
 
     # ---- auth -----------------------------------------------------------------------
     @property
@@ -292,6 +293,14 @@ class KalshiClient:
         return self._paged("/portfolio/fills", "fills", params)
 
     def _paged(self, path: str, key: str, params: Optional[dict], max_pages: int = 20) -> list[dict]:
+        rows, self.last_truncated = self.paged(path, key, params, max_pages)
+        return rows
+
+    def paged(self, path: str, key: str, params: Optional[dict] = None, max_pages: int = 20) -> tuple[list[dict], bool]:
+        """(rows, truncated) of a signed cursor-paged read. ``truncated`` is True when the
+        exchange still returned a cursor after ``max_pages`` pages: the rows are then *not*
+        the whole answer, so an absent order proves nothing (``execution/ledger.py``) and a
+        listing printed for a person says so (``kalshi orders``)."""
         out: list[dict] = []
         q = dict(params or {})
         for _ in range(max_pages):
@@ -299,9 +308,9 @@ class KalshiClient:
             out.extend(data.get(key) or [])
             cursor = data.get("cursor")
             if not cursor:
-                break
+                return out, False
             q["cursor"] = cursor
-        return out
+        return out, True
 
     def trades(self, ticker: str, limit: int = 100, min_ts: Optional[int] = None) -> list[dict]:
         """Public trade prints for a market (newest first)."""

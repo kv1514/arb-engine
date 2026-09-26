@@ -17,10 +17,13 @@ from arb_engine.cli_plugins.kalshi_ops import load_account_env, run_kalshi
 from arb_engine.execution.kalshi import KalshiExecutor
 
 
+HOSTS = {"demo": "https://external-api.demo.kalshi.co/trade-api/v2", "prod": "https://external-api.kalshi.com/trade-api/v2"}
+
+
 class _Client:
-    def __init__(self, env="demo"):
+    def __init__(self, env="demo", base_url=None):
         self.env = env
-        self.base_url = f"https://{env}.invalid"
+        self.base_url = base_url or HOSTS[env]
         self.calls = []
 
     def cancel_order(self, order_id, **routing):
@@ -52,6 +55,16 @@ class ExecutorMutationGateTests(unittest.TestCase):
             result = KalshiExecutor(client).cancel_all(confirm=True)
         self.assertTrue(result["status"].startswith("BLOCKED"))
         self.assertEqual(client.calls, [])
+
+    def test_a_host_of_the_other_environment_or_an_unknown_host_is_blocked(self):
+        # KALSHI_BASE_URL moves the host without changing KALSHI_ENV: the demo gates (no
+        # ARB_LIVE_TRADING) must never reach production that way.
+        for client in (_Client("demo", HOSTS["prod"]), _Client("prod", HOSTS["demo"]), _Client("demo", "https://proxy.invalid/trade-api/v2")):
+            with self.subTest(env=client.env, host=client.base_url), mock.patch.dict(os.environ, {"ARB_LIVE_TRADING": "1"}):
+                ex = KalshiExecutor(client)
+                self.assertTrue(ex.cancel("o-1", confirm=True)["status"].startswith("BLOCKED"))
+                self.assertTrue(ex.cancel_all(confirm=True)["status"].startswith("BLOCKED"))
+                self.assertEqual(client.calls, [])
 
     def test_blank_order_id_rejected_before_network(self):
         client = _Client()
@@ -107,6 +120,14 @@ class AccountOpsPluginTests(unittest.TestCase):
             self.assertEqual(run_kalshi(args), 0)
         fake.cancel.assert_called_once_with("o-9", confirm=False, market_ticker="T", exchange_index=None, subaccount=None)
         self.assertEqual(json.loads(out.getvalue())["status"], "DRY_RUN")
+
+    def test_blocked_cancel_exits_nonzero(self):
+        fake = mock.Mock()
+        fake.cancel.return_value = {"status": "BLOCKED: KALSHI_ENV=prod requires ARB_LIVE_TRADING=1"}
+        args = argparse.Namespace(action="cancel", no_account_env=True, order_id="o-9", ticker="T",
+                                  exchange_index=None, subaccount=None, confirm=True)
+        with mock.patch("arb_engine.execution.kalshi.KalshiExecutor", return_value=fake), redirect_stdout(io.StringIO()):
+            self.assertEqual(run_kalshi(args), 3)
 
     def test_cancel_requires_explicit_shard_routing(self):
         args = argparse.Namespace(action="cancel", no_account_env=True, order_id="o-9", ticker=None,

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from ..execution.kalshi import gtd_horizon_s
+from ..execution.ledger import env_host_problem
 from ..venues.kalshi import KalshiClient, batch_cancel_reduced, build_order_payload, order_expiration, order_side_price
 
 log = logging.getLogger(__name__)
@@ -173,6 +174,9 @@ class KalshiBroker(Broker):
         self.confirm = confirm
         if not self.client.has_credentials:
             raise RuntimeError("KalshiBroker needs KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH")
+        problem = env_host_problem(self.client.env, self.client.base_url)
+        if problem:   # KALSHI_BASE_URL must not move the demo gates onto a production host
+            raise RuntimeError(f"KalshiBroker refuses this host: {problem}")
         if self.client.env == "prod" and (os.environ.get("ARB_LIVE_TRADING") != "1" or not confirm):
             raise RuntimeError("prod trading requires ARB_LIVE_TRADING=1 and --confirm")
         if not confirm:
