@@ -2,14 +2,15 @@
 
 Repo: `/Users/kv15/Documents/ChatGPT/arbitradge`, branch **`claude/exec-readiness`** (created
 this session from `claude/order-buttons` @ `a8b9246`). Not pushed. Not merged into the GitHub
-clone (`~/Documents/GitHub/arb-engine`, `main` @ `1ae9ef2`) that runs the live stack. The
-original prompt for this session is kept at the end.
+clone (`~/Documents/GitHub/arb-engine`) that runs the live stack. That clone's `main`
+(`3ca9684` at 13:00 PT, moved by another session this afternoon) is an ancestor of this branch,
+so deploying is a fast-forward. The original prompt for this session is kept at the end.
 
 ## Read this first
 
 * **The running live stack still runs the old executor.** It was started from the GitHub
-  clone with `--execute-lag demo` and has per-process caps, lock legs retried every second,
-  and no ledger. Nothing in this branch reaches it until it is merged there and the
+  clone (`main` `1ae9ef2`–`3ca9684`) with `--execute-lag demo` and has per-process caps, lock
+  legs retried every second, and no ledger. Nothing in this branch reaches it until it is merged there and the
   processes are restarted (next steps 1–3). I did not restart anything: it is your running
   system.
 * **Demo-order readiness is verified against Kalshi's demo exchange.** This covers the ledger,
@@ -33,11 +34,13 @@ original prompt for this session is kept at the end.
 | `835daec` | Demo check: lost-answer recovery through the ledger, plus an opt-in real fill with a fee comparison. Real fill fixtures recorded. The centicent finding is documented in `docs/VENUES.md`. |
 | `daa7d60` | Demo check drives `strategy/lagexec.py` itself: signal → ledger → IOC → reconcile → a bounded lock leg → flatten. |
 | `2cf14c0` | Selective port of `claude/micro-audit-2`, with look-ahead and accounting fixes. Discovery was re-run; the numbers are identical to the branch's. |
+| `235be2d` | This handoff. |
+| `bac2b46` | Merge GitHub `main` `3ca9684`, the other session's afternoon work (ticker-pair aliases, Polymarket US fee date, live book check before ARB pushes). Only the test counts conflicted. `ArbButton.confirm` only simulates. |
 
-## Validation (all run this session, on `2cf14c0` unless noted)
+## Validation (all run this session; the suite, JS and render checks again on `bac2b46`)
 
 * **Tests and checks:**
-  * `python3 -m unittest discover -s tests -t .`: **962 tests OK** (108 s).
+  * `python3 -m unittest discover -s tests -t .`: **975 tests OK** on `bac2b46` (113 s; 962 on `2cf14c0` before the merge).
   * `bash scripts/test_js.sh`: fee vectors 3650 checked with 0 mismatches, arb vectors 54 checked with 0 mismatches, `ok 3769 checks`, `ok 159 checks`, and the extension check PASS.
   * `python3 scripts/render_results.py --check`: OK.
   * `git diff --check`: clean.
@@ -198,12 +201,12 @@ Only Kalshi has an order API the engine can use. Robinhood's prediction markets 
 
 ```bash
 # 1. Look at the branch (this clone)
-cd /Users/kv15/Documents/ChatGPT/arbitradge && git log --oneline 1ae9ef2..claude/exec-readiness
+cd /Users/kv15/Documents/ChatGPT/arbitradge && git log --oneline 3ca9684..claude/exec-readiness
 
-# 2. Bring it to the GitHub clone that runs the stack (fast-forward while its main is still 1ae9ef2;
+# 2. Bring it to the GitHub clone that runs the stack (fast-forward while its main is still 3ca9684;
 #    if --ff-only refuses, main moved on: merge FETCH_HEAD instead and re-run the tests)
 cd ~/Documents/GitHub/arb-engine && git fetch /Users/kv15/Documents/ChatGPT/arbitradge claude/exec-readiness && git merge --ff-only FETCH_HEAD
-python3 -m unittest discover -s tests -t . 2>&1 | tail -3        # expect 962 OK
+python3 -m unittest discover -s tests -t . 2>&1 | tail -3        # expect 975 OK
 
 # 3. Restart each process, one at a time (`sunday.sh stop` stops everything and deletes *.args)
 scripts/sunday.sh restart live -- --execute-lag demo
