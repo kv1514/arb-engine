@@ -196,6 +196,32 @@ class TapTests(unittest.TestCase):
         events = [json.loads(x)["event"] for x in open(path)]
         self.assertEqual(events, ["issued", "listen-error", "tap"])
 
+    def test_auto_practice_simulates_without_pushing_or_using_the_token(self):
+        b, path = _button(book=_Book([(0.55, 500)]), rh=_RH(ask=0.37, bid=0.36))
+        spec = self._spec(b)
+        rec = b.auto_practice(spec["token"], now=T0 + 10)
+        self.assertEqual((rec["event"], rec["status"]), ("auto-practice", "simulated"))
+        self.assertEqual(rec["rh_live_ask"], 0.37)
+        self.assertEqual(rec["rh_within_max"], 0.37 <= spec["robinhood"]["max"] + 1e-9)
+        self.assertEqual(rec["would_lock"], rec["rh_within_max"] and rec["unhedged"] == 0)
+        self.assertEqual(b.alerts.pushes, [])                # never pushed
+        self.assertFalse(spec.get("used"))
+        self.assertIsNotNone(b.fire(spec["token"], now=T0 + 12))   # your own tap still works
+        # In live mode the automatic tap still only simulates.
+        sent = []
+
+        class _Ex:
+            def plan(self, *a, **k):
+                sent.append(a)
+
+            def execute(self, *a, **k):
+                sent.append("execute")
+        with mock.patch.dict(os.environ, {"ARB_LIVE_TRADING": "1"}):
+            lb, _ = _button(mode="live", executor=_Ex(), book=_Book([(0.55, 500)]))
+            lspec = self._spec(lb)
+            self.assertEqual(lb.auto_practice(lspec["token"], now=T0 + 10)["status"], "simulated")
+        self.assertEqual(sent, [])
+
     def test_live_needs_the_switch_and_demo_sends_an_ioc_at_the_limit(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ARB_LIVE_TRADING", None)
@@ -233,7 +259,9 @@ class AlerterIntegrationTests(unittest.TestCase):
         arbs.handle(me, rep, "DEN @ KC", T0)
         self.assertNotIn("Robinhood done", json.dumps(arbs.alerts.pushes[-1][2]["ntfy_actions"]))   # tests and one-off runs: no button
         arbs.start_button()
+        self.assertEqual(arbs.button.auto_practice_s, 10.0)
         arbs.button.http_get = False                       # no poller in a test
+        arbs.button.auto_practice_s = None                 # nor a timer
         arbs.last.clear()
         arbs.handle(me, rep, "DEN @ KC", T0 + 1)
         kind, full, data = arbs.alerts.pushes[-1]

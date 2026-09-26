@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (867)
+python -m unittest discover -s tests -t .      # Python tests (868)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -163,6 +163,7 @@ When you declare a key, add its row here.
 | `arb_stake_fraction_arb` | `ARB_STAKE_FRACTION_ARB` | `0.05` | Share of the bankroll a 1-3c ARB ticket is sized to (legged by hand that tier returned -0.5 % per dollar, Kelly 0; 20 % BIG + 5 % ARB made $169 vs $80 at 20 % on every tier). 0 = do not alert that tier. |
 | `arb_push_style` | `ARB_PUSH_STYLE` | `short` | What an ARB / ARB CLOSE push shows on the phone: `short` (each leg's venue, shares, side and price, the cost and profit, a tie warning when a tie loses; Kalshi / Robinhood buttons) or `full` (the whole itemised ticket). The journal always keeps the full ticket. |
 | `arb_button_mode` | `ARB_BUTTON_MODE` | `paper` | The "Robinhood done" button on Kalshi + Robinhood ARB pushes (`strategy/arbbutton.py`): `off`; `paper` (practice - at the tap, both venues' live prices are re-read and checked against the alert and the Kalshi buy is simulated against Kalshi's live order book; nothing is sent); `demo` (the Kalshi order goes to the demo exchange); `live` (a real immediate-or-cancel order; also needs `ARB_LIVE_TRADING=1` and the production key). Results come back as ARB FILL pushes. |
+| `arb_button_auto_practice_s` | `ARB_BUTTON_AUTO_PRACTICE_S` | `10.0` | Seconds after a real Kalshi + Robinhood arb's button is issued at which a practice tap is simulated: live prices re-read, the Kalshi buy walked against the live book, journalled to `out/orders/arb_button.jsonl` (`scripts/arb_button_report.py` summarises it); never pushed, never an order, and your own tap still works. 0 = off. |
 | `arb_suspect_margin` | `ARB_SUSPECT_MARGIN` | `0.15` | An arb wider than this (dollars per contract, fees in) is journalled as ARB SUSPECT and not pushed (on the 2026-09-24/26 slates such gaps were frozen or mismatched quotes). |
 | `arb_max_quote_lag_s` | `ARB_MAX_QUOTE_LAG_S` | `30` | During play, an arb with a leg whose own venue timestamp is older than this is ARB SUSPECT, not pushed (Robinhood's college quotes can sit frozen while the game moves). |
 | `arb_push_min_margin` | `ARB_PUSH_MIN_MARGIN` | `0.01` | Live slate: smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL (replayed by hand, arbs under 1c lost money). |

@@ -91,7 +91,7 @@ class ArbButton:
                  executor: Any = None, data_client: Any = None, robinhood: Any = None, ttl_s: float = 180.0,
                  max_contracts: int = 2000, daily_notional: float = 500.0, journal_path: str = "out/orders/arb_button.jsonl",
                  http_get: Optional[Callable[[str], str]] = None, clock: Callable[[], float] = time.time,
-                 stream: Optional[Callable[[str], Any]] = None) -> None:
+                 stream: Optional[Callable[[str], Any]] = None, auto_practice_s: Optional[float] = None) -> None:
         if mode not in MODES:
             raise ValueError(f"arb_button_mode must be one of {MODES}")
         if mode == "live" and os.environ.get("ARB_LIVE_TRADING") != "1":
@@ -103,6 +103,8 @@ class ArbButton:
         self.journal_path, self.http_get, self.clock, self.stream = journal_path, http_get, clock, stream
         self.pending: dict[str, dict[str, Any]] = {}
         self.results: dict[str, dict[str, Any]] = {}      # token -> the tap's result record
+        self.auto_results: dict[str, dict[str, Any]] = {}
+        self.auto_practice_s = auto_practice_s
         self.spent_today, self.day = 0.0, None
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
@@ -187,7 +189,17 @@ class ArbButton:
             self._expire(now)
         self._journal({"event": "issued", **{k: v for k, v in spec.items() if not k.startswith("_")}})
         self.start()
+        if self.auto_practice_s and not practice:
+            t = threading.Timer(float(self.auto_practice_s), self._auto_safe, args=(token,))
+            t.daemon = True
+            t.start()
         return spec
+
+    def _auto_safe(self, token: str) -> None:
+        try:
+            self.auto_practice(token)
+        except Exception as e:   # a practice tap must never take the process down
+            self._journal({"event": "auto-practice-error", "token": token, "error": repr(e)[:300]})
 
     def _expire(self, now: float) -> None:
         for t in [t for t, p in self.pending.items() if now > p["expires"] + 600]:
@@ -309,6 +321,30 @@ class ArbButton:
         if now > spec["expires"]:
             rec.update(status="expired", filled=0, unhedged=n)
             return self._finish(spec, rec)
+        return self._finish(spec, self._evaluate(spec, rec, now, simulate=self.mode == "paper"))
+
+    def auto_practice(self, token: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
+        """A practice tap ``auto_practice_s`` after a real arb's button was issued - about the
+        time it takes to buy the Robinhood leg - always simulated (never an order, whatever the
+        mode), never pushed, and it does not use the token up: your own tap still works. It
+        answers, for every arb pushed: at that moment, did both live prices still match, could
+        you have bought Robinhood at or under its max, and would the Kalshi leg have filled?"""
+        spec = self.pending.get(token)
+        if spec is None:
+            return None
+        now = self.clock() if now is None else now
+        rec: dict[str, Any] = {"event": "auto-practice", "token": token, "mode": self.mode, "event_key": spec["event_key"], "title": spec["title"],
+                               "count": spec["count"], "tap_after_s": round(now - spec["created"], 2)}
+        rec = self._evaluate(spec, rec, now, simulate=True, capped=False)
+        self.auto_results[token] = rec
+        self._journal(rec)
+        return rec
+
+    def _evaluate(self, spec: dict[str, Any], rec: dict[str, Any], now: float, simulate: bool, capped: bool = True) -> dict[str, Any]:
+        """Read both live prices, compare them with the alert, and buy - or, ``simulate``,
+        walk Kalshi's live book up to the limit."""
+        k, r, n = spec["kalshi"], spec["robinhood"], spec["count"]
+        token = spec["token"]
         live = self.live_prices(spec)
         asks = live.get("kalshi_asks") or []
         rec.update(kalshi_live_ask=asks[0][0] if asks else None, kalshi_live_depth=asks[0][1] if asks else None,
@@ -323,14 +359,17 @@ class ArbButton:
         if rec["kalshi_live_ask"] is not None and rec["rh_live_ask"] is not None:
             rec["live_set_cost"] = round(all_in(kfee, rec["kalshi_live_ask"], n) + all_in(rfee, rec["rh_live_ask"], n), 4)
             rec["still_locks_live"] = rec["live_set_cost"] <= 1.0 + 1e-12
+        # Could Robinhood still be bought at or under the push's max?
+        if rec["rh_live_ask"] is not None:
+            rec["rh_within_max"] = rec["rh_live_ask"] <= r["max"] + 1e-9
         # Caps
         self._roll_day(now)
-        room = self.daily_notional - self.spent_today
+        room = self.daily_notional - self.spent_today if capped else float("inf")
         count = n if room >= n * k["limit"] else int(room // k["limit"])
         if count <= 0:
             rec.update(status="skipped", reason="daily notional cap reached", filled=0, unhedged=n)
-            return self._finish(spec, rec)
-        if self.mode == "paper":
+            return rec
+        if simulate:
             filled, cost = 0, Decimal("0")
             levels = []
             for px, size in asks:
@@ -358,7 +397,7 @@ class ArbButton:
                 rec.update(status="error", reason=repr(e)[:300], filled=0)
         rec["unhedged"] = n - int(rec.get("filled") or 0)
         spent = float(rec.get("kalshi_cost") or 0.0)
-        self.spent_today += spent if self.mode != "paper" else 0.0
+        self.spent_today += spent if not simulate else 0.0
         if rec.get("filled"):
             f = int(rec["filled"])
             rh_cost = float(Decimal(str(r["alert_ask"])) * f + Decimal(str(rfee.fee(r["alert_ask"], f, "taker"))))
@@ -366,7 +405,8 @@ class ArbButton:
             rec["locked_sets"] = f
             rec["profit_at_alert_rh_price"] = round(f - rh_cost - spent, 2)
             rec["profit_at_rh_max"] = round(f - rh_cost_max - spent, 2)
-        return self._finish(spec, rec)
+        rec["would_lock"] = bool(rec.get("rh_within_max")) and rec["unhedged"] == 0
+        return rec
 
     def _roll_day(self, now: float) -> None:
         day = time.strftime("%Y-%m-%d", time.localtime(now))

@@ -36,6 +36,7 @@ if _declare_setting is not None:
         _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=900.0, cast=float, doc="seconds before the same event may send another ARB CLOSE unless the gap shrank by two cents (at 300 s / one cent the college slate sent 279 ARB CLOSE pushes on 2026-09-26 and ran the free ntfy.sh quota dry)")
         _declare_setting("arb_stake_fraction", env="ARB_STAKE_FRACTION", default=0.20, cast=float, doc="share of the bankroll one ARB ticket is sized to (fees in). A locked set holds its cost until the game ends, so an all-in ticket leaves nothing for the next arb; on the first recorded Sunday, 20 % per arb made about twice what all-in did")
         _declare_setting("arb_button_mode", env="ARB_BUTTON_MODE", default="paper", cast=str, doc="the 'Robinhood done' button on Kalshi + Robinhood ARB pushes (strategy/arbbutton.py): 'off', 'paper' (practice: live prices checked, the Kalshi buy simulated against the live book, nothing sent), 'demo' (Kalshi demo exchange) or 'live' (real order; also needs ARB_LIVE_TRADING=1 and the production key)")
+        _declare_setting("arb_button_auto_practice_s", env="ARB_BUTTON_AUTO_PRACTICE_S", default=10.0, cast=float, doc="seconds after a real Kalshi + Robinhood arb's button is issued at which a practice tap is simulated (live prices re-read, the Kalshi buy walked against the live book, journalled to out/orders/arb_button.jsonl, never pushed or sent; your own tap still works). 0 = off")
         _declare_setting("arb_suspect_margin", env="ARB_SUSPECT_MARGIN", default=0.15, cast=float, doc="an arb wider than this (dollars per contract, fees in) is journalled as ARB SUSPECT and not pushed: cross-venue gaps that large were stale or mismatched quotes on the recorded games")
         _declare_setting("arb_max_quote_lag_s", env="ARB_MAX_QUOTE_LAG_S", default=30.0, cast=float, doc="during play, an arb whose leg's own venue timestamp is older than this is journalled as ARB SUSPECT and not pushed (Robinhood's college quotes can sit frozen while the game moves)")
         _declare_setting("arb_push_style", env="ARB_PUSH_STYLE", default="short", cast=str, doc="what an ARB / ARB CLOSE push shows on the phone: 'short' (what to buy where at what price, and the result; the full ticket stays in the journal) or 'full' (the whole itemised ticket)")
@@ -161,7 +162,8 @@ class ArbAlerter:
         from .arbbutton import ArbButton
 
         self.button = ArbButton(self.button_mode, alerts=self.alerts, cmd_url=str(self.alerts.ntfy).rstrip("/") + "-cmd",
-                                fee_for=lambda q: fee_model_for_quote(q, self.settings))
+                                fee_for=lambda q: fee_model_for_quote(q, self.settings),
+                                auto_practice_s=float(_setting(self.settings, "arb_button_auto_practice_s", 10.0) or 0.0) or None)
 
     def suspect(self, me: Any, rep: Any, sized: dict, now: float) -> Optional[str]:
         """Why an arb should not be pushed, or None: too wide to be real, or (in play) a leg
