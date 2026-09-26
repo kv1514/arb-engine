@@ -6,6 +6,45 @@ clone (`~/Documents/GitHub/arb-engine`) that runs the live stack. That clone's `
 (`3ca9684` at 13:00 PT, moved by another session this afternoon) is an ancestor of this branch,
 so deploying is a fast-forward. The original prompt for this session is kept at the end.
 
+## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
+
+Branch `claude/exec-readiness`, commits `5dfae25` → `a016721` on top of `2414d8b`. Still not
+pushed and not deployed. Validation on `a016721`: **1003 Python tests OK**; JS parity 3650 fee +
+54 arb vectors with 0 mismatches, `ok 3769` + `ok 159` checks, extension PASS;
+`render_results.py --check` OK; `git diff --check` clean. **Kalshi demo exchange**
+(`kalshi_demo_check.py`, demo only): **ALL PASS twice**, the second run with `--fill
+--confirm-demo`. No production request or order was made.
+
+| hash | what |
+|---|---|
+| `5dfae25` | **Finding 1.** `cancel_all(sweep=True)` ignored truncation: reproduced with 20 cursor pages, the sweep returned "complete" without the fallback. Now a truncated or failed listing runs `DELETE /portfolio/events/orders`, a complete re-listing must show the book empty (polled up to `settle_s`), the outcome is in `last_sweep` (`SweepReport`), and anything short of complete raises `SweepIncomplete` naming every order that may still rest. **Finding 2.** `env_host_problem` accepted `http://` (and user-info, other ports and paths, query, fragment) on recognised hosts. `endpoint_problem` now requires exactly `https://<known host>/trade-api/v2`, and the client refuses to sign any request to a non-HTTPS endpoint. |
+| `2079269` | **Fee multiplier.** `fee_bound` defaulted to 1x and nobody passed the real one. Every live Kalshi series is 1, 0.5 or 0 today (14,394 series), but a 2x series would pay $0.35 where $0.20 was reserved. The multiplier is now required: read from `GET /series` on the trading exchange, taking the larger of that and the quote's value; unknown → no order. The adapter now marks an assumed 1x. |
+| `af3ef98` | **Account binding.** The ledger stores SHA-256 fingerprints of the key id and of `GET /communications/id`, never the identifiers. A ledger belongs to one account: another account's client is refused. Only a client provably of the sending account can release a missing order. Key rotation on the same account carries on (`keys` map). New command `kalshi release --intent-id … --reason … --confirm` is the recorded escape hatch. |
+| `57140f2` | **Maker through the ledger.** `KalshiBroker.place` records the intent before sending. A lost answer → unknown → no new placements until found; found resting and untracked → cancelled. `poll` books order rows (`apply_row`). `recover()` (run by the maker runner at start) cancels a dead maker's resting orders; a live one's are left alone. `tests/__init__.py` stops tests writing `out/orders`. |
+| `a016721` | Demo check step 6c drives `KalshiBroker` through the ledger on the real demo exchange. |
+
+**Answers to the investigation items**
+
+* **Account vs environment.** Now bound to the account.
+  * `GET /communications/id` is documented as "a public communications ID which is used to identify the user".
+  * On demo it was stable across calls, and order rows carry a matching `user_id`.
+  * Rotation is handled by the account fingerprint. It could not be tested live: there is only one demo key. If the id ever changed with the key, the ledger would refuse the new key (fail safe), and `kalshi release` or a new `ARB_ORDER_LEDGER_DIR` gets out.
+* **Maker path.** Covered by these tests (fake exchange with resting orders, cancels, partial maker fills):
+  * accepted-but-timeout → blocked → found → cancelled → done → unblocked;
+  * a request that never arrived is released;
+  * a restart cancels a dead predecessor's orders and books 4 fills at their cost;
+  * a live predecessor is left alone;
+  * partial fills are booked, then finished after the cancel.
+* **Higher multipliers.** A property test covers multipliers 0–3, many limits and counts, every split and both roundings: charged ≤ reserved. The old 1x bound is shown to under-reserve a 2x market. The executor reserves at the exchange's 2x when the quote says 1x, and the reconciled 2x fee lands inside the reservation.
+
+**Remaining gaps from this round**
+
+* **Subaccounts.** The identity is per account, not per subaccount (orders use subaccount 0).
+* **Owner liveness uses same-host PIDs** (checked here: a dead PID reads as gone, anything uncertain as alive). A maker that died on another host is never treated as gone, so its orders wait for their GTD expiry (≤ 1 h).
+* **Shutdown timing.** `MakerRunner.shutdown` cancels without re-reading. The ledger shows those orders `accepted` until the next `recover()` books them. That doesn't matter for the LAG or button budgets, because budgets are per strategy.
+* **Multiplier cache.** The multiplier is cached for 1 h, so a series change is picked up within the hour.
+* **Sweep verification.** It trusts a complete listing within `settle_s` (10 s), while Kalshi's cancel-all is asynchronous. A late straggler is reported as unresolved (`SweepIncomplete`), not hidden.
+
 ## Read this first
 
 * **The running live stack still runs the old executor.** It was started from the GitHub
@@ -190,7 +229,7 @@ Only Kalshi has an order API the engine can use. Robinhood's prediction markets 
 ## Unfinished work and known gaps
 
 1. **Not deployed.** The live stack runs `1ae9ef2` without any of this (next steps 1–3).
-2. **The maker's resting orders** (`KalshiBroker`, `maker --mode kalshi`) are not in the ledger. It keeps its own sweep and expiry, and runs in paper mode. Integrate them before any real maker mode.
+2. ~~The maker's resting orders are not in the ledger~~ - done in `57140f2` (see the follow-up round above).
 3. **The ntfy throttle is per process.** Two processes pushed the same game less than 60 s apart 40 times. A shared throttle (a small SQLite file in `out/run/`) would fix it.
 4. **Fee rounding.** Demo charges centicent. Confirm on one production fill, then consider switching the `kalshi_rounding` default. That changes fee vectors, so follow AGENTS rule 1 and re-run `gen_fee_vectors.py` and `test_js.sh`.
 5. **Microstructure test fold.** It is still unfrozen, and the H3 identity strictness is your decision. The test fold starts 2026-10-08 (TB @ DAL). Run `--freeze-spec` only after deciding.
@@ -206,7 +245,7 @@ cd /Users/kv15/Documents/ChatGPT/arbitradge && git log --oneline 3ca9684..claude
 # 2. Bring it to the GitHub clone that runs the stack (fast-forward while its main is still 3ca9684;
 #    if --ff-only refuses, main moved on: merge FETCH_HEAD instead and re-run the tests)
 cd ~/Documents/GitHub/arb-engine && git fetch /Users/kv15/Documents/ChatGPT/arbitradge claude/exec-readiness && git merge --ff-only FETCH_HEAD
-python3 -m unittest discover -s tests -t . 2>&1 | tail -3        # expect 975 OK
+python3 -m unittest discover -s tests -t . 2>&1 | tail -3        # expect 1003 OK
 
 # 3. Restart each process, one at a time (`sunday.sh stop` stops everything and deletes *.args)
 scripts/sunday.sh restart live -- --execute-lag demo
