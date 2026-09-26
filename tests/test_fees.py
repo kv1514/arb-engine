@@ -201,24 +201,36 @@ class PolymarketFeeTests(unittest.TestCase):
         self.assertEqual(PolymarketFees.from_market({"feesEnabled": False}).fee(0.5, 100), Decimal("0"))
 
     def test_us_theta_schedule(self):
-        before = PolymarketUSFees.for_date(date(2026, 9, 15))
-        after = PolymarketUSFees.for_date(date(2026, 9, 16))
+        # docs.polymarket.us/fees, read 2026-09-26: 0.0695 from 12:00 AM ET on 2026-09-25.
+        before = PolymarketUSFees.for_date(date(2026, 9, 24))
+        after = PolymarketUSFees.for_date(date(2026, 9, 25))
         self.assertEqual(before.taker_theta, POLY_US_TAKER_THETA_BEFORE)
         self.assertEqual(after.taker_theta, POLY_US_TAKER_THETA_AFTER)
-        self.assertEqual(before.fee(0.50, 100), Decimal("1.50"))
+        self.assertEqual(PolymarketUSFees.for_date(date(2026, 9, 16)).taker_theta, POLY_US_TAKER_THETA_BEFORE)
+        self.assertEqual(before.fee(0.50, 100), Decimal("1.50"))  # 0.06 * 100 * 0.25 = 1.50
         self.assertEqual(before.fee(0.50, 100, "maker"), Decimal("-0.31"))
-        self.assertEqual(after.fee(0.50, 100), Decimal("1.74"))  # 1.7375 -> banker's rounding
+        self.assertEqual(after.fee(0.50, 100), Decimal("1.74"))  # 1.7375 -> banker's rounding, the page's 100-lot row
 
     def test_us_fee_page_worked_example(self):
-        # docs.polymarket.us/fees: 1,000 @ $0.50 -> taker $17.38 (17.375 -> even), maker -$3.12 (-3.125 -> even).
+        # docs.polymarket.us/fees, read 2026-09-26. 1,000 @ $0.50 -> taker $17.38
+        # (17.375 -> even), maker -$3.12 (-3.125 -> even). The other four examples
+        # on that page are the same formula.
         fm = PolymarketUSFees(taker_theta=POLY_US_TAKER_THETA_AFTER)
         self.assertEqual(fm.fee(0.50, 1000), Decimal("17.38"))
         self.assertEqual(fm.fee(0.50, 1000, "maker"), Decimal("-3.12"))
+        self.assertEqual(fm.fee(0.10, 1000), Decimal("6.26"))
+        self.assertEqual(-fm.fee(0.10, 1000, "maker"), Decimal("1.12"))
+        self.assertEqual(fm.fee(0.65, 1000), Decimal("15.81"))
+        self.assertEqual(-fm.fee(0.65, 1000, "maker"), Decimal("2.84"))
+        self.assertEqual(fm.fee(0.30, 1000), Decimal("14.60"))
+        self.assertEqual(fm.fee(0.90, 1000), Decimal("6.26"))
         self.assertEqual(POLY_US_WORKED_EXAMPLE["taker"], Decimal("17.38"))
         self.assertTrue(check_polymarket_us_worked_example())
-        self.assertTrue(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 19))))
-        # The pre-change theta does not reproduce it, so the guard is not vacuous.
-        self.assertFalse(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 15))))
+        self.assertTrue(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 25))))
+        self.assertTrue(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 26))))
+        # The day before the published effective date still uses 0.06, so the guard is not vacuous.
+        self.assertFalse(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 24))))
+        self.assertFalse(check_polymarket_us_worked_example(PolymarketUSFees.for_date(date(2026, 9, 19))))
 
 
 class RegistryTests(unittest.TestCase):

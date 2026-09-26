@@ -42,7 +42,7 @@ from typing import Any, Iterable, Optional
 from ..fees.robinhood import exchange_from_symbol_or_enum
 from .kalshi import TENNIS_SETTLEMENT as KALSHI_TENNIS_SETTLEMENT
 from ..models import VENUE_ROBINHOOD, EventInfo, OutcomeQuote, VenueSnapshot
-from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
+from ..matching.normalize import et_date, fmt_line, nfl_event_key, parse_iso, person_keys, push_rule_for_line, split_ticker_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key, team_event_key
 from ..matching.teams import TEAM_SPORTS, nfl_team_city, nfl_team_code, team_code, team_name
 from .http import HttpClient
 
@@ -424,12 +424,10 @@ class RobinhoodAdapter:
                     yes_key, no_key = "over", "under"
                     labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
                     outcomes = ["over", "under"]
-                pair = "".join(game_codes)
+                pair = f"{game_codes[0]} @ {game_codes[1]}"
             elif mtype == "spread":
                 team_raw = strip_digits(sym.rsplit("-", 1)[-1])
-                other_raw = split_pair(pair, team_raw)
-                fav = team_code(sport, team_raw) if team_sport else team_raw
-                dog = (team_code(sport, other_raw) if team_sport else other_raw) if other_raw else None
+                fav, dog = _line_spread_sides(pair, sport, team_raw, team_sport)
                 if not fav or not dog:
                     continue
                 key = spread_event_key(sport, [fav, dog], date, fav, line)
@@ -437,12 +435,7 @@ class RobinhoodAdapter:
                 labels = {yes_key: f"{team_name(sport, fav) if team_sport else fav} -{fmt_line(line)}", no_key: f"{team_name(sport, dog) if team_sport else dog} +{fmt_line(line)}"}
                 outcomes = [yes_key, no_key]
             else:
-                codes: list[str] = []
-                for cut in range(2, len(pair) - 1):
-                    a, b = pair[:cut], pair[cut:]
-                    if team_sport and team_code(sport, a) and team_code(sport, b):
-                        codes = [team_code(sport, a), team_code(sport, b)]  # type: ignore[list-item]
-                        break
+                codes = _line_total_codes(pair, sport, team_sport)
                 if not codes:
                     continue
                 key = total_event_key(sport, codes, date, line)
@@ -450,7 +443,7 @@ class RobinhoodAdapter:
                 labels = {"over": f"Over {fmt_line(line)}", "under": f"Under {fmt_line(line)}"}
                 outcomes = ["over", "under"]
             progress = str(st.get("eventProgress") or "").strip()
-            info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=outcomes, labels=labels, start_time=start, line=line, tie_rule=push_rule_for_line(line), venues={self.venue: {"event_id": ev.get("id"), "contract_id": c["id"], "slug": slug, "url": url, "exchange": exch}, "_teams": {"title": _pair_title(pair, sport)}}, in_play=_in_play_from_progress(progress, st.get("eventStatus")))
+            info = EventInfo(event_key=key, sport=sport, market_type=mtype, outcomes=outcomes, labels=labels, start_time=start, line=line, tie_rule=push_rule_for_line(line), venues={self.venue: {"event_id": ev.get("id"), "contract_id": c["id"], "slug": slug, "url": url, "exchange": exch}, "_teams": {"title": pair if " @ " in pair else _pair_title(pair, sport)}}, in_play=_in_play_from_progress(progress, st.get("eventStatus")))
             snap.events.setdefault(key, info)
             qd = quotes.get(c["id"]) or {}
             common = dict(venue=self.venue, event_key=key, fee_params={"exchange": exch, "symbol": sym}, url=url, ts=self._quote_ts(c.get("id"), snap.fetched_at), book_id="kalshi" if exch == "kalshi" else exch, quote_time=_epoch(qd.get("ask_venue_timestamp") or qd.get("updated_at")))
@@ -458,12 +451,33 @@ class RobinhoodAdapter:
             snap.quotes.append(OutcomeQuote(venue_market_id=c["id"] + "#no", outcome=no_key, outcome_label=labels[no_key], ask=_f(qd.get("no_ask_price")), bid=_f(qd.get("no_bid_price")), ask_size=_f(qd.get("bid_size_fractional") or qd.get("bid_size")), bid_size=_f(qd.get("ask_size_fractional") or qd.get("ask_size")), meta={"symbol": sym, "exchange": exch, "side": "no", "line": line, "contract_id": c["id"]}, **common))
 
 
+def _line_spread_sides(pair: str, sport: str, team_raw: str, team_sport: bool) -> tuple[Optional[str], Optional[str]]:
+    if team_sport:
+        split = split_ticker_pair(pair, sport, known=team_raw)
+        fav = team_code(sport, team_raw)
+        if not split or not fav or fav not in split:
+            return None, None
+        dog = split[1] if fav == split[0] else split[0]
+        return fav, dog
+    if pair.endswith(team_raw) and len(pair) > len(team_raw):
+        return team_raw, pair[: -len(team_raw)]
+    if pair.startswith(team_raw) and len(pair) > len(team_raw):
+        return team_raw, pair[len(team_raw):]
+    return None, None
+
+
+def _line_total_codes(pair: str, sport: str, team_sport: bool) -> list[str]:
+    if not team_sport:
+        return []
+    split = split_ticker_pair(pair, sport)
+    return list(split) if split else []
+
+
 def _pair_title(pair: str, sport: str) -> str:
     """'DETBUF' -> 'DET @ BUF' (Kalshi/Rothera pairs are away then home)."""
-    for cut in range(2, len(pair) - 1):
-        a, b = pair[:cut], pair[cut:]
-        if sport not in TEAM_SPORTS or (team_code(sport, a) and team_code(sport, b)):
-            return f"{a} @ {b}"
+    split = split_ticker_pair(pair, sport) if sport in TEAM_SPORTS else None
+    if split:
+        return f"{split[0]} @ {split[1]}"
     return pair
 
 

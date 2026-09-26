@@ -14,9 +14,10 @@ economically the same number, so we quote everything in dollars.
 Polymarket US (CFTC-regulated, docs.polymarket.us/fees) — a separate product:
 
     fee = theta x C x P x (1 - P), banker's rounding to the cent
-    taker theta 0.06 (0.0695 from 2026-09-16), maker rebate theta -0.0125
+    taker theta 0.06 through 2026-09-24 ET, 0.0695 from 12:00 AM ET on 2026-09-25
+    maker rebate theta -0.0125
 
-The fee page's worked example (verified 2026-09-19): 1,000 contracts at $0.50 pay a taker
+The fee page's worked example (re-read 2026-09-26): 1,000 contracts at $0.50 pay a taker
 fee of 0.0695 x 1,000 x 0.25 = $17.375 -> **$17.38** and earn a maker rebate of
 -0.0125 x 1,000 x 0.25 = -$3.125 -> **-$3.12** (both banker's-rounded: 17.375 rounds to
 the even 8, -3.125 to the even 2). ``POLY_US_WORKED_EXAMPLE`` pins it for the tests and
@@ -84,9 +85,13 @@ class PolymarketFees(_Base):
 
 POLY_US_TAKER_THETA_BEFORE = Decimal("0.06")
 POLY_US_TAKER_THETA_AFTER = Decimal("0.0695")
-POLY_US_THETA_CHANGE_DATE = date(2026, 9, 16)
+# docs.polymarket.us/fees, read 2026-09-26: "Effective exchange-wide from 12 AM ET,
+# Friday September 25, 2026." for_date() keys off the Eastern calendar date, so
+# 2026-09-25 is the first day on 0.0695. An earlier reading of the same page
+# (2026-09-19) had recorded 2026-09-16; that boundary is the one this constant replaces.
+POLY_US_THETA_CHANGE_DATE = date(2026, 9, 25)
 POLY_US_MAKER_THETA = Decimal("-0.0125")
-#: docs.polymarket.us/fees worked example at the post-2026-09-16 taker theta.
+#: docs.polymarket.us/fees worked example at the post-2026-09-25 taker theta.
 POLY_US_WORKED_EXAMPLE = {"contracts": 1000, "price": "0.50", "taker": Decimal("17.38"), "maker": Decimal("-3.12")}
 
 

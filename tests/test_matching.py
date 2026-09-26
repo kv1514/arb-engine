@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from arb_engine.matching import et_date, fmt_line, kalshi_ticker_date, merge_snapshots, nfl_event_key, nfl_team_code, parse_iso, person_key, person_keys, push_rule_for_line, split_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key
+from arb_engine.matching import et_date, fmt_line, kalshi_ticker_date, merge_snapshots, nfl_event_key, nfl_team_code, parse_iso, person_key, person_keys, push_rule_for_line, split_pair, split_ticker_pair, spread_event_key, spread_outcomes, strip_digits, tennis_event_key, ticker_pair, total_event_key
 from arb_engine.models import EventInfo, OutcomeQuote, VenueSnapshot
 
 
@@ -92,6 +92,39 @@ class LineKeyTests(unittest.TestCase):
         self.assertEqual(strip_digits("BUF12"), "BUF")
         self.assertEqual(push_rule_for_line(1.5), "no_push")
         self.assertEqual(push_rule_for_line(3), "push_possible")
+
+    def test_ticker_pair_refuses_ambiguous_college_codes(self):
+        # Suffix-first splitting of MURMU returns MUR (Murray State). MU is also
+        # Methodist, and RMU is Robert Morris, so both MUR+MU and MU+RMU are real.
+        self.assertIsNone(split_ticker_pair("MURMU", "ncaaf", known="MU"))
+        self.assertIsNone(split_ticker_pair("MURMU", "ncaaf"))
+        # BENCAPU is Benedict+Capital or Benedictine College+Azusa Pacific.
+        self.assertIsNone(split_ticker_pair("BENCAPU", "ncaaf"))
+        self.assertEqual(split_ticker_pair("BENCAPU", "ncaaf", known="BEN"), ("BEN", "CAPU"))
+        self.assertEqual(split_ticker_pair("BENCAPU", "ncaaf", known="BENC"), ("BENC", "APU"))
+        # NWUNW is Northwestern (ticker NW)+Northwestern (MN), or Nebraska Wesleyan+Northwestern.
+        self.assertIsNone(split_ticker_pair("NWUNW", "ncaaf", known="NW"))
+
+    def test_ticker_pair_unique_games(self):
+        self.assertEqual(split_ticker_pair("DETBUF", "nfl"), ("DET", "BUF"))
+        self.assertEqual(split_ticker_pair("NYGLAR", "nfl", known="NYG"), ("NYG", "LAR"))
+        # endswith('LA') on LAFLA used to return LAF and drop the Kings spread.
+        self.assertEqual(split_ticker_pair("LAFLA", "nhl", known="LA"), ("LA", "FLA"))
+        self.assertEqual(split_ticker_pair("LAFLA", "nhl"), ("LA", "FLA"))
+
+    def test_ticker_pair_reads_kalshi_spellings_kept_as_aliases(self):
+        # Real 2026-09-26/27 tickers. Kalshi writes the Jaguars JAC, NC State NCST and Albany
+        # ALBY; the tables keep those as aliases, and every one of these games is on both venues.
+        self.assertEqual(split_ticker_pair("NEJAC", "nfl"), ("NE", "JAX"))
+        self.assertEqual(split_ticker_pair("NEJAC", "nfl", known="JAC"), ("NE", "JAX"))
+        self.assertEqual(split_ticker_pair("LADAL", "nfl", known="LA"), ("LAR", "DAL"))
+        self.assertEqual(split_ticker_pair("APPNCST", "ncaaf"), ("APP", "NCSU"))
+        self.assertEqual(split_ticker_pair("ALBYPRIN", "ncaaf", known="PRIN"), ("UALB", "PRIN"))
+
+    def test_ticker_pair_two_readings_settled_by_kalshi_spelling(self):
+        # TOWSDSU cuts as TOW+SDSU and TOWS+DSU. Kalshi spells Towson TOWS, so the game is
+        # Towson @ Delaware State; first-cut-wins had keyed it Towson @ San Diego State.
+        self.assertEqual(split_ticker_pair("TOWSDSU", "ncaaf"), ("TOW", "DSU"))
 
     def test_merge_keeps_lines_separate(self):
         def snap(venue, key, line):
