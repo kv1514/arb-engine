@@ -64,7 +64,7 @@
   ],
   "test_from": "2026-10-08",
   "spec": {
-    "version": 3,
+    "version": 4,
     "primary": "H3@30s",
     "hypotheses": [
       "H1",
@@ -111,7 +111,8 @@
     ],
     "h2": {
       "dip": "down trigger: dmid_30 <= -0.05 with bid and ask each confirming >= 40 %, same sign; buy into the fall",
-      "recovery": "fell >= 5c peak-to-trough within 60 s, mid now >= 1c above that trough, bid and ask both up over 5 s; buy the observed bounce; once per contract per 60 s"
+      "recovery": "fell >= 5c peak-to-trough within 60 s, mid now >= 1c above that trough, bid and ask both up over 5 s; buy the observed bounce; once per contract per 60 s",
+      "note": "unchanged from v3: dip and recovery stay separate registered rules"
     },
     "momentum_candidate": "M_prototype = strategy/momentum.MomentumTracker at its defaults; buy on status 'rising'; forecast = projected_mid over its horizon_s",
     "signal_cooldown_s": 60,
@@ -124,6 +125,33 @@
       "reject": "skill CI includes 0 or is below it",
       "shadow": "net P&L CI includes 0, fill rate < 0.60, < 30 test games, < 200 deduplicated decisions, or one game > 40 % of P&L",
       "alert_only_eligible": "positive net P&L CI at L=3 s, haircut 0.5, both fees, >= 60 % positive games (no alert is created)"
+    },
+    "manual_venues": [
+      "robinhood"
+    ],
+    "tests": {
+      "p_value": "one-sided game-level sign-flip randomization test of H0 'game totals symmetric about 0' vs mean > 0 (exact for <= 16 games, else 2000 fixed-seed draws)",
+      "primary": "H3@30s alone at alpha",
+      "secondary": "Holm over the secondary list at alpha; the primary never in it"
+    },
+    "decisions_to_trades": "a decision buys the contract (+1) or its executable complement (-1: same event, market and book, paying on the other outcome and 1 - its tie payout on a tie, observed fresh at the decision; the event's outcomes are those observed up to the decision, and for a moneyline only the two the event key names); H1 and H3 are symmetric; one exposure (the bought contract: event, book, outcome paid on, side) trades once per signal_cooldown_s; unavailable complements are counted",
+    "changes": {
+      "4": [
+        "H1 and H3 symmetric through executable complements; mirror signals deduplicated by economic exposure",
+        "Robinhood single-leg orders at manual_leg_latency_s (a person places them)",
+        "all four latencies_s x haircuts executions reported; decisions stress at L=3 s, haircut 0.5",
+        "p-value: game-level sign-flip test replaces the uncentered bootstrap share",
+        "H3 counts a leader only with settlement identity (equal tie payouts, verbatim identical registry rules)",
+        "simultaneous observations processed atomically; settlement values keyed by book and contract",
+        "port onto the integration branch (2026-09-26): the complement's outcome set is causal (observed so far, a moneyline's two named outcomes), not collected from the whole replay",
+        "fees are the traded venue's; settlement values are looked up by the full contract (settlement_for); the tie falls back to the registry rule",
+        "an exposure includes the side (a Rothera YES-B and NO-A differ on a tie)",
+        "H3 lock: hedges only if they can fill before the remainder's exit; locked pairs valued by their settlement (else a tie-safe pair's $1)",
+        "the test-open guard also reads test runs recorded only in the audit log"
+      ],
+      "3": [
+        "discovery by date; verified week-5 kickoff; chronological frozen forecast models; H2 dip vs recovery; spec hash and audit log"
+      ]
     }
   },
   "discovery_dates": [

@@ -336,7 +336,8 @@ def features_at(rows: Iterable[dict[str, Any]], t: float) -> dict[tuple, dict[st
 def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), prints: Iterable[dict[str, Any]] = (),
           horizons: Iterable[int] = HORIZONS, sample: str = "trigger", settlement: Optional[dict[tuple, float]] = None,
           fee_for_row: Any = None, ref_contracts: int = REF_CONTRACTS, latency_s: float = 1.0,
-          entry_tol_s: float = 2.0, haircut: float = 1.0, prints_approx: bool = False) -> list[dict[str, Any]]:
+          entry_tol_s: float = 2.0, haircut: float = 1.0, prints_approx: bool = False,
+          venue_latency: Optional[dict[str, float]] = None) -> list[dict[str, Any]]:
     """Samples (``trigger``, ``unconditional``, ``recovery`` or ``all``) with causal features
     and forward labels. ``haircut`` scales the displayed sizes the paper orders may take.
 
@@ -344,9 +345,14 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     executable return's roll-to-settlement (an unambiguous legacy
     ``(event_key, outcome, side)`` key is also accepted); ``fee_for_row(row)`` returns the venue fee model
     (default: ``fees.registry.fee_model_for_quote`` on the row's venue and fee params).
-    ``latency_s`` / ``entry_tol_s`` are the order's arrival and how stale a book it may meet:
-    a 5 s recorder cannot show the book 1 s after a decision, so legacy data needs
-    latency_s >= its poll interval, or every executable return is (rightly) a missed fill."""
+    ``latency_s`` / ``entry_tol_s`` are the order's arrival and how stale a book it may meet;
+    ``venue_latency`` overrides the latency per venue (a Robinhood order is placed by a
+    person). A 5 s recorder cannot show the book 1 s after a decision, so legacy data needs
+    latency_s >= its poll interval, or every executable return is (rightly) a missed fill.
+
+    Each sample also names its executable *complement* (``_complement``): the contract on the
+    same book paying on the other outcome, as observed at the decision - never chosen with
+    anything recorded later."""
     obs = _dedupe(rows)
     espn_idx, prints_idx = _Espn(espn), _Prints(prints, approx=prints_approx)
     build.print_counts = prints_idx.counts()
@@ -360,6 +366,7 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     last_recovery: dict[tuple, float] = {}
     out: list[dict[str, Any]] = []
     fee_for_row = fee_for_row or _default_fee
+    venue_latency = venue_latency or {}
     pos = 0
     while pos < len(obs):
         t = obs[pos][0]
@@ -389,7 +396,8 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
             if not kinds:
                 continue
             s: dict[str, Any] = {"t": t, "approx_time": approx, "event_key": key[0], "book_id": key[1], "outcome": key[2], "side": key[3],
-                                 "venue": r.get("venue"), "venue_market_id": r.get("venue_market_id"), "tie_payout": _f(r.get("tie_payout")), **f}
+                                 "venue": r.get("venue"), "venue_market_id": r.get("venue_market_id"), "tie_payout": _f(r.get("tie_payout")),
+                                 "no_of": r.get("no_of"), **f}
             qt = _f(r.get("quote_time"))
             s["venue_lag_s"] = t - qt if qt is not None else None
             bs, as_ = _f(r.get("bid_size")), _f(r.get("ask_size"))
@@ -423,12 +431,14 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
                 adj = prior * ((their_tie or 0.0) - (my_tie or 0.0)) if can_tie else 0.0
                 diag[book] = dict(entry, gap_tie_adjusted=entry["gap"] - adj)
             s["cross"], s["cross_excluded"] = cross, dict(excluded)
+            # Ties in |dmid_30| break on the book name, so a leader never depends on the order
+            # the books were first seen in.
             def _lead(items: dict[str, dict], gap_key: str = "gap") -> Optional[dict[str, Any]]:
-                lead = max(items.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+                lead = max(sorted(items.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
                 return {"book": lead[0], "dmid_30": lead[1]["dmid_30"], "gap": lead[1][gap_key]} if lead else None
             s["leader_diag"] = {"tie_matched": _lead({k: v for k, v in diag.items() if v["tie_match"]}),
                                 "any_settlement": _lead(diag, "gap_tie_adjusted")}
-            leader = max(cross.items(), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+            leader = max(sorted(cross.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
             s["leader_book"] = leader[0] if leader else None
             s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
             s["gap_leader"] = leader[1]["gap"] if leader else None
@@ -442,12 +452,15 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
             ld = s["leader_dmid_30"]
             s["agree"] = sum(1 for book, c in cross.items() if leader and book != leader[0] and ld and c["dmid_30"] is not None
                              and c["dmid_30"] * ld > 0 and abs(c["dmid_30"]) >= 0.5 * abs(ld))
+            s["complement"], s["complement_missing"] = _complement(key, t, my_tie, can_tie, books)
             s.update(espn_idx.at(_game_key(key[0]), t, key[2]))
             s.setdefault("prints_approx_time", 0)
             if key[1] == "kalshi":
                 ticker = str(r.get("venue_market_id") or "").split("#", 1)[0]
                 s.update(prints_idx.at(ticker, t, key[3], f["mid"]))
             series, ts_list = by_contract[key], times[key]
+            lat = float(venue_latency.get(str(r.get("venue")), latency_s))
+            s["order_latency_s"] = lat
             for h in horizons:
                 lo, hi = t + h, t + h + max(1.0, 0.2 * h)
                 i = bisect.bisect_left(ts_list, lo)
@@ -458,7 +471,7 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
                 else:
                     s[f"dbid_{h}"] = s[f"dask_{h}"] = s[f"dmid_{h}_fwd"] = None
                 trade = _exec_trade(series, t, f["ask"], h, fee_for_row(r), ref_contracts,
-                                    settlement_for(settlement, key), latency_s, entry_tol_s, haircut)
+                                    settlement_for(settlement, key), lat, entry_tol_s, haircut, times=ts_list)
                 s[f"ret_long_{h}"] = trade.pnl_per_contract if trade is not None else None
                 s[f"exec_{h}"] = exec_record(trade)
             for kind in kinds:
@@ -467,13 +480,79 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     return out
 
 
+def _event_outcomes(event_key: str) -> Optional[set[str]]:
+    """The two outcomes a moneyline key names (``nfl:DEN|KC:2026-09-21`` -> {DEN, KC}); None
+    for a line market, whose outcomes the key does not spell out."""
+    if not _is_moneyline(event_key):
+        return None
+    parts = str(event_key).split(":")
+    if len(parts) < 3 or "|" not in parts[1]:
+        return None
+    a, _, b = parts[1].partition("|")
+    return {a, b} if a and b and a != b else None
+
+
+def _complement(key: tuple, t: float, my_tie: Optional[float], can_tie: bool, books: dict[tuple, "_Book"]
+                ) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+    """The executable contract that pays exactly what this one does not: same event, market
+    and book, paying on the other outcome, and - where a tie can happen - paying 1 - this
+    contract's tie payout on a tie (a Kalshi YES-B for a Kalshi YES-A: $0.50 + $0.50; a
+    Rothera NO-A, recorded on outcome B with ``no_of`` A, for a Rothera YES-A: $0 + $1). It
+    must have been observed, fresh and two-sided, at the decision. Returns (the complement's
+    decision-time quote, None) or (None, why it is unavailable).
+
+    Causal by construction: ``books`` holds only what was pushed up to ``t``, and the event's
+    outcomes are those observed so far - intersected, for a moneyline, with the two the key
+    names - so a row recorded later (a third outcome label, a late book) can never change a
+    past decision's complement."""
+    ev, book, oc, _ = key
+    seen_outcomes = {k[2] for k, ob in books.items() if k[0] == ev and ob.hist}
+    named = _event_outcomes(ev)
+    if named is not None and not seen_outcomes <= named:
+        return None, "not-two-outcome"
+    if len(seen_outcomes) != 2:
+        return None, "not-two-outcome"
+    seen = stale = inexact = unknown = 0
+    best: Optional[dict[str, Any]] = None
+    for k2, ob in books.items():
+        if k2[0] != ev or k2[1] != book or k2[2] == oc or not ob.hist or ob.row is None:
+            continue
+        seen += 1
+        age = t - ob.hist[-1][0]
+        if age > fresh_limit(ob.row):
+            stale += 1
+            continue
+        if can_tie:
+            tie2 = _tie_cached(ob.row)
+            if my_tie is None or tie2 is None:
+                unknown += 1
+                continue
+            if abs(tie2 - (1.0 - my_tie)) > 1e-9:
+                inexact += 1
+                continue
+        cur = ob.hist[-1]
+        if cur[1] is None or cur[2] is None:
+            stale += 1
+            continue
+        cand = {"key": list(k2), "venue": ob.row.get("venue"), "bid": cur[1], "ask": cur[2], "ask_size": _f(ob.row.get("ask_size")),
+                "age_s": age, "tie_payout": _tie_cached(ob.row), "observed_at": cur[0]}
+        if best is None or (cand["ask"], cand["key"]) < (best["ask"], best["key"]):
+            best = cand
+    if best is not None:
+        return best, None
+    if not seen:
+        return None, "none-observed"
+    return None, "unknown-tie" if unknown else ("tie-inexact" if inexact else "stale")
+
+
 def _exec_trade(series: list[tuple[float, dict[str, Any]]], t: float, ask: float, h: int, fee_model: Any, n: int,
-                settle: Optional[float], latency_s: float = 1.0, entry_tol_s: float = 2.0, haircut: float = 1.0) -> Any:
+                settle: Optional[float], latency_s: float = 1.0, entry_tol_s: float = 2.0, haircut: float = 1.0,
+                times: Optional[list[float]] = None) -> Any:
     if fee_model is None:
         return None
     from .paperexec import ioc_round_trip
 
-    times = [tt for tt, _ in series]
+    times = times if times is not None else [tt for tt, _ in series]
     lo, hi = bisect.bisect_right(times, t), bisect.bisect_right(times, t + latency_s + entry_tol_s + h + 90)
     rows = [dict(r, obs_ts=tt) for tt, r in series[lo:hi]]
     return ioc_round_trip(rows, t, ask, n, fee_model, latency_s=latency_s, horizon_s=float(h), haircut=haircut,
@@ -501,9 +580,11 @@ def exec_record(trade: Any) -> dict[str, Any]:
     else:
         status = "closed"
     pnl = trade.pnl
+    entry_notional = float(trade.entry_price) * trade.filled if trade.filled and trade.entry_price is not None else 0.0
+    exit_notional = sum(float(p) * c for _, p, c, _ in trade.exits) + (float(trade.settle_value) * trade.settled if trade.settled else 0.0)
     return {"status": status, "requested": int(trade.requested), "filled": int(trade.filled),
             "fees": float(trade.entry_fee + trade.exit_fee) if trade.filled else 0.0, "pnl": float(pnl) if pnl is not None else None,
-            "reason": trade.reason or None}
+            "entry_notional": entry_notional, "exit_notional": exit_notional, "reason": trade.reason or None}
 
 
 def _default_fee(row: dict[str, Any]) -> Any:
@@ -630,8 +711,11 @@ def settlement_values(rows: Iterable[dict[str, Any]], finals: dict[str, tuple]) 
     Adapter rows are normalized to the purchased outcome. In particular, Robinhood's
     ``NO Detroit`` row has ``outcome=Buffalo`` and ``no_of=Detroit``; Buffalo winning pays
     one, so the normalized outcome must not be inverted again. A contradictory ``no_of`` /
-    normalized outcome is excluded. Legacy three-field aliases are emitted only when every
-    book agrees, preventing Kalshi and Rothera tie payouts from overwriting one another.
+    normalized outcome is excluded. A tie pays the row's own ``tie_payout``, else the
+    settlement registry's rule for that book and side (``_tie_cached``: the Kalshi adapter
+    never sets a tie payout, and Kalshi's rule is half), else the contract is not valued.
+    Legacy three-field aliases are emitted only when every book agrees, preventing Kalshi and
+    Rothera tie payouts from overwriting one another.
     """
     out: dict[tuple, float] = {}
     legacy: dict[tuple, set[float]] = defaultdict(set)
@@ -642,7 +726,7 @@ def settlement_values(rows: Iterable[dict[str, Any]], finals: dict[str, tuple]) 
         _, _, winner = finals[ev]
         side = side_of(r)
         if winner is None:
-            value = _f(r.get("tie_payout"))
+            value = _tie_cached(r)
             if value is None:
                 continue
         else:

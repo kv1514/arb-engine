@@ -301,7 +301,8 @@ class EvaluationDisciplineTests(unittest.TestCase):
         self.assertEqual((m["attempts"], m["trades"], m["games"]), (5, 3, 2))
         self.assertAlmostEqual(m["resolved_rate"], .6)   # completed / attempted: a resolution rate, not a fill rate
         self.assertAlmostEqual(m["top_game_share"], .06 / .11)
-        self.assertAlmostEqual(m["max_drawdown_per_contract"], .05)
+        self.assertIsNone(m["max_drawdown_per_contract"])                  # no decision times: unsupported, not guessed
+        self.assertIn("max_drawdown_per_contract", m["unsupported"])
         self.assertAlmostEqual(m["positive_game_share"], .5)
 
     def test_end_to_end_on_a_recorded_database(self):
@@ -371,7 +372,7 @@ class EvaluationDisciplineTests(unittest.TestCase):
             self.assertEqual(r["primary"]["hypothesis"], "H3_leadlag@30")
             self.assertEqual(r["secondary"]["family"], ["H1_momentum@30"])      # listed by mistake: still tested alone
             self.assertFalse(r["exploratory"])
-            self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "code", "frozen_models"})
+            self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "code", "fees", "settlement", "runtime", "frozen_models"})
             audit = json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])
             self.assertEqual(audit["fold"], "validation")
             for k in ("utc", "git_head", "spec_hash", "hashes", "results_sha256", "exploratory", "argv"):
