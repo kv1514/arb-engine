@@ -454,7 +454,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
         oid = "0b3c7a2e-demo-4c1f-9a11-000000000001"
         answers = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"},
                    {"order_id": "i4", "fill_count": "0.00", "remaining_count": "0.00"},    # the IOC: nothing at $0.01, nothing rests
-                   {"order_id": "i5", "fill_count": "0.00", "remaining_count": "0.00"}]    # the ledger step's IOC, answer "lost"
+                   {"order_id": "i5", "fill_count": "0.00", "remaining_count": "0.00"},    # the ledger step's IOC, answer "lost"
+                   {"order_id": "e6", "fill_count": "0.00", "remaining_count": "0.00"}]    # the LAG executor's own IOC
         posted: list = []
 
         def create(body):
@@ -474,6 +475,9 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "GET /portfolio/balance": _fx("balance"),
             "GET /markets?series_ticker=KXNFLGAME": {"markets": [{"ticker": "KXNFLGAME-26SEP20PHITEN-PHI"}], "cursor": ""},
             "GET /portfolio/orders?ticker=": by_ticker,
+            "GET /portfolio/orders/e6": {"order": {"order_id": "e6", "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00",
+                                                   "taker_fill_cost_dollars": "0.000000", "maker_fill_cost_dollars": "0.000000",
+                                                   "taker_fees_dollars": "0.000000", "maker_fees_dollars": "0.000000"}},
             "POST /portfolio/events/orders": create,
             f"GET /portfolio/orders/{oid}": {"order": order_row},
             "GET /portfolio/orders?status=resting": [{"orders": [order_row], "cursor": ""}, {"orders": [], "cursor": ""}],
@@ -511,6 +515,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertIn("PASS an order with an unknown outcome blocks new exposure", text)
         self.assertIn("PASS reconciliation found it by client_order_id in the orders listing: state=done order_id=i5", text)
         self.assertIn("PASS and new exposure is unblocked", text)
+        self.assertIn("PASS LAG executor sends IOC 1 x KXNFLGAME-26SEP20PHITEN-PHI @ 0.01 through the ledger", text)
+        self.assertIn("PASS the executor's order is reconciled from the exchange", text)
         self.assertIn("order", written["order.json"])  # the client unwraps; --record re-wraps
         self.assertEqual(written["order.json"]["order"]["outcome_side"], "yes")
         self.assertTrue(written["order.json"]["_fixture"].startswith("recorded, "))

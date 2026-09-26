@@ -19,6 +19,9 @@ Steps (each prints PASS/FAIL and the HTTP status; the script refuses to run on p
    sent with the ledger's client_order_id and its answer is thrown away on purpose - the
    ledger must block new exposure, then find the order in GET /portfolio/orders?ticker=
    &min_ts= by that client_order_id and resolve it                -> unknown-outcome recovery works
+   6b. the LAG executor itself (strategy/lagexec.py): a synthetic signal -> ledger -> IOC ->
+   reconciled; with --fill it buys 1 contract, sends the lock leg on the other outcome through
+   buy_lock (asked 5, bounded to the 1 held; a second lock refused) and sells both back
 7. (--fill --confirm-demo) buy 1 contract IOC at a demo market's ask through the ledger,
    reconcile it (fill count, fill cost, fees from the order row; /portfolio/fills?order_id=
    cross-check) and compare the fee charged with the engine's Kalshi fee model (cent vs
@@ -42,6 +45,7 @@ import argparse
 import json
 import os
 import sys
+from decimal import Decimal
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -271,7 +275,7 @@ def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: Ord
             bid = None
         if bid:
             res2 = led.reserve(strategy="democheck", ticker=ticker, side="yes", action="sell", count=1, limit_price=str(bid),
-                               max_cost_per_contract=str(round(1 - bid, 4) + float(fee_bound(1 - bid, 1))), detail={"step": "flatten"})
+                               max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1), detail={"step": "flatten"})
             plan2 = ex.plan(ticker, "sell", "yes", 1, bid, time_in_force="immediate_or_cancel", note="demo check flatten", client_order_id=res2.client_order_id)
             r2 = chk.step(f"POST IOC sell 1 x {ticker} @ {bid} (flatten)", lambda: ex.execute(plan2, confirm=True))
             if r2 is not None:
@@ -282,6 +286,84 @@ def ledger_fill(chk: "Check", client: KalshiClient, ex: KalshiExecutor, led: Ord
                 print(f"  flatten: state={row2.get('state')} filled={row2.get('fill_count')} proceeds={row2.get('fill_cost')} fees={row2.get('fees')}")
         else:
             print("  no demo bid to sell into: the contract stays in the demo account")
+    return [i for i in ids if i]
+
+
+def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: list[str], fill: bool, max_price: float) -> list[str]:
+    """Step 6b: the LAG executor's own path (strategy/lagexec.py) on demo - a synthetic signal
+    goes through the ledger to an IOC and is reconciled; with ``fill`` it buys 1 contract, then
+    sends the lock leg on the other outcome through ``buy_lock`` (bounded by the entry's fill:
+    a second lock is refused), and sells both back. Returns the order ids."""
+    import tempfile
+
+    from arb_engine.models import OutcomeQuote
+    from arb_engine.strategy.lagexec import LagExecutor
+    from arb_engine.strategy.leadlag import LagSignal
+
+    pick = pick_fillable(client, series_list, max_price) if fill else None
+    if fill and pick is None:
+        print("SKIP engine fill: no demo market with an ask to fill")
+        return []
+    if pick is not None:
+        ticker, _, price, _, _ = pick
+    else:
+        ticker, price = pick_ticker(client, series_list[0]), 0.01
+    ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "lag.jsonl"),
+                     ledger=OrderLedger(led_path, "demo", client.base_url), max_contracts=1, max_notional_per_game=5.0, daily_notional=5.0)
+    key = f"democheck:{ticker}"
+    sig = LagSignal(event_key=key, title="demo check", leader="robinhood", follower="kalshi", outcome="A", label=ticker, lead_move=0.05, follower_move=0.0,
+                    leader_mid=min(0.99, price + 0.05), follower_ask=price, follower_all_in=price, edge=0.05, depth=1, suggested_contracts=1, lag_s=0.0, ts=time.time())
+    quotes = {"kalshi": [OutcomeQuote("kalshi", ticker, key, "A", ask=price, meta={"ticker": ticker, "side": "yes"}, ts=time.time())]}
+    rec = ex.on_signal(sig, quotes)
+    chk.expect(f"LAG executor sends IOC 1 x {ticker} @ {price} through the ledger", rec.get("status") == "SUBMITTED" and bool(rec.get("intent_id")),
+               f"status={rec.get('status')} state={rec.get('state')} reason={rec.get('reason')} latency_ms={rec.get('latency_ms')}")
+    if not rec.get("intent_id"):
+        return []
+    ids = [str(rec.get("order_id") or "")]
+    row = reconcile_until(ex.ledger, client, rec["intent_id"])
+    chk.expect("the executor's order is reconciled from the exchange", row.get("state") == DONE, f"fill={row.get('fill_count')} cost={row.get('fill_cost')} fees={row.get('fees')}")
+    if not fill or float(row.get("fill_count") or 0) < 1:
+        return [i for i in ids if i]
+    # The lock leg: the other outcome of the same event, through buy_lock (inventory-bounded).
+    ev = client.market(ticker).get("event_ticker")
+    others = [m for m in client.get("/markets", {"event_ticker": ev}).get("markets", []) if m.get("ticker") != ticker] if ev else []
+    if not others:
+        print("  no other outcome in this event: lock leg not exercised")
+        return [i for i in ids if i]
+    other = others[0]["ticker"]
+    yes_book, _ = parse_orderbook(client.orderbook(other, depth=3))
+    if not yes_book.asks:
+        print(f"  {other} shows no ask: lock leg not exercised")
+        return [i for i in ids if i]
+    lock_px = float(yes_book.asks[0].price)
+    q = OutcomeQuote("kalshi", other, key, "B", ask=lock_px, meta={"ticker": other, "side": "yes"}, ts=time.time())
+    lock = ex.buy_lock(q, 5, lock_px, key, parent_id=rec["intent_id"])
+    chk.expect("buy_lock asks only for the entry's verified fill (5 requested, 1 held)", lock.get("count") == 1 and lock.get("status") == "SUBMITTED",
+               f"count={lock.get('count')} status={lock.get('status')} reason={lock.get('reason')}")
+    if lock.get("order_id"):
+        ids.append(str(lock["order_id"]))
+    lrow = reconcile_until(ex.ledger, client, lock["intent_id"]) if lock.get("intent_id") else {}
+    if float(lrow.get("fill_count") or 0) >= 1:
+        again = ex.buy_lock(q, 1, lock_px, key, parent_id=rec["intent_id"])
+        chk.expect("a second lock leg is refused: nothing left unhedged", again.get("status") == "skipped" and "hedged" in str(again.get("reason")), str(again.get("reason")))
+    # Flat again (play money either way).
+    for t, n in ((ticker, float(row.get("fill_count") or 0)), (other, float(lrow.get("fill_count") or 0))):
+        if n < 1:
+            continue
+        yb, _ = parse_orderbook(client.orderbook(t, depth=3))
+        if not yb.bids:
+            print(f"  no demo bid for {t}: 1 contract stays in the demo account")
+            continue
+        bid = float(yb.bids[0].price)
+        res = ex.ledger.reserve(strategy="democheck", ticker=t, side="yes", action="sell", count=1, limit_price=str(bid),
+                                max_cost_per_contract=Decimal(1) - Decimal(str(bid)) + fee_bound(1 - Decimal(str(bid)), 1), detail={"step": "engine flatten"})
+        kex = KalshiExecutor(client)
+        r = chk.step(f"POST IOC sell 1 x {t} @ {bid} (engine flatten)", lambda t=t, bid=bid, res=res: kex.execute(
+            kex.plan(t, "sell", "yes", 1, bid, time_in_force="immediate_or_cancel", client_order_id=res.client_order_id), confirm=True))
+        if r is not None:
+            ex.ledger.accepted(res.intent_id, r.get("response") or {})
+            ids.append(str(((r.get("response") or {}).get("order") or r.get("response") or {}).get("order_id") or ""))
+    print(f"  ledger after the engine steps: {ex.ledger.status()['by_state']}, committed today {ex.ledger.status()['committed_today']}")
     return [i for i in ids if i]
 
 
@@ -403,6 +485,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     lost = ledger_lost_answer(chk, client, ex, led, ticker)
     if lost:
         more.append(lost)
+    more.extend(engine_path(chk, client, led.path, [x.strip() for x in args.fill_series.split(",") if x.strip()] if args.fill else [args.series],
+                            args.fill, args.max_price))
     if args.fill:
         more.extend(ledger_fill(chk, client, ex, led, [x.strip() for x in args.fill_series.split(",") if x.strip()], args.max_price))
     if not args.fill or "fills_v2" not in chk.recorded:
