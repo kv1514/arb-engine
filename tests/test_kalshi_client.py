@@ -230,6 +230,13 @@ class ClientOrderPathTests(unittest.TestCase):
         self.assertEqual(res["remaining_count"], "1.00")
         self.assertEqual(c.cancel_order(res["order_id"])["reduced_by"], "1.00")
 
+    def test_cancel_single_routes_to_the_correct_exchange_shard(self):
+        oid = _fx("create_order")["order_id"]
+        path = f"DELETE /portfolio/events/orders/{oid}?market_ticker=KXNBA-X&exchange_index=-1&subaccount=2"
+        c = _client({path: _fx("cancel_order")})
+        self.assertEqual(c.cancel_order(oid, market_ticker="KXNBA-X", exchange_index=-1, subaccount=2)["reduced_by"], "1.00")
+        self.assertTrue(c.http.calls[-1][1].endswith("?market_ticker=KXNBA-X&exchange_index=-1&subaccount=2"))
+
     def test_cancel_all_orders_is_a_bodyless_delete(self):
         c = _client({"DELETE /portfolio/events/orders": {}})
         self.assertIsNone(c.cancel_all_orders())
@@ -285,6 +292,22 @@ class CancelAllTests(unittest.TestCase):
         self.assertEqual([o.status for o in (a, b, stray)], ["canceled", "filled", "canceled"])
         self.assertEqual([o for o in pb.placed if o.status == "resting"], [])
 
+    def test_single_cancel_failure_stays_visible_as_resting(self):
+        c = _client({"DELETE /portfolio/events/orders/o1": HttpError(500, "u", "boom")})
+        kb = KalshiBroker(c, confirm=True)
+        order = RestingOrder("o1", "KXNBA-X", "yes", .4, 1, payload={"exchange_index": 3})
+        with self.assertRaises(HttpError):
+            kb.cancel(order)
+        self.assertEqual(order.status, "resting")
+
+    def test_single_cancel_success_keeps_shard_routing(self):
+        c = _client({"DELETE /portfolio/events/orders/o1": _fx("cancel_order")})
+        kb = KalshiBroker(c, confirm=True)
+        order = RestingOrder("o1", "KXNBA-X", "yes", .4, 1, payload={"exchange_index": 3})
+        kb.cancel(order)
+        self.assertEqual(order.status, "canceled")
+        self.assertTrue(c.http.calls[-1][1].endswith("/o1?market_ticker=KXNBA-X&exchange_index=3"))
+
     def test_kalshi_cancel_all_is_one_batched_delete(self):
         c = _client({"POST /portfolio/events/orders": [{"order_id": "a1", "remaining_count": "5.00"}, {"order_id": "a2", "remaining_count": "5.00"}, {"order_id": "a3", "remaining_count": "5.00"}], "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "a1", "reduced_by": "5.00"}, {"order_id": "a2", "reduced_by": "5.00"}, {"order_id": "a3", "reduced_by": "5.00"}]}})
         kb = KalshiBroker(c, confirm=True)
@@ -310,7 +333,7 @@ class CancelAllTests(unittest.TestCase):
         done = kb.cancel_all()
         self.assertEqual({o.order_id for o in done}, {"a1", "a3"})  # a3 was missing from the batch response -> single cancel OK
         self.assertEqual((o1.status, o2.status, o3.status), ("canceled", "resting", "canceled"))
-        self.assertEqual([u.rsplit("/", 1)[1] for m, u, _ in c.http.calls if m == "DELETE"], ["batched", "a2", "a3"])
+        self.assertEqual([u.rsplit("/", 1)[1].split("?", 1)[0] for m, u, _ in c.http.calls if m == "DELETE"], ["batched", "a2", "a3"])
 
     def test_kalshi_cancel_all_sweep_and_fallback(self):
         c = _client({"GET /portfolio/orders?status=resting": _fx("orders_v2"), "DELETE /portfolio/events/orders/batched": HttpError(500, "u", "boom"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000001": _fx("cancel_order"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000002": HttpError(404, "u", "gone")})

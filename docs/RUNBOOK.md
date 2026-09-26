@@ -256,8 +256,8 @@ python3 -m arb_engine kalshi fills
 ```bash
 python3 -m arb_engine kalshi order --ticker <ticker> --side-action buy --side yes --count 1 --price 0.40 --time-in-force immediate_or_cancel
 python3 -m arb_engine kalshi order --ticker <ticker> --side-action buy --side yes --count 1 --price 0.40 --time-in-force immediate_or_cancel --confirm
-python3 -m arb_engine kalshi cancel --order-id <order-id>              # dry-run
-python3 -m arb_engine kalshi cancel --order-id <order-id> --confirm
+python3 -m arb_engine kalshi cancel --order-id <order-id> --ticker <ticker>              # dry-run; ticker auto-routes to the right shard
+python3 -m arb_engine kalshi cancel --order-id <order-id> --ticker <ticker> --confirm
 python3 -m arb_engine kalshi cancel-all                               # dry-run emergency sweep
 python3 -m arb_engine kalshi cancel-all --confirm
 ```

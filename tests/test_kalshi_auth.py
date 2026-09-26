@@ -61,6 +61,10 @@ class SigningTests(unittest.TestCase):
         msg = (headers["KALSHI-ACCESS-TIMESTAMP"] + "DELETE" + "/trade-api/v2/portfolio/events/orders/batched").encode()
         self.key.public_key().verify(base64.b64decode(headers["KALSHI-ACCESS-SIGNATURE"]), msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
 
+        headers = c._auth_headers("DELETE", "/portfolio/events/orders/o-1?market_ticker=T&exchange_index=-1")
+        msg = (headers["KALSHI-ACCESS-TIMESTAMP"] + "DELETE" + "/trade-api/v2/portfolio/events/orders/o-1").encode()
+        self.key.public_key().verify(base64.b64decode(headers["KALSHI-ACCESS-SIGNATURE"]), msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+
     def test_missing_credentials_raise(self):
         c = KalshiClient(env="demo", api_key=None, private_key_path=None)
         with self.assertRaises(RuntimeError):

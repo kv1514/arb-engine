@@ -94,7 +94,10 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
     elif action == "cancel":
         if not args.order_id:
             raise SystemExit("kalshi cancel requires --order-id")
-        result = ex.cancel(args.order_id, confirm=args.confirm)
+        if not args.ticker and args.exchange_index is None:
+            raise SystemExit("kalshi cancel requires --ticker for shard auto-routing or --exchange-index")
+        result = ex.cancel(args.order_id, confirm=args.confirm, market_ticker=args.ticker,
+                           exchange_index=args.exchange_index, subaccount=args.subaccount)
     elif action == "cancel-all":
         result = ex.cancel_all(confirm=args.confirm, subaccount=args.subaccount)
     else:  # pragma: no cover - argparse owns the choices

@@ -26,6 +26,7 @@ import re
 import socket
 import time
 import urllib.error
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Sequence
 
@@ -179,7 +180,7 @@ class KalshiClient:
             raise RuntimeError("Kalshi credentials missing: set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH")
         # Signed path includes the /trade-api/v2 prefix but not the query string.
         prefix = self.base_url[self.base_url.index("/trade-api"):]
-        return self._sign(method, prefix + path)
+        return self._sign(method, prefix + path.split("?", 1)[0])
 
     # ---- request layer (host fallback) ----------------------------------------------
     @staticmethod
@@ -311,11 +312,21 @@ class KalshiClient:
         is the YES price in dollars as a 4-dp string, ``count`` a string."""
         return self.post("/portfolio/events/orders", payload)
 
-    def cancel_order(self, order_id: str) -> dict:
+    def cancel_order(self, order_id: str, *, market_ticker: Optional[str] = None,
+                     exchange_index: Optional[int] = None, subaccount: Optional[int] = None) -> dict:
         """``DELETE /portfolio/events/orders/{id}`` -> flat ``{order_id,
         reduced_by, ts_ms}`` (not an order object; ``reduced_by`` is the count taken off the
-        book). 404 when the id is unknown."""
-        return self.delete(f"/portfolio/events/orders/{order_id}")
+        book). Kalshi shards the event exchange: pass ``market_ticker`` to auto-route, or an
+        explicit ``exchange_index``; an order id alone defaults to shard 0."""
+        params: list[tuple[str, Any]] = []
+        if market_ticker:
+            params.append(("market_ticker", market_ticker))
+        if exchange_index is not None:
+            params.append(("exchange_index", int(exchange_index)))
+        if subaccount is not None:
+            params.append(("subaccount", int(subaccount)))
+        query = "?" + urllib.parse.urlencode(params) if params else ""
+        return self.delete(f"/portfolio/events/orders/{order_id}{query}")
 
     def cancel_orders_batched(self, orders: Sequence[str | dict]) -> list[dict]:
         """``DELETE /portfolio/events/orders/batched`` in chunks of :data:`BATCH_CANCEL_MAX`.

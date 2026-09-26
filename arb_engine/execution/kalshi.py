@@ -121,14 +121,17 @@ class KalshiExecutor:
         preview["status"] = "SUBMITTED"
         return preview
 
-    def cancel(self, order_id: str, confirm: bool = False) -> dict[str, Any]:
+    def cancel(self, order_id: str, confirm: bool = False, *, market_ticker: Optional[str] = None,
+               exchange_index: Optional[int] = None, subaccount: Optional[int] = None) -> dict[str, Any]:
         """Cancel one order through the same gates as submission."""
         if not str(order_id or "").strip():
             raise ValueError("order_id is required")
-        preview = self._mutation_preview("cancel_order", order_id=str(order_id))
+        preview = self._mutation_preview("cancel_order", order_id=str(order_id), market_ticker=market_ticker,
+                                         exchange_index=exchange_index, subaccount=subaccount)
         if not self._mutation_allowed(preview, confirm):
             return preview
-        preview["response"] = self.client.cancel_order(str(order_id))
+        preview["response"] = self.client.cancel_order(str(order_id), market_ticker=market_ticker,
+                                                        exchange_index=exchange_index, subaccount=subaccount)
         preview["status"] = "CANCELLED"
         return preview
 

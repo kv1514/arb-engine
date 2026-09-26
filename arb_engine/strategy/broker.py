@@ -194,10 +194,9 @@ class KalshiBroker(Broker):
     def cancel(self, order: RestingOrder) -> None:
         if order.status != "resting":
             return
-        try:
-            self.client.cancel_order(order.order_id)
-        finally:
-            order.status = "canceled"
+        self.client.cancel_order(order.order_id, market_ticker=order.ticker or None,
+                                 exchange_index=order.payload.get("exchange_index"))
+        order.status = "canceled"
 
     def cancel_all(self, orders: Optional[Iterable[RestingOrder]] = None, sweep: bool = False) -> list[RestingOrder]:
         """One batched DELETE per :data:`BATCH_CANCEL_MAX` orders for everything resting;
@@ -250,7 +249,8 @@ class KalshiBroker(Broker):
             if oid not in confirmed:
                 # reduced_by == 0 ("the cancel errored") or missing from the response: retry singly.
                 try:
-                    self.client.cancel_order(oid)
+                    self.client.cancel_order(oid, market_ticker=o.ticker or None,
+                                             exchange_index=o.payload.get("exchange_index"))
                 except Exception:
                     continue  # stays "resting" so the caller can see what is still on the book
             o.status = "canceled"

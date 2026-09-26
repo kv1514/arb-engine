@@ -658,7 +658,7 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
             compat = True if rel == "identical" else (False if rel == "mismatch" else None)
             res = two_leg_arb([x for x in series[ka] if x["obs_ts"] > t], [x for x in series[kb] if x["obs_ts"] > t], t,
                               float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb, haircut=haircut,
-                              tie_payouts=ties, settlement_compatible=compat)
+                              tie_payouts=ties, settlement_compatible=compat, book_id_a=ka[1], book_id_b=kb[1])
             legs_filled = sum(1 for l in res.legs if l.filled)
             win = float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None
             tie = float(res.pnl_tie) / seed_n if res.pnl_tie is not None and (res.matched or res.unwound) else None

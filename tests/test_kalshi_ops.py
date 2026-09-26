@@ -23,8 +23,8 @@ class _Client:
         self.base_url = f"https://{env}.invalid"
         self.calls = []
 
-    def cancel_order(self, order_id):
-        self.calls.append(("cancel", order_id))
+    def cancel_order(self, order_id, **routing):
+        self.calls.append(("cancel", order_id, routing))
         return {"order_id": order_id, "reduced_by": "1.00"}
 
     def cancel_all_orders(self, subaccount=None):
@@ -43,7 +43,8 @@ class ExecutorMutationGateTests(unittest.TestCase):
         ex = KalshiExecutor(client)
         self.assertEqual(ex.cancel("o-1", confirm=True)["status"], "CANCELLED")
         self.assertEqual(ex.cancel_all(confirm=True, subaccount=2)["status"], "CANCELLED_ALL")
-        self.assertEqual(client.calls, [("cancel", "o-1"), ("cancel-all", 2)])
+        self.assertEqual(client.calls, [("cancel", "o-1", {"market_ticker": None, "exchange_index": None, "subaccount": None}),
+                                        ("cancel-all", 2)])
 
     def test_production_cancel_requires_live_opt_in(self):
         client = _Client("prod")
@@ -99,12 +100,20 @@ class AccountOpsPluginTests(unittest.TestCase):
     def test_cancel_cli_remains_dry_run_by_default(self):
         fake = mock.Mock()
         fake.cancel.return_value = {"status": "DRY_RUN"}
-        args = argparse.Namespace(action="cancel", no_account_env=True, order_id="o-9", confirm=False)
+        args = argparse.Namespace(action="cancel", no_account_env=True, order_id="o-9", ticker="T",
+                                  exchange_index=None, subaccount=None, confirm=False)
         out = io.StringIO()
         with mock.patch("arb_engine.execution.kalshi.KalshiExecutor", return_value=fake), redirect_stdout(out):
             self.assertEqual(run_kalshi(args), 0)
-        fake.cancel.assert_called_once_with("o-9", confirm=False)
+        fake.cancel.assert_called_once_with("o-9", confirm=False, market_ticker="T", exchange_index=None, subaccount=None)
         self.assertEqual(json.loads(out.getvalue())["status"], "DRY_RUN")
+
+    def test_cancel_requires_explicit_shard_routing(self):
+        args = argparse.Namespace(action="cancel", no_account_env=True, order_id="o-9", ticker=None,
+                                  exchange_index=None, subaccount=None, confirm=False)
+        with mock.patch("arb_engine.execution.kalshi.KalshiExecutor"):
+            with self.assertRaisesRegex(SystemExit, "auto-routing"):
+                run_kalshi(args)
 
 
 if __name__ == "__main__":
