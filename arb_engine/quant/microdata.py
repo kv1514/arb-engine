@@ -304,9 +304,17 @@ class _Prints:
 
 
 # ---------------------------------------------------------------------------------------
+def _row_rank(r: dict[str, Any]) -> tuple[int, str]:
+    """Which of two rows for one contract at one instant is kept: the direct venue's row
+    before a reseller's (Robinhood's Kalshi-routed rows), then the smallest canonical row -
+    a pure function of the rows, so arrival order never decides."""
+    direct = str(r.get("venue")) == str(r.get("book_id") or r.get("venue"))
+    return (0 if direct else 1, json.dumps(r, sort_keys=True, default=str))
+
+
 def _dedupe(rows: Iterable[dict[str, Any]]) -> list[tuple[float, int, dict[str, Any]]]:
-    """(t, approx, row) observations sorted by time, one per contract per instant: the
-    direct venue's row wins over a reseller's (Robinhood's Kalshi-routed rows)."""
+    """(t, approx, row) observations sorted by time, one per contract per instant (``_row_rank``
+    picks it; exact duplicates collapse)."""
     best: dict[tuple, tuple[float, int, dict[str, Any]]] = {}
     for r in rows:
         if not is_observation(r):
@@ -314,8 +322,7 @@ def _dedupe(rows: Iterable[dict[str, Any]]) -> list[tuple[float, int, dict[str, 
         t, approx = observation_time(r)
         key = (contract_key(r), t)
         prev = best.get(key)
-        direct = str(r.get("venue")) == str(r.get("book_id") or r.get("venue"))
-        if prev is None or (direct and str(prev[2].get("venue")) != str(prev[2].get("book_id") or prev[2].get("venue"))):
+        if prev is None or _row_rank(r) < _row_rank(prev[2]):
             best[key] = (t, approx, r)
     return sorted(best.values(), key=lambda x: (x[0], contract_key(x[2])))
 

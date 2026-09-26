@@ -372,7 +372,7 @@ class EvaluationDisciplineTests(unittest.TestCase):
             self.assertEqual(r["primary"]["hypothesis"], "H3_leadlag@30")
             self.assertEqual(r["secondary"]["family"], ["H1_momentum@30"])      # listed by mistake: still tested alone
             self.assertFalse(r["exploratory"])
-            self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "code", "fees", "settlement", "runtime", "frozen_models"})
+            self.assertEqual(set(r["hashes"]), {"spec", "folds", "constants", "semantics", "code", "fees", "settlement", "runtime", "frozen_models"})
             audit = json.loads((Path(tmp) / "log.jsonl").read_text().splitlines()[-1])
             self.assertEqual(audit["fold"], "validation")
             for k in ("utc", "git_head", "spec_hash", "hashes", "results_sha256", "exploratory", "argv"):

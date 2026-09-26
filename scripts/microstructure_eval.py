@@ -71,6 +71,20 @@ CODE_FILES = (
     "arb_engine/fees/registry.py", "arb_engine/matching/settlement_rules.py", "arb_engine/matching/normalize.py",
     "arb_engine/data/settlement_rules.json", "arb_engine/models/__init__.py",
 )
+# How the evaluator decides and counts, in words: part of the effective spec (and so of its
+# hash), next to the code hashes, so a behaviour change is recorded as such.
+EVAL_SEMANTICS: dict[str, Any] = {
+    "batching": ("every loop that decides applies all observations sharing one obs_ts before deciding at that obs_ts: "
+                 "microdata.build samples, arb_scan (H4), the h3_lock_trades hedge watch and the select_trades exposure cooldown"),
+    "dedupe": "one row per (event, book, outcome, side, obs_ts): the direct venue's row, then the smallest canonical row (microdata._row_rank)",
+    "tie_break": {"arb_scan": "cheapest all-in set, then the fresher pair (age of its older leg), then the deeper pair (smaller ask size), then the contract keys",
+                  "select_trades": "one exposure per instant: the cheapest bought contract, then the larger tie payout, then its key",
+                  "h3_lock": "the cheapest lockable complement at each instant, then the larger tie payout, then its key"},
+    "h4_accounting": ("per requested set of ref_contracts: an attempt where no leg fills is $0 and stays in the denominator; an excluded pair "
+                      "(unknown tie, same book, settlement mismatch) is not an attempt; excess a failed unwind leaves is held to its settlement "
+                      "value when the result is known, else the attempt is unresolved (counted, not valued); a per-filled-set return is reported alongside"),
+    "h3_lock": "a hedge counts only on identical settlement (settlement_relation) and, when tie_safe, tie payouts summing to >= $1",
+}
 DEFAULT_SPEC: dict[str, Any] = {"version": 3, "primary": "H3@30s", "horizons": [5, 15, 30, 60], "bootstrap": 2000, "seed": 20260920}
 
 
@@ -177,7 +191,7 @@ def effective_spec(manifest: dict[str, Any], frozen: Optional[dict[str, Any]] = 
     # A listed file that is missing is recorded as such - never silently left out of the hash.
     code = {f: hashlib.sha256((root / f).read_bytes()).hexdigest() if (root / f).exists() else "MISSING" for f in CODE_FILES}
     return {"spec": manifest.get("spec") or DEFAULT_SPEC, "folds": fold_policy(manifest), "constants": effective_constants(),
-            "code": code, "fees": fee_fingerprint(), "settlement": settlement_fingerprint(), "runtime": dict(runtime or {}),
+            "semantics": EVAL_SEMANTICS, "code": code, "fees": fee_fingerprint(), "settlement": settlement_fingerprint(), "runtime": dict(runtime or {}),
             "frozen_models": spec_hash(frozen) if frozen else None}
 
 
@@ -440,11 +454,12 @@ def bought_contract(s: dict[str, Any], d: int) -> Optional[dict[str, Any]]:
     where a tie can happen, the rest of the tie). Never a short synthesised from a bid."""
     if d > 0:
         return {"key": (s["event_key"], s["book_id"], s["outcome"], s["side"]), "venue": s.get("venue"), "ask": s["ask"],
-                "mid": s.get("mid", s["ask"]), "self": True}
+                "mid": s.get("mid", s["ask"]), "tie_payout": s.get("tie_payout"), "self": True}
     c = s.get("complement")
     if not c:
         return None
-    return {"key": tuple(c["key"]), "venue": c.get("venue"), "ask": c["ask"], "mid": (c["bid"] + c["ask"]) / 2.0, "self": False}
+    return {"key": tuple(c["key"]), "venue": c.get("venue"), "ask": c["ask"], "mid": (c["bid"] + c["ask"]) / 2.0,
+            "tie_payout": c.get("tie_payout"), "self": False}
 
 
 def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], int], cooldown_s: float = 0.0
@@ -452,13 +467,16 @@ def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]]
     """(decision, direction, bought contract) in time order, plus the counts of what was not
     traded. One *economic exposure* - (event, book, the outcome the bought contract pays on) -
     trades once per ``cooldown_s``: a rise in KC and the mirror fall in DEN both mean "long
-    KC" and are one trade, whichever contract signalled first. A fall with no executable
+    KC" and are one trade. Decisions at one instant are one batch: when both fire at the same
+    ``t`` the exposure is bought through the cheaper contract (then the larger tie payout, then
+    its key) - never through whichever outcome name sorts first. A fall with no executable
     complement is counted, not traded."""
     last: dict[tuple, float] = {}
     out = []
     unavailable: Counter = Counter()
     dup = 0
-    for s in sorted(samples, key=lambda x: (x["t"], x["event_key"], x["book_id"], x["outcome"], x["side"], x["kind"])):
+    cands = []
+    for s in samples:
         if s.get("venue") not in EXECUTABLE:
             continue
         d = rule(s)
@@ -468,12 +486,17 @@ def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]]
         if bc is None or bc.get("venue") not in EXECUTABLE:
             unavailable[s.get("complement_missing") or "not-executable"] += 1
             continue
+        cands.append((s, d, bc))
+    cands.sort(key=lambda x: (x[0]["t"], tuple(x[2]["key"][:3]), float(x[2]["ask"]), -float(x[2].get("tie_payout") or 0.0), tuple(x[2]["key"]),
+                              x[0]["event_key"], x[0]["book_id"], x[0]["outcome"], x[0]["side"], x[0]["kind"]))
+    for s, d, bc in cands:
         exposure = (bc["key"][0], bc["key"][1], bc["key"][2])
         if cooldown_s and exposure in last and s["t"] - last[exposure] < cooldown_s:
             dup += 1
             continue
         last[exposure] = s["t"]
         out.append((s, d, bc))
+    out.sort(key=lambda x: (x[0]["t"], x[0]["event_key"], x[0]["book_id"], x[0]["outcome"], x[0]["side"], x[0]["kind"]))
     return out, {"complement_unavailable": dict(unavailable), "complement_unavailable_total": sum(unavailable.values()),
                  "same_exposure_dropped": dup, "long": sum(1 for _, d, _ in out if d > 0), "via_complement": sum(1 for _, d, _ in out if d < 0)}
 
@@ -769,7 +792,8 @@ def momentum_forecast_score(fc: dict[tuple, dict[str, Any]], rows: list[dict[str
 # ---- H3 extras, H4 ----------------------------------------------------------------------
 def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fee_for_row: Callable, latency_s: float,
                    watch_s: float = 600.0, n: int = 10, tie_safe: bool = True, settle: Optional[dict] = None,
-                   cooldown_s: float = 0.0, venue_latency: Optional[dict[str, float]] = None) -> dict[str, Any]:
+                   cooldown_s: float = 0.0, venue_latency: Optional[dict[str, float]] = None,
+                   require_identical_settlement: bool = True) -> dict[str, Any]:
     """H3 + lock (strategy/laglock.py replayed) with inventory accounting. Buy what the H3
     decision buys (IOC at the decision ask after the latency, fees in); then for ``watch_s``
     watch the contracts paying on the other outcome on the executable venues and send an IOC
@@ -777,10 +801,17 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
     asked). Every contract a hedge actually fills stays in the books - a partial hedge locks
     what it filled and the watch goes on for the rest; one order at a time. Whatever is still
     unhedged after the watch is sold to the bid (or settled) by the paper executor's own exit;
-    if any of it is neither, the trade is unresolved (None), never valued."""
+    if any of it is neither, the trade is unresolved (None), never valued.
+
+    The watch decides once per instant, after every complement observed at that instant is in:
+    the cheapest lockable one (then the larger tie payout, then its key) gets the order, never
+    whichever book name sorts first. A hedge is a lock only when the two books settle the same
+    way (``settlement_relation`` identical; ``require_identical_settlement``); a cross-book pair
+    on unverified rules is not hedged, and entries that could only have locked that way are
+    counted (``entries_lockable_only_on_unverified_settlement``)."""
     from decimal import Decimal
 
-    from arb_engine.quant.microdata import series_by_contract, tie_value
+    from arb_engine.quant.microdata import series_by_contract, settlement_relation, tie_value
     from arb_engine.quant.paperexec import ioc_entry, ioc_round_trip
 
     series = series_by_contract(rows)
@@ -816,25 +847,42 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
         t_in = erow["obs_ts"]
         etie = tie_value(erow)
         comp_keys = [k for k in series if k[0] == key[0] and k[2] != key[2]]      # rows are normalized: any side
-        stream = sorted((r["obs_ts"], k, r) for k in comp_keys for r in series[k]
-                        if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE)
+        stream = sorted(((r["obs_ts"], k, r) for k in comp_keys for r in series[k]
+                         if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE), key=lambda x: (x[0], x[1]))
         locked, hedge_cost, busy_until = 0, Decimal("0"), -math.inf
-        for tt, k, r in stream:
+        unverified_seen = False
+        pos = 0
+        while pos < len(stream):
+            tt = stream[pos][0]
+            end = pos
+            while end < len(stream) and stream[end][0] == tt:
+                end += 1
+            batch, pos = stream[pos:end], end
             remaining = held - locked
             if remaining <= 0:
                 break
             if tt < busy_until:
                 continue                                    # the previous hedge order is still out
-            ask, cfee = r.get("ask"), fee_for_row(r)
-            if ask is None or cfee is None:
-                continue
-            c_all_in = float(ask) + float(cfee.fee(ask, remaining, "taker")) / remaining
-            if float(cost) / held + c_all_in > 1.0:
-                continue
-            if tie_safe:
-                ct = tie_value(r)
-                if etie is None or ct is None or etie + ct < 1.0 - 1e-9:
+            options = []
+            for _, k, r in batch:                           # every complement seen at tt, then one choice
+                ask, cfee = r.get("ask"), fee_for_row(r)
+                if ask is None or cfee is None:
                     continue
+                c_all_in = float(ask) + float(cfee.fee(ask, remaining, "taker")) / remaining
+                if float(cost) / held + c_all_in > 1.0:
+                    continue
+                ct = tie_value(r)
+                if tie_safe and (etie is None or ct is None or etie + ct < 1.0 - 1e-9):
+                    continue
+                if require_identical_settlement and settlement_relation(erow, r) != "identical":
+                    unverified_seen = True
+                    continue
+                options.append((c_all_in, -(ct or 0.0), k, r))
+            if not options:
+                continue
+            _, _, k, r = min(options, key=lambda o: o[:3])
+            ask = r.get("ask")
+            cfee = fee_for_row(r)
             leg_lat = float(vl.get(str(r.get("venue")), latency_s))
             leg, lrow = ioc_entry([x for x in series[k] if x["obs_ts"] > tt], tt, float(ask), remaining, cfee, leg_lat)
             inv["hedge_orders"] += 1
@@ -860,6 +908,8 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
             unresolved += ex.unresolved
         inv["locked_contracts"] += locked
         inv["unhedged_contracts_at_watch_end"] += rest
+        if unverified_seen and not locked:
+            inv["entries_lockable_only_on_unverified_settlement"] += 1
         if locked == held:
             inv["fully_locked"] += 1
         elif locked:
@@ -889,100 +939,163 @@ def h3_by_grade(samples: list[dict[str, Any]], h: int, seed: int, draws: int, co
     return {name: candidate_metrics([tr for tr in trades if keep(tr["_decision"])], h, seed, draws) for name, keep in groups.items()}
 
 
+def _leg_latency(row: dict[str, Any], latency_k: float, latency_rh: float) -> float:
+    return latency_rh if row.get("venue") == "robinhood" else latency_k
+
+
 def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float, latency_rh: float, seed_n: int = 10,
-             cooldown_s: float = 30.0, haircut: float = 1.0) -> list[dict[str, Any]]:
+             cooldown_s: float = 30.0, haircut: float = 1.0, settle: Optional[dict[tuple, float]] = None) -> list[dict[str, Any]]:
     """H4: moments where independent executable books' all-in asks for both outcomes sum < $1
     (each quote fresh: <= 2 s on the fast-lane venues, <= 6 s elsewhere). Each leg meets its
     own book after its own latency; the win-case, tie-case and worst-case P&L are recorded
-    (a pair whose tie payout is unknown is excluded, not guessed)."""
-    from arb_engine.quant.microdata import TIE_PRIOR, contract_key, fresh_limit, is_observation, observation_time, settlement_relation, tie_value
+    (a pair whose tie payout is unknown is excluded, not guessed).
+
+    **One instant, one decision.** Observations are deduplicated to one row per contract per
+    ``obs_ts`` (``microdata._dedupe``) and every row sharing an ``obs_ts`` is applied before
+    the single decision at that instant: a pair is never formed from one book's new quote and
+    another book's quote that the same instant replaced, so arrival order cannot create or
+    hide an arb. Among the pairs that lock, the cheapest all-in set wins; equal sets go to the
+    fresher pair (the age of its older leg), then the deeper one (the smaller of its two ask
+    sizes), and only then to the contract keys - names never choose between pairs that differ.
+
+    **Accounting** (per requested set of ``seed_n``; ``EVAL_SEMANTICS["h4_accounting"]``): an
+    attempt where no leg fills made $0 and stays in the denominator; an excluded pair is not
+    an attempt; excess contracts a failed unwind leaves behind are held to their settlement
+    value when the game's result is known (``settle``), else the attempt is unresolved -
+    counted, never valued. ``pnl_win_per_filled_set`` divides by the contracts actually bought
+    on the larger leg instead."""
+    from decimal import Decimal
+
+    from arb_engine.quant.microdata import TIE_PRIOR, fresh_limit, series_by_contract, settlement_relation, tie_value
     from arb_engine.quant.paperexec import two_leg_arb
 
+    series = series_by_contract(r for r in rows if r.get("venue") in EXECUTABLE)
+    times = {k: [x["obs_ts"] for x in v] for k, v in series.items()}
     by_event: dict[str, list] = defaultdict(list)
-    for r in rows:
-        if r.get("venue") in EXECUTABLE and is_observation(r):
-            by_event[r["event_key"]].append((observation_time(r)[0], r))
+    for k, ser in series.items():
+        by_event[k[0]].extend((x["obs_ts"], k, x) for x in ser)
     records: list[dict[str, Any]] = []
-    for ev, obs in by_event.items():
-        obs.sort(key=lambda x: x[0])
+    for ev in sorted(by_event):
+        obs = sorted(by_event[ev], key=lambda x: (x[0], x[1]))
         latest: dict[tuple, tuple[float, dict]] = {}
-        series: dict[tuple, list] = defaultdict(list)
-        for t, r in obs:
-            series[contract_key(r)].append(dict(r, obs_ts=t))
         last_fire = -math.inf
-        for t, r in obs:
-            latest[contract_key(r)] = (t, r)
-            fresh = [(k, x) for k, x in latest.items() if t - x[0] <= fresh_limit(x[1])]
+        pos = 0
+        while pos < len(obs):
+            t = obs[pos][0]
+            while pos < len(obs) and obs[pos][0] == t:          # the whole instant lands first ...
+                latest[obs[pos][1]] = (t, obs[pos][2])
+                pos += 1
+            if t - last_fire < cooldown_s:                       # ... then one decision sees all of it
+                continue
+            fresh = sorted(((k, x) for k, x in latest.items() if t - x[0] <= fresh_limit(x[1])), key=lambda kv: kv[0])
             outcomes = sorted({k[2] for k, _ in fresh})
-            if len(outcomes) != 2 or t - last_fire < cooldown_s:
+            if len(outcomes) != 2:
                 continue
             best = None
             for ka, (ta, ra) in fresh:
+                if ka[2] != outcomes[0]:
+                    continue
                 for kb, (tb, rb) in fresh:
-                    if ka[2] != outcomes[0] or kb[2] != outcomes[1] or ka[1] == kb[1]:
+                    if kb[2] != outcomes[1] or ka[1] == kb[1]:
                         continue
                     fa, fb = fee_for_row(ra), fee_for_row(rb)
                     if fa is None or fb is None:
                         continue
                     cost = float(ra["ask"]) + float(fa.fee(ra["ask"], seed_n, "taker")) / seed_n + float(rb["ask"]) + float(fb.fee(rb["ask"], seed_n, "taker")) / seed_n
-                    if cost < 1.0 and (best is None or cost < best[0]):
-                        best = (cost, ka, ra, fa, kb, rb, fb)
+                    if cost >= 1.0:
+                        continue
+                    depth = min(float(ra.get("ask_size") or 0.0), float(rb.get("ask_size") or 0.0))
+                    rank = (round(cost, 12), max(t - ta, t - tb), -depth, ka, kb)
+                    if best is None or rank < best[0]:
+                        best = (rank, cost, ka, ra, fa, kb, rb, fb)
             if best is None:
                 continue
             last_fire = t
-            cost, ka, ra, fa, kb, rb, fb = best
-            la = latency_rh if ra.get("venue") == "robinhood" else latency_k
-            lb = latency_rh if rb.get("venue") == "robinhood" else latency_k
+            _, cost, ka, ra, fa, kb, rb, fb = best
             ties = (tie_value(ra), tie_value(rb))
             rel = settlement_relation(ra, rb)          # every case but the tie (the tie is priced by ``ties``)
             compat = True if rel == "identical" else (False if rel == "mismatch" else None)
-            res = two_leg_arb([x for x in series[ka] if x["obs_ts"] > t], [x for x in series[kb] if x["obs_ts"] > t], t,
-                              float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb, haircut=haircut,
-                              tie_payouts=ties, settlement_compatible=compat, book_id_a=ka[1], book_id_b=kb[1])
+            fut_a = series[ka][bisect.bisect_right(times[ka], t):]
+            fut_b = series[kb][bisect.bisect_right(times[kb], t):]
+            res = two_leg_arb(fut_a, fut_b, t, float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb,
+                              latency_a_s=_leg_latency(ra, latency_k, latency_rh), latency_b_s=_leg_latency(rb, latency_k, latency_rh),
+                              haircut=haircut, tie_payouts=ties, settlement_compatible=compat, book_id_a=ka[1], book_id_b=kb[1])
             legs_filled = sum(1 for l in res.legs if l.filled)
-            win = float(res.pnl) / seed_n if res.pnl is not None and (res.matched or res.unwound) else None
-            tie = float(res.pnl_tie) / seed_n if res.pnl_tie is not None and (res.matched or res.unwound) else None
+            bought = max(l.filled for l in res.legs)
+            unresolved, settled_excess = res.unresolved, 0
+            if res.excluded:
+                pnl_w = pnl_t = None
+            elif not bought:
+                pnl_w = pnl_t = Decimal("0")                     # nothing traded: $0, still an attempt
+            else:
+                pnl_w, pnl_t = res.pnl, res.pnl_tie
+                if res.unresolved:
+                    # The excess a failed unwind left is held to the game's result when it is known.
+                    big = 0 if res.legs[0].filled > res.legs[1].filled else 1
+                    sv = (settle or {}).get((ka, kb)[big])
+                    if sv is not None:
+                        base = Decimal(res.matched) + res.unwind_proceeds - res.unwind_fee - res._cost()
+                        pnl_w = base + Decimal(str(sv)) * res.unresolved
+                        pnl_t = (base - Decimal(res.matched) + Decimal(str(sum(ties))) * res.matched
+                                 + Decimal(str(ties[big])) * res.unresolved) if None not in ties else None
+                        settled_excess, unresolved = res.unresolved, 0
+            win = float(pnl_w) / seed_n if pnl_w is not None else None
+            tie = float(pnl_t) / seed_n if pnl_t is not None else None
             p_tie = TIE_PRIOR.get(ev.split(":", 1)[0].lower(), 0.0)
             tie_safe = (sum(ties) >= 1.0 - 1e-9) if None not in ties else None
             records.append({"game": _game(ev), "t": t, "margin": 1.0 - cost, "tie_safe": tie_safe, "settlement": rel,
+                            "legs": [list(ka), list(kb)],
                             "class": "guaranteed-eligible" if compat is True and tie_safe is True else "speculation",
                             "guaranteed_result": bool(res.guaranteed),
                             "excluded": res.excluded or None, "legs_filled": legs_filled, "matched": res.matched, "unwound": res.unwound,
-                            "unresolved": res.unresolved, "pnl_win": win, "pnl_tie": tie,
+                            "bought": bought, "settled_excess": settled_excess, "unresolved": unresolved, "pnl_win": win, "pnl_tie": tie,
                             "pnl_worst": min(win, tie) if win is not None and tie is not None else win,
-                            "pnl_ev": (1 - p_tie) * win + p_tie * tie if win is not None and tie is not None else win})
+                            "pnl_ev": (1 - p_tie) * win + p_tie * tie if win is not None and tie is not None else win,
+                            "pnl_win_per_filled_set": float(pnl_w) / bought if pnl_w is not None and bought else None})
     return records
 
 
 def h4_report(records: list[dict[str, Any]], seed: int, draws: int) -> dict[str, Any]:
     """Guaranteed-eligible pairs on their worst case; everything else as speculation on its
-    win case (plus the tie case and the tie-odds expectation, for scale) - never mixed."""
+    win case (plus the tie case and the tie-odds expectation, for scale) - never mixed.
+    ``signals`` counts every pair that fired, ``attempts`` the ones traded (not excluded)."""
     elig = [r for r in records if r["class"] == "guaranteed-eligible"]
     spec = [r for r in records if r["class"] == "speculation"]
-    return {"signals": len(records), "by_settlement": dict(Counter(r["settlement"] for r in records)),
+    return {"signals": len(records), "attempts": sum(1 for r in records if not r["excluded"]),
+            "by_settlement": dict(Counter(r["settlement"] for r in records)),
             "by_tie": dict(Counter("tie-safe" if r["tie_safe"] else ("loses-on-tie" if r["tie_safe"] is False else "unknown") for r in records)),
             "excluded": dict(Counter(r["excluded"] for r in records if r["excluded"])),
             "guaranteed": arb_metrics(elig, seed, draws, "pnl_worst"),
             "speculation": {**arb_metrics(spec, seed, draws, "pnl_win"),
                             "tie_case": arb_metrics(spec, seed, draws, "pnl_tie").get("mean_ret"),
-                            "expected_with_tie_prior": arb_metrics(spec, seed, draws, "pnl_ev").get("mean_ret")}}
+                            "expected_with_tie_prior": arb_metrics(spec, seed, draws, "pnl_ev").get("mean_ret"),
+                            "win_case_per_filled_set": arb_metrics([r for r in spec if r.get("bought")], seed, draws,
+                                                                   "pnl_win_per_filled_set").get("mean_ret")}}
 
 
 def arb_metrics(records: list[dict[str, Any]], seed: int, draws: int, field: str = "pnl_worst") -> dict[str, Any]:
-    """Two-leg accounting: attempts, both legs filled (a locked set), one leg (unwound), none,
-    unresolved; P&L per contract set on ``field`` (worst case = win or tie, the guaranteed)."""
+    """Two-leg accounting. The denominator is every attempted pair (``EVAL_SEMANTICS
+    ["h4_accounting"]``): a pair excluded before trading (unknown tie, same book, settlement
+    mismatch) is counted apart, not attempted; an attempt where no leg filled is a $0 trade,
+    not a missing one; only an unresolved attempt (excess neither unwound nor settled) has no
+    value - counted in ``unresolved_attempts``, never valued. P&L per requested contract set
+    on ``field`` (worst case = win or tie, the guaranteed)."""
     rets: dict[str, list] = defaultdict(list)
     tries: dict[str, int] = defaultdict(int)
     times: dict[str, list] = defaultdict(list)
-    for r in records:
+    attempted = [r for r in records if not r["excluded"]]
+    for r in attempted:
         tries[r["game"]] += 1
         rets[r["game"]].append(r[field])
         times[r["game"]].append(r["t"])
     out = summarize(dict(rets), dict(tries), seed=seed, draws=draws, times=dict(times))
-    out.update({"excluded_unknown_tie": sum(1 for r in records if r["excluded"]), "both_legs_filled": sum(1 for r in records if r["legs_filled"] == 2),
-                "one_leg_filled": sum(1 for r in records if r["legs_filled"] == 1), "no_leg_filled": sum(1 for r in records if r["legs_filled"] == 0 and not r["excluded"]),
-                "locked_sets": sum(r["matched"] for r in records), "unwound_contracts": sum(r["unwound"] for r in records),
-                "unresolved_contracts": sum(r["unresolved"] for r in records)})
+    out.update({"excluded": dict(Counter(r["excluded"] for r in records if r["excluded"])),
+                "both_legs_filled": sum(1 for r in attempted if r["legs_filled"] == 2),
+                "one_leg_filled": sum(1 for r in attempted if r["legs_filled"] == 1), "no_leg_filled": sum(1 for r in attempted if r["legs_filled"] == 0),
+                "locked_sets": sum(r["matched"] for r in attempted), "unwound_contracts": sum(r["unwound"] for r in attempted),
+                "excess_held_to_settlement": sum(r.get("settled_excess") or 0 for r in attempted),
+                "unresolved_contracts": sum(r["unresolved"] for r in attempted),
+                "unresolved_attempts": sum(1 for r in attempted if r["unresolved"])})
     return out
 
 
@@ -1123,9 +1236,9 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     report["M_prototype_forecast"] = momentum_forecast_score(fc, data["rows"], samples, seed, draws)
     # H4: the guaranteed trade. Manual Robinhood leg (a person) and both legs fast.
     rob = spec["robust"]
-    manual_recs = arb_scan(data["rows"], _default_fee, latency_s, manual)
-    fast = arb_scan(data["rows"], _default_fee, latency_s, latency_s)
-    stressed = arb_scan(data["rows"], _default_fee, max(float(rob["latency_s"]), latency_s), manual, haircut=float(rob["haircut"]))
+    manual_recs = arb_scan(data["rows"], _default_fee, latency_s, manual, settle=settle)
+    fast = arb_scan(data["rows"], _default_fee, latency_s, latency_s, settle=settle)
+    stressed = arb_scan(data["rows"], _default_fee, max(float(rob["latency_s"]), latency_s), manual, haircut=float(rob["haircut"]), settle=settle)
     h4 = h4_report(manual_recs, seed, draws)
     h4["both_legs_fast"] = h4_report(fast, seed, draws)
     h4["stressed_l3_h05"] = h4_report(stressed, seed, draws)
@@ -1155,6 +1268,7 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     fam = {k: pvals[k] for k in family if k in pvals}
     report["secondary"] = {"family": family, "p": fam, "holm_pass": holm(fam, alpha), "test": "game-level sign-flip, one-sided; Holm"}
     report["decisions"] = decisions
+    report["semantics"] = EVAL_SEMANTICS
     report["fold_role"] = {"discovery": "descriptive: these games shaped the rules; not evidence",
                            "validation": "chronological check before the test; not the test",
                            "test": "the pre-registered test"}.get(fold, fold)

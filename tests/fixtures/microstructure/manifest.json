@@ -64,7 +64,7 @@
   ],
   "test_from": "2026-10-08",
   "spec": {
-    "version": 4,
+    "version": 5,
     "primary": "H3@30s",
     "hypotheses": [
       "H1",
@@ -136,6 +136,12 @@
     },
     "decisions_to_trades": "a decision buys the contract (+1) or its executable complement (-1: same event, market and book, paying on the other outcome and 1 - its tie payout on a tie, observed fresh at the decision); H1 and H3 are symmetric; one economic exposure (event, book, outcome paid on) trades once per signal_cooldown_s; unavailable complements are counted",
     "changes": {
+      "5": [
+        "atomic instants everywhere a decision is made: arb_scan (H4) applies every observation sharing an obs_ts before its one decision (row-at-a-time processing let arrival order create or hide an arb), and so do the h3_lock hedge watch and the select_trades exposure cooldown",
+        "deterministic ties: one row per contract per instant (direct venue, then the smallest canonical row); H4 pairs by cost, freshness, depth, then keys; mirror exposures and hedges by price, tie payout, then key",
+        "H4 denominators: excluded pairs are not attempts, an unfilled attempt is $0, unwind leftovers are held to known settlement values, per-filled-set return reported",
+        "H3 lock: a hedge counts only on identical settlement rules"
+      ],
       "4": [
         "H1 and H3 symmetric through executable complements; mirror signals deduplicated by economic exposure",
         "Robinhood single-leg orders at manual_leg_latency_s (a person places them)",
