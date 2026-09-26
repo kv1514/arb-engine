@@ -33,7 +33,9 @@
     }
   },
   "H4_arb": {
+    "attempts": 162,
     "both_legs_fast": {
+      "attempts": 162,
       "by_settlement": {
         "unverified": 162
       },
@@ -44,13 +46,15 @@
       "guaranteed": {
         "attempts": 0,
         "both_legs_filled": 0,
-        "excluded_unknown_tie": 0,
+        "excess_held_to_settlement": 0,
+        "excluded": {},
         "games": 0,
         "locked_sets": 0,
         "no_leg_filled": 0,
         "one_leg_filled": 0,
         "resolved_rate": null,
         "trades": 0,
+        "unresolved_attempts": 0,
         "unresolved_contracts": 0,
         "unsupported": {
           "mean_ret": "no resolved trade"
@@ -61,39 +65,47 @@
       "speculation": {
         "attempts": 162,
         "both_legs_filled": 57,
-        "excluded_unknown_tie": 0,
+        "excess_held_to_settlement": 0,
+        "excluded": {},
         "expected_with_tie_prior": {
-          "hi": 0.02741,
-          "lo": 0.00471,
-          "point": 0.01587
+          "hi": 0.01861,
+          "lo": 0.00254,
+          "point": 0.00986
         },
-        "games": 10,
-        "hit_rate": 0.6,
+        "games": 11,
+        "hit_rate": 0.37267,
         "locked_sets": 561,
         "max_drawdown_per_contract": 0.241,
         "mean_ret": {
-          "hi": 0.02855,
-          "lo": 0.00566,
-          "point": 0.01699
+          "hi": 0.01941,
+          "lo": 0.00311,
+          "point": 0.01055
         },
         "no_leg_filled": 61,
         "one_leg_filled": 44,
-        "positive_game_share": 0.7,
-        "resolved_rate": 0.61728,
+        "positive_game_share": 0.63636,
+        "resolved_rate": 0.99383,
         "tie_case": {
-          "hi": -0.2154,
-          "lo": -0.2975,
-          "point": -0.26351
+          "hi": -0.10838,
+          "lo": -0.21976,
+          "point": -0.16367
         },
         "top_game_share": 0.29836,
-        "trades": 100,
+        "trades": 161,
+        "unresolved_attempts": 1,
         "unresolved_contracts": 10,
         "unsupported": {},
-        "unwound_contracts": 434
+        "unwound_contracts": 434,
+        "win_case_per_filled_set": {
+          "hi": 0.02836,
+          "lo": 0.00541,
+          "point": 0.01677
+        }
       }
     },
     "by_margin": {
       "1-3c": {
+        "attempts": 57,
         "by_settlement": {
           "unverified": 57
         },
@@ -104,13 +116,15 @@
         "guaranteed": {
           "attempts": 0,
           "both_legs_filled": 0,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "games": 0,
           "locked_sets": 0,
           "no_leg_filled": 0,
           "one_leg_filled": 0,
           "resolved_rate": null,
           "trades": 0,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {
             "mean_ret": "no resolved trade"
@@ -121,38 +135,46 @@
         "speculation": {
           "attempts": 57,
           "both_legs_filled": 7,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "expected_with_tie_prior": {
-            "hi": 0.03854,
-            "lo": -0.01436,
-            "point": 0.00808
+            "hi": 0.02477,
+            "lo": -0.00928,
+            "point": 0.00511
           },
-          "games": 10,
-          "hit_rate": 0.5,
+          "games": 11,
+          "hit_rate": 0.31579,
           "locked_sets": 70,
           "max_drawdown_per_contract": 0.253,
           "mean_ret": {
-            "hi": 0.03871,
-            "lo": -0.01421,
-            "point": 0.00847
+            "hi": 0.02511,
+            "lo": -0.00923,
+            "point": 0.00535
           },
           "no_leg_filled": 21,
           "one_leg_filled": 29,
-          "positive_game_share": 0.6,
-          "resolved_rate": 0.63158,
+          "positive_game_share": 0.54545,
+          "resolved_rate": 1.0,
           "tie_case": {
-            "hi": -0.01414,
-            "lo": -0.15822,
-            "point": -0.08875
+            "hi": -0.0081,
+            "lo": -0.10864,
+            "point": -0.05605
           },
           "top_game_share": 0.48226,
-          "trades": 36,
+          "trades": 57,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {},
-          "unwound_contracts": 281
+          "unwound_contracts": 281,
+          "win_case_per_filled_set": {
+            "hi": 0.03793,
+            "lo": -0.01659,
+            "point": 0.00697
+          }
         }
       },
       "<1c": {
+        "attempts": 48,
         "by_settlement": {
           "unverified": 48
         },
@@ -163,13 +185,15 @@
         "guaranteed": {
           "attempts": 0,
           "both_legs_filled": 0,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "games": 0,
           "locked_sets": 0,
           "no_leg_filled": 0,
           "one_leg_filled": 0,
           "resolved_rate": null,
           "trades": 0,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {
             "mean_ret": "no resolved trade"
@@ -180,38 +204,46 @@
         "speculation": {
           "attempts": 48,
           "both_legs_filled": 2,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "expected_with_tie_prior": {
-            "hi": -0.00067,
-            "lo": -0.0252,
-            "point": -0.01231
+            "hi": -0.00015,
+            "lo": -0.01529,
+            "point": -0.00744
           },
-          "games": 8,
-          "hit_rate": 0.41379,
+          "games": 10,
+          "hit_rate": 0.25,
           "locked_sets": 20,
           "max_drawdown_per_contract": 0.441,
           "mean_ret": {
-            "hi": -0.00045,
-            "lo": -0.02515,
-            "point": -0.01217
+            "hi": -4e-05,
+            "lo": -0.01523,
+            "point": -0.00735
           },
           "no_leg_filled": 19,
           "one_leg_filled": 27,
-          "positive_game_share": 0.375,
-          "resolved_rate": 0.60417,
+          "positive_game_share": 0.3,
+          "resolved_rate": 1.0,
           "tie_case": {
-            "hi": -0.0078,
-            "lo": -0.09239,
-            "point": -0.04666
+            "hi": -0.00383,
+            "lo": -0.0606,
+            "point": -0.02819
           },
           "top_game_share": 0.53007,
-          "trades": 29,
+          "trades": 48,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {},
-          "unwound_contracts": 270
+          "unwound_contracts": 270,
+          "win_case_per_filled_set": {
+            "hi": -0.00045,
+            "lo": -0.02515,
+            "point": -0.01217
+          }
         }
       },
       ">=3c": {
+        "attempts": 57,
         "by_settlement": {
           "unverified": 57
         },
@@ -222,13 +254,15 @@
         "guaranteed": {
           "attempts": 0,
           "both_legs_filled": 0,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "games": 0,
           "locked_sets": 0,
           "no_leg_filled": 0,
           "one_leg_filled": 0,
           "resolved_rate": null,
           "trades": 0,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {
             "mean_ret": "no resolved trade"
@@ -239,35 +273,42 @@
         "speculation": {
           "attempts": 57,
           "both_legs_filled": 6,
-          "excluded_unknown_tie": 0,
+          "excess_held_to_settlement": 0,
+          "excluded": {},
           "expected_with_tie_prior": {
-            "hi": 0.0557,
-            "lo": 0.01217,
-            "point": 0.03023
+            "hi": 0.03169,
+            "lo": 0.00624,
+            "point": 0.01644
           },
-          "games": 9,
-          "hit_rate": 0.45161,
+          "games": 10,
+          "hit_rate": 0.24561,
           "locked_sets": 60,
           "max_drawdown_per_contract": 0.198,
           "mean_ret": {
-            "hi": 0.05607,
-            "lo": 0.01239,
-            "point": 0.03061
+            "hi": 0.03214,
+            "lo": 0.00631,
+            "point": 0.01665
           },
           "no_leg_filled": 26,
           "one_leg_filled": 25,
-          "positive_game_share": 0.88889,
-          "resolved_rate": 0.54386,
+          "positive_game_share": 0.8,
+          "resolved_rate": 1.0,
           "tie_case": {
-            "hi": -0.0165,
-            "lo": -0.10542,
-            "point": -0.06616
+            "hi": -0.00667,
+            "lo": -0.07408,
+            "point": -0.03598
           },
           "top_game_share": 0.3983,
-          "trades": 31,
+          "trades": 57,
+          "unresolved_attempts": 0,
           "unresolved_contracts": 0,
           "unsupported": {},
-          "unwound_contracts": 245
+          "unwound_contracts": 245,
+          "win_case_per_filled_set": {
+            "hi": 0.05545,
+            "lo": 0.012,
+            "point": 0.0299
+          }
         }
       }
     },
@@ -281,13 +322,15 @@
     "guaranteed": {
       "attempts": 0,
       "both_legs_filled": 0,
-      "excluded_unknown_tie": 0,
+      "excess_held_to_settlement": 0,
+      "excluded": {},
       "games": 0,
       "locked_sets": 0,
       "no_leg_filled": 0,
       "one_leg_filled": 0,
       "resolved_rate": null,
       "trades": 0,
+      "unresolved_attempts": 0,
       "unresolved_contracts": 0,
       "unsupported": {
         "mean_ret": "no resolved trade"
@@ -298,37 +341,45 @@
     "speculation": {
       "attempts": 162,
       "both_legs_filled": 15,
-      "excluded_unknown_tie": 0,
+      "excess_held_to_settlement": 0,
+      "excluded": {},
       "expected_with_tie_prior": {
-        "hi": 0.02342,
-        "lo": -0.00306,
-        "point": 0.00907
+        "hi": 0.01486,
+        "lo": -0.00206,
+        "point": 0.00538
       },
-      "games": 10,
-      "hit_rate": 0.45833,
+      "games": 11,
+      "hit_rate": 0.2716,
       "locked_sets": 150,
       "max_drawdown_per_contract": 0.402,
       "mean_ret": {
-        "hi": 0.02381,
-        "lo": -0.00283,
-        "point": 0.00939
+        "hi": 0.01515,
+        "lo": -0.00194,
+        "point": 0.00556
       },
       "no_leg_filled": 66,
       "one_leg_filled": 81,
-      "positive_game_share": 0.5,
-      "resolved_rate": 0.59259,
+      "positive_game_share": 0.45455,
+      "resolved_rate": 1.0,
       "tie_case": {
-        "hi": -0.02919,
-        "lo": -0.09895,
-        "point": -0.06874
+        "hi": -0.01313,
+        "lo": -0.06907,
+        "point": -0.04073
       },
       "top_game_share": 0.30028,
-      "trades": 96,
+      "trades": 162,
+      "unresolved_attempts": 0,
       "unresolved_contracts": 0,
       "unsupported": {},
-      "unwound_contracts": 796
+      "unwound_contracts": 796,
+      "win_case_per_filled_set": {
+        "hi": 0.02337,
+        "lo": -0.00361,
+        "point": 0.00859
+      }
     },
     "stressed_l3_h05": {
+      "attempts": 162,
       "by_settlement": {
         "unverified": 162
       },
@@ -339,13 +390,15 @@
       "guaranteed": {
         "attempts": 0,
         "both_legs_filled": 0,
-        "excluded_unknown_tie": 0,
+        "excess_held_to_settlement": 0,
+        "excluded": {},
         "games": 0,
         "locked_sets": 0,
         "no_leg_filled": 0,
         "one_leg_filled": 0,
         "resolved_rate": null,
         "trades": 0,
+        "unresolved_attempts": 0,
         "unresolved_contracts": 0,
         "unsupported": {
           "mean_ret": "no resolved trade"
@@ -356,35 +409,42 @@
       "speculation": {
         "attempts": 162,
         "both_legs_filled": 15,
-        "excluded_unknown_tie": 0,
+        "excess_held_to_settlement": 0,
+        "excluded": {},
         "expected_with_tie_prior": {
-          "hi": 0.02424,
-          "lo": -0.00287,
-          "point": 0.00961
+          "hi": 0.01522,
+          "lo": -0.0019,
+          "point": 0.00564
         },
-        "games": 10,
-        "hit_rate": 0.46316,
+        "games": 11,
+        "hit_rate": 0.2716,
         "locked_sets": 150,
         "max_drawdown_per_contract": 0.402,
         "mean_ret": {
-          "hi": 0.02464,
-          "lo": -0.00263,
-          "point": 0.00993
+          "hi": 0.0155,
+          "lo": -0.00175,
+          "point": 0.00582
         },
         "no_leg_filled": 67,
         "one_leg_filled": 80,
-        "positive_game_share": 0.5,
-        "resolved_rate": 0.58642,
+        "positive_game_share": 0.45455,
+        "resolved_rate": 1.0,
         "tie_case": {
-          "hi": -0.02859,
-          "lo": -0.0992,
-          "point": -0.06902
+          "hi": -0.01284,
+          "lo": -0.06876,
+          "point": -0.04048
         },
         "top_game_share": 0.30548,
-        "trades": 95,
+        "trades": 162,
+        "unresolved_attempts": 0,
         "unresolved_contracts": 0,
         "unsupported": {},
-        "unwound_contracts": 784
+        "unwound_contracts": 784,
+        "win_case_per_filled_set": {
+          "hi": 0.02354,
+          "lo": -0.00301,
+          "point": 0.00921
+        }
       }
     }
   },
@@ -436,7 +496,7 @@
       "rising": 2960
     }
   },
-  "_fixture": "scripts/microstructure_eval.py --fold discovery --db out/history.db (the 15 NFL games of 2026-09-20/21, legacy ~5 s recorder), replayed under spec v4 (atomic observations, symmetric H1/H3 via executable complements, sign-flip p-values); metrics only; discovery is descriptive, not evidence",
+  "_fixture": "scripts/microstructure_eval.py --fold discovery --db out/history.db (the 15 NFL games of 2026-09-20/21, legacy ~5 s recorder), replayed under spec v5 (one decision per instant in every decision loop, deterministic ties, H4 per-attempt accounting) at git b1238ce4; the evaluator's own output had sha256 45ef4c86ce1af1fd998c6ab47f4c8285803bf6b28b0258285e217515309bad0e (audit log 2026-09-26T23:39:16+00:00, spec_hash 0bcb6e072297), to which only this note was added; metrics only; discovery is descriptive, not evidence",
   "baselines": {
     "B0": "B0_persistence (unchanged price)",
     "B1": "B1_buy_any (cost hurdle)",
@@ -999,14 +1059,15 @@
   },
   "games": 15,
   "hashes": {
-    "code": "3ff6565b02e9fb4db475bacbfdda5fd2e5bfc81c1d7baa742e60baaa4405252f",
+    "code": "5bd66d09bbfad051cb12921afba51f55c1d855b1e2dd39d766ba2d7f8266b38d",
     "constants": "56b7a9c7fe20685ca75cd4b78bcc9b751bc12ddb9f4a7ed6caf35fa4034db9a8",
     "fees": "2dd10c49991c30a884537cb31a363938be94a7edf5617c2e99ed92b7f4477450",
     "folds": "3f8fa925aff1310d9d0046182d12eff258d7e0218a3612ee6208f8efb3b11f9b",
     "frozen_models": null,
     "runtime": "c918b189519bb841f193c768ae0c5f3eff821e7800f12a8a52080faf9a5b0bf6",
+    "semantics": "63c063cf099eb80b4bee1dc345f588e7e4b72e569d94ec7a9b8316dc3ea6e98b",
     "settlement": "74c3cf3551172c8bd5c876fa99220fab6203e89b67fe44eb26286b73ef8456da",
-    "spec": "df5fc0215ec0a2cdb4adc28c66473031b1fe360637918190b832fdaf41e0274a"
+    "spec": "fc1a661902d6502853123421af3a57b74a300618c2320dbb33ffa43e170c4b84"
   },
   "horizons": {
     "15": {
@@ -1258,9 +1319,9 @@
             "tie-inexact": 60
           },
           "complement_unavailable_total": 105,
-          "long": 141,
+          "long": 78,
           "same_exposure_dropped": 119,
-          "via_complement": 61
+          "via_complement": 124
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -1688,9 +1749,9 @@
               "tie-inexact": 64
             },
             "complement_unavailable_total": 87,
-            "long": 82,
+            "long": 70,
             "same_exposure_dropped": 250,
-            "via_complement": 66
+            "via_complement": 78
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -1730,9 +1791,9 @@
           "selection": {
             "complement_unavailable": {},
             "complement_unavailable_total": 0,
-            "long": 11,
+            "long": 5,
             "same_exposure_dropped": 96,
-            "via_complement": 10
+            "via_complement": 16
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -2300,9 +2361,9 @@
             "tie-inexact": 60
           },
           "complement_unavailable_total": 105,
-          "long": 141,
+          "long": 78,
           "same_exposure_dropped": 119,
-          "via_complement": 61
+          "via_complement": 124
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -2730,9 +2791,9 @@
               "tie-inexact": 64
             },
             "complement_unavailable_total": 87,
-            "long": 82,
+            "long": 70,
             "same_exposure_dropped": 250,
-            "via_complement": 66
+            "via_complement": 78
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -2772,9 +2833,9 @@
           "selection": {
             "complement_unavailable": {},
             "complement_unavailable_total": 0,
-            "long": 11,
+            "long": 5,
             "same_exposure_dropped": 96,
-            "via_complement": 10
+            "via_complement": 16
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -3292,9 +3353,9 @@
             "tie-inexact": 60
           },
           "complement_unavailable_total": 105,
-          "long": 141,
+          "long": 78,
           "same_exposure_dropped": 119,
-          "via_complement": 61
+          "via_complement": 124
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -3722,9 +3783,9 @@
               "tie-inexact": 64
             },
             "complement_unavailable_total": 87,
-            "long": 82,
+            "long": 70,
             "same_exposure_dropped": 250,
-            "via_complement": 66
+            "via_complement": 78
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -3766,9 +3827,9 @@
           "selection": {
             "complement_unavailable": {},
             "complement_unavailable_total": 0,
-            "long": 11,
+            "long": 5,
             "same_exposure_dropped": 96,
-            "via_complement": 10
+            "via_complement": 16
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -4289,9 +4350,9 @@
             "tie-inexact": 60
           },
           "complement_unavailable_total": 105,
-          "long": 141,
+          "long": 78,
           "same_exposure_dropped": 119,
-          "via_complement": 61
+          "via_complement": 124
         },
         "settled_positions": 0,
         "skill_ci": {
@@ -4719,9 +4780,9 @@
               "tie-inexact": 64
             },
             "complement_unavailable_total": 87,
-            "long": 82,
+            "long": 70,
             "same_exposure_dropped": 250,
-            "via_complement": 66
+            "via_complement": 78
           },
           "settled_positions": 1,
           "skill_ci": {
@@ -4761,9 +4822,9 @@
           "selection": {
             "complement_unavailable": {},
             "complement_unavailable_total": 0,
-            "long": 11,
+            "long": 5,
             "same_exposure_dropped": 96,
-            "via_complement": 10
+            "via_complement": 16
           },
           "settled_positions": 0,
           "skill_ci": {
@@ -5157,6 +5218,17 @@
     },
     "test": "game-level sign-flip, one-sided; Holm"
   },
-  "spec_hash": "fb40604af8e36651627c509f1dfcdadf7f740283e3500acb9cdf81afb52fd74a",
+  "semantics": {
+    "batching": "every loop that decides applies all observations sharing one obs_ts before deciding at that obs_ts: microdata.build samples, arb_scan (H4), the h3_lock_trades hedge watch and the select_trades exposure cooldown",
+    "dedupe": "one row per (event, book, outcome, side, obs_ts): the direct venue's row, then the smallest canonical row (microdata._row_rank)",
+    "h3_lock": "a hedge counts only on identical settlement (settlement_relation) and, when tie_safe, tie payouts summing to >= $1",
+    "h4_accounting": "per requested set of ref_contracts: an attempt where no leg fills is $0 and stays in the denominator; an excluded pair (unknown tie, same book, settlement mismatch) is not an attempt; excess a failed unwind leaves is held to its settlement value when the result is known, else the attempt is unresolved (counted, not valued); a per-filled-set return is reported alongside",
+    "tie_break": {
+      "arb_scan": "cheapest all-in set, then the fresher pair (age of its older leg), then the deeper pair (smaller ask size), then the contract keys",
+      "h3_lock": "the cheapest lockable complement at each instant, then the larger tie payout, then its key",
+      "select_trades": "one exposure per instant: the cheapest bought contract, then the larger tie payout, then its key"
+    }
+  },
+  "spec_hash": "0bcb6e0722978a5a8dfcf53bcad833cdaac146d4cb7018e253f1618ddce688eb",
   "triggers": 609
 }

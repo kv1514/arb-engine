@@ -720,7 +720,7 @@ a print only once `obs_ts <= t` and excludes approximate ones unless asked
 
 `scripts/microstructure_eval.py --fold discovery` replays every NFL game dated 2026-09-20/21
 (the 15 recorded games the LAG rule was designed on; `tests/fixtures/microstructure/
-manifest.json`, spec v4) through `quant/microdata` and `quant/paperexec`. **Discovery is
+manifest.json`, spec v5) through `quant/microdata` and `quant/paperexec`. **Discovery is
 descriptive, not evidence**: these games shaped the rules, so nothing below may be quoted as
 a test result. The test fold begins at the verified week-5 kickoff (TB @ DAL, 2026-10-08 8:15
 PM ET) and stays closed until the discovery implementation and effective spec hash are
@@ -735,8 +735,12 @@ outcome B, for a Rothera YES-A), observed fresh at the decision, bought at its o
 its own depth and fees. Never a short synthesised from a bid; a fall without such a contract
 is counted, not traded. H1 and H3 are symmetric this way. One *economic exposure* (event,
 book, the outcome the bought contract pays on) trades once per 60 s, so a rise in KC and the
-mirror fall in DEN are one trade. Observations with the same timestamp are processed as one
-batch, so no decision sees a book's previous tick just because of the order rows arrived in.
+mirror fall in DEN are one trade; when both fire at the same instant the cheaper contract
+buys it, never the outcome whose name sorts first. **One instant, one decision**: every loop
+that decides - the sampler, the H4 scan, the lock watch, the mirror cooldown - applies all
+observations sharing an `obs_ts` before it decides at that `obs_ts`, and keeps one row per
+contract per instant (the direct venue's, then the smallest canonical row), so neither the
+order rows arrive in nor how books are named can change a decision.
 
 How a trade is scored: an immediate-or-cancel buy limited to the ask at decision time, meeting
 the book after the latency, filled only for the displayed size, sold to the bid at decision +
@@ -785,7 +789,7 @@ signals of an exposure already traded:
 | at 30 s | trades | bought itself | bought its complement | no executable complement | why | mirror / repeat dropped |
 |---|---|---|---|---|---|---|
 | B1 buy at random | 31127 | 31127 | 0 | 0 | - | 0 |
-| H1 momentum | 202 | 141 | 61 | 105 | 45 stale, 60 tie-inexact | 119 |
+| H1 momentum | 202 | 78 | 124 | 105 | 45 stale, 60 tie-inexact | 119 |
 | H2 dip | 232 | 232 | 0 | 0 | - | 0 |
 | H2 recovery | 55 | 55 | 0 | 0 | - | 0 |
 | H3 lead-lag | 0 | 0 | 0 | 0 | - | 0 |
@@ -873,29 +877,53 @@ meeting its own book after its own latency, a failed leg unwound at the bid. A p
 scored on its win case, with the tie case and the tie-odds expectation (0.4 %) for scale:
 
 <!-- results:micro_discovery_arb -->
-| H4 two-leg arb | signals | settlement rules | guaranteed: pairs, worst case per set | speculation: both legs / one leg / none | win case per set | tie case | with NFL tie odds |
-|---|---|---|---|---|---|---|---|
-| Kalshi leg at the latency, Robinhood by hand (15 s) | 162 | 162 unverified | 0: - | 15 / 81 / 66 | +0.94c [-0.28, +2.38] | -6.87c [-9.89, -2.92] | +0.91c [-0.31, +2.34] |
-| both legs at the latency | 162 | 162 unverified | 0: - | 57 / 44 / 61 | +1.70c [+0.57, +2.85] | -26.35c [-29.75, -21.54] | +1.59c [+0.47, +2.74] |
+| H4 two-leg arb | signals / attempts | settlement rules | guaranteed: pairs, worst case per set | speculation: both legs / one leg / none | leftovers: held to settlement / unresolved | win case per attempted set | per filled set | tie case | with NFL tie odds |
+|---|---|---|---|---|---|---|---|---|---|
+| Kalshi leg at the latency, Robinhood by hand (15 s) | 162 / 162 | 162 unverified | 0: - | 15 / 81 / 66 | 0 / 0 | +0.56c [-0.19, +1.52] | +0.86c [-0.36, +2.34] | -4.07c [-6.91, -1.31] | +0.54c [-0.21, +1.49] |
+| both legs at the latency | 162 / 162 | 162 unverified | 0: - | 57 / 44 / 61 | 0 / 1 | +1.05c [+0.31, +1.94] | +1.68c [+0.54, +2.84] | -16.37c [-21.98, -10.84] | +0.99c [+0.25, +1.86] |
+| stressed: 3 s, half the displayed size, Robinhood by hand | 162 / 162 | 162 unverified | 0: - | 15 / 80 / 67 | 0 / 0 | +0.58c [-0.18, +1.55] | +0.92c [-0.30, +2.35] | -4.05c [-6.88, -1.28] | +0.56c [-0.19, +1.52] |
 <!-- /results:micro_discovery_arb -->
 
 <!-- results:micro_discovery_arb_size -->
-| arb size when it fired | completed / signals | guaranteed-eligible | speculation: win case per set [90 % CI] | tie case |
+| arb size when it fired | valued / attempts | guaranteed-eligible | speculation: win case per attempted set [90 % CI] | tie case |
 |---|---|---|---|---|
-| <1c | 29/48 | 0 | -1.2c [-2.5, -0.0] | -4.7c [-9.2, -0.8] |
-| 1-3c | 36/57 | 0 | +0.8c [-1.4, +3.9] | -8.9c [-15.8, -1.4] |
-| >=3c | 31/57 | 0 | +3.1c [+1.2, +5.6] | -6.6c [-10.5, -1.7] |
+| <1c | 48/48 | 0 | -0.7c [-1.5, -0.0] | -2.8c [-6.1, -0.4] |
+| 1-3c | 57/57 | 0 | +0.5c [-0.9, +2.5] | -5.6c [-10.9, -0.8] |
+| >=3c | 57/57 | 0 | +1.7c [+0.6, +3.2] | -3.6c [-7.4, -0.7] |
 <!-- /results:micro_discovery_arb_size -->
 
 **No discovery arb was guaranteed.** Every one paired a Kalshi YES with a Rothera YES
 (which pays $0.50 on a tie), and Rothera's settlement terms are unverified in the registry,
 so even a tie-proof Rothera NO leg would still be speculation until its terms are captured.
-As speculation: (1) the speed of the second leg is the edge - with both legs at the latency
-the win case is positive with its whole interval above zero, while with the Robinhood leg
-typed by hand at 15 s most signals end with one leg unwound; (2) the 3c+ arbs survive even by
-hand; (3) arbs under 1c lose even in the win case, which is why the live slate journals them
-as ARB SMALL without pushing them. The live tickets follow the same rule: a tie-proof pair
+Returns are per *attempted* set of 10: an attempt where neither leg filled made $0 and stays in
+the denominator (spec v4 dropped those 66, which inflated the by-hand win case from +0.56c to
++0.94c), and "per filled set" divides by the contracts actually bought. As speculation: (1)
+the speed of the second leg is the edge - with both legs at the latency the win case is
+positive with its whole interval above zero, while with the Robinhood leg typed by hand at
+15 s most signals end with one leg unwound; (2) the 3c+ arbs survive even by hand; (3) arbs
+under 1c lose even in the win case, which is why the live slate journals them as ARB SMALL
+without pushing them. One both-legs attempt is unresolved: its unwind failed, and 12 of the 15
+discovery games have no recorded final score (the Mac slept through that Sunday), so its 10
+leftover contracts cannot be held to settlement - counted, never valued. The live tickets follow the same rule: a tie-proof pair
 with a Rothera leg reads `tie-proof on paper`, never `guaranteed`.
+
+**The spec v5 audit (2026-09-26).** `arb_scan` decided after every *row*: at t = 0 two books
+quoted A $0.60 and B $0.50, at t = 1 both moved at once to A $0.40 and B $0.70 - no instant
+offered a set under $1 - yet with zero fees, processing A's row first emitted a 10c "arb"
+(B first: none). The same row-at-a-time pattern chose the lock hedge by book name when two
+complements updated together, and chose the contract behind a mirror exposure by outcome
+name. All are fixed (one decision per instant; cheapest, then freshest, then deepest; names
+only for exact economic ties), and the evaluator's behaviour is now recorded in the effective
+spec (`EVAL_SEMANTICS`, part of its hash). **Synthetic correctness** -
+`tests/test_microstructure_atomic.py`: the reproduction, row permutations, book names that
+sort the other way, duplicated and conflicting rows, appending the future, tie-breaks,
+accounting, mirror exposures and hedges; 11 of its 13 tests fail on the v4 evaluator. **Empirical
+effect on discovery**: none on any decision - the same 162 H4 signals, the same H1-H3 trades,
+unchanged with the rows shuffled - because this recorder polled every ~5.4 s and a quote is
+fresh for 2 s, so the other book's previous quote was already stale whenever a new row
+arrived. The defect needs rows closer together than the freshness window, which is what the
+1 s fast lane records (from 2026-09-24): validation and test data. The H4 numbers above moved
+only through the accounting. The test fold was not run.
 
 The primary and secondary tests (H3 at 30 s alone; the pre-registered secondary family
 Holm-corrected at 10 %, the primary never in it). Each p-value is a one-sided **game-level
@@ -1049,9 +1077,9 @@ a Kalshi YES + a Rothera YES pays $0.50 on a tie). Replayed on the same games, t
 own IOC facing the same latency:
 
 <!-- results:micro_discovery_lock -->
-| signals | entries filled | fully locked | partly locked (partial hedges) | median time to lock | lock or hold (10 min) | same entries held, never locked | fully locked ones only |
-|---|---|---|---|---|---|---|---|
-| 0 | 0 | 0 (0%) | 0 (0) | - | - | - | - |
+| signals | entries filled | fully locked | partly locked (partial hedges) | lockable only on unverified rules | median time to lock | lock or hold (10 min) | same entries held, never locked | fully locked ones only |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0 | 0 (0%) | 0 (0) | 0 | - | - | - | - |
 <!-- /results:micro_discovery_lock -->
 
 The replay runs on the registered H3 signals, and under strict settlement identity there are

@@ -441,28 +441,32 @@ def render_micro_discovery(d: dict) -> dict[str, str]:
     def arb_row(label: str, m: dict) -> list[str]:
         g, sp = m.get("guaranteed") or {}, m.get("speculation") or {}
         settle = ", ".join(f"{v} {k}" for k, v in sorted((m.get("by_settlement") or {}).items()))
-        return [label, str(m.get("signals", 0)), settle or "-", f"{g.get('attempts', 0)}: {ci(g.get('mean_ret'), p=2)}",
-                f"{sp.get('both_legs_filled', 0)} / {sp.get('one_leg_filled', 0)} / {sp.get('no_leg_filled', 0)}",
-                ci(sp.get("mean_ret"), p=2), ci(sp.get("tie_case"), p=2), ci(sp.get("expected_with_tie_prior"), p=2)]
-    arb = table(["H4 two-leg arb", "signals", "settlement rules", "guaranteed: pairs, worst case per set",
-                 "speculation: both legs / one leg / none", "win case per set", "tie case", "with NFL tie odds"],
+        left = f"{sp.get('excess_held_to_settlement', 0)} / {sp.get('unresolved_attempts', 0)}"
+        return [label, f"{m.get('signals', 0)} / {m.get('attempts', m.get('signals', 0))}", settle or "-", f"{g.get('attempts', 0)}: {ci(g.get('mean_ret'), p=2)}",
+                f"{sp.get('both_legs_filled', 0)} / {sp.get('one_leg_filled', 0)} / {sp.get('no_leg_filled', 0)}", left,
+                ci(sp.get("mean_ret"), p=2), ci(sp.get("win_case_per_filled_set"), p=2), ci(sp.get("tie_case"), p=2), ci(sp.get("expected_with_tie_prior"), p=2)]
+    arb = table(["H4 two-leg arb", "signals / attempts", "settlement rules", "guaranteed: pairs, worst case per set",
+                 "speculation: both legs / one leg / none", "leftovers: held to settlement / unresolved",
+                 "win case per attempted set", "per filled set", "tie case", "with NFL tie odds"],
+                [arb_row("Kalshi leg at the latency, Robinhood by hand (15 s)", a), arb_row("both legs at the latency", a["both_legs_fast"]),
+                 arb_row("stressed: 3 s, half the displayed size, Robinhood by hand", a["stressed_l3_h05"])] if "stressed_l3_h05" in a else
                 [arb_row("Kalshi leg at the latency, Robinhood by hand (15 s)", a), arb_row("both legs at the latency", a["both_legs_fast"])])
     lk = d.get("H3_lock") or {}
     def m(x: dict) -> str:
         return ci((x or {}).get("mean_ret"))
     inv = lk.get("inventory") or {}
-    lock = table(["signals", "entries filled", "fully locked", "partly locked (partial hedges)", "median time to lock", "lock or hold (10 min)",
-                  "same entries held, never locked", "fully locked ones only"],
+    lock = table(["signals", "entries filled", "fully locked", "partly locked (partial hedges)", "lockable only on unverified rules",
+                  "median time to lock", "lock or hold (10 min)", "same entries held, never locked", "fully locked ones only"],
                  [[str(lk.get("attempts")), str(lk.get("entries_filled")), f"{lk.get('locked')} ({(lk.get('lock_conversion') or 0):.0%})",
-                   f"{inv.get('partly_locked', 0)} ({inv.get('partial_hedges', 0)})",
+                   f"{inv.get('partly_locked', 0)} ({inv.get('partial_hedges', 0)})", str(inv.get("entries_lockable_only_on_unverified_settlement", 0)),
                    f"{lk['median_seconds_to_lock']:.0f} s" if lk.get("median_seconds_to_lock") is not None else "-",
                    m(lk), m(lk.get("hold_no_lock")), m(lk.get("locked_only"))]]) if lk else ""
     bym = a.get("by_margin") or {}
     def size_row(k: str) -> list[str]:
         sp = (bym[k].get("speculation") or {})
-        return [k, f"{sp.get('trades', 0)}/{bym[k].get('signals', 0)}", str((bym[k].get("guaranteed") or {}).get("attempts", 0)),
+        return [k, f"{sp.get('trades', 0)}/{sp.get('attempts', 0)}", str((bym[k].get("guaranteed") or {}).get("attempts", 0)),
                 ci(sp.get("mean_ret"), p=1), ci(sp.get("tie_case"), p=1)]
-    arb_size = table(["arb size when it fired", "completed / signals", "guaranteed-eligible", "speculation: win case per set [90 % CI]", "tie case"],
+    arb_size = table(["arb size when it fired", "valued / attempts", "guaranteed-eligible", "speculation: win case per attempted set [90 % CI]", "tie case"],
                      [size_row(k) for k in ("<1c", "1-3c", ">=3c") if k in bym]) if bym else ""
     h3r = [["registered: identical settlement, equal tie payout", str(h30["H3_leadlag"]["attempted_orders"]), ci(h30["H3_leadlag"].get("mean_ret")), "tested (primary)"]]
     for lvl, label in (("tie_matched", "diagnostic: equal tie payout, other rules may differ"), ("any_settlement", "diagnostic: any settlement, tie priced in")):
