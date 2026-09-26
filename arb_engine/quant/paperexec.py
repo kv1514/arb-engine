@@ -201,11 +201,15 @@ class ArbResult:
     excluded: str = ""
     tie_payouts: Optional[tuple[float, float]] = None
     settlement_compatible: Optional[bool] = None
+    book_ids: Optional[tuple[str, str]] = None
 
     @property
     def guaranteed(self) -> bool:
         """A positive win-case P&L is a lock only with verified settlement and tie cases."""
-        return self.settlement_compatible is True and self.tie_payouts is not None and self.pnl is not None and self.pnl > 0 and self.pnl_tie is not None and self.pnl_tie >= 0
+        return (self.settlement_compatible is True and self.tie_payouts is not None
+                and self.book_ids is not None and self.book_ids[0] != self.book_ids[1]
+                and self.pnl is not None and self.pnl > 0
+                and self.pnl_tie is not None and self.pnl_tie >= 0)
 
     @property
     def leg_failure(self) -> bool:
@@ -225,7 +229,25 @@ class ArbResult:
     def pnl_tie(self) -> Optional[Decimal]:
         if self.pnl is None or self.tie_payouts is None:
             return None
-        return D(sum(self.tie_payouts)) * self.matched + self.unwind_proceeds - self.unwind_fee - self._cost()
+        tie_payout = sum((D(v) for v in self.tie_payouts), Decimal("0"))
+        return tie_payout * self.matched + self.unwind_proceeds - self.unwind_fee - self._cost()
+
+
+def _book_identity(value: Any) -> Optional[str]:
+    """Return a usable immutable book identity, or None for placeholders/unknowns."""
+    if value is None:
+        return None
+    book = str(value).strip()
+    if not book or book.lower() in {"?", "none", "null", "unknown"}:
+        return None
+    return book
+
+
+def _series_book(rows: Sequence[dict[str, Any]]) -> Optional[str]:
+    """Infer identity only for legacy callers whose complete series names exactly one book."""
+    books = {_book_identity(r.get("book_id")) for r in rows}
+    books.discard(None)
+    return next(iter(books)) if len(books) == 1 else None
 
 
 def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any]], decision_ts: float,
@@ -236,17 +258,20 @@ def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any
                 unwind_window_s: float = 60.0, settlement_compatible: Optional[bool] = None,
                 book_id_a: Optional[str] = None, book_id_b: Optional[str] = None) -> ArbResult:
     """Both legs IOC after their own latency. ``tie_payouts`` = (leg a, leg b) dollars per
-    contract on a tie; an unknown value excludes the pair (ties settle differently by venue)."""
+    contract on a tie; an unknown value excludes the pair (ties settle differently by venue).
+
+    ``book_id_a`` / ``book_id_b`` are the identities known at decision time and are
+    authoritative when supplied.  Legacy callers may omit them, in which case a unique
+    identity is inferred from each complete series.  A result cannot be ``guaranteed``
+    unless both identities are known and distinct.
+    """
     rows_a, rows_b = _dedupe_observations(rows_a), _dedupe_observations(rows_b)
-    books_a = {str(r.get("book_id")) for r in rows_a if r.get("book_id")}
-    books_b = {str(r.get("book_id")) for r in rows_b if r.get("book_id")}
-    if book_id_a:
-        books_a.add(str(book_id_a))
-    if book_id_b:
-        books_b.add(str(book_id_b))
-    if books_a & books_b:
+    identity_a = _book_identity(book_id_a) if book_id_a is not None else _series_book(rows_a)
+    identity_b = _book_identity(book_id_b) if book_id_b is not None else _series_book(rows_b)
+    identities = (identity_a, identity_b) if identity_a is not None and identity_b is not None else None
+    if identities is not None and identities[0] == identities[1]:
         empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
-        return ArbResult(legs=empty, excluded="same-book")
+        return ArbResult(legs=empty, excluded="same-book", book_ids=identities)
     if settlement_compatible is False:
         empty = PaperTrade(count, limit_a), PaperTrade(count, limit_b)
         return ArbResult(legs=empty, excluded="settlement-mismatch")
@@ -256,6 +281,7 @@ def two_leg_arb(rows_a: Iterable[dict[str, Any]], rows_b: Iterable[dict[str, Any
     a, obs_a = ioc_entry(rows_a, decision_ts, limit_a, count, fee_a, latency_a_s, haircut, entry_tol_s)
     b, obs_b = ioc_entry(rows_b, decision_ts, limit_b, count, fee_b, latency_b_s, haircut, entry_tol_s)
     res = ArbResult(legs=(a, b), matched=min(a.filled, b.filled), settlement_compatible=settlement_compatible,
+                    book_ids=identities,
                     tie_payouts=tuple(float(v) for v in tie_payouts) if tie_payouts is not None else None)
     excess = abs(a.filled - b.filled)
     if excess:
