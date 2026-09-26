@@ -143,6 +143,59 @@ class HostEnvTests(unittest.TestCase):
         self.assertIn("demo host", env_host_problem("prod", DEMO_URL))
         self.assertIn("not a known Kalshi host", env_host_problem("demo", "https://proxy.local/trade-api/v2"))
 
+    def test_a_recognised_host_is_not_enough_the_whole_endpoint_is_checked(self):
+        from arb_engine.execution.ledger import endpoint_problem
+        from arb_engine.strategy.broker import KalshiBroker
+
+        bad = {
+            "http://external-api.demo.kalshi.co/trade-api/v2": "only https",
+            "HTTP://external-api.demo.kalshi.co/trade-api/v2": "only https",
+            "https://user:pw@external-api.demo.kalshi.co/trade-api/v2": "user-info",
+            "https://@external-api.demo.kalshi.co/trade-api/v2": "user-info",
+            "https://external-api.demo.kalshi.co:8443/trade-api/v2": "port 8443",
+            "https://external-api.demo.kalshi.co:80/trade-api/v2": "port 80",
+            "https://external-api.demo.kalshi.co/other": "path",
+            "https://external-api.demo.kalshi.co/trade-api/v1": "path",
+            "https://external-api.demo.kalshi.co/trade-api/v2/portfolio": "path",
+            "https://external-api.demo.kalshi.co": "path",
+            "https://external-api.demo.kalshi.co/trade-api/v2?next=https://evil": "query",
+            "https://external-api.demo.kalshi.co/trade-api/v2#x": "fragment",
+            "https://external-api.demo.kalshi.co/trade-api/v2?": "query",
+            " https://external-api.demo.kalshi.co/trade-api/v2": "whitespace",
+            "https://external-api.demo.kalshi.co/trade-api/v2\n": "whitespace",
+            "https://external-api.demo.kalshi.co\\@evil.example/trade-api/v2": "backslash",
+            "https://external-api.demo.kalshi.co.evil.example/trade-api/v2": "not a known Kalshi host",
+            "https://external-api.demo.kalshi.co:99999/trade-api/v2": "unparseable",
+            "": "empty",
+        }
+        for url, why in bad.items():
+            with self.subTest(url=url):
+                problem = env_host_problem("demo", url)
+                self.assertIsNotNone(problem)
+                self.assertIn(why, problem)
+                self.assertIsNone(host_env(url))
+                client = FakeKalshi(Clock())
+                client.base_url = url
+                ex = KalshiExecutor(client)
+                self.assertTrue(ex.execute(ex.plan(TICKER, "buy", "yes", 1, 0.5), confirm=True)["status"].startswith("BLOCKED"))
+                with self.assertRaises(RuntimeError):
+                    KalshiBroker(client, confirm=True)
+                with self.assertRaises(LedgerError):
+                    OrderLedger.for_client(client, path=tmp())
+                self.assertEqual(client.creates, [])
+        for good in (DEMO_URL, DEMO_URL + "/", "https://EXTERNAL-API.demo.kalshi.co/trade-api/v2", "https://external-api.demo.kalshi.co:443/trade-api/v2",
+                     "https://demo-api.kalshi.co/trade-api/v2"):
+            with self.subTest(good=good):
+                self.assertIsNone(endpoint_problem(good))
+                self.assertIsNone(env_host_problem("demo", good))
+
+    def test_signed_requests_are_never_sent_over_plain_http(self):
+        from arb_engine.venues.kalshi import KalshiClient
+
+        c = KalshiClient(env="demo", api_key="k", private_key_path="/nonexistent.pem", base_url="http://external-api.demo.kalshi.co/trade-api/v2")
+        with self.assertRaisesRegex(RuntimeError, "non-HTTPS"):
+            c._auth_headers("GET", "/portfolio/balance")      # refused before the key file is even read
+
     def test_demo_gates_never_reach_a_production_host(self):
         client = FakeKalshi(Clock())
         client.base_url = PROD_URL                      # KALSHI_BASE_URL moved the host, KALSHI_ENV still says demo

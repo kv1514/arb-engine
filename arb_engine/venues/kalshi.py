@@ -180,6 +180,9 @@ class KalshiClient:
     def _auth_headers(self, method: str, path: str) -> dict[str, str]:
         if not self.has_credentials:
             raise RuntimeError("Kalshi credentials missing: set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH")
+        if not self.base_url.lower().startswith("https://"):
+            # The key id and a replayable signature ride on every signed request: never in clear.
+            raise RuntimeError(f"refusing to sign a request to a non-HTTPS Kalshi endpoint ({self.base_url.split('://', 1)[0]}://...)")
         # Signed path includes the /trade-api/v2 prefix but not the query string.
         prefix = self.base_url[self.base_url.index("/trade-api"):]
         return self._sign(method, prefix + path.split("?", 1)[0])

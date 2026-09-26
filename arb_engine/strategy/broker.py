@@ -48,6 +48,40 @@ class SelfMatchRefused(RuntimeError):
     """Raised by ``place`` when :class:`SelfMatchGuard` says the order would hit our own book."""
 
 
+@dataclass
+class SweepReport:
+    """What a ``cancel_all(sweep=True)`` could establish about the book.
+
+    ``complete`` only when a complete (untruncated) listing was read, every order on it and
+    every order of ours was confirmed cancelled, and - when the exchange-side cancel-all had
+    to stand in for a listing - a complete listing afterwards shows nothing resting."""
+    listed: int = 0
+    listing_truncated: bool = False
+    listing_error: Optional[str] = None
+    fallback: Optional[str] = None           # "cancel_all_orders" when the exchange-side sweep ran
+    verified: Optional[bool] = None          # after the fallback: a complete listing shows the book empty
+    unresolved: list[str] = field(default_factory=list)   # order ids that may still be resting
+    cancelled: int = 0
+
+    @property
+    def complete(self) -> bool:
+        return (not self.unresolved and self.listing_error is None and not self.listing_truncated) or \
+               (self.fallback is not None and self.verified is True and not self.unresolved)
+
+
+class SweepIncomplete(RuntimeError):
+    """``cancel_all(sweep=True)`` could not show the book is empty: the listing was truncated
+    or failed (the exchange-side cancel-all ran and could not be verified), or some orders
+    are still resting. ``report`` says which; ``cancelled`` is what was cancelled."""
+
+    def __init__(self, report: SweepReport, cancelled: list[Any]):
+        self.report, self.cancelled = report, cancelled
+        why = report.listing_error or ("the resting-order listing was truncated" if report.listing_truncated else "")
+        super().__init__(f"kalshi sweep incomplete: {why + '; ' if why else ''}{len(report.unresolved)} order(s) may still rest"
+                         + (f" ({', '.join(report.unresolved[:5])}{' ...' if len(report.unresolved) > 5 else ''})" if report.unresolved else "")
+                         + ("" if report.verified is not False else "; the exchange-side cancel-all could not be verified"))
+
+
 class SelfMatchGuard:
     """Why an order must not be sent, or ``None``.
 
@@ -168,10 +202,12 @@ class KalshiBroker(Broker):
 
     name = "kalshi"
 
-    def __init__(self, client: Optional[KalshiClient] = None, confirm: bool = False):
+    def __init__(self, client: Optional[KalshiClient] = None, confirm: bool = False, settle_s: float = 10.0, sleep: Any = time.sleep):
         super().__init__()
         self.client = client or KalshiClient()
         self.confirm = confirm
+        self.settle_s, self._sleep = float(settle_s), sleep   # Kalshi's reads trail its writes by seconds
+        self.last_sweep: Optional[SweepReport] = None
         if not self.client.has_credentials:
             raise RuntimeError("KalshiBroker needs KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH")
         problem = env_host_problem(self.client.env, self.client.base_url)
@@ -202,6 +238,14 @@ class KalshiBroker(Broker):
                                  exchange_index=order.payload.get("exchange_index"))
         order.status = "canceled"
 
+    def _list_resting(self) -> tuple[list[dict], bool]:
+        """(rows, truncated) of every resting order the client will page through. A client
+        without ``paged`` reports truncation through ``last_truncated`` (``orders_v2``)."""
+        if callable(getattr(self.client, "paged", None)):
+            return self.client.paged("/portfolio/orders", "orders", {"status": "resting"})
+        rows = list(self.client.orders_v2(status="resting") or [])
+        return rows, bool(getattr(self.client, "last_truncated", False))
+
     def cancel_all(self, orders: Optional[Iterable[RestingOrder]] = None, sweep: bool = False) -> list[RestingOrder]:
         """One batched DELETE per :data:`BATCH_CANCEL_MAX` orders for everything resting;
         with ``sweep=True`` also cancels resting orders the exchange reports that this process
@@ -211,16 +255,25 @@ class KalshiBroker(Broker):
         2xx single cancel) marks an order ``canceled``; anything else stays ``resting`` so the
         caller can see what is still on the book. If the batched call itself fails the orders
         are cancelled one by one, so a shutdown never leaves orders because one endpoint
-        misbehaved. A failed sweep listing is never swallowed: the exchange-side
-        ``cancel_all_orders`` (needs no listing) takes over, and if that fails too the error
-        propagates after our own orders were cancelled — a sweep that silently returns ``[]``
-        is exactly the orphan bug this method exists to prevent."""
+        misbehaved.
+
+        A sweep must prove the book is empty. A listing that failed *or came back truncated*
+        (the client stopped paging with a cursor still pending: orders beyond it are unknown)
+        does not: the exchange-side ``cancel_all_orders`` (needs no listing) takes over, and a
+        complete listing afterwards has to show nothing resting (polled for up to
+        ``settle_s``: Kalshi's reads trail its writes). If the fallback itself fails the error
+        propagates after our own orders were cancelled. Otherwise the outcome is in
+        ``last_sweep`` and, unless it is complete, :class:`SweepIncomplete` is raised naming
+        every order that may still rest - a sweep that silently returns is exactly the orphan
+        bug this method exists to prevent."""
         mine = self._resting(orders)
         known = {o.order_id for o in mine}
-        sweep_error: Optional[BaseException] = None
+        report = SweepReport()
         if sweep:
             try:
-                for od in self.client.orders_v2(status="resting"):
+                rows, truncated = self._list_resting()
+                report.listed, report.listing_truncated = len(rows), bool(truncated)
+                for od in rows:
                     oid = str(od.get("order_id") or od.get("id") or "")
                     if oid and oid not in known:
                         known.add(oid)
@@ -229,15 +282,51 @@ class KalshiBroker(Broker):
                         mine.append(orphan)
                         self._placed.append(orphan)  # now tracked: a later cancel_all retries it and the guard sees it
             except Exception as e:  # noqa: BLE001 - reported below, never dropped
-                sweep_error = e
-                log.warning("kalshi sweep: listing resting orders failed (%r); falling back to DELETE /portfolio/events/orders", e)
+                report.listing_error = f"listing resting orders failed ({e!r})"
         done = self._cancel_batched(mine) if mine else []
-        if sweep_error is not None:
+        report.cancelled = len(done)
+        if not sweep:
+            return done
+        report.unresolved = [o.order_id for o in mine if o.status == "resting"]
+        if report.listing_error is not None or report.listing_truncated:
+            why = report.listing_error or f"the resting-order listing was truncated after {report.listed} rows"
+            log.warning("kalshi sweep: %s; falling back to DELETE /portfolio/events/orders", why)
             try:
                 self.client.cancel_all_orders()
             except Exception as e2:
-                raise RuntimeError(f"kalshi sweep failed: listing ({sweep_error!r}) and cancel-all ({e2!r}) both errored; resting orders may remain on the book") from e2
+                self.last_sweep = report
+                raise RuntimeError(f"kalshi sweep failed: {why} and cancel-all ({e2!r}) errored; resting orders may remain on the book") from e2
+            report.fallback = "cancel_all_orders"
+            report.verified, left = self._verify_empty()
+            if left is not None:
+                report.unresolved = sorted(set(report.unresolved) | set(left)) if left else []
+                for o in mine:
+                    if o.status == "resting" and o.order_id not in report.unresolved:
+                        o.status = "canceled"    # gone from a complete listing after the exchange-side sweep
+        self.last_sweep = report
+        if not report.complete:
+            log.warning("kalshi sweep incomplete: %s", report)
+            raise SweepIncomplete(report, done)
         return done
+
+    def _verify_empty(self) -> tuple[bool, Optional[list[str]]]:
+        """After the exchange-side cancel-all: (verified, order ids still listed). Polls a
+        complete listing until it is empty or ``settle_s`` runs out; a listing that errors or
+        comes back truncated verifies nothing (``(False, None)``)."""
+        t0 = time.monotonic()
+        while True:
+            try:
+                rows, truncated = self._list_resting()
+            except Exception as e:  # noqa: BLE001
+                log.warning("kalshi sweep: verification listing failed (%r)", e)
+                return False, None
+            if truncated:
+                return False, None
+            left = [str(od.get("order_id") or od.get("id") or "") for od in rows]
+            left = [x for x in left if x]
+            if not left or time.monotonic() - t0 >= self.settle_s:
+                return not left, left
+            self._sleep(1.0)
 
     def _cancel_batched(self, mine: list[RestingOrder]) -> list[RestingOrder]:
         by_id = {o.order_id: o for o in mine}

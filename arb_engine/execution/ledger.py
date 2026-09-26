@@ -104,10 +104,47 @@ class LedgerError(RuntimeError):
     """The ledger could not record (or refuses this environment): send nothing."""
 
 
-def host_env(base_url: str) -> Optional[str]:
-    """``prod`` / ``demo`` for a known Kalshi host, else None."""
+API_PATH = "/trade-api/v2"
+
+
+def endpoint_problem(base_url: str) -> Optional[str]:
+    """Why ``base_url`` is not a well-formed Kalshi REST endpoint, or None.
+
+    The signed headers (key id, timestamp, signature) and every order ride on this URL, so
+    it must be exactly ``https://<host>/trade-api/v2``: HTTPS (never cleartext), no
+    user-info, the default port, that path and nothing after it (no query, no fragment), and
+    no whitespace or control characters that different parsers could read differently."""
     from urllib.parse import urlsplit
 
+    raw = str(base_url or "")
+    if not raw or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in raw) or "\\" in raw:
+        return "empty, or contains whitespace, control characters or backslashes"
+    try:
+        parts = urlsplit(raw)
+        port = parts.port
+    except ValueError as e:
+        return f"unparseable ({e})"
+    if parts.scheme.lower() != "https":
+        return f"scheme {parts.scheme or '(none)'!r}: only https"
+    if "@" in parts.netloc or parts.username is not None or parts.password is not None:
+        return "carries user-info (credentials) in the URL"
+    if port not in (None, 443):
+        return f"port {port}: only the default HTTPS port"
+    if not parts.hostname:
+        return "no host"
+    if parts.path.rstrip("/") != API_PATH:
+        return f"path {parts.path or '/'!r}: must be {API_PATH}"
+    if parts.query or parts.fragment or raw.rstrip("/").endswith(("?", "#")):
+        return "query or fragment after the API path"
+    return None
+
+
+def host_env(base_url: str) -> Optional[str]:
+    """``prod`` / ``demo`` for a well-formed endpoint on a known Kalshi host, else None."""
+    from urllib.parse import urlsplit
+
+    if endpoint_problem(base_url) is not None:
+        return None
     host = (urlsplit(str(base_url or "")).hostname or "").lower()
     for env, hosts in KNOWN_HOSTS.items():
         if host in hosts:
@@ -120,10 +157,15 @@ def env_host_problem(env: str, base_url: str) -> Optional[str]:
 
     ``KALSHI_BASE_URL`` overrides the host without changing ``KALSHI_ENV``; the demo gates
     (no ``ARB_LIVE_TRADING`` needed) must never reach a production host that way, and an
-    unrecognised host (a proxy, a typo) could be either."""
+    unrecognised host (a proxy, a typo) could be either. The whole endpoint is checked
+    (``endpoint_problem``): a recognised host over plain HTTP, on another port or path is
+    refused too."""
     from urllib.parse import urlsplit
 
-    host = urlsplit(str(base_url or "")).hostname or str(base_url)
+    structure = endpoint_problem(base_url)
+    if structure is not None:
+        return f"{base_url!r} is not a Kalshi API endpoint: {structure}"
+    host = (urlsplit(str(base_url or "")).hostname or "").lower()
     where = host_env(base_url)
     env = str(env or "").lower()
     if where is None:

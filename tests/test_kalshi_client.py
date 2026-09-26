@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from arb_engine.execution.kalshi import KalshiExecutor, OrderPlan
-from arb_engine.strategy.broker import KalshiBroker, PaperBroker, RestingOrder, SelfMatchGuard, SelfMatchRefused
+from arb_engine.strategy.broker import SweepIncomplete, KalshiBroker, PaperBroker, RestingOrder, SelfMatchGuard, SelfMatchRefused
 from arb_engine.venues import kalshi as kmod
 from arb_engine.venues.http import HttpError
 from arb_engine.venues.kalshi import BATCH_CANCEL_MAX, ENV_REST_BASE, LEGACY_REST_BASE, KalshiClient, batch_cancel_reduced, build_order_payload, order_expiration, order_side_price
@@ -342,10 +342,14 @@ class CancelAllTests(unittest.TestCase):
     def test_kalshi_cancel_all_sweep_and_fallback(self):
         c = _client({"GET /portfolio/orders?status=resting": _fx("orders_v2"), "DELETE /portfolio/events/orders/batched": HttpError(500, "u", "boom"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000001": _fx("cancel_order"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000002": HttpError(404, "u", "gone")})
         kb = KalshiBroker(c, confirm=True)
-        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"):
-            done = kb.cancel_all(sweep=True)
-        # batched failed -> per-order fallback; the 404 one is reported as still resting
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(SweepIncomplete) as cm:
+            kb.cancel_all(sweep=True)
+        # batched failed -> per-order fallback; the 404 one is reported as possibly still resting
+        done = cm.exception.cancelled
         self.assertEqual([o.order_id[-1] for o in done], ["1"])
+        self.assertEqual(cm.exception.report.unresolved, ["0b3c7a2e-demo-4c1f-9a11-000000000002"])
+        self.assertFalse(cm.exception.report.listing_truncated)
+        self.assertIsNone(cm.exception.report.fallback)                  # a complete listing needs no exchange-side sweep
         self.assertEqual([m for m, _, _ in c.http.calls], ["GET", "DELETE", "DELETE", "DELETE"])
         self.assertTrue(c.http.calls[0][1].endswith("/trade-api/v2/portfolio/orders?status=resting"))
         # swept orders carry the documented direction/price: a NO order's price is no_price_dollars
@@ -361,14 +365,25 @@ class CancelAllTests(unittest.TestCase):
         own_create = {"POST /portfolio/events/orders": {"order_id": "a1"}}
         batched_ok = {"DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "a1", "reduced_by": "5.00"}]}}
         c = _client({**own_create, "GET /portfolio/orders?status=resting": HttpError(404, "u", "not found"), **batched_ok, "DELETE /portfolio/events/orders": {}})
-        kb = KalshiBroker(c, confirm=True)
+        kb = KalshiBroker(c, confirm=True, sleep=lambda s: None)
         o1 = kb.place("T", "yes", 0.3, 5)
-        with self.assertLogs("arb_engine.strategy.broker", level="WARNING") as logs:
-            done = kb.cancel_all(sweep=True)
-        self.assertEqual([o.order_id for o in done], ["a1"])
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING") as logs, self.assertRaises(SweepIncomplete) as cm:
+            kb.cancel_all(sweep=True)
+        # The exchange-side cancel-all ran, but no listing could confirm the book is empty:
+        # that is not a complete shutdown, and it says so.
+        self.assertEqual([o.order_id for o in cm.exception.cancelled], ["a1"])
+        self.assertEqual((cm.exception.report.fallback, cm.exception.report.verified), ("cancel_all_orders", False))
         self.assertEqual(o1.status, "canceled")
         self.assertIn("listing resting orders failed", logs.output[0])
-        self.assertEqual([(m, u.rsplit("/trade-api/v2", 1)[1]) for m, u, _ in c.http.calls][1:], [("GET", "/portfolio/orders?status=resting"), ("DELETE", "/portfolio/events/orders/batched"), ("DELETE", "/portfolio/events/orders")])
+        self.assertEqual([(m, u.rsplit("/trade-api/v2", 1)[1]) for m, u, _ in c.http.calls][1:], [("GET", "/portfolio/orders?status=resting"), ("DELETE", "/portfolio/events/orders/batched"), ("DELETE", "/portfolio/events/orders"), ("GET", "/portfolio/orders?status=resting")])
+        # When the listing works again after the exchange-side sweep and shows nothing, it is complete.
+        c3 = _client({**own_create, "GET /portfolio/orders?status=resting": [HttpError(404, "u", "not found"), {"orders": [], "cursor": ""}], **batched_ok, "DELETE /portfolio/events/orders": {}})
+        kb3 = KalshiBroker(c3, confirm=True, sleep=lambda s: None)
+        kb3.place("T", "yes", 0.3, 5)
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"):
+            self.assertEqual([o.order_id for o in kb3.cancel_all(sweep=True)], ["a1"])
+        self.assertTrue(kb3.last_sweep.complete)
+        self.assertEqual((kb3.last_sweep.fallback, kb3.last_sweep.verified), ("cancel_all_orders", True))
         c2 = _client({**own_create, "GET /portfolio/orders?status=resting": HttpError(404, "u", "not found"), **batched_ok, "DELETE /portfolio/events/orders": HttpError(500, "u", "down")})
         kb2 = KalshiBroker(c2, confirm=True)
         o = kb2.place("T", "yes", 0.3, 5)
@@ -376,6 +391,85 @@ class CancelAllTests(unittest.TestCase):
             kb2.cancel_all(sweep=True)
         self.assertIn("resting orders may remain", str(cm.exception))
         self.assertEqual(o.status, "canceled")  # our own order was still cancelled before raising
+
+
+class TruncatedSweepTests(unittest.TestCase):
+    """A listing the client stopped paging (a cursor still pending after max_pages) is not the
+    book: the sweep runs the exchange-side cancel-all, verifies, and reports what may rest."""
+
+    ROW = None
+
+    def _routes(self, verify):
+        row = _fx("orders_v2")["orders"][0]
+        return {"GET /portfolio/orders?status=resting&cursor=more": {"orders": [row], "cursor": "more"},
+                "GET /portfolio/orders?status=resting": [{"orders": [row], "cursor": "more"}] * 1 + verify,
+                "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": row["order_id"], "reduced_by": "1.00"}]},
+                "DELETE /portfolio/events/orders": {}}
+
+    def _broker(self, routes, **kw):
+        return KalshiBroker(_client(routes), confirm=True, sleep=lambda s: None, **kw)
+
+    def test_a_truncated_listing_runs_the_fallback_and_verifies(self):
+        kb = self._broker(self._routes([{"orders": [], "cursor": ""}]))
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING") as logs:
+            done = kb.cancel_all(sweep=True)
+        self.assertEqual(len(done), 1)
+        self.assertIn("truncated", logs.output[0])
+        rep = kb.last_sweep
+        self.assertTrue(rep.listing_truncated)
+        self.assertEqual((rep.fallback, rep.verified, rep.unresolved, rep.complete), ("cancel_all_orders", True, [], True))
+        self.assertTrue(any(m == "DELETE" and u.endswith("/portfolio/events/orders") for m, u, _ in kb.client.http.calls))
+
+    def test_orders_still_listed_after_the_fallback_are_reported(self):
+        straggler = dict(_fx("orders_v2")["orders"][1], order_id="late-1")
+        kb = self._broker(self._routes([{"orders": [straggler], "cursor": ""}]), settle_s=0.0)
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(SweepIncomplete) as cm:
+            kb.cancel_all(sweep=True)
+        self.assertEqual(cm.exception.report.unresolved, ["late-1"])
+        self.assertIn("late-1", str(cm.exception))
+        self.assertFalse(kb.last_sweep.complete)
+
+    def test_a_verification_listing_that_is_truncated_again_verifies_nothing(self):
+        kb = self._broker(self._routes([{"orders": [], "cursor": "more"}]))
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(SweepIncomplete) as cm:
+            kb.cancel_all(sweep=True)
+        self.assertEqual((cm.exception.report.fallback, cm.exception.report.verified), ("cancel_all_orders", False))
+        self.assertIn("could not be verified", str(cm.exception))
+
+    def test_a_client_without_paged_reports_truncation_through_last_truncated(self):
+        row = _fx("orders_v2")["orders"][0]
+
+        class Legacy:
+            env, base_url, has_credentials = "demo", "https://external-api.demo.kalshi.co/trade-api/v2", True
+
+            def __init__(self):
+                self.listings, self.cancel_all_calls = 0, 0
+                self.last_truncated = False
+
+            def orders_v2(self, **params):
+                self.listings += 1
+                self.last_truncated = self.listings == 1           # the first listing stopped early
+                return [row] if self.listings == 1 else []
+
+            def cancel_orders_batched(self, entries):
+                return [{"orders": [{"order_id": e["order_id"], "reduced_by": "1.00"} for e in entries]}]
+
+            def cancel_all_orders(self, subaccount=None):
+                self.cancel_all_calls += 1
+        c = Legacy()
+        kb = KalshiBroker(c, confirm=True, sleep=lambda s: None)
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"):
+            kb.cancel_all(sweep=True)
+        self.assertEqual((c.cancel_all_calls, kb.last_sweep.complete), (1, True))
+
+    def test_a_failing_fallback_still_raises_after_our_own_orders_are_cancelled(self):
+        routes = self._routes([])
+        routes["DELETE /portfolio/events/orders"] = HttpError(500, "u", "down")
+        kb = self._broker(routes)
+        with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(RuntimeError) as cm:
+            kb.cancel_all(sweep=True)
+        self.assertIn("truncated", str(cm.exception))
+        self.assertIn("resting orders may remain", str(cm.exception))
 
 
 class MakerShutdownTests(unittest.TestCase):
