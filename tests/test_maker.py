@@ -567,15 +567,21 @@ class BrokerGateTests(unittest.TestCase):
         self.assertEqual(b.name, "kalshi")
 
     def test_kalshi_broker_place_and_poll(self):
-        http = FakeHttp({"/portfolio/events/orders/abc": {}, "/portfolio/events/orders": {"order": {"order_id": "abc", "status": "resting"}}, "/portfolio/orders/abc": {"order": {"order_id": "abc", "status": "resting", "fill_count_fp": "40"}}})
+        http = FakeHttp({"/portfolio/events/orders/abc": {}, "/portfolio/events/orders": {"order": {"order_id": "abc", "status": "resting"}}, "/portfolio/orders/abc": {"order": {"order_id": "abc", "status": "resting", "fill_count_fp": "40"}},
+                         "/series/KXT": {"series": {"ticker": "KXT", "fee_type": "quadratic", "fee_multiplier": 1}}})
         client = KalshiClient(env="demo", api_key="k", private_key_path="/x.pem", http=http)
         client._auth_headers = lambda m, p: {}  # skip signing in the test
-        b = KalshiBroker(client, confirm=True)
+        from tests.test_kalshi_client import _ledger
+
+        b = KalshiBroker(client, confirm=True, ledger=_ledger())
         o = b.place("KXT-1", "no", 0.91, 100, watch_key="w")
         self.assertEqual((o.order_id, o.status), ("abc", "resting"))
+        row = b.ledger.get(o.intent_id)                         # recorded before it was sent, reserved at the worst case
+        self.assertEqual((row["state"], row["strategy"], row["tif"], row["order_id"]), ("accepted", "maker", "good_till_canceled", "abc"))
         fills = b.poll([o], {})
         self.assertEqual(fills, [(o, 40.0, 0.91)])
         self.assertEqual(o.filled, 40.0)
+        self.assertEqual(b.ledger.get(o.intent_id)["fill_count"], "40")   # the poll's row is booked in the ledger
         b.cancel(o)
         self.assertEqual(o.status, "canceled")
         self.assertTrue(any("/portfolio/events/orders/abc" in c for c in http.calls))

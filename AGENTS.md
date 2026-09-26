@@ -23,14 +23,22 @@ data flow.
    (`execution/ledger.env_host_problem`), so `KALSHI_BASE_URL` cannot move the demo gates
    onto production. The maker runner must cancel everything on shutdown and must never rest
    on a market whose hedge has disappeared.
-3a. **Every automatic order goes through the order ledger** (`execution/ledger.py`): the
-   intent and its worst-case cost (fees included) are written and reserved against the
-   budget before the request, the ledger's `client_order_id` goes on the order, an answer
-   that never came back is `ambiguous` and blocks new exposure until reconciliation finds
-   the order on the exchange, and actual fills and fees replace the reservation. Budgets
-   are sums over the ledger, so they survive restarts and span processes. Lock legs are
-   bounded by the entry's verified fill and a maximum number of attempts. Tests pass a
-   temporary ledger path and never write to `out/`.
+3a. **Every order the engine sends goes through the order ledger** (`execution/ledger.py`):
+   LAG entries and lock legs, the Robinhood-done button, the maker's resting orders
+   (`KalshiBroker`) and confirmed manual orders. The intent and its worst-case cost (fees
+   included, at the market's own fee multiplier read from the exchange - never an assumed
+   1) are written and reserved before the request, the ledger's `client_order_id` goes on
+   the order, an answer that never came back is `ambiguous` and blocks new exposure until
+   reconciliation finds the order on the exchange, and actual fills and fees replace the
+   reservation. Budgets are sums over the ledger, so they survive restarts and span
+   processes. A ledger belongs to one Kalshi account (fingerprints of the key id and of
+   `GET /communications/id`, never the identifiers): another account's client is refused,
+   and an order is released as never accepted only by a client provably of the account
+   that sent it. Lock legs are bounded by the entry's verified fill and a maximum number of
+   attempts. A resting maker order is read by the process that placed it; a restarted maker
+   cancels what a dead one left resting. A sweep counts as a shutdown only when a complete
+   listing shows the book empty. Tests never write to `out/` (`tests/__init__.py` points
+   `ARB_ORDER_LEDGER_DIR` at a temporary directory).
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
    Those quotes carry `book_id="kalshi"` and must never be arbed against Kalshi direct;
@@ -84,7 +92,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (996)
+python3 -m unittest discover -s tests -t .     # Python tests (1003)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

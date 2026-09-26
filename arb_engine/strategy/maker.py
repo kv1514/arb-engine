@@ -597,6 +597,16 @@ class MakerRunner:
         self.alerts.info(f"maker runner start: broker={self.broker.name} size={self.cfg.size} min_margin={self.cfg.min_margin:.2%} max_orders={self.cfg.max_orders} max_notional=${self.cfg.max_notional:g} hedge_cash=${self.cfg.hedge_cash:g} hedge_venues={','.join(self.hedge_venues)} executable={','.join(sorted(self.executable))}")
         for v, why in self.ineligible_hedges.items():
             self.alerts.alert("HEDGE VENUE NOT EXECUTABLE", f"hedge venue {v} was opted in explicitly but {why}; every fill there must be hedged some other way", venue=v)
+        recover = getattr(self.broker, "recover", None)
+        if callable(recover):
+            # The order ledger's view of the last run: unknown orders resolved, and the resting
+            # orders of a maker process that is gone cancelled before anything new rests.
+            try:
+                for rec in recover() or []:
+                    self.alerts.info(f"maker recovery: {rec.get('ticker', '')} {rec.get('before', '')}->{rec.get('after', '')} {rec.get('note') or rec.get('error') or ''}".strip(),
+                                     recovery=rec)
+            except Exception as e:  # noqa: BLE001 - never start blind: say so loudly
+                self.alerts.alert("EXEC ERROR", f"maker recovery failed ({e!r}): orders from the last run may still rest", error=repr(e))
         try:
             while time.time() - start < duration and (max_iterations is None or n < max_iterations):
                 try:

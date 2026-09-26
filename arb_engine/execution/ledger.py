@@ -66,7 +66,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
-from typing import Any, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from ..fees.base import D
 from ..fees.kalshi import KalshiFees
@@ -802,10 +802,21 @@ class OrderLedger:
                 "this_key_account_known": bool(self.identity.account_fp)}
 
     # ---- 4. reconciliation ---------------------------------------------------------------
-    def reconcile(self, client: Any, now: Optional[float] = None) -> list[dict]:
+    def owner_gone(self, owner: str) -> bool:
+        """True when ``owner`` (``host:pid``) is a process on this host that no longer runs."""
+        return self._owner_gone(owner)
+
+    def reconcile(self, client: Any, now: Optional[float] = None, include_resting: bool = False,
+                  skip: Iterable[str] = ()) -> list[dict]:
         """Resolve every open intent against the exchange. Returns one record per intent
         looked at: ``{intent_id, before, after, note}``. Errors leave the intent as it was
-        (an ambiguous one stays blocking) and are reported, never raised."""
+        (an ambiguous one stays blocking) and are reported, never raised.
+
+        An accepted *resting* order (good-till-cancelled: the maker's) belongs to the process
+        that placed it, which reads it every poll and hands the rows to :meth:`apply_row`;
+        it is only looked at with ``include_resting`` - by that process, or by its successor
+        once the owner is gone - and never when its owner is another live process. ``skip``
+        names intents the caller is reading itself."""
         self._check_client(client)
         now = self.clock() if now is None else float(now)
         ident = self._identity_for(client)
@@ -816,10 +827,16 @@ class OrderLedger:
         with self._lock:
             rows = self.conn.execute("SELECT * FROM intents WHERE state IN ('pending', 'ambiguous', 'accepted') ORDER BY created_ts").fetchall()
             unknown = {r["intent_id"] for r in self._unknown(self.conn, now)}
+        skip = set(skip or ())
         out = []
         for r in rows:
             if r["state"] == PENDING and r["intent_id"] not in unknown:
                 continue                           # still in flight in a live process
+            if r["intent_id"] in skip:
+                continue
+            if r["state"] == ACCEPTED and str(r["tif"]).lower() not in IOC:
+                if not include_resting or (r["owner"] != self.owner and not self._owner_gone(r["owner"])):
+                    continue                       # a resting order is its (live) owner's to read
             rel = self._relation(r, ident)
             if rel == "other":
                 out.append({"intent_id": r["intent_id"], "strategy": r["strategy"], "ticker": r["ticker"], "before": r["state"],
@@ -881,6 +898,24 @@ class OrderLedger:
             oid = str(order.get("order_id") or order.get("id") or "")
             self._write(lambda c: (c.execute("UPDATE intents SET order_id=?, state=?, updated_ts=? WHERE intent_id=?", (oid, ACCEPTED, now, iid)),
                                    self._event(c, now, iid, "found", order_id=oid, status=order.get("status"))))
+        return self._apply_order(client, r, order, now)
+
+    def apply_row(self, intent_id: str, order: dict, client: Any = None, now: Optional[float] = None) -> str:
+        """Book an order row the caller read itself (``GET /portfolio/orders/{id}``): fills of
+        a resting order so far, or the final fills and fees of a finished one."""
+        now = self.clock() if now is None else float(now)
+        row = self.get(intent_id)
+        if row is None:
+            raise LedgerError(f"no intent {intent_id}")
+        if row["state"] in (DONE, REJECTED):
+            return f"already {row['state']}"
+        oid = str((order or {}).get("order_id") or (order or {}).get("id") or "")
+        if row["order_id"] and oid and oid != row["order_id"]:
+            raise LedgerError(f"order row {oid} is not intent {intent_id}'s order {row['order_id']}")
+        return self._apply_order(client, row, order, now)
+
+    def _apply_order(self, client: Any, r: dict, order: Optional[dict], now: float) -> str:
+        iid = r["intent_id"]
         if not order:
             self._bump(iid, now, "empty order read")
             return "empty order read"
@@ -902,7 +937,7 @@ class OrderLedger:
             # the fee at its bound, so the budget errs high.
             cost, fees = D(r["limit_price"]) * filled, fee_bound(r["limit_price"], filled, _dec(r.get("fee_mult")) or Decimal(1))
             detail["source"] = "order-without-cost-fields: limit x fills + fee bound"
-        if filled > 0 and hasattr(client, "fills_v2"):
+        if filled > 0 and client is not None and hasattr(client, "fills_v2"):
             try:
                 fills = [f for f in (client.fills_v2(order_id=order.get("order_id") or r["order_id"]) or [])
                          if str(f.get("order_id") or "") in ("", str(order.get("order_id") or r["order_id"]))]

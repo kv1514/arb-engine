@@ -53,7 +53,7 @@ class FakeKalshi:
         self.clock, self.fill = clock, fill
         self.api_key, self.account = api_key, account   # the key id and GET /communications/id
         self.comms_error = None
-        self.rows, self.fill_rows, self.creates = {}, [], []
+        self.rows, self.fill_rows, self.creates, self.cancels = {}, [], [], []
         self.lose_answer = None      # an exception to raise after the order is on the book
         self.fail_before = None      # an exception to raise before anything is recorded
         self.blank_answer = False
@@ -82,12 +82,14 @@ class FakeKalshi:
         n = int(float(payload["count"]))
         yes = Decimal(payload["price"])
         price = yes if payload["side"] == "bid" else Decimal(1) - yes
-        got = self.fill(n)
+        resting = payload.get("time_in_force") == "good_till_canceled"
+        got = 0 if resting else self.fill(n)            # a post-only maker order rests; an IOC fills or is gone
         fee = KalshiFees(multiplier=D(self.multiplier), rounding=self.rounding).fee(price, got, "taker") if got else Decimal("0")
         oid = f"o{len(self.rows) + 1}"
-        row = {"order_id": oid, "client_order_id": payload.get("client_order_id"), "ticker": payload["ticker"], "status": "executed" if got == n else "canceled",
-               "outcome_side": "yes" if payload["side"] == "bid" else "no", "fill_count_fp": f"{got}.00", "remaining_count_fp": "0.00",
-               "initial_count_fp": f"{n}.00", "created": self.clock()}
+        row = {"order_id": oid, "client_order_id": payload.get("client_order_id"), "ticker": payload["ticker"],
+               "status": "resting" if resting else ("executed" if got == n else "canceled"),
+               "outcome_side": "yes" if payload["side"] == "bid" else "no", "fill_count_fp": f"{got}.00",
+               "remaining_count_fp": f"{n}.00" if resting else "0.00", "initial_count_fp": f"{n}.00", "created": self.clock(), "_price": price}
         if self.cost_fields:
             row.update(taker_fill_cost_dollars=str(price * got), maker_fill_cost_dollars="0.0000", taker_fees_dollars=str(fee), maker_fees_dollars="0.0000")
         self.rows[oid] = row
@@ -100,6 +102,24 @@ class FakeKalshi:
         return {"order_id": oid, "client_order_id": payload.get("client_order_id"), "fill_count": f"{got}.00", "remaining_count": "0.00",
                 **({"average_fill_price": str(price)} if got else {})}
 
+    def fill_resting(self, oid, k):
+        """Someone sells into our resting order: k contracts at its price, as maker."""
+        row = self.rows[oid]
+        filled = int(float(row["fill_count_fp"])) + k
+        left = int(float(row["remaining_count_fp"])) - k
+        row.update(fill_count_fp=f"{filled}.00", remaining_count_fp=f"{left}.00", status="resting" if left else "executed",
+                   maker_fill_cost_dollars=str(row["_price"] * filled), maker_fees_dollars="0.0000",
+                   taker_fill_cost_dollars="0.0000", taker_fees_dollars="0.0000")
+
+    def cancel_order(self, order_id, market_ticker=None, exchange_index=None, subaccount=None):
+        row = self.rows.get(order_id)
+        if row is None or row["status"] != "resting":
+            raise HttpError(404, f"{DEMO_URL}/portfolio/events/orders/{order_id}", "not found")
+        left = row["remaining_count_fp"]
+        row.update(status="canceled", remaining_count_fp="0.00")
+        self.cancels.append(order_id)
+        return {"order_id": order_id, "reduced_by": left, "ts_ms": 0}
+
     def _visible(self, row):
         return self.clock() - row["created"] >= self.read_lag
 
@@ -107,11 +127,11 @@ class FakeKalshi:
         row = self.rows.get(oid)
         if row is None or not self._visible(row):
             raise HttpError(404, f"{DEMO_URL}/portfolio/orders/{oid}", "not found")
-        return {k: v for k, v in row.items() if k != "created"}
+        return {k: v for k, v in row.items() if k not in ("created", "_price")}
 
     def paged(self, path, key, params):
         assert path == "/portfolio/orders" and key == "orders"
-        rows = [{k: v for k, v in r.items() if k != "created"} for r in self.rows.values()
+        rows = [{k: v for k, v in r.items() if k not in ("created", "_price")} for r in self.rows.values()
                 if self._visible(r) and r["ticker"] == params.get("ticker", r["ticker"])]
         return rows, self.truncated
 
@@ -147,6 +167,151 @@ class FeeBoundTests(unittest.TestCase):
                         charged = sum((fees.fee(price, k, "taker") for k in split if k), Decimal("0"))
                         self.assertLessEqual(charged, bound, (limit, n, price, split))
         self.assertEqual(worst_cost("0.60", 50, 1), Decimal("31.00"))   # 50 x 0.60 + 50 x 2c
+
+
+def maker(client, clock, path=None, owner=None, owner_alive=None, **kw):
+    """A KalshiBroker (the maker's) on its own ledger; ``owner`` names the process."""
+    from arb_engine.strategy.broker import KalshiBroker
+
+    led_kw = {k: v for k, v in (("owner", owner), ("owner_alive", owner_alive)) if v is not None}
+    led = OrderLedger.for_client(client, path=path or tmp(), clock=clock, **led_kw)
+    return KalshiBroker(client, confirm=True, ledger=led, clock=clock, **kw)
+
+
+class MakerLedgerTests(unittest.TestCase):
+    """The maker's resting orders go through the ledger too: an order whose answer was lost
+    blocks new ones until it is found (and, untracked, cancelled); a restart cancels what a
+    dead maker left resting; fills and fees are booked from the rows the maker reads."""
+
+    W = KEY + "|kalshi:yes"
+
+    def test_a_maker_create_whose_answer_was_lost_blocks_then_is_found_and_cancelled(self):
+        from arb_engine.strategy.broker import OrderOutcomeUnknown, OrderRefused
+
+        clock = Clock(1000.0)
+        c = FakeKalshi(clock)
+        c.lose_answer = HttpError(0, DEMO_URL + "/portfolio/events/orders", "curl: (28) Operation timed out")
+        b = maker(c, clock)
+        with self.assertRaises(OrderOutcomeUnknown):
+            b.place(TICKER, "yes", 0.40, 10, watch_key=self.W)
+        c.lose_answer = None
+        self.assertEqual((len(c.creates), c.rows["o1"]["status"]), (1, "resting"))       # it is on the book all the same
+        self.assertEqual(c.creates[0]["client_order_id"], b.ledger.rows()[0]["client_order_id"])
+        with self.assertRaisesRegex(OrderRefused, "unknown outcome"):
+            b.place(TICKER, "yes", 0.39, 10, watch_key=self.W)
+        self.assertEqual(len(c.creates), 1)                                             # nothing new while it is unknown
+        clock.t = 1003.0
+        b.poll([], {})                                                                  # reconcile: found resting, untracked -> cancelled
+        self.assertEqual((c.cancels, c.rows["o1"]["status"]), (["o1"], "canceled"))
+        clock.t = 1010.0
+        b.poll([], {})                                                                  # its final state booked
+        row = b.ledger.rows()[0]
+        self.assertEqual((row["state"], row["fill_count"]), ("done", "0.00"))
+        self.assertIsNone(b.ledger.blocked())
+        o = b.place(TICKER, "yes", 0.39, 10, watch_key=self.W)
+        self.assertEqual((o.status, len(c.creates)), ("resting", 2))
+
+    def test_a_request_that_never_reached_the_exchange_is_released_and_the_maker_goes_on(self):
+        from arb_engine.strategy.broker import OrderOutcomeUnknown
+
+        clock = Clock(1000.0)
+        c = FakeKalshi(clock)
+        c.fail_before = HttpError(503, DEMO_URL, "unavailable")
+        b = maker(c, clock)
+        with self.assertRaises(OrderOutcomeUnknown):
+            b.place(TICKER, "yes", 0.40, 10, watch_key=self.W)
+        c.fail_before = None
+        for t in (1003.0, 1040.0):
+            clock.t = t
+            b.poll([], {})
+        self.assertEqual(b.ledger.rows()[0]["state"], "rejected")
+        self.assertEqual(b.place(TICKER, "yes", 0.40, 10, watch_key=self.W).status, "resting")
+
+    def test_a_restarted_maker_cancels_what_its_dead_predecessor_left_resting(self):
+        clock, path = Clock(1000.0), tmp()
+        c = FakeKalshi(clock)
+        a = maker(c, clock, path, owner="maker-host:101")
+        o1, o2 = a.place(TICKER, "yes", 0.40, 10, watch_key=self.W), a.place("KXNFLGAME-26SEP21DENKC-DEN", "yes", 0.35, 10, watch_key=KEY + "|kalshi:den")
+        c.fill_resting(o1.order_id, 4)                         # 4 filled before the process was killed (no shutdown cancel)
+        clock.t = 1100.0
+        b = maker(c, clock, path, owner="maker-host:202", owner_alive=lambda owner: owner != "maker-host:101")
+        b.recover()
+        self.assertEqual(sorted(c.cancels), sorted([o1.order_id, o2.order_id]))
+        clock.t = 1110.0
+        b.reconcile(force=True)
+        rows = {r["order_id"]: r for r in b.ledger.rows()}
+        self.assertEqual((rows[o1.order_id]["state"], rows[o1.order_id]["fill_count"], Decimal(rows[o1.order_id]["fill_cost"])), ("done", "4.00", Decimal("1.60")))
+        self.assertEqual((rows[o2.order_id]["state"], rows[o2.order_id]["fill_count"]), ("done", "0.00"))
+        self.assertEqual(b.ledger.exposure(strategy="maker"), Decimal("1.60"))
+
+    def test_a_maker_that_is_still_running_keeps_its_orders(self):
+        clock, path = Clock(1000.0), tmp()
+        c = FakeKalshi(clock)
+        a = maker(c, clock, path, owner="maker-host:101")
+        a.place(TICKER, "yes", 0.40, 10, watch_key=self.W)
+        clock.t = 1100.0
+        b = maker(c, clock, path, owner="maker-host:202", owner_alive=lambda owner: True)
+        b.recover()
+        self.assertEqual(c.cancels, [])
+        self.assertEqual(b.ledger.rows()[0]["state"], "accepted")
+
+    def test_fills_of_a_resting_order_are_booked_and_finished_after_the_cancel(self):
+        clock = Clock(1000.0)
+        c = FakeKalshi(clock)
+        b = maker(c, clock)
+        o = b.place(TICKER, "yes", 0.40, 10, watch_key=self.W)
+        c.fill_resting(o.order_id, 3)
+        clock.t = 1003.0
+        self.assertEqual(b.poll([o], {}), [(o, 3.0, 0.40)])
+        self.assertEqual((b.ledger.get(o.intent_id)["state"], b.ledger.get(o.intent_id)["fill_count"]), ("accepted", "3.00"))
+        b.cancel(o)
+        clock.t = 1010.0
+        b.poll([o], {})                                             # no longer resting: the reconcile books its end
+        row = b.ledger.get(o.intent_id)
+        self.assertEqual((row["state"], row["fill_count"], Decimal(row["fill_cost"])), ("done", "3.00", Decimal("1.20")))
+        self.assertEqual(c.cancels, [o.order_id])                   # cancelled once, by the runner's own cancel
+
+    def test_an_unknown_fee_multiplier_rests_nothing(self):
+        from arb_engine.strategy.broker import OrderRefused
+
+        clock = Clock(1000.0)
+        c = FakeKalshi(clock)
+        c.series_error = HttpError(503, DEMO_URL, "down")
+        b = maker(c, clock)
+        with self.assertRaisesRegex(OrderRefused, "fee multiplier"):
+            b.place(TICKER, "yes", 0.40, 10, watch_key=self.W)
+        self.assertEqual(c.creates, [])
+
+    def test_the_runner_recovers_before_anything_rests(self):
+        from arb_engine.strategy.alerts import Alerter
+        from arb_engine.strategy.maker import MakerConfig, MakerRunner
+
+        calls = []
+
+        class Broker:
+            name = "stub"
+
+            def place(self, *a, **k):
+                calls.append("place")
+                raise AssertionError("nothing should rest in this test")
+
+            def poll(self, orders, state):
+                return []
+
+            def cancel(self, o):
+                pass
+
+            def recover(self):
+                calls.append("recover")
+                return [{"ticker": TICKER, "before": "ambiguous", "after": "done", "note": "found"}]
+
+        class Feed:
+            kalshi = None
+
+        alerts = Alerter(journal_path=tmp("maker.jsonl"), quiet=True, desktop=False, webhook="")
+        MakerRunner(MakerConfig(interval=0), Feed(), Broker(), alerts, settings={}).run(duration=0.01, max_iterations=0)
+        self.assertEqual(calls, ["recover"])
+        self.assertTrue(any("maker recovery" in str(e.get("msg")) for e in alerts.events))
 
 
 class AccountIdentityTests(unittest.TestCase):

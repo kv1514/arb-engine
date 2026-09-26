@@ -79,6 +79,28 @@ def _fx(name: str) -> dict:
     return load(f"kalshi_orders/{name}.json")
 
 
+def _ledger():
+    """A throw-away order ledger (KalshiBroker records every order in one)."""
+    import tempfile
+
+    from arb_engine.execution.ledger import OrderLedger
+
+    return OrderLedger(os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "ledger.sqlite3"), "demo", "https://external-api.demo.kalshi.co/trade-api/v2")
+
+
+class _OneX:
+    """Fee multipliers: every series 1x (these tests are about order plumbing, not fees)."""
+
+    def resolve(self, ticker, stated=None):
+        from decimal import Decimal
+
+        return Decimal(1), None
+
+
+def _kb(client, **kw):
+    return KalshiBroker(client, confirm=True, ledger=_ledger(), fee_multipliers=_OneX(), **kw)
+
+
 class HostTests(unittest.TestCase):
     def test_default_hosts_are_external_api_with_legacy_fallback(self):
         with mock.patch.dict(os.environ, {}, clear=False):
@@ -276,7 +298,7 @@ class SelfMatchGuardTests(unittest.TestCase):
             pb.place("T", "yes", 0.41, 10)                    # tracked by the broker itself
         ok = pb.place("T", "yes", 0.39, 10, resting=[first])
         self.assertEqual(ok.status, "resting")
-        kb = KalshiBroker(_client({"POST /portfolio/events/orders": _fx("create_order")}), confirm=True)
+        kb = _kb(_client({"POST /portfolio/events/orders": _fx("create_order")}))
         with self.assertRaises(SelfMatchRefused):
             kb.place("T", "yes", 0.41, 10, resting=[first], hedge_book_id="rothera")
         self.assertEqual(kb.client.http.calls, [])  # refused before any request
@@ -298,7 +320,7 @@ class CancelAllTests(unittest.TestCase):
 
     def test_single_cancel_failure_stays_visible_as_resting(self):
         c = _client({"DELETE /portfolio/events/orders/o1": HttpError(500, "u", "boom")})
-        kb = KalshiBroker(c, confirm=True)
+        kb = _kb(c)
         order = RestingOrder("o1", "KXNBA-X", "yes", .4, 1, payload={"exchange_index": 3})
         with self.assertRaises(HttpError):
             kb.cancel(order)
@@ -306,7 +328,7 @@ class CancelAllTests(unittest.TestCase):
 
     def test_single_cancel_success_keeps_shard_routing(self):
         c = _client({"DELETE /portfolio/events/orders/o1": _fx("cancel_order")})
-        kb = KalshiBroker(c, confirm=True)
+        kb = _kb(c)
         order = RestingOrder("o1", "KXNBA-X", "yes", .4, 1, payload={"exchange_index": 3})
         kb.cancel(order)
         self.assertEqual(order.status, "canceled")
@@ -314,7 +336,7 @@ class CancelAllTests(unittest.TestCase):
 
     def test_kalshi_cancel_all_is_one_batched_delete(self):
         c = _client({"POST /portfolio/events/orders": [{"order_id": "a1", "remaining_count": "5.00"}, {"order_id": "a2", "remaining_count": "5.00"}, {"order_id": "a3", "remaining_count": "5.00"}], "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "a1", "reduced_by": "5.00"}, {"order_id": "a2", "reduced_by": "5.00"}, {"order_id": "a3", "reduced_by": "5.00"}]}})
-        kb = KalshiBroker(c, confirm=True)
+        kb = _kb(c)
         o1, o2 = kb.place("T", "yes", 0.3, 5, exchange_index=0), kb.place("T", "yes", 0.2, 5)
         with mock.patch.dict(os.environ, {"KALSHI_GTD_HORIZON_S": "900"}):
             o3 = kb.place("T2", "no", 0.9, 5, kickoff=1e12)
@@ -332,7 +354,7 @@ class CancelAllTests(unittest.TestCase):
         """``reduced_by == 0`` means "the cancel errored": that order is retried on its own and
         stays ``resting`` if the retry fails, instead of being reported as cancelled."""
         c = _client({"POST /portfolio/events/orders": [{"order_id": "a1"}, {"order_id": "a2"}, {"order_id": "a3"}], "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "a1", "reduced_by": "5.00"}, {"order_id": "a2", "reduced_by": "0.00"}]}, "DELETE /portfolio/events/orders/a2": HttpError(500, "u", "boom"), "DELETE /portfolio/events/orders/a3": _fx("cancel_order")})
-        kb = KalshiBroker(c, confirm=True)
+        kb = _kb(c)
         o1, o2, o3 = (kb.place("T", "yes", p, 5) for p in (0.3, 0.2, 0.1))
         done = kb.cancel_all()
         self.assertEqual({o.order_id for o in done}, {"a1", "a3"})  # a3 was missing from the batch response -> single cancel OK
@@ -341,7 +363,7 @@ class CancelAllTests(unittest.TestCase):
 
     def test_kalshi_cancel_all_sweep_and_fallback(self):
         c = _client({"GET /portfolio/orders?status=resting": _fx("orders_v2"), "DELETE /portfolio/events/orders/batched": HttpError(500, "u", "boom"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000001": _fx("cancel_order"), "DELETE /portfolio/events/orders/0b3c7a2e-demo-4c1f-9a11-000000000002": HttpError(404, "u", "gone")})
-        kb = KalshiBroker(c, confirm=True)
+        kb = _kb(c)
         with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(SweepIncomplete) as cm:
             kb.cancel_all(sweep=True)
         # batched failed -> per-order fallback; the 404 one is reported as possibly still resting
@@ -365,7 +387,7 @@ class CancelAllTests(unittest.TestCase):
         own_create = {"POST /portfolio/events/orders": {"order_id": "a1"}}
         batched_ok = {"DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "a1", "reduced_by": "5.00"}]}}
         c = _client({**own_create, "GET /portfolio/orders?status=resting": HttpError(404, "u", "not found"), **batched_ok, "DELETE /portfolio/events/orders": {}})
-        kb = KalshiBroker(c, confirm=True, sleep=lambda s: None)
+        kb = _kb(c, sleep=lambda s: None)
         o1 = kb.place("T", "yes", 0.3, 5)
         with self.assertLogs("arb_engine.strategy.broker", level="WARNING") as logs, self.assertRaises(SweepIncomplete) as cm:
             kb.cancel_all(sweep=True)
@@ -378,14 +400,14 @@ class CancelAllTests(unittest.TestCase):
         self.assertEqual([(m, u.rsplit("/trade-api/v2", 1)[1]) for m, u, _ in c.http.calls][1:], [("GET", "/portfolio/orders?status=resting"), ("DELETE", "/portfolio/events/orders/batched"), ("DELETE", "/portfolio/events/orders"), ("GET", "/portfolio/orders?status=resting")])
         # When the listing works again after the exchange-side sweep and shows nothing, it is complete.
         c3 = _client({**own_create, "GET /portfolio/orders?status=resting": [HttpError(404, "u", "not found"), {"orders": [], "cursor": ""}], **batched_ok, "DELETE /portfolio/events/orders": {}})
-        kb3 = KalshiBroker(c3, confirm=True, sleep=lambda s: None)
+        kb3 = _kb(c3, sleep=lambda s: None)
         kb3.place("T", "yes", 0.3, 5)
         with self.assertLogs("arb_engine.strategy.broker", level="WARNING"):
             self.assertEqual([o.order_id for o in kb3.cancel_all(sweep=True)], ["a1"])
         self.assertTrue(kb3.last_sweep.complete)
         self.assertEqual((kb3.last_sweep.fallback, kb3.last_sweep.verified), ("cancel_all_orders", True))
         c2 = _client({**own_create, "GET /portfolio/orders?status=resting": HttpError(404, "u", "not found"), **batched_ok, "DELETE /portfolio/events/orders": HttpError(500, "u", "down")})
-        kb2 = KalshiBroker(c2, confirm=True)
+        kb2 = _kb(c2)
         o = kb2.place("T", "yes", 0.3, 5)
         with self.assertLogs("arb_engine.strategy.broker", level="WARNING"), self.assertRaises(RuntimeError) as cm:
             kb2.cancel_all(sweep=True)
@@ -407,7 +429,7 @@ class TruncatedSweepTests(unittest.TestCase):
                 "DELETE /portfolio/events/orders": {}}
 
     def _broker(self, routes, **kw):
-        return KalshiBroker(_client(routes), confirm=True, sleep=lambda s: None, **kw)
+        return _kb(_client(routes), sleep=lambda s: None, **kw)
 
     def test_a_truncated_listing_runs_the_fallback_and_verifies(self):
         kb = self._broker(self._routes([{"orders": [], "cursor": ""}]))
@@ -457,7 +479,7 @@ class TruncatedSweepTests(unittest.TestCase):
             def cancel_all_orders(self, subaccount=None):
                 self.cancel_all_calls += 1
         c = Legacy()
-        kb = KalshiBroker(c, confirm=True, sleep=lambda s: None)
+        kb = _kb(c, sleep=lambda s: None)
         with self.assertLogs("arb_engine.strategy.broker", level="WARNING"):
             kb.cancel_all(sweep=True)
         self.assertEqual((c.cancel_all_calls, kb.last_sweep.complete), (1, True))
