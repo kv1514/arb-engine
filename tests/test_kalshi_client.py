@@ -571,7 +571,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
         answers = [dict(_fx("create_order"), order_id=oid), {"order_id": "b2", "remaining_count": "1.00"}, {"order_id": "b3", "remaining_count": "1.00"},
                    {"order_id": "i4", "fill_count": "0.00", "remaining_count": "0.00"},    # the IOC: nothing at $0.01, nothing rests
                    {"order_id": "i5", "fill_count": "0.00", "remaining_count": "0.00"},    # the ledger step's IOC, answer "lost"
-                   {"order_id": "e6", "fill_count": "0.00", "remaining_count": "0.00"}]    # the LAG executor's own IOC
+                   {"order_id": "e6", "fill_count": "0.00", "remaining_count": "0.00"},    # the LAG executor's own IOC
+                   {"order_id": "m7", "fill_count": "0.00", "remaining_count": "1.00"}]    # the maker broker's post-only bid
         posted: list = []
 
         def create(body):
@@ -596,6 +597,11 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "GET /portfolio/orders/e6": {"order": {"order_id": "e6", "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00",
                                                    "taker_fill_cost_dollars": "0.000000", "maker_fill_cost_dollars": "0.000000",
                                                    "taker_fees_dollars": "0.000000", "maker_fees_dollars": "0.000000"}},
+            "GET /portfolio/orders/m7": [{"order": {"order_id": "m7", "status": "resting", "fill_count_fp": "0.00", "remaining_count_fp": "1.00"}},
+                                         {"order": {"order_id": "m7", "status": "canceled", "fill_count_fp": "0.00", "remaining_count_fp": "0.00",
+                                                    "taker_fill_cost_dollars": "0.000000", "maker_fill_cost_dollars": "0.000000",
+                                                    "taker_fees_dollars": "0.000000", "maker_fees_dollars": "0.000000"}}],
+            "DELETE /portfolio/events/orders/m7": {"order_id": "m7", "reduced_by": "1.00", "ts_ms": 0},
             "POST /portfolio/events/orders": create,
             f"GET /portfolio/orders/{oid}": {"order": order_row},
             "GET /portfolio/orders?status=resting": [{"orders": [order_row], "cursor": ""}, {"orders": [], "cursor": ""}],
@@ -640,6 +646,8 @@ class DemoCheckOfflineTests(unittest.TestCase):
         self.assertIn("PASS and new exposure is unblocked", text)
         self.assertIn("PASS LAG executor sends IOC 1 x KXNFLGAME-26SEP20PHITEN-PHI @ 0.01 through the ledger", text)
         self.assertIn("PASS the executor's order is reconciled from the exchange", text)
+        self.assertIn("PASS the maker's order is in the ledger, accepted, with the ledger's client_order_id", text)
+        self.assertIn("PASS after the cancel the ledger has its final state (done, nothing filled)", text)
         self.assertIn("order", written["order.json"])  # the client unwraps; --record re-wraps
         self.assertEqual(written["order.json"]["order"]["outcome_side"], "yes")
         self.assertTrue(written["order.json"]["_fixture"].startswith("recorded, "))

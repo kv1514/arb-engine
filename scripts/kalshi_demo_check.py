@@ -22,6 +22,8 @@ Steps (each prints PASS/FAIL and the HTTP status; the script refuses to run on p
    6b. the LAG executor itself (strategy/lagexec.py): a synthetic signal -> ledger -> IOC ->
    reconciled; with --fill it buys 1 contract, sends the lock leg on the other outcome through
    buy_lock (asked 5, bounded to the 1 held; a second lock refused) and sells both back
+   6c. the maker's broker (strategy/broker.KalshiBroker): a post-only $0.01 bid recorded in
+   the ledger before it is sent, booked by the broker's poll, cancelled, reconciled to done
 7. (--fill --confirm-demo) buy 1 contract IOC at a demo market's ask through the ledger,
    reconcile it (fill count, fill cost, fees from the order row; /portfolio/fills?order_id=
    cross-check) and compare the fee charged with the engine's Kalshi fee model (cent vs
@@ -379,6 +381,37 @@ def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: 
     return [i for i in ids if i]
 
 
+def maker_path(chk: "Check", client: KalshiClient, led_path: str, ticker: str) -> list[str]:
+    """Step 6c: the maker's broker (strategy/broker.KalshiBroker) on demo - a post-only bid
+    at $0.01 (never fills) recorded in the ledger before it is sent, read back by the broker's
+    poll and booked, cancelled, and its final state reconciled. Returns the order ids."""
+    from arb_engine.strategy.broker import KalshiBroker
+
+    kb = KalshiBroker(client, confirm=True, ledger=OrderLedger.for_client(client, path=led_path), settle_s=READ_SETTLE_S)
+    o = chk.step(f"maker: KalshiBroker.place post-only bid 1 x {ticker} @ 0.01 through the ledger",
+                 lambda: kb.place(ticker, "yes", 0.01, 1, watch_key=f"democheck:{ticker}|maker", kickoff=time.time() + 3600))
+    if o is None:
+        return []
+    row = kb.ledger.get(o.intent_id) or {}
+    chk.expect("the maker's order is in the ledger, accepted, with the ledger's client_order_id", row.get("state") == "accepted" and row.get("order_id") == o.order_id
+               and o.payload.get("client_order_id") == row.get("client_order_id"), f"state={row.get('state')} strategy={row.get('strategy')}")
+    polled, _ = settle(lambda: (kb.poll([o], {}), kb.ledger.get(o.intent_id))[1], lambda r: bool(r and r.get("fill_count") is not None and "still-resting"
+                       in {e["kind"] for e in kb.ledger.events(o.intent_id)}))
+    chk.expect("the broker's poll books the order row in the ledger", "still-resting" in {e["kind"] for e in kb.ledger.events(o.intent_id)},
+               f"fill_count={(polled or {}).get('fill_count')}")
+    chk.step("maker: cancel", lambda: kb.cancel(o))
+    t0 = time.time()
+    while time.time() - t0 < READ_SETTLE_S + 10:
+        kb.reconcile(force=True)
+        if (kb.ledger.get(o.intent_id) or {}).get("state") == DONE:
+            break
+        time.sleep(1.0)
+    row = kb.ledger.get(o.intent_id) or {}
+    chk.expect("after the cancel the ledger has its final state (done, nothing filled)", row.get("state") == DONE and float(row.get("fill_count") or 0) == 0,
+               f"state={row.get('state')} fill={row.get('fill_count')}")
+    return [o.order_id]
+
+
 def pick_ticker(client: KalshiClient, series: str) -> str:
     ms = client.markets(series, status="open", limit=5, max_pages=1)
     if not ms:
@@ -501,6 +534,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         more.append(lost)
     more.extend(engine_path(chk, client, led.path, [x.strip() for x in args.fill_series.split(",") if x.strip()] if args.fill else [args.series],
                             args.fill, args.max_price))
+    more.extend(maker_path(chk, client, led.path, ticker))
     if args.fill:
         more.extend(ledger_fill(chk, client, ex, led, [x.strip() for x in args.fill_series.split(",") if x.strip()], args.max_price))
     if not args.fill or "fills_v2" not in chk.recorded:
