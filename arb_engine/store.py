@@ -330,14 +330,19 @@ class Store:
         state but ran no strategy — also how fixtures are loaded for the tick replay."""
         g = _get(game_state) if game_state is not None else (lambda k, d=None: d)
         home, away = home or g("home"), away or g("away")
-        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=ts, obs_ts=ts, source="full")
+        tick_ts = float(ts)
+        l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts, source="full")
+        exact_obs = [r["obs_ts"] for r in l1.get("rows", [])
+                     if not r.get("approx_time") and r.get("obs_ts") is not None]
+        if exact_obs:
+            tick_ts = max(tick_ts, max(exact_obs))
         if home is None or away is None:
             outs = sorted({r["outcome"] for r in l1.get("rows", [])})
             home, away = home or (outs[0] if outs else None), away or (outs[1] if len(outs) > 1 else None)
         if live is None and game_state is not None:
             live = g("status") == "live"
         with self.conn:
-            return self._insert("inplay_ticks", self._tick_row(ts, event_key, live, game_state, l1, home, away, freshness))
+            return self._insert("inplay_ticks", self._tick_row(tick_ts, event_key, live, game_state, l1, home, away, freshness))
 
     @_locked
     def record_trade_prints(self, trades: Iterable[dict[str, Any]], ticker: Optional[str] = None,

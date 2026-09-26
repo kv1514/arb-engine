@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
@@ -68,6 +68,11 @@ class SlateTick:
     lags: list[str] = field(default_factory=list)   # LAG signal texts this tick (lead-lag, market vs market)
     arbs: list[str] = field(default_factory=list)   # fresh two-leg ARB texts this tick (fees, depth, quote age <= 10 s)
     paper: list[str] = field(default_factory=list)  # paper LAG fills / expiries this tick
+
+
+# A quote whose adapter timestamp is this much older than the request start was not
+# observed by that request (cached / carried prices keep their real age).
+CARRIED_TOL_S = 1.0
 
 
 class LiveSlate:
@@ -171,10 +176,40 @@ class LiveSlate:
         return f
 
     def merged_events(self, errors: list[str]) -> dict[str, MergedEvent]:
+        """Fetch every venue and stamp its returned rows at the HTTP boundary.
+
+        Adapter ``fetched_at`` and quote ``ts`` predate the recorder contract and are not
+        consistently request/receipt times. A pinned ``now`` keeps fixture replays
+        deterministic; production reads the wall clock immediately before and after each
+        adapter call.
+        """
+        now = getattr(self, "_fetch_pinned_now", None)
         snaps = []
         for ad in self.adapters:
+            req_ts = float(now) if now is not None else time.time()
             try:
-                snaps.append(ad.fetch(self.sport))
+                snap = ad.fetch(self.sport)
+                obs_ts = float(now) if now is not None else time.time()
+                stamped = []
+                for q in snap.quotes:
+                    meta = dict(q.meta or {})
+                    if now is None and q.ts is not None and float(q.ts) < req_ts - CARRIED_TOL_S:
+                        # The adapter says this price is older than the request (a Robinhood
+                        # contract the quotes refresh did not answer keeps its cached
+                        # catalogue's time): it was not observed by this fetch.
+                        meta.setdefault("req_ts", float(q.ts))
+                        meta.setdefault("obs_ts", float(q.ts))
+                        meta.update({"approx_time": True, "refreshed": False})
+                    else:
+                        meta.update({"req_ts": req_ts, "obs_ts": obs_ts,
+                                     "approx_time": False, "refreshed": True})
+                    # ``q.ts`` remains the adapter's market timestamp: strategy freshness
+                    # and alert throttles already depend on it. Recorder causality uses the
+                    # explicit local receipt in metadata.
+                    stamped.append(replace(q, meta=meta))
+                snap.quotes = stamped
+                snap.fetched_at = obs_ts
+                snaps.append(snap)
             except Exception as e:
                 errors.append(f"{getattr(ad, 'venue', ad.__class__.__name__)}: {e!r}")
         return merge_snapshots(snaps) if snaps else {}
@@ -218,7 +253,11 @@ class LiveSlate:
         out = SlateTick(at=now, views=[], games=len(games), errors=errors, quiet=self.quiet)
         if not games:
             return out
-        merged = self.merged_events(errors)
+        self._fetch_pinned_now = pinned
+        try:
+            merged = self.merged_events(errors)
+        finally:
+            self._fetch_pinned_now = None
         if pinned is None:
             # The catalogue fetch takes seconds; quotes are stamped as they arrive, so the
             # tick decides once they are all in hand, not when it started fetching.

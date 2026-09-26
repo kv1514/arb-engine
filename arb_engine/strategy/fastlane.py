@@ -150,7 +150,9 @@ class FastLane:
         self.steps = 0
         self.errors: list[str] = []
         self.trade_cursor: dict[str, int] = {}
+        self.trade_last_request: dict[str, float] = {}
         self.trade_last_poll: dict[str, float] = {}
+        self.trade_request_gaps: dict[str, float] = {}
         self.trade_poll_gaps: dict[str, float] = {}
         self.trade_errors: list[str] = []
         self._trade_page_cursor: dict[str, str] = {}
@@ -215,6 +217,10 @@ class FastLane:
         cursor = self._trade_page_cursor.get(ticker)
         trades = list(self._trade_pending.get(ticker, []))
         req_ts = clock()
+        previous_request = self.trade_last_request.get(ticker)
+        if previous_request is not None:
+            self.trade_request_gaps[ticker] = req_ts - previous_request
+        self.trade_last_request[ticker] = req_ts
         complete = False
         for _ in range(max_pages):
             params = {"ticker": ticker, "limit": 1000, "min_ts": minimum, "cursor": cursor}
@@ -253,6 +259,18 @@ class FastLane:
                 self.trade_errors.append(f"trade prints {ticker}: {exc!r}")
         return inserted
 
+    def _poll_trades_background(self, store: Any, tickers: list[str], max_pages: int) -> None:
+        """Poll due tickers concurrently so one slow tape cannot delay every other ticker.
+
+        Store writes remain serialised by ``Store._lock``; only independent HTTP page walks
+        overlap. Per-ticker pagination state is disjoint.
+        """
+        with ThreadPoolExecutor(max_workers=min(8, len(tickers))) as pool:
+            futures = [pool.submit(self._poll_trades_sync, store, [ticker], None, max_pages)
+                       for ticker in tickers]
+            for future in futures:
+                future.result()
+
     def poll_trades(self, store: Any, now: Optional[float] = None, per_step: Optional[int] = None,
                     max_pages: int = 5, cadence_s: float = 5.0, background: bool = False) -> int:
         """Record Kalshi's public trade prints for the live tickers (L1 changes are never read
@@ -269,7 +287,7 @@ class FastLane:
         if not tickers:
             return 0
         decision_now = float(now) if now is not None else self.clock()
-        due = [t for t in tickers if decision_now - self.trade_last_poll.get(t, -float("inf")) >= cadence_s
+        due = [t for t in tickers if decision_now - self.trade_last_request.get(t, -float("inf")) >= cadence_s
                or t in self._trade_page_cursor]
         if per_step is not None and due:
             ordered = [tickers[(self._trade_rr + i) % len(tickers)] for i in range(len(tickers))]
@@ -282,8 +300,8 @@ class FastLane:
             with self._trade_lock:
                 if self._trade_thread is not None and self._trade_thread.is_alive():
                     return 0
-                self._trade_thread = threading.Thread(target=self._poll_trades_sync,
-                    args=(store, due, None, max_pages), name="kalshi-trade-prints", daemon=True)
+                self._trade_thread = threading.Thread(target=self._poll_trades_background,
+                    args=(store, due, max_pages), name="kalshi-trade-prints", daemon=True)
                 self._trade_thread.start()
             return 0
         return self._poll_trades_sync(store, due, now, max_pages)
@@ -306,8 +324,10 @@ class FastLane:
         at = self.clock() if now is None else float(now)
         tickers = sorted({(q.meta or {}).get("ticker") or q.venue_market_id.split("#")[0]
                           for by in self.last.values() for q in by.get("kalshi", [])})
-        return {ticker: {"last_poll_ts": self.trade_last_poll.get(ticker),
-                         "last_gap_s": self.trade_poll_gaps.get(ticker),
-                         "overdue": at - self.trade_last_poll.get(ticker, -float("inf")) > cadence_s,
+        return {ticker: {"last_request_ts": self.trade_last_request.get(ticker),
+                         "last_poll_ts": self.trade_last_poll.get(ticker),
+                         "last_gap_s": self.trade_request_gaps.get(ticker),
+                         "receipt_gap_s": self.trade_poll_gaps.get(ticker),
+                         "overdue": at - self.trade_last_request.get(ticker, -float("inf")) > cadence_s,
                          "backlog": ticker in self._trade_page_cursor}
                 for ticker in tickers}
