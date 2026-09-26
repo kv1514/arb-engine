@@ -30,6 +30,30 @@ class EvaluateTests(unittest.TestCase):
         self.assertAlmostEqual(r.profit, 100 - (40 + 1.2 + 55 + 1.74), places=6)
         self.assertEqual([l.venue for l in r.legs], ["polymarket", "kalshi"])
 
+    def test_hand_computed_cross_venue_lock(self):
+        # 100 contracts. Polymarket sports fee 100*0.05*0.40*0.60 = 1.20.
+        # Kalshi taker ceil(0.07*100*0.55*0.45) = ceil(1.7325) = 1.74.
+        # cost 40+1.20+55+1.74 = 97.94; profit 2.06; margin 0.0206.
+        legs = [Leg("A", "polymarket", 0.40, P), Leg("B", "kalshi", 0.55, K)]
+        r = evaluate(legs, 100)
+        self.assertAlmostEqual(r.total_cost, 97.94, places=6)
+        self.assertAlmostEqual(r.profit, 2.06, places=6)
+        self.assertAlmostEqual(r.margin, 0.0206, places=6)
+        self.assertTrue(r.is_arb)
+
+    def test_hand_computed_book_walk_charges_each_level(self):
+        # Polymarket 60 @ 0.40 (fee 0.72) and 40 @ 0.41
+        # (40*0.05*0.41*0.59 = 0.48380) plus Kalshi 100 @ 0.55 (fee 1.74).
+        # cost 24+0.72+16.40+0.48380+55+1.74 = 98.34380; profit 1.65620.
+        qa = OutcomeQuote("polymarket", "A", "e", "A", ask=0.40, book=Book(asks=[Level(0.40, 60), Level(0.41, 40)]))
+        qb = OutcomeQuote("kalshi", "B", "e", "B", ask=0.55, book=Book(asks=[Level(0.55, 100)]))
+        legs = [Leg("A", "polymarket", 0.40, P, quote=qa), Leg("B", "kalshi", 0.55, K, quote=qb)]
+        r = size_from_books(legs)
+        self.assertEqual(r.contracts, 100)
+        self.assertAlmostEqual(r.total_cost, 98.34380, places=5)
+        self.assertAlmostEqual(r.profit, 1.65620, places=5)
+        self.assertTrue(r.is_arb)
+
     def test_fee_free_legs_sum_rule(self):
         legs = [Leg("A", "book", 0.48, ZeroFees()), Leg("B", "book", 0.50, ZeroFees())]
         r = evaluate(legs, 10)

@@ -5,7 +5,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from .teams import nfl_team_code
+from .teams import canonical_from_ticker, nfl_team_code, ticker_codes
 
 # US/Eastern without pulling in zoneinfo data (DST second Sunday of March -> first Sunday of November).
 def _is_dst(dt_utc: datetime) -> bool:
@@ -149,6 +149,35 @@ def split_pair(pair: str, known: str) -> Optional[str]:
     if pair.startswith(known) and len(pair) > len(known):
         return pair[len(known):]
     return None
+
+
+def split_ticker_pair(pair: str, sport: str, known: Optional[str] = None) -> Optional[tuple[str, str]]:
+    """Split an away+home ticker blob into canonical (away, home).
+
+    None when there is no split, or more than one distinct canonical split
+    (``MURMU`` is both Methodist+Robert Morris and Murray State+Methodist).
+    ``known`` is the favourite's ticker code on a spread and drops splits that
+    do not contain it (that disambiguates ``BENCAPU`` given ``BEN`` vs ``BENC``).
+    """
+    blob = (pair or "").upper()
+    codes = ticker_codes(sport)
+    if len(blob) < 3 or not codes:
+        return None
+    known_u = known.upper() if known else None
+    hits: set[tuple[str, str]] = set()
+    for cut in range(2, len(blob)):
+        left, right = blob[:cut], blob[cut:]
+        if not right or left == right or left not in codes or right not in codes:
+            continue
+        if known_u is not None and known_u not in (left, right):
+            continue
+        away, home = canonical_from_ticker(sport, left), canonical_from_ticker(sport, right)
+        if not away or not home or away == home:
+            continue
+        hits.add((away, home))
+        if len(hits) > 1:
+            return None
+    return next(iter(hits)) if len(hits) == 1 else None
 
 
 def ticker_pair(event_ticker: str) -> Optional[str]:

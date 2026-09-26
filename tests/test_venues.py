@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from arb_engine.models import Book
+from arb_engine.models import Book, VenueSnapshot
 from arb_engine.venues.kalshi import KalshiAdapter, KalshiClient, build_order_payload, parse_orderbook
 from arb_engine.venues.polymarket import PolymarketAdapter, parse_clob_book
 from arb_engine.venues.robinhood import RobinhoodAdapter, _in_play_from_progress, clean_label, extract_next_data, tie_payout_for
@@ -73,6 +73,46 @@ class KalshiAdapterTests(unittest.TestCase):
         self.assertEqual(q.ask, q.book.asks[0].price)  # top of book overrides the market summary
         no_side = next(x for x in snap.quotes if x.venue_market_id.endswith("#no"))
         self.assertIsInstance(no_side.book, Book)
+
+    def test_ambiguous_college_ticker_is_not_paired(self):
+        # MURMU with favourite MU is Methodist+Robert Morris or Murray State+Methodist.
+        # The old suffix split returned MUR and would have keyed a game that is not this one.
+        adapter = KalshiAdapter(client=KalshiClient(env="prod", http=FakeHttp({})))
+        snap = VenueSnapshot(venue="kalshi")
+        market = {
+            "status": "active", "floor_strike": 2.5,
+            "event_ticker": "KXNCAAFSPREAD-26SEP26MURMU",
+            "ticker": "KXNCAAFSPREAD-26SEP26MURMU-MU3",
+            "yes_ask_dollars": "0.55", "yes_bid_dollars": "0.53",
+        }
+        adapter._ingest_line_markets(snap, "ncaaf", {"series": "KXNCAAFSPREAD", "market_type": "spread"}, [market], {})
+        self.assertEqual(snap.events, {})
+        self.assertEqual(snap.quotes, [])
+        # A total with two real cuts is skipped too (no midpoint invents a pairing).
+        total = {
+            "status": "active", "floor_strike": 49.5,
+            "event_ticker": "KXNCAAFTOTAL-26SEP26BENCAPU",
+            "ticker": "KXNCAAFTOTAL-26SEP26BENCAPU-50",
+            "yes_ask_dollars": "0.50", "yes_bid_dollars": "0.48",
+        }
+        adapter._ingest_line_markets(snap, "ncaaf", {"series": "KXNCAAFTOTAL", "market_type": "total"}, [total], {})
+        self.assertEqual(snap.events, {})
+
+    def test_la_favorite_spread_splits_as_kings_not_laf(self):
+        adapter = KalshiAdapter(client=KalshiClient(env="prod", http=FakeHttp({})))
+        snap = VenueSnapshot(venue="kalshi")
+        market = {
+            "status": "active", "floor_strike": 1.5,
+            "event_ticker": "KXNHLSPREAD-26SEP26LAFLA",
+            "ticker": "KXNHLSPREAD-26SEP26LAFLA-LA2",
+            "yes_ask_dollars": "0.52", "yes_bid_dollars": "0.50",
+        }
+        adapter._ingest_line_markets(snap, "nhl", {"series": "KXNHLSPREAD", "market_type": "spread"}, [market], {})
+        key = "nhl:FLA|LA:2026-09-26:spread:LA-1.5"
+        self.assertEqual(list(snap.events), [key])
+        self.assertEqual(snap.events[key].outcomes, ["LA-1.5", "FLA+1.5"])
+        self.assertEqual(snap.events[key].labels["LA-1.5"], "Los Angeles -1.5")
+        self.assertNotIn("LAF", snap.events[key].event_key)
 
     def test_parse_orderbook_mirrors_no_bids_into_yes_asks(self):
         yes, no = parse_orderbook({"orderbook_fp": {"yes_dollars": [["0.54", "10"], ["0.55", "5"]], "no_dollars": [["0.40", "7"], ["0.41", "3"]]}})
