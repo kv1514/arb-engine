@@ -364,6 +364,46 @@ class LiveSlateTests(unittest.TestCase):
         got = opted.tick(1_800_000_000.0)
         self.assertTrue(any(a.startswith("STEAL") and "on polymarket" in a for v in got.views for a in v.actions), [v.actions for v in got.views])
 
+    def test_each_game_decides_at_its_own_time_not_the_tick_start(self):
+        # Runtime logs 2026-09-26: on a big college slate the ESPN summaries of the games before
+        # it took minutes, and a tick-start clock issued buttons already past their TTL.
+        from unittest import mock
+
+        adapters = _adapters()
+        key, me = _moneyline_key(adapters)
+        away, home = me.info.outcomes[0], me.info.outcomes[1]
+        clock = {"t": 1_800_000_000.0}
+
+        class SlowFeed(FakeFeed):
+            def enrich(self, g):
+                clock["t"] += 300.0                     # a slow ESPN summary
+                return super().enrich(g)
+        live = GameState(event_id="1", home=home, away=away, home_score=14, away_score=10, status="live", period=3, clock_seconds_remaining_in_period=600, game_seconds_remaining=1500, possession="home", event_key=key)
+        slate = LiveSlate(adapters, feed=SlowFeed([live]), settings={}, steal_edge=0.03, alerter=_quiet())
+        seen = []
+        slate.market_signals = lambda me, view, out, now: seen.append(now)
+        with mock.patch("arb_engine.strategy.live.time.time", side_effect=lambda: clock["t"]):
+            slate.tick()
+        self.assertEqual(seen, [1_800_000_300.0])
+        # A pinned tick (replays, fixtures) keeps its one time.
+        seen.clear()
+        slate._enriched.clear()
+        slate.tick(1_800_000_000.0)
+        self.assertEqual(seen, [1_800_000_000.0])
+
+    def test_a_polling_gap_is_journalled(self):
+        from unittest import mock
+
+        alerts = _quiet()
+        slate = LiveSlate([], feed=FakeFeed([]), settings={}, alerter=alerts, interval=5.0)
+        clock = {"t": 0.0}
+        with mock.patch("arb_engine.strategy.live.time.time", side_effect=lambda: clock["t"]):   # (the time module's own clock)
+            for t in (1000.0, 1004.0, 1100.0):
+                clock["t"] = t
+                slate.tick()
+        gaps = [e for e in alerts.events if e.get("polling_gap_s") is not None]
+        self.assertEqual([g["polling_gap_s"] for g in gaps], [96.0])
+
     def test_quiet_tick_prints_signals_and_one_summary_line(self):
         adapters = _adapters()
         key, me = _moneyline_key(adapters)

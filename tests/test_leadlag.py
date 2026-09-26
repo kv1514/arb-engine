@@ -1196,9 +1196,11 @@ class LagLockTests(unittest.TestCase):
         b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5, parent_id=entry["intent_id"])
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 5.0)]}, 5.0)          # IOC found nothing
         self.assertEqual(b.positions[0].status, "watching")
-        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # 4 of 10 filled
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # 1 s later: retries are spaced
+        self.assertEqual(len(sent), 2)
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 16.0)]}, 16.0)        # 4 of 10 filled
         self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("watching", 4))
-        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 7.0)]}, 7.0)          # the other 6: locked
+        b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 27.0)]}, 27.0)        # the other 6: locked
         self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("locked", 10))
         # Only the unhedged remainder is ever asked for: 10, 10, then 6 - never more than the entry.
         self.assertEqual([(p["ticker"], p["time_in_force"], int(float(p["count"]))) for p in sent[1:]],
@@ -1234,6 +1236,14 @@ class LagLockTests(unittest.TestCase):
         lines = b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 8.0)]}, 8.0)
         self.assertEqual(b.positions[0].status, "expired")                     # the watch ends: no more lock legs
         self.assertIn("closed with 0 of 10 hedged", lines[0])
+
+    def test_a_watch_whose_game_is_never_observed_again_is_swept(self):
+        b = self._book()
+        b.open("p1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "paper", entry_tie=0.5)
+        b.open("p2", "nfl:BUF|MIA:2026-09-21", "BUF", "MIA", "kalshi", 5, 0.50, 0.52, 500.0, "paper", entry_tie=0.5)
+        lines = b.sweep(601.0)
+        self.assertEqual([p.status for p in b.positions], ["expired", "watching"])
+        self.assertEqual(len(lines), 1)
 
     def test_a_lock_only_on_robinhood_is_flagged_for_a_person(self):
         from arb_engine.strategy.lagexec import LagExecutor

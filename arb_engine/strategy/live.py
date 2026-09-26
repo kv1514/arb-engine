@@ -249,6 +249,14 @@ class LiveSlate:
         pinned = now
         now = now or time.time()
         errors: list[str] = []
+        last, self._last_tick_at = getattr(self, "_last_tick_at", None), now
+        if pinned is None and last is not None and now - last > max(30.0, 3.0 * float(self.interval or 0.0)):
+            # A structured record of every stall (the Mac sleeping, a slow catalogue, a restart
+            # inside the process): nothing was priced or recorded in between.
+            try:
+                self.alerts.info(f"polling gap: {now - last:.0f}s since the last tick", polling_gap_s=round(now - last, 1), last_tick_ts=last, sport=self.sport)
+            except Exception:  # noqa: BLE001
+                pass
         games = self.wanted_games(self.feed.games(), now)
         out = SlateTick(at=now, views=[], games=len(games), errors=errors, quiet=self.quiet)
         if self.lag_executor is not None and hasattr(self.lag_executor, "reconcile"):
@@ -258,6 +266,11 @@ class LiveSlate:
                 self.lag_executor.reconcile(now)
             except Exception as e:  # noqa: BLE001
                 errors.append(f"lag-exec reconcile: {e!r}")
+        try:
+            with self._sig_lock:
+                out.paper.extend(self.laglock.sweep(now))
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"laglock sweep: {e!r}")
         if not games:
             return out
         self._fetch_pinned_now = pinned
@@ -270,46 +283,52 @@ class LiveSlate:
             # tick decides once they are all in hand, not when it started fetching.
             now = max(now, time.time())
             out.at = now
-        priced: list[tuple[GameState, MergedEvent, InplayView, FeedFreshness]] = []
+        priced: list[tuple[GameState, MergedEvent, InplayView, FeedFreshness, float]] = []
         for g in games:
             me = merged.get(g.event_key or "")
             if me is None or me.info.market_type != "moneyline":
                 out.missing.append(f"{g.away} @ {g.home} ({g.event_key})")
                 continue
             gs = self.state_for(g, now)
+            # Each game decides at its own time: ESPN summaries and signal handling for the
+            # games before it can take minutes on a big college slate, and a tick-start clock
+            # made quotes look younger than they were (tickets said "0s ago"), issued buttons
+            # already past their time-to-live and let a cooldown compare stale times
+            # (runtime logs 2026-09-26: buttons created 815 s in the past).
+            gnow = now if pinned is not None else max(now, time.time())
             fresh = self.freshness_for(me.event_key)
             try:
-                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=fresh, now=now, executable_venues=self.executable_venues)
+                view = evaluate_inplay(me, [], self.settings, self.steal_edge, self.target_margin, game_state=gs, model=self.model, bankroll=self.bankroll, kelly_fraction=self.kelly_fraction, freshness=fresh, now=gnow, executable_venues=self.executable_venues)
             except Exception as e:
                 errors.append(f"{g.away} @ {g.home}: {e!r}")
                 continue
             out.views.append(view)
-            priced.append((gs, me, view, fresh))
-            self.market_signals(me, view, out, now)
+            priced.append((gs, me, view, fresh, gnow))
+            self.market_signals(me, view, out, gnow)
         out.stake_scale = self.apply_slate_cap(out.views)
-        for gs, me, view, fresh in priced:
+        for gs, me, view, fresh, gnow in priced:
             for act in view.actions:
                 if act.startswith("STEAL"):
                     key = f"{view.event_key}|{act.split(' on ')[0]}"
                     if key not in self._seen_steal:
                         self._seen_steal.add(key)
                         sv = next((s for s in view.sides if f" {s.label} all-in " in act), None)
-                        extra = {"steal": steal_record(view, sv, act, now)} if sv is not None else {}
+                        extra = {"steal": steal_record(view, sv, act, gnow)} if sv is not None else {}
                         _call_optional(self.alerts.alert, "STEAL", f"{view.title}: {act}", event=view.event_key, game_state=view.game_state, **extra)
                 elif act.startswith("GATED"):
                     self.alerts.info(f"{view.title}: {act}", event=view.event_key, gated=view.gated_reasons)
             try:
-                self.record_pregame(gs, me, now)
+                self.record_pregame(gs, me, gnow)
             except Exception as e:
                 errors.append(f"record_pregame_line: {e!r}")
-            for err in record_view(self.store, view, me, gs, fresh, now, update_ladder=False):
+            for err in record_view(self.store, view, me, gs, fresh, gnow, update_ladder=False):
                 errors.append(f"record: {err}")
         if priced and self.store is not None:
             try:
                 call_store(self.store, "update_ladder", now)   # once per tick, after every game's STEALs are in
             except Exception as e:
                 errors.append(f"record: update_ladder: {e!r}")
-        for gs, me, view, _ in priced:
+        for gs, me, view, _, _ in priced:
             if getattr(gs, "status", "") == "final" and gs.home_score is not None and gs.away_score is not None:
                 try:
                     winner = None if gs.home_score == gs.away_score else (gs.home if gs.home_score > gs.away_score else gs.away)
@@ -320,7 +339,7 @@ class LiveSlate:
                     self._final_seen.add(me.event_key)
                     self.final_summary(gs, me, now)
         with self._sig_lock:
-            self._live_priced = {me.event_key: (gs, me, view) for gs, me, view, _ in priced if view.live}
+            self._live_priced = {me.event_key: (gs, me, view) for gs, me, view, _, _ in priced if view.live}
             if self.fast:
                 self.fastlane.seed({k: me.quotes_by_venue for k, (_, me, _) in self._live_priced.items()})
         return out

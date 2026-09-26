@@ -137,6 +137,10 @@ class LagExecutor:
         EXEC ERROR alert, which is pushed: a broken auto-trader in the middle of a game must
         not be a line in a file nobody is reading. A failed journal write is counted and
         alerted too instead of disappearing."""
+        # ``ts`` is the decision time the caller passed (the fast-lane thread and the full tick
+        # decide on their own clocks, so ``ts`` can step backwards between lines); ``logged_ts``
+        # is the wall clock at the write, which orders the file.
+        rec.setdefault("logged_ts", round(time.time(), 3))
         self.orders.append(rec)
         try:
             os.makedirs(os.path.dirname(self.intents_path) or ".", exist_ok=True)

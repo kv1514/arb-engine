@@ -59,6 +59,7 @@ class LockPosition:
     status: str = "watching"          # watching | locked | lockable | expired | partial
     parent_id: Optional[str] = None   # demo/live: the entry's order-ledger intent (bounds the lock legs)
     locked_contracts: int = 0         # contracts of the lock outcome bought so far
+    last_try: Optional[float] = None  # when a lock leg was last sent (demo/live retries are spaced)
     locked_at: Optional[float] = None
     lock_venue: Optional[str] = None
     lock_ask: Optional[float] = None
@@ -76,11 +77,15 @@ class LockPosition:
 class LagLockBook:
     def __init__(self, store: Any = None, watch_s: float = 600.0, target_margin: float = 0.0, executable: Optional[set[str]] = None,
                  executor: Any = None, alerter: Any = None, settings: Optional[dict[str, Any]] = None,
-                 require_tie_safe: bool = True, fresh_s: float = 10.0) -> None:
+                 require_tie_safe: bool = True, fresh_s: float = 10.0, lock_retry_s: float = 10.0) -> None:
         self.store, self.watch_s, self.target_margin = store, float(watch_s), float(target_margin)
         self.executable = set(executable) if executable is not None else None
         self.executor, self.alerter, self.settings = executor, alerter, settings
         self.require_tie_safe, self.fresh_s = require_tie_safe, fresh_s
+        # Seconds between two lock legs for one position: the fast lane observes every second,
+        # and an unfilled IOC retried on every observation was a storm (457 lock orders for
+        # one demo position on 2026-09-24). The executor also caps the number of attempts.
+        self.lock_retry_s = float(lock_retry_s)
         self.positions: list[LockPosition] = []
         self._keys: set[str] = set()
         self._ensure_table()
@@ -95,6 +100,10 @@ class LagLockBook:
   key TEXT PRIMARY KEY, event_key TEXT, outcome TEXT, lock_outcome TEXT, venue TEXT, contracts INTEGER,
   entry_price REAL, entry_all_in REAL, opened REAL, source TEXT, status TEXT, locked_at REAL, lock_venue TEXT,
   lock_ask REAL, lock_all_in REAL, lock_margin REAL, lock_tie_sum REAL, closed_at REAL, extra_json TEXT)""")
+            # A watch lives in memory; one a restart (or a game that stopped being observed)
+            # left 'watching' past its window is expired at its window's end, whoever wrote it.
+            conn.execute("UPDATE lag_locks SET status = 'expired', closed_at = opened + ? WHERE status = 'watching' AND opened < ?",
+                         (self.watch_s, time.time() - self.watch_s))
 
     def _save(self, p: LockPosition) -> None:
         conn = getattr(self.store, "conn", None)
@@ -165,6 +174,18 @@ class LagLockBook:
                     best = (v, float(q.ask), all_in, q, tv)
         return best
 
+    def _expire(self, p: LockPosition, now: float) -> str:
+        p.status, p.closed_at = ("partial" if p.locked_contracts else "expired"), now
+        self._save(p)
+        return (f"LAG lock watch expired after {self.watch_s:.0f}s with {p.locked_contracts} of {p.contracts} hedged: "
+                f"{p.contracts} x {p.outcome} on {p.venue} @ {p.entry_price:.2f}")
+
+    def sweep(self, now: Optional[float] = None) -> list[str]:
+        """Expire every watch past its window, whatever game it is on (``observe`` only sees
+        the game it is called for, and a finished game is not observed again)."""
+        now = time.time() if now is None else float(now)
+        return [self._expire(p, now) for p in self.positions if p.open and now - p.opened > self.watch_s]
+
     def observe(self, event_key: str, quotes_by_venue: dict[str, list[Any]], now: Optional[float] = None) -> list[str]:
         now = time.time() if now is None else float(now)
         out: list[str] = []
@@ -172,10 +193,7 @@ class LagLockBook:
             if p.event_key != event_key or not p.open:
                 continue
             if now - p.opened > self.watch_s:
-                p.status, p.closed_at = ("partial" if p.locked_contracts else "expired"), now
-                self._save(p)
-                out.append(f"LAG lock watch expired after {self.watch_s:.0f}s with {p.locked_contracts} of {p.contracts} hedged: "
-                           f"{p.contracts} x {p.outcome} on {p.venue} @ {p.entry_price:.2f}")
+                out.append(self._expire(p, now))
                 continue
             best = self._cheapest(p, quotes_by_venue, now)
             if best is None:
@@ -194,6 +212,9 @@ class LagLockBook:
                         self._save(p)
                         out.append(self._line(p, "LOCKABLE (needs a person on " + v + ")"))
                     continue
+                if p.last_try is not None and now - p.last_try < self.lock_retry_s:
+                    continue      # the last lock leg went out moments ago: space the retries
+                p.last_try = now
                 remaining = p.contracts - p.locked_contracts
                 rec = self.executor.buy_lock(q, remaining, ask, p.event_key, now, parent_id=p.parent_id)
                 p.order = rec
