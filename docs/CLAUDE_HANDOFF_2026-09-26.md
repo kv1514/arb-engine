@@ -234,6 +234,16 @@ Only Kalshi has an order API the engine can use. Robinhood's prediction markets 
 4. **Fee rounding.** Demo charges centicent. Confirm on one production fill, then consider switching the `kalshi_rounding` default. That changes fee vectors, so follow AGENTS rule 1 and re-run `gen_fee_vectors.py` and `test_js.sh`.
 5. **Microstructure test fold.** It is still unfrozen, and the H3 identity strictness is your decision. The test fold starts 2026-10-08 (TB @ DAL). Run `--freeze-spec` only after deciding.
 6. **Not investigated:** the stuck `live=1` ticks after final, and the NULL Kalshi/Polymarket `quote_time` in `inplay_ticks`.
+6a. **Two microstructure evaluator lines now exist.** Another session built
+   `claude/micro-audit-3` (on GitHub; `24adfb5`, spec v5) from `micro-audit-2` + `main`. Its
+   fixes: one decision per instant in `arb_scan`, `h3_lock_trades` and `select_trades`,
+   deterministic `_dedupe`, and H4 denominators. It lacks this branch's port fixes: causal
+   complements, traded-venue fees, the side in the exposure key, H3-lock hedge causality
+   and settlement valuation, and the legacy-log test guard. It also lacks Codex's
+   `84806e4` / `a50e4e9` / `1076f1a` (`settlement_for`, `no_of` guard, decision-time book
+   identity). The two overlap in `h3_lock_trades` and `select_trades`. Merge them by hand,
+   keeping every fix from both, re-run discovery, and do it **before** the test fold opens on
+   2026-10-08.
 7. **Demo balance.** This session's checks sent a few $0.01 demo IOCs (nothing filled), three filled 1-contract round trips and one lock leg, all sold back; together well under $1 of play money including fees.
 
 ## Exact next steps
