@@ -340,6 +340,29 @@ class ArbButton:
         self._journal(rec)
         return rec
 
+    def confirm(self, token: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
+        """The tap's own check, run at the moment of the alert: Kalshi's live order book and
+        Robinhood's live quote, the Kalshi buy walked against the book, nothing sent. Kalshi's
+        ``/markets`` price - what the sweep and the fast lane read - trails its order book by
+        5-10 s while a game moves (2026-09-26: 34 % of busy college reads disagreed), so an arb
+        seen there can already be gone from the book. Journalled as ``confirm``."""
+        spec = self.pending.get(token)
+        if spec is None:
+            return None
+        now = self.clock() if now is None else now
+        rec: dict[str, Any] = {"event": "confirm", "token": token, "mode": self.mode, "event_key": spec["event_key"], "title": spec["title"],
+                               "count": spec["count"], "tap_after_s": round(now - spec["created"], 2)}
+        rec = self._evaluate(spec, rec, now, simulate=True, capped=False)
+        self._journal(rec)
+        return rec
+
+    def withdraw(self, token: str, reason: str = "") -> None:
+        """Forget a button whose push was not sent: no tap can use it and no practice tap runs."""
+        with self._lock:
+            spec = self.pending.pop(token, None)
+        if spec is not None:
+            self._journal({"event": "withdrawn", "token": token, "event_key": spec["event_key"], "reason": reason})
+
     def _evaluate(self, spec: dict[str, Any], rec: dict[str, Any], now: float, simulate: bool, capped: bool = True) -> dict[str, Any]:
         """Read both live prices, compare them with the alert, and buy - or, ``simulate``,
         walk Kalshi's live book up to the limit."""

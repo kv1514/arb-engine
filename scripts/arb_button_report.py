@@ -6,6 +6,9 @@
 Reads out/orders/arb_button.jsonl (strategy/arbbutton.py). For each day:
 
 * issued      - arbs pushed with a button (practice-script pairs are counted apart);
+* book check  - the same live check at the moment of the alert (``arb_confirm_book``): arbs that
+                held on Kalshi's order book and were pushed, and arbs already gone there
+                (Kalshi's /markets list price trails the book) that were journalled, not pushed;
 * auto        - the automatic practice tap ~10 s after each real arb (``arb_button_auto_practice_s``):
                 was Kalshi's live price still the alert's, was Robinhood still at or under its max,
                 would the Kalshi leg have filled in full - i.e. would the arb have locked had you
@@ -65,12 +68,18 @@ def main(argv=None) -> int:
         by_day[datetime.fromtimestamp(r.get("ts") or 0).strftime("%Y-%m-%d")].append(r)
     for day in sorted(by_day):
         rs = by_day[day]
-        issued = [r for r in rs if r.get("event") == "issued" and not r.get("practice")]
+        withdrawn = {r.get("token") for r in rs if r.get("event") == "withdrawn"}
+        confirms = [r for r in rs if r.get("event") == "confirm"]
+        issued = [r for r in rs if r.get("event") == "issued" and not r.get("practice") and r.get("token") not in withdrawn]
         issued_p = [r for r in rs if r.get("event") == "issued" and r.get("practice")]
         auto = summarize([r for r in rs if r.get("event") == "auto-practice"])
         mine = [r for r in rs if r.get("event") == "tap" and not r.get("practice")]
         script = summarize([r for r in rs if r.get("event") == "tap" and r.get("practice")])
         print(f"{day}: {len(issued)} arbs pushed with a button ({len({r.get('event_key') for r in issued})} games); {len(issued_p)} practice-script pairs")
+        if confirms:
+            held = sum(1 for r in confirms if r.get("token") not in withdrawn)
+            print(f"  checked on the live book at the alert: pushed {_pct(held, len(confirms))}, gone before the push {_pct(len(confirms) - held, len(confirms))} "
+                  f"({len({r.get('event_key') for r in confirms if r.get('token') in withdrawn})} markets)")
         if auto["taps"]:
             print(f"  auto practice ~10 s after each arb: Kalshi price unchanged {_pct(auto['kalshi_unchanged'], auto['taps'])}, "
                   f"Robinhood still <= its max {_pct(auto['rh_within_max'], auto['taps'])}, Kalshi leg filled in full {_pct(auto['kalshi_filled_full'], auto['taps'])}")

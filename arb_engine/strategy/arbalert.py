@@ -27,7 +27,7 @@ from typing import Any, Callable, Optional
 from . import ticket
 
 try:  # the settings registry; this module must import without it
-    from ..config import declare_setting as _declare_setting  # type: ignore
+    from ..config import as_bool as _bool_setting, declare_setting as _declare_setting  # type: ignore
 except Exception:  # pragma: no cover
     _declare_setting = None
 if _declare_setting is not None:
@@ -37,6 +37,7 @@ if _declare_setting is not None:
         _declare_setting("arb_stake_fraction", env="ARB_STAKE_FRACTION", default=0.20, cast=float, doc="share of the bankroll one ARB ticket is sized to (fees in). A locked set holds its cost until the game ends, so an all-in ticket leaves nothing for the next arb; on the first recorded Sunday, 20 % per arb made about twice what all-in did")
         _declare_setting("arb_button_mode", env="ARB_BUTTON_MODE", default="paper", cast=str, doc="the 'Robinhood done' button on Kalshi + Robinhood ARB pushes (strategy/arbbutton.py): 'off', 'paper' (practice: live prices checked, the Kalshi buy simulated against the live book, nothing sent), 'demo' (Kalshi demo exchange) or 'live' (real order; also needs ARB_LIVE_TRADING=1 and the production key)")
         _declare_setting("arb_button_auto_practice_s", env="ARB_BUTTON_AUTO_PRACTICE_S", default=10.0, cast=float, doc="seconds after a real Kalshi + Robinhood arb's button is issued at which a practice tap is simulated (live prices re-read, the Kalshi buy walked against the live book, journalled to out/orders/arb_button.jsonl, never pushed or sent; your own tap still works). 0 = off")
+        _declare_setting("arb_confirm_book", env="ARB_CONFIRM_BOOK", default=True, cast=_bool_setting, doc="before a Kalshi + Robinhood ARB / BIG ARB is pushed, re-read Kalshi's live order book and Robinhood's live quote (the button's tap check, nothing sent); a set that would not lock there is journalled as ARB GONE and not pushed. Kalshi's /markets price trails its book by 5-10 s while a game moves. A read that fails pushes as before, marked unconfirmed")
         _declare_setting("arb_suspect_margin", env="ARB_SUSPECT_MARGIN", default=0.15, cast=float, doc="an arb wider than this (dollars per contract, fees in) is journalled as ARB SUSPECT and not pushed: cross-venue gaps that large were stale or mismatched quotes on the recorded games")
         _declare_setting("arb_max_quote_lag_s", env="ARB_MAX_QUOTE_LAG_S", default=30.0, cast=float, doc="during play, an arb whose leg's own venue timestamp is older than this is journalled as ARB SUSPECT and not pushed (Robinhood's college quotes can sit frozen while the game moves)")
         _declare_setting("arb_push_style", env="ARB_PUSH_STYLE", default="short", cast=str, doc="what an ARB / ARB CLOSE push shows on the phone: 'short' (what to buy where at what price, and the result; the full ticket stays in the journal) or 'full' (the whole itemised ticket)")
@@ -45,6 +46,10 @@ if _declare_setting is not None:
         _declare_setting("arb_big_margin", env="ARB_BIG_MARGIN", default=0.03, cast=float, doc="ARB margin from which the push is titled BIG ARB at top priority (replayed: arbs of 3c+ made money when legged by hand)")
     except Exception:  # pragma: no cover
         pass
+
+
+def _truthy(v: Any) -> bool:
+    return v if isinstance(v, bool) else str(v).strip().lower() not in ("", "0", "false", "no", "off")
 
 
 # How long arbs stayed open, by tier: fillable, fresh locks on 2026-09-20/21 (15 NFL games,
@@ -140,6 +145,8 @@ class ArbAlerter:
         self.max_quote_lag = float(_setting(self.settings, "arb_max_quote_lag_s", 30.0) or 30.0)
         self.button_mode = str(_setting(self.settings, "arb_button_mode", "paper") or "off").strip().lower()
         self.button = None          # strategy/arbbutton.ArbButton, once a long-running loop calls start_button()
+        self.confirm_book = _truthy(_setting(self.settings, "arb_confirm_book", True))
+        self._gone_until: dict[str, float] = {}   # event -> no book re-check before this (a stale list price lasts 5-10 s)
         self.stake_fraction_arb = min(self.stake_fraction, max(0.0, float(_setting(self.settings, "arb_stake_fraction_arb", 0.05) or 0.0)))
         self._staked: dict[str, float] = {}   # event -> the fraction its last analysis was sized to
         self._moves_fn = moves
@@ -164,6 +171,25 @@ class ArbAlerter:
         self.button = ArbButton(self.button_mode, alerts=self.alerts, cmd_url=str(self.alerts.ntfy).rstrip("/") + "-cmd",
                                 fee_for=lambda q: fee_model_for_quote(q, self.settings),
                                 auto_practice_s=float(_setting(self.settings, "arb_button_auto_practice_s", 10.0) or 0.0) or None)
+
+    def _book_says_gone(self, spec: dict) -> Optional[str]:
+        """Why the set would not lock on the live book (the tap's own check, nothing sent), or
+        None: it holds, or a venue could not be read (then the push goes out as before)."""
+        try:
+            chk = self.button.confirm(spec["token"])
+        except Exception:
+            return None
+        if not chk or chk.get("kalshi_error") or chk.get("rh_error") or chk.get("kalshi_live_ask") is None or chk.get("rh_live_ask") is None:
+            return None
+        if chk.get("would_lock"):
+            return None
+        k, r = spec["kalshi"], spec["robinhood"]
+        bits = [f"Kalshi {k['label']} {str(k['side']).upper()} {chk['kalshi_live_ask']:.2f} on the book (list said {k['alert_ask']:.2f}, limit {k['limit']:.2f}); "
+                f"fills {chk.get('filled', 0)}/{spec['count']} at the limit",
+                f"Robinhood {r['label']} {chk['rh_live_ask']:.2f} (alert {r['alert_ask']:.2f}, max {r['max']:.2f})"]
+        if chk.get("rh_state") not in (None, "active"):
+            bits.append(f"Robinhood market {chk['rh_state']}")
+        return "; ".join(bits)
 
     def suspect(self, me: Any, rep: Any, sized: dict, now: float) -> Optional[str]:
         """Why an arb should not be pushed, or None: too wide to be real, or (in play) a leg
@@ -249,8 +275,11 @@ class ArbAlerter:
             if why_not:
                 text += f"\nSUSPECT - not pushed: {why_not}"
             out.append((kind, text))
+            if self.button is not None and kind in ("ARB", "BIG ARB") and now < self._gone_until.get(me.event_key, -1e18):
+                return out                  # the live book said no a moment ago; the list price has not caught up yet
             # Once per throttle_s per event - sooner if the lock grew by a cent since the last push.
             if now - self.last.get(me.event_key, -1e18) >= self.throttle_s or margin >= self.last_margin.get(me.event_key, 9.0) + 0.01:
+                prev = (self.last.get(me.event_key), self.last_margin.get(me.event_key))
                 self.last[me.event_key], self.last_margin[me.event_key] = now, margin
                 # ARB SMALL is journalled, not pushed (not a default ntfy kind).
                 # The push is keyed by game (one per game per minute: a game's spread and total lines
@@ -262,6 +291,24 @@ class ArbAlerter:
                         spec = self.button.register(me.event_key, title, sized, me.quotes_by_venue, now)
                     except Exception:
                         spec = None
+                    if spec is not None and self.confirm_book:
+                        gone = self._book_says_gone(spec)
+                        if gone:
+                            self.button.withdraw(spec["token"], gone)
+                            spec = None
+                            kind, text = "ARB GONE", text + f"\nGONE on the live book - not pushed: {gone}"
+                            out[-1] = (kind, text)
+                            # Not a push: the per-game throttle is left as it was, so a real arb a
+                            # few seconds later still goes out once the book agrees.
+                            for d, v in ((self.last, prev[0]), (self.last_margin, prev[1])):
+                                if v is None:
+                                    d.pop(me.event_key, None)
+                                else:
+                                    d[me.event_key] = v
+                            self._gone_until[me.event_key] = now + 5.0
+                            _call(self.alerts.alert, kind, text, event=_game(me.event_key), market=me.event_key, margin=sized.get("margin"),
+                                  legs=sized.get("legs"), contracts=sized.get("contracts"), cost=sized.get("total_cost"), profit=sized.get("profit"))
+                            return out
                 if self.short_push and spec is not None:
                     extra["ntfy_body"] = ticket.arb_button_short(sized, spec, where=where, mode=self.button.mode)
                     extra["ntfy_actions"] = [spec["action"]] + [(f"Robinhood {spec['robinhood']['label']}", spec["robinhood"]["url"]),

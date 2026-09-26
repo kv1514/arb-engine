@@ -208,6 +208,13 @@ scripts/sunday.sh restart live                  # if the recorders are already r
 
        python3 scripts/arb_button_practice.py --sport ncaaf --mid --live-only
        python3 scripts/arb_button_practice.py --sport nfl --push --self-tap   # end to end through ntfy
+       python3 scripts/arb_button_practice.py --sport ncaaf --phone --pairs 1 # push one; YOU tap it
+       python3 scripts/arb_button_report.py --games                         # how the arbs held up
+
+   Every such arb is checked on the live book **before** it is pushed (`arb_confirm_book`):
+   Kalshi's `/markets` price, which the scans read, trails its order book by 5-10 s while a
+   game moves, so an arb seen there can already be gone. One that would not lock on the book at
+   full size is journalled as **ARB GONE** and never reaches the phone.
 
    **ntfy's quota.** ntfy.sh lets an anonymous sender publish 250 messages a day per IP, shared
    by every process on the Mac (`curl https://ntfy.sh/v1/account` shows what is left). Over it,

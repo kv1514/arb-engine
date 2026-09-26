@@ -260,8 +260,10 @@ class AlerterIntegrationTests(unittest.TestCase):
         self.assertNotIn("Robinhood done", json.dumps(arbs.alerts.pushes[-1][2]["ntfy_actions"]))   # tests and one-off runs: no button
         arbs.start_button()
         self.assertEqual(arbs.button.auto_practice_s, 10.0)
+        arbs.button.journal_path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"button_int_{os.getpid()}.jsonl")   # never the real journal
         arbs.button.http_get = False                       # no poller in a test
         arbs.button.auto_practice_s = None                 # nor a timer
+        arbs.button.live_prices = lambda spec: {"kalshi_asks": [(0.55, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active", "at": T0 + 1}
         arbs.last.clear()
         arbs.handle(me, rep, "DEN @ KC", T0 + 1)
         kind, full, data = arbs.alerts.pushes[-1]
@@ -274,6 +276,64 @@ class AlerterIntegrationTests(unittest.TestCase):
         self.assertIn('2) Tap "Robinhood done": the bot buys', body[1])
         self.assertIn("Practice mode", data["ntfy_body"])
         self.assertIn("+ Kalshi taker fee:", full)          # the journal keeps the full ticket
+
+    def _started(self, live):
+        from arb_engine.strategy.arbalert import ArbAlerter
+
+        class _A(_Alerts):
+            def alert(self, kind, msg, **data):
+                self.pushes.append((kind, msg, data))
+
+            def info(self, *a, **k):
+                pass
+        me = _me()
+        arbs = ArbAlerter(_A(), {}, bankroll=500, executable_venues={"kalshi", "robinhood"})
+        arbs.start_button()
+        arbs.button.http_get, arbs.button.auto_practice_s = False, None
+        arbs.button.journal_path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"button_gate_{os.getpid()}.jsonl")
+        arbs.button.live_prices = lambda spec: dict(live, at=T0)
+        return arbs, me, arbs.analyse(me, T0)
+
+    def test_an_arb_gone_from_the_live_book_is_journalled_not_pushed(self):
+        # Kalshi's /markets list said 0.55; its order book already asks 0.62 (the list trails the
+        # book by 5-10 s in play). Nothing locks there, so no push and no button.
+        arbs, me, rep = self._started({"kalshi_asks": [(0.62, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active"})
+        out = arbs.handle(me, rep, "DEN @ KC", T0)
+        kind, text, data = arbs.alerts.pushes[-1]
+        self.assertEqual(kind, "ARB GONE")
+        self.assertEqual(out[-1][0], "ARB GONE")
+        self.assertNotIn("ntfy_actions", data)
+        self.assertIn("GONE on the live book - not pushed: Kalshi Kansas City YES 0.62 on the book (list said 0.55", text)
+        self.assertEqual(arbs.button.pending, {})           # withdrawn: no tap, no practice tap
+        # The throttle was not used up; the same stale list price is not re-checked for 5 s ...
+        self.assertNotIn(me.event_key, arbs.last)
+        n = len(arbs.alerts.pushes)
+        arbs.handle(me, rep, "DEN @ KC", T0 + 3)
+        self.assertEqual(len(arbs.alerts.pushes), n)
+        # ... and once the book agrees the arb goes out with its button.
+        arbs.button.live_prices = lambda spec: {"kalshi_asks": [(0.55, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active", "at": T0 + 6}
+        arbs.handle(me, rep, "DEN @ KC", T0 + 6)
+        kind, _, data = arbs.alerts.pushes[-1]
+        self.assertEqual(kind, "BIG ARB")
+        self.assertEqual(data["ntfy_actions"][0]["action"], "http")
+
+    def test_thin_book_at_the_limit_is_gone_but_an_unreadable_book_still_pushes(self):
+        # Two contracts at the list price is not the ticket's size.
+        arbs, me, rep = self._started({"kalshi_asks": [(0.55, 2.0), (0.70, 500.0)], "rh_ask": 0.36, "rh_bid": 0.35, "rh_state": "active"})
+        arbs.handle(me, rep, "DEN @ KC", T0)
+        self.assertEqual(arbs.alerts.pushes[-1][0], "ARB GONE")
+        self.assertIn("fills 2/", arbs.alerts.pushes[-1][1])
+        # A read that fails is not evidence the arb is gone: push as before.
+        arbs, me, rep = self._started({"kalshi_asks": [], "kalshi_error": "HTTPError(429)", "rh_ask": 0.36, "rh_state": "active"})
+        arbs.handle(me, rep, "DEN @ KC", T0)
+        self.assertEqual(arbs.alerts.pushes[-1][0], "BIG ARB")
+
+    def test_the_book_check_can_be_turned_off(self):
+        from arb_engine.strategy.arbalert import ArbAlerter
+        arbs, me, rep = self._started({"kalshi_asks": [(0.62, 500.0)], "rh_ask": 0.36, "rh_state": "active"})
+        arbs.confirm_book = False
+        arbs.handle(me, rep, "DEN @ KC", T0)
+        self.assertEqual(arbs.alerts.pushes[-1][0], "BIG ARB")
 
 
 if __name__ == "__main__":
