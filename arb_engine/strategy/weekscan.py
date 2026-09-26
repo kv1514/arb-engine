@@ -122,7 +122,15 @@ class WeekScanner:
                     me = (res.merged or {}).get(rep.event_key)
                     if me is None or self._skip(rep):
                         continue
-                    got = self._alert(me, rep, now)
+                    if (rep.arb or {}).get("is_arb"):
+                        # A sweep's prices come from a catalogue pass that can take half a minute
+                        # and read two venues seconds apart: an arb found here is only a lead. It
+                        # goes on the fast watch, whose next step re-reads both venues' live
+                        # quotes (sized to the stake) and pushes it only if it still holds.
+                        self.stats["pending"] = self.stats.get("pending", 0) + 1
+                        got = []
+                    else:
+                        got = self._alert(me, rep, now)
                     found += got
                     self._consider(sport, me, rep, now)
                     if got or rep.event_key in self.watch:
@@ -194,6 +202,7 @@ class WeekScanner:
 
         end = None if duration is None else self.clock() + duration
         stop = threading.Event()
+        self.arbs.start_button()
         printer(f"week scan: {', '.join(self.sports)}; full sweep every {self.full_every_s:g}s (background), watch within "
                 f"{self.watch_margin * 100:.0f}c every {self.fast_every_s:g}s (max {self.max_watch}); in-play moneylines are the live slate's")
 

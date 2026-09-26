@@ -146,6 +146,35 @@ def arb_short(result: Any, first: Optional[int] = None, max_prices: Optional[dic
     return "\n".join(lines)
 
 
+def arb_button_short(result: Any, spec: dict, where: str = "", mode: str = "paper") -> str:
+    """The push for a Kalshi + Robinhood arb with the "Robinhood done" button: you buy
+    Robinhood first, then tap; the bot buys Kalshi (``strategy/arbbutton.py``).
+
+        1) Robinhood: buy 25 Green Bay YES at 72¢ (max 73¢)
+        2) Tap "Robinhood done": the bot buys 25 Atlanta YES on Kalshi, up to 23¢
+        Cost $24.31, pays $25.00 = +$0.69
+    """
+    k, r, n = spec["kalshi"], spec["robinhood"], spec["count"]
+    mx = f" (max {_price_c(r['max'])})" if r["max"] > r["alert_ask"] + 1e-9 else ""
+    lines = [f"1) Robinhood: buy {n:g} {r['label']} {str(r['side']).upper()} at {_price_c(r['alert_ask'])}{mx}",
+             f"2) Tap \"Robinhood done\": the bot buys {n:g} {k['label']} {str(k['side']).upper()} on Kalshi, up to {_price_c(k['limit'])}"]
+    contracts = float(_g(result, "contracts", 0) or 0)
+    cost = float(_g(result, "total_cost", 0) or 0)
+    payout = float(_g(result, "payout", contracts) or 0)
+    profit = float(_g(result, "profit", payout - cost) or 0)
+    lines.append(f"Cost {money(cost)}, pays {money(payout)} = {'+' if profit >= 0 else ''}{money(profit)}")
+    tie_margin = _g(result, "tie_margin")
+    if tie_margin is not None and float(tie_margin) < 0:
+        lines.append(f"If the game ends in a tie you lose {money(-float(tie_margin) * contracts)} (rare)")
+    if mode == "paper":
+        lines.append("Practice mode: the bot checks live prices and simulates the Kalshi buy - nothing is sent")
+    elif mode == "demo":
+        lines.append("Demo mode: the Kalshi order goes to the demo exchange")
+    if where:
+        lines.append(where)
+    return "\n".join(lines)
+
+
 def near_arb_short(report: Any) -> str:
     """The phone push for "nearly an arb": each side's price now and the price that locks it."""
     lines = []
