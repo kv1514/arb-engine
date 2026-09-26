@@ -76,12 +76,53 @@ class WeekScanTests(unittest.TestCase):
         far = _event("nfl:NE|NYJ:2026-09-27", 0.62, 0.45)          # ~-10c: ignored
         ws, lane = self._ws([arb, near, far])
         res = ws.full_sweep(T0)
-        self.assertEqual([k for k, _ in res["found"] if k != "ARB CLOSE"], ["BIG ARB"])
-        self.assertEqual([t.split(" - ")[0] for t, _ in self.sent], ["BIG ARB +5.3c"])       # only the arb reached the phone
-        self.assertIn("pre-game", self.sent[0][1])
+        # A sweep's arb is only a lead: nothing is pushed until live quotes confirm it.
+        self.assertEqual([k for k, _ in res["found"] if k != "ARB CLOSE"], [])
+        self.assertEqual(self.sent, [])
+        self.assertEqual(ws.stats["pending"], 1)
         self.assertEqual(set(ws.watch), {arb.event_key, near.event_key})
         self.assertEqual(set(lane.seeded), set(ws.watch))
         self.assertTrue(any(e["kind"] == "info" and "near-lock" in e.get("msg", "") for e in self.alerts.events))
+        lane.quotes[arb.event_key] = _event(arb.event_key, 0.55, 0.36, t=T0 + 5).quotes_by_venue      # re-read live: still there
+        found = ws.fast_step(T0 + 5)
+        self.assertEqual([k for k, _ in found if k != "ARB CLOSE"], ["BIG ARB"])
+        self.assertEqual([t.split(" - ")[0] for t, _ in self.sent], ["BIG ARB +5.3c"])       # only the arb reached the phone
+        self.assertIn("pre-game", self.sent[0][1])
+        pushed = [e for e in self.alerts.events if e["kind"] == "alert" and e["title"] == "BIG ARB"][0]
+        self.assertLessEqual(pushed["cost"], 100.0 + 1e-9)       # sized to the stake (20 % of $500), fees in
+
+    def test_an_arb_that_is_gone_on_the_live_reread_is_never_pushed(self):
+        arb = _event("nfl:DEN|KC:2026-09-27", 0.55, 0.36)
+        ws, lane = self._ws([arb])
+        ws.full_sweep(T0)
+        lane.quotes[arb.event_key] = _event(arb.event_key, 0.62, 0.40, t=T0 + 5).quotes_by_venue      # the sweep saw a stale moment
+        self.assertEqual([k for k, _ in ws.fast_step(T0 + 5) if k != "ARB CLOSE"], [])
+        self.assertEqual(self.sent, [])
+        # ... and quotes the fast lane could not refresh (still the sweep's) are too old to count.
+        ws2, lane2 = self._ws([arb])
+        ws2.full_sweep(T0)
+        self.assertEqual([k for k, _ in ws2.fast_step(T0 + 60) if k != "ARB CLOSE"], [])
+        self.assertEqual(self.sent, [])
+
+    def test_implausible_or_frozen_arbs_are_journalled_not_pushed(self):
+        wide = _event("nfl:DEN|KC:2026-09-27:spread:KC-3.5", 0.45, 0.36, mtype="spread")    # ~+16c: a stale quote, not an arb
+        ws, lane = self._ws([wide])
+        ws.full_sweep(T0)
+        lane.quotes[wide.event_key] = _event(wide.event_key, 0.45, 0.36, mtype="spread", t=T0 + 5).quotes_by_venue
+        self.assertEqual([k for k, _ in ws.fast_step(T0 + 5) if k != "ARB CLOSE"], ["ARB SUSPECT"])
+        self.assertEqual(self.sent, [])
+        # In play, a Robinhood quote whose own venue timestamp is 2 minutes old is frozen.
+        live = _event("nfl:DEN|KC:2026-09-27:spread:KC-3.5", 0.55, 0.36, live=True, mtype="spread")
+        ws2, lane2 = self._ws([live])
+        ws2.full_sweep(T0)
+        fresh = _event(live.event_key, 0.55, 0.36, live=True, mtype="spread", t=T0 + 125).quotes_by_venue
+        import dataclasses
+        fresh["robinhood"] = [dataclasses.replace(q, quote_time=T0) for q in fresh["robinhood"]]      # we read it now; the venue last moved it 125 s ago
+        lane2.quotes[live.event_key] = fresh
+        found = ws2.fast_step(T0 + 125)
+        self.assertEqual([k for k, _ in found if k != "ARB CLOSE"], ["ARB SUSPECT"])
+        self.assertIn("not updated for 125s during play", next(t for k, t in found if k == "ARB SUSPECT"))
+        self.assertEqual(self.sent, [])
 
     def test_in_play_moneylines_are_left_to_the_live_slate(self):
         live = _event("nfl:DEN|KC:2026-09-27", 0.55, 0.36, live=True)
@@ -89,8 +130,10 @@ class WeekScanTests(unittest.TestCase):
         self.assertEqual(ws.full_sweep(T0)["found"], [])
         self.assertEqual(self.sent, [])
         line = _event("nfl:DEN|KC:2026-09-27:spread:KC-3.5", 0.55, 0.36, live=True, mtype="spread")
-        ws2, _ = self._ws([line])
-        self.assertEqual([k for k, _ in ws2.full_sweep(T0)["found"]], ["BIG ARB"])   # in-play lines are ours
+        ws2, lane2 = self._ws([line])
+        ws2.full_sweep(T0)
+        lane2.quotes[line.event_key] = _event(line.event_key, 0.55, 0.36, live=True, mtype="spread", t=T0 + 5).quotes_by_venue
+        self.assertEqual([k for k, _ in ws2.fast_step(T0 + 5)], ["BIG ARB"])   # in-play lines are ours
 
     def test_the_fast_watch_catches_a_near_lock_that_crosses_between_sweeps(self):
         near = _event("nfl:BUF|MIA:2026-09-27", 0.61, 0.38)
@@ -107,13 +150,15 @@ class WeekScanTests(unittest.TestCase):
         arb = _event("nfl:DEN|KC:2026-09-27", 0.55, 0.36)
         ws, lane = self._ws([arb], prematch_every_s=600)
         ws.full_sweep(T0)
-        ws.full_sweep(T0 + 120)
-        ws.full_sweep(T0 + 240)
+        for t in (5, 125, 245):                                  # confirmed on every re-read
+            lane.quotes[arb.event_key] = _event(arb.event_key, 0.55, 0.36, t=T0 + t).quotes_by_venue
+            ws.fast_step(T0 + t)
         self.assertEqual(len(self.sent), 1)                     # the same lock is one message
         lane.quotes[arb.event_key] = _event(arb.event_key, 0.53, 0.36, t=T0 + 250).quotes_by_venue   # it grew by 2c
         ws.fast_step(T0 + 250)
         self.assertEqual(len(self.sent), 2)
-        ws.full_sweep(T0 + 900)                                  # back at the old price, past the throttle
+        lane.quotes[arb.event_key] = _event(arb.event_key, 0.55, 0.36, t=T0 + 900).quotes_by_venue
+        ws.fast_step(T0 + 900)                                   # back at the old price, past the throttle
         self.assertEqual(len(self.sent), 3)
 
     def test_watch_is_capped_and_forgets_markets_that_drift_away(self):

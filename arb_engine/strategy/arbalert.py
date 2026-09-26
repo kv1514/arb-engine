@@ -13,8 +13,8 @@ arb is tiered, sized, throttled and written the same way whenever it shows up:
 * **Window**: each ticket says how long arbs of its tier stayed open when recorded (median
   ~8 s; about a third still there at 15 s) - the first leg is a now-or-never decision.
 * **Throttle**: one ARB push per event per ``throttle_s`` (30 s); an ARB CLOSE (within
-  ``arb_near_margin``, 3c, of locking) once per ``arb_near_every_s`` or when the gap shrank
-  by a cent.
+  ``arb_near_margin``, 3c, of locking) once per ``arb_near_every_s`` (15 min) or when the gap
+  shrank by two cents.
 * **Legging**: the legs in buying order - the stale one first (the venue that has moved least
   over the last 30 s: its price is the one about to go; else the thinner book) - each price's
   age, and the most every later leg may cost and still lock.
@@ -33,8 +33,11 @@ except Exception:  # pragma: no cover
 if _declare_setting is not None:
     try:
         _declare_setting("arb_near_margin", env="ARB_NEAR_MARGIN", default=0.03, cast=float, doc="how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert - the buffer that says 'this pair is about to cross'")
-        _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=300.0, cast=float, doc="seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent")
+        _declare_setting("arb_near_every_s", env="ARB_NEAR_EVERY_S", default=900.0, cast=float, doc="seconds before the same event may send another ARB CLOSE unless the gap shrank by two cents (at 300 s / one cent the college slate sent 279 ARB CLOSE pushes on 2026-09-26 and ran the free ntfy.sh quota dry)")
         _declare_setting("arb_stake_fraction", env="ARB_STAKE_FRACTION", default=0.20, cast=float, doc="share of the bankroll one ARB ticket is sized to (fees in). A locked set holds its cost until the game ends, so an all-in ticket leaves nothing for the next arb; on the first recorded Sunday, 20 % per arb made about twice what all-in did")
+        _declare_setting("arb_button_mode", env="ARB_BUTTON_MODE", default="paper", cast=str, doc="the 'Robinhood done' button on Kalshi + Robinhood ARB pushes (strategy/arbbutton.py): 'off', 'paper' (practice: live prices checked, the Kalshi buy simulated against the live book, nothing sent), 'demo' (Kalshi demo exchange) or 'live' (real order; also needs ARB_LIVE_TRADING=1 and the production key)")
+        _declare_setting("arb_suspect_margin", env="ARB_SUSPECT_MARGIN", default=0.15, cast=float, doc="an arb wider than this (dollars per contract, fees in) is journalled as ARB SUSPECT and not pushed: cross-venue gaps that large were stale or mismatched quotes on the recorded games")
+        _declare_setting("arb_max_quote_lag_s", env="ARB_MAX_QUOTE_LAG_S", default=30.0, cast=float, doc="during play, an arb whose leg's own venue timestamp is older than this is journalled as ARB SUSPECT and not pushed (Robinhood's college quotes can sit frozen while the game moves)")
         _declare_setting("arb_push_style", env="ARB_PUSH_STYLE", default="short", cast=str, doc="what an ARB / ARB CLOSE push shows on the phone: 'short' (what to buy where at what price, and the result; the full ticket stays in the journal) or 'full' (the whole itemised ticket)")
         _declare_setting("arb_stake_fraction_arb", env="ARB_STAKE_FRACTION_ARB", default=0.05, cast=float, doc="share of the bankroll a 1-3c ARB ticket is sized to (BIG ARB uses arb_stake_fraction). Legged by hand the 1-3c tier returned -0.5 % per dollar on 2026-09-20/21 (Kelly: 0); on one bankroll, 20 % BIG + 5 % ARB made $169 vs $80 for 20 % on every tier. 0 = do not alert that tier")
         _declare_setting("arb_push_min_margin", env="ARB_PUSH_MIN_MARGIN", default=0.01, cast=float, doc="smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL. Replayed by hand (a person on the Robinhood leg), arbs under 1c lost money at every leg speed tested")
@@ -127,11 +130,15 @@ class ArbAlerter:
         self.contracts, self.target_margin, self.executable_venues = contracts, target_margin, executable_venues
         self.throttle_s = throttle_s
         self.near_margin = float(_setting(self.settings, "arb_near_margin", 0.03) or 0.0)
-        self.near_every = float(_setting(self.settings, "arb_near_every_s", 300.0) or 300.0)
+        self.near_every = float(_setting(self.settings, "arb_near_every_s", 900.0) or 900.0)
         self.push_min = float(_setting(self.settings, "arb_push_min_margin", 0.01) or 0.0)
         self.big = float(_setting(self.settings, "arb_big_margin", 0.03) or 0.03)
         self.stake_fraction = float(_setting(self.settings, "arb_stake_fraction", 0.20) or 1.0)
         self.short_push = str(_setting(self.settings, "arb_push_style", "short") or "short").strip().lower() != "full"
+        self.suspect_margin = float(_setting(self.settings, "arb_suspect_margin", 0.15) or 0.15)
+        self.max_quote_lag = float(_setting(self.settings, "arb_max_quote_lag_s", 30.0) or 30.0)
+        self.button_mode = str(_setting(self.settings, "arb_button_mode", "paper") or "off").strip().lower()
+        self.button = None          # strategy/arbbutton.ArbButton, once a long-running loop calls start_button()
         self.stake_fraction_arb = min(self.stake_fraction, max(0.0, float(_setting(self.settings, "arb_stake_fraction_arb", 0.05) or 0.0)))
         self._staked: dict[str, float] = {}   # event -> the fraction its last analysis was sized to
         self._moves_fn = moves
@@ -144,6 +151,31 @@ class ArbAlerter:
         self.last: dict[str, float] = {}
         self.last_margin: dict[str, float] = {}
         self.near_last: dict[str, tuple[float, float]] = {}
+
+    def start_button(self) -> None:
+        """Called by the long-running loops (live slate, week scanner): from here on, Kalshi +
+        Robinhood arbs carry the "Robinhood done" button and the command topic is polled."""
+        if self.button is not None or self.button_mode == "off" or not getattr(self.alerts, "ntfy", None):
+            return
+        from ..fees.registry import fee_model_for_quote
+        from .arbbutton import ArbButton
+
+        self.button = ArbButton(self.button_mode, alerts=self.alerts, cmd_url=str(self.alerts.ntfy).rstrip("/") + "-cmd",
+                                fee_for=lambda q: fee_model_for_quote(q, self.settings))
+
+    def suspect(self, me: Any, rep: Any, sized: dict, now: float) -> Optional[str]:
+        """Why an arb should not be pushed, or None: too wide to be real, or (in play) a leg
+        whose own venue quote has not moved for ``arb_max_quote_lag_s``."""
+        margin = float(sized.get("margin") or 0.0)
+        if margin > self.suspect_margin:
+            return f"{margin * 100:.1f}c is wider than a real cross-venue arb ({self.suspect_margin * 100:.0f}c cap): stale or mismatched quote"
+        if rep.live:
+            for leg in sized.get("legs") or []:
+                q = next((x for x in (me.quotes_by_venue or {}).get(leg.get("venue"), []) if x.venue_market_id == leg.get("market_id")), None)
+                qt = getattr(q, "quote_time", None) if q is not None else None
+                if qt and now - float(qt) > self.max_quote_lag:
+                    return f"{str(leg.get('venue')).title()} quote for {leg.get('label') or leg.get('outcome')} not updated for {now - float(qt):.0f}s during play"
+        return None
 
     @property
     def stake(self) -> Optional[float]:
@@ -206,9 +238,14 @@ class ArbAlerter:
             first, why, maxp = self.legging(me, rep, sized, now)
             margin = float(sized.get("margin") or 0.0)
             kind = "BIG ARB" if margin >= self.big else ("ARB" if margin >= self.push_min else "ARB SMALL")
+            why_not = self.suspect(me, rep, sized, now)
+            if why_not:
+                kind = "ARB SUSPECT"          # journalled, never pushed
             text = ticket.arb_ticket(title, sized, size_note=note, sport=rep.sport or me.event_key, header=kind,
                                      first=first, first_reason=why, max_prices=maxp, now=now, window=window_line(kind),
                                      guarantee=guarantee_line(rep, sized))
+            if why_not:
+                text += f"\nSUSPECT - not pushed: {why_not}"
             out.append((kind, text))
             # Once per throttle_s per event - sooner if the lock grew by a cent since the last push.
             if now - self.last.get(me.event_key, -1e18) >= self.throttle_s or margin >= self.last_margin.get(me.event_key, 9.0) + 0.01:
@@ -217,7 +254,19 @@ class ArbAlerter:
                 # The push is keyed by game (one per game per minute: a game's spread and total lines
                 # can arb together); the journal keeps the market.
                 extra = {}
-                if self.short_push:
+                spec = None
+                if self.button is not None and kind in ("ARB", "BIG ARB"):
+                    try:
+                        spec = self.button.register(me.event_key, title, sized, me.quotes_by_venue, now)
+                    except Exception:
+                        spec = None
+                if self.short_push and spec is not None:
+                    extra["ntfy_body"] = ticket.arb_button_short(sized, spec, where=where, mode=self.button.mode)
+                    extra["ntfy_actions"] = [spec["action"]] + [(f"Robinhood {spec['robinhood']['label']}", spec["robinhood"]["url"]),
+                                                                 (f"Kalshi {spec['kalshi']['label']}", spec["kalshi"]["url"])]
+                    extra["ntfy_click"] = spec["robinhood"]["url"]      # Robinhood is bought first
+                    head = f"{kind} +{margin * 100:.1f}c - {sport} {title}".replace("  ", " ")
+                elif self.short_push:
                     extra["ntfy_body"] = ticket.arb_short(sized, first=first, max_prices=maxp, where=where)
                     buttons = ticket.order_buttons(sized, first=first, max_prices=maxp)
                     extra["ntfy_actions"] = buttons
@@ -232,7 +281,7 @@ class ArbAlerter:
         elif not stale and arb.get("margin") is not None and self.near_margin > 0 and -self.near_margin <= float(arb["margin"]) < 0:
             m = float(arb["margin"])
             last_t, last_m = self.near_last.get(me.event_key, (-1e18, -1.0))
-            if now - last_t >= self.near_every or m >= last_m + 0.01:
+            if now - last_t >= self.near_every or m >= last_m + 0.02:
                 self.near_last[me.event_key] = (now, m)
                 text = ticket.near_arb_ticket(title, rep, m, sport=rep.sport or me.event_key, bankroll=self.bankroll or None)
                 out.append(("ARB CLOSE", text))

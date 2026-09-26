@@ -46,8 +46,12 @@ NTFY_DEFAULT_KINDS = ("BIG ARB", "ARB", "ARB CLOSE", "EXEC ERROR", "HEDGE NOW", 
 # total line of a game in one pass, and one push per game per minute (the best-margin line
 # comes first, the watches are ranked) beats eight in three seconds.
 NTFY_GAME_LEVEL = ("TAKER ARB", "ARB CLOSE", "EXEC ERROR")
-NTFY_PRIORITY = {"HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "EXEC ERROR": "5", "BIG ARB": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "ARB CLOSE": "3", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
-NTFY_TAGS = {"HEDGE NOW": "rotating_light", "EXEC ERROR": "warning", "BIG ARB": "moneybag,rotating_light", "ARB": "moneybag", "ARB CLOSE": "eyes", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
+# ntfy.sh gives an anonymous sender 250 messages a day per IP, shared by every process on the
+# machine. These kinds stop once fewer than ``ARB_ALERT_NTFY_RESERVE`` remain, so the arbs,
+# button results and errors always have room.
+NTFY_LOW_PRIORITY = ("ARB CLOSE", "FINAL", "TAKER ARB", "LAG", "STEAL", "LOCK NOW")
+NTFY_PRIORITY = {"ARB FILL": "5", "HEDGE NOW": "5", "EXCHANGE PAUSED": "5", "EXEC ERROR": "5", "BIG ARB": "5", "ARB": "4", "LAG": "4", "TAKER ARB": "4", "ARB CLOSE": "3", "STEAL": "3", "LOCK NOW": "3", "FINAL": "2"}
+NTFY_TAGS = {"ARB FILL": "white_check_mark", "HEDGE NOW": "rotating_light", "EXEC ERROR": "warning", "BIG ARB": "moneybag,rotating_light", "ARB": "moneybag", "ARB CLOSE": "eyes", "LAG": "hourglass_flowing_sand", "TAKER ARB": "moneybag", "STEAL": "chart_with_upwards_trend", "LOCK NOW": "lock", "EXCHANGE PAUSED": "pause_button", "FINAL": "checkered_flag"}
 
 try:  # settings registry; the module must import without it
     from ..config import declare_setting as _declare_setting  # type: ignore
@@ -86,6 +90,12 @@ class Alerter:
         except (TypeError, ValueError):
             self.min_interval_s = 60.0
         self._transport = transport  # tests inject one; None = urllib with a curl fallback
+        try:
+            self.ntfy_reserve = int(os.environ.get("ARB_ALERT_NTFY_RESERVE") or 80)
+        except ValueError:
+            self.ntfy_reserve = 80
+        self._quota: tuple[float, Optional[int]] = (-1e18, None)   # (checked at, messages remaining)
+        self._refused_until = -1e18
         self._last_push: dict[tuple[str, str, str], float] = {}
         self.quiet = quiet
         self.desktop = desktop and sys.platform == "darwin" and shutil.which("osascript") is not None
@@ -171,11 +181,34 @@ class Alerter:
         if not force and kind != "HEDGE NOW" and now - self._last_push.get(key, -1e18) < self.min_interval_s:
             self.journal("ntfy_throttled", title=title, event=event, side=side)
             return False
+        if kind in NTFY_LOW_PRIORITY and not force:
+            left = self.ntfy_remaining(now)
+            if now < self._refused_until or (left is not None and left < self.ntfy_reserve):
+                self.journal("ntfy_saved", title=title, event=event, remaining=left,
+                             reason="ntfy quota kept for arbs" if left is not None else "ntfy refusing pushes")
+                return False
         self._last_push[key] = now
         headers = {"Title": (headline or title)[:120], "Priority": NTFY_PRIORITY.get(kind, "3"), "Tags": NTFY_TAGS.get(kind, "bell"), "Content-Type": "text/plain; charset=utf-8"}
-        acts = [(str(lbl), str(url)) for lbl, url in (actions or [])[:3] if url and str(url).isascii() and "," not in str(url) and ";" not in str(url)]
-        if acts:   # ntfy action buttons: "view, <label>, <url>" separated by ";"
-            headers["Actions"] = "; ".join(f"view, {lbl}, {url}" for lbl, url in acts)
+        acts = []
+        for a in (actions or [])[:3]:   # ntfy allows three buttons
+            if isinstance(a, dict):      # {"action": "http", "label", "url", "method", "body", "clear"}
+                url = str(a.get("url") or "")
+                if not url or not url.isascii() or any(ch in url + str(a.get("body", "")) for ch in ",;"):
+                    continue
+                part = f"{a.get('action', 'view')}, {a.get('label', 'Open')}, {url}"
+                if a.get("method"):
+                    part += f", method={a['method']}"
+                if a.get("body"):
+                    part += f", body={a['body']}"
+                if a.get("clear"):
+                    part += ", clear=true"
+                acts.append(part)
+            else:
+                lbl, url = a
+                if url and str(url).isascii() and "," not in str(url) and ";" not in str(url):
+                    acts.append(f"view, {lbl}, {url}")
+        if acts:   # ntfy action buttons, separated by ";"
+            headers["Actions"] = "; ".join(acts)
         if click and str(click).isascii():
             headers["Click"] = str(click)
         try:
@@ -183,23 +216,52 @@ class Alerter:
             self.journal("ntfy", title=title, event=event, side=side)
             return True
         except Exception as e:
-            self.journal("ntfy_error", error=str(e))
+            if "429" in str(e):
+                self._refused_until = now + 600      # over the daily quota: stop spending requests on low-priority kinds
+            self.journal("ntfy_error", title=title, event=event, error=str(e)[:300])
             return False
 
+    def ntfy_remaining(self, now: Optional[float] = None) -> Optional[int]:
+        """Messages this machine may still send today (ntfy's ``/v1/account``, cached 2 min);
+        None when unknown (a test transport, a server without the endpoint, no network)."""
+        now = time.time() if now is None else now
+        if self._transport is not None or not self.ntfy:
+            return None
+        if now - self._quota[0] < 120:
+            return self._quota[1]
+        left = None
+        try:
+            import urllib.parse
+            import urllib.request
+
+            u = urllib.parse.urlsplit(self.ntfy)
+            with urllib.request.urlopen(f"{u.scheme}://{u.netloc}/v1/account", timeout=5) as resp:
+                left = int(((json.loads(resp.read()) or {}).get("stats") or {}).get("messages_remaining"))
+        except Exception:
+            left = None
+        self._quota = (now, left)
+        return left
+
     def _post(self, url: str, body: bytes, headers: dict[str, str]) -> None:
+        """POST, raising on *any* refusal: a 429 (over quota) or 4xx/5xx must be an error in
+        the journal, never a push counted as sent."""
         if self._transport is not None:
             self._transport(url, body, headers)
             return
+        import urllib.error
+
         try:
             import urllib.request
 
             req = urllib.request.Request(url, data=body, headers=headers, method="POST")
             urllib.request.urlopen(req, timeout=5).read()
+        except urllib.error.HTTPError:
+            raise                                     # the server answered: its refusal is final
         except Exception:
             curl = shutil.which("curl")
             if not curl:
                 raise
-            cmd = [curl, "-sS", "-m", "6", "-X", "POST", "--data-binary", "@-"]
+            cmd = [curl, "-sS", "-f", "-m", "6", "-X", "POST", "--data-binary", "@-"]
             for k, v in headers.items():
                 cmd += ["-H", f"{k}: {v}"]
             subprocess.run(cmd + [url], input=body, capture_output=True, timeout=8, check=True)

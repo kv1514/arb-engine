@@ -74,7 +74,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python -m unittest discover -s tests -t .      # Python tests (852)
+python -m unittest discover -s tests -t .      # Python tests (867)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -162,10 +162,13 @@ When you declare a key, add its row here.
 | `arb_stake_fraction` | `ARB_STAKE_FRACTION` | `0.2` | Share of the bankroll a BIG ARB ticket is sized to, fees in (a locked set holds its cost until the game ends; on one $500 bankroll over 2026-09-20/21, 20 % per BIG ARB made $187 vs $92 all-in and $111 at 50 %). |
 | `arb_stake_fraction_arb` | `ARB_STAKE_FRACTION_ARB` | `0.05` | Share of the bankroll a 1-3c ARB ticket is sized to (legged by hand that tier returned -0.5 % per dollar, Kelly 0; 20 % BIG + 5 % ARB made $169 vs $80 at 20 % on every tier). 0 = do not alert that tier. |
 | `arb_push_style` | `ARB_PUSH_STYLE` | `short` | What an ARB / ARB CLOSE push shows on the phone: `short` (each leg's venue, shares, side and price, the cost and profit, a tie warning when a tie loses; Kalshi / Robinhood buttons) or `full` (the whole itemised ticket). The journal always keeps the full ticket. |
+| `arb_button_mode` | `ARB_BUTTON_MODE` | `paper` | The "Robinhood done" button on Kalshi + Robinhood ARB pushes (`strategy/arbbutton.py`): `off`; `paper` (practice - at the tap, both venues' live prices are re-read and checked against the alert and the Kalshi buy is simulated against Kalshi's live order book; nothing is sent); `demo` (the Kalshi order goes to the demo exchange); `live` (a real immediate-or-cancel order; also needs `ARB_LIVE_TRADING=1` and the production key). Results come back as ARB FILL pushes. |
+| `arb_suspect_margin` | `ARB_SUSPECT_MARGIN` | `0.15` | An arb wider than this (dollars per contract, fees in) is journalled as ARB SUSPECT and not pushed (on the 2026-09-24/26 slates such gaps were frozen or mismatched quotes). |
+| `arb_max_quote_lag_s` | `ARB_MAX_QUOTE_LAG_S` | `30` | During play, an arb with a leg whose own venue timestamp is older than this is ARB SUSPECT, not pushed (Robinhood's college quotes can sit frozen while the game moves). |
 | `arb_push_min_margin` | `ARB_PUSH_MIN_MARGIN` | `0.01` | Live slate: smallest ARB margin (dollars per contract, fees in) that is pushed; smaller ones are journalled as ARB SMALL (replayed by hand, arbs under 1c lost money). |
 | `arb_big_margin` | `ARB_BIG_MARGIN` | `0.03` | Live slate: ARB margin from which the push is titled BIG ARB at top priority (replayed by hand, arbs of 3c+ made money). |
 | `arb_near_margin` | `ARB_NEAR_MARGIN` | `0.03` | Live slate: how far below a lock (dollars per contract, fees in) still earns an ARB CLOSE alert — the buffer that says "this pair is about to cross". |
-| `arb_near_every_s` | `ARB_NEAR_EVERY_S` | `300.0` | Live slate: seconds before the same event may send another ARB CLOSE unless the gap shrank by a cent. |
+| `arb_near_every_s` | `ARB_NEAR_EVERY_S` | `900.0` | Seconds before the same event may send another ARB CLOSE unless the gap shrank by two cents (at 300 s / one cent the college slate sent 279 ARB CLOSE pushes on 2026-09-26 and used up the free ntfy.sh quota). Low-priority pushes (ARB CLOSE, FINAL, LAG...) also stop once fewer than `ARB_ALERT_NTFY_RESERVE` (80) of ntfy's daily messages remain. |
 | `leadlag_move` | `LEADLAG_MOVE` | `0.05` | Lead-lag: leader mid move (dollars) within the window that counts as a repricing. |
 | `leadlag_window_s` | `LEADLAG_WINDOW_S` | `30.0` | Lead-lag: seconds over which the leader's move and the follower's (non-)move are measured. |
 | `leadlag_min_edge` | `LEADLAG_MIN_EDGE` | `0.02` | Lead-lag: minimum leader mid minus follower all-in ask to signal LAG. |

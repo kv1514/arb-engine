@@ -187,6 +187,50 @@ class NtfyTests(unittest.TestCase):
         b.alert("STEAL", "y", event="nfl:PHI|TEN")
         self.assertEqual(len(self.sent), 2)
 
+    def test_a_refused_push_is_an_error_not_a_sent_push(self):
+        import urllib.error
+
+        def refuse(url, body, headers):
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", {}, None)
+        a = Alerter(journal_path=self.path, quiet=True, desktop=False, webhook="", ntfy="arb-test-topic", transport=refuse)
+        self.assertFalse(a.push("ARB", "x", event="e1"))
+        kinds = [e["kind"] for e in a.events]
+        self.assertIn("ntfy_error", kinds)
+        self.assertNotIn("ntfy", kinds)
+        self.assertIn("429", [e for e in a.events if e["kind"] == "ntfy_error"][0]["error"])
+        # After a 429, low-priority kinds stop spending requests for a while; arbs still try.
+        self.assertFalse(a.push("ARB CLOSE", "y", event="e2"))
+        self.assertEqual(a.events[-1]["kind"], "ntfy_saved")
+        a.push("BIG ARB", "z", event="e3")
+        self.assertEqual(a.events[-1]["kind"], "ntfy_error")          # it was attempted
+
+    def test_the_quota_is_kept_for_arbs(self):
+        a = self._alerter()
+        a._transport_backup = a._transport
+        a.ntfy_remaining = lambda now=None: 50                       # below the 80 reserve
+        self.assertFalse(a.push("ARB CLOSE", "near", event="e1"))
+        self.assertFalse(a.push("FINAL", "final", event="e1"))
+        self.assertTrue(a.push("ARB", "arb", event="e1"))
+        self.assertTrue(a.push("ARB FILL", "fill", event="e1", force=True))
+        self.assertEqual([h["Title"] for _, _, h in self.sent], ["ARB", "ARB FILL"])
+        a.ntfy_remaining = lambda now=None: 200
+        self.assertTrue(a.push("ARB CLOSE", "near", event="e4"))
+
+    def test_curl_fallback_fails_on_http_errors(self):
+        import subprocess
+        from unittest import mock
+
+        a = Alerter(journal_path=self.path, quiet=True, desktop=False, webhook="", ntfy="arb-test-topic")
+        seen = {}
+
+        def run(cmd, **kw):
+            seen["cmd"] = cmd
+            raise subprocess.CalledProcessError(22, cmd)             # curl -f: HTTP >= 400
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("proxy reset")), mock.patch("subprocess.run", run):
+            self.assertFalse(a.push("ARB", "x", event="e1"))
+        self.assertIn("-f", seen["cmd"])
+        self.assertEqual(a.events[-1]["kind"], "ntfy_error")
+
     def test_lag_is_journalled_but_not_pushed_unless_opted_in(self):
         # A LAG is a one-sided bet, not an arb, and failed the executable re-run: it runs in
         # the background (journal, paper book, demo executor) and is pushed only on request.
