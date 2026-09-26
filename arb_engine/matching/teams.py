@@ -107,26 +107,12 @@ def team_name(sport: str, code: Optional[str]) -> str:
     return (info or {}).get("name") or (code or "")
 
 
-_TICKER_CODES: dict[str, set[str]] = {}
-
-
-def ticker_codes(sport: str) -> set[str]:
-    """Codes that can appear in a concatenated Kalshi/Rothera ticker: every canonical
-    code, plus ``info['kalshi']`` when the venue spells the team differently."""
-    if sport not in _TICKER_CODES:
-        codes: set[str] = set()
-        for code, info in team_table(sport).items():
-            codes.add(str(code).upper())
-            k = (info or {}).get("kalshi")
-            if k:
-                codes.add(str(k).upper())
-        _TICKER_CODES[sport] = codes
-    return _TICKER_CODES[sport]
-
-
 def canonical_from_ticker(sport: str, code: Optional[str]) -> Optional[str]:
     """Map one ticker slice to a canonical code. A Kalshi spelling (``MURR``) resolves
-    to the team that owns it; two owners for the same spelling resolve to nothing."""
+    to the team that owns it; two owners for the same spelling resolve to nothing. Else an
+    exact alias: Kalshi writes the Jaguars ``JAC``, the Rams ``LA`` and NC State ``NCST``,
+    which the tables keep as aliases. Exact only - NFL's substring matcher would read a
+    slice like ``NEJA`` as a team."""
     if not code:
         return None
     raw = str(code).strip().upper()
@@ -144,7 +130,15 @@ def canonical_from_ticker(sport: str, code: Optional[str]) -> Optional[str]:
         return owners[0]
     if len(owners) > 1:
         return None
+    if sport == "nfl":
+        return _INDEX.get(re.sub(r"[^a-z0-9]", "", raw.lower()))
     return team_code(sport, raw)
+
+
+def kalshi_spelling(sport: str, code: Optional[str]) -> Optional[str]:
+    """The team's own Kalshi ticker code when the table records one (``TOW`` -> ``TOWS``)."""
+    k = (team_table(sport).get(code or "") or {}).get("kalshi")
+    return str(k).upper() if k else None
 
 
 def ncaaf_team_code(name: Optional[str]) -> Optional[str]:

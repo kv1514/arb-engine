@@ -5,7 +5,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from .teams import canonical_from_ticker, nfl_team_code, ticker_codes
+from .teams import canonical_from_ticker, kalshi_spelling, nfl_team_code, team_table
 
 # US/Eastern without pulling in zoneinfo data (DST second Sunday of March -> first Sunday of November).
 def _is_dst(dt_utc: datetime) -> bool:
@@ -154,30 +154,30 @@ def split_pair(pair: str, known: str) -> Optional[str]:
 def split_ticker_pair(pair: str, sport: str, known: Optional[str] = None) -> Optional[tuple[str, str]]:
     """Split an away+home ticker blob into canonical (away, home).
 
-    None when there is no split, or more than one distinct canonical split
-    (``MURMU`` is both Methodist+Robert Morris and Murray State+Methodist).
-    ``known`` is the favourite's ticker code on a spread and drops splits that
-    do not contain it (that disambiguates ``BENCAPU`` given ``BEN`` vs ``BENC``).
+    Every cut whose two slices are teams (a canonical code, a Kalshi spelling or an exact
+    alias: ``NEJAC`` is NE @ JAX) is a reading. ``known`` is the favourite's ticker code on
+    a spread and keeps only the cuts that contain it (``BENCAPU`` given ``BEN`` vs ``BENC``).
+    Two distinct readings are settled by the teams' own Kalshi spellings - ``TOWSDSU`` is
+    Towson (Kalshi ``TOWS``) @ Delaware State, not ``TOW`` @ San Diego State - and are
+    otherwise refused: ``MURMU`` is Methodist + Robert Morris or Murray State + Methodist.
     """
     blob = (pair or "").upper()
-    codes = ticker_codes(sport)
-    if len(blob) < 3 or not codes:
+    if len(blob) < 4 or not team_table(sport):
         return None
     known_u = known.upper() if known else None
-    hits: set[tuple[str, str]] = set()
-    for cut in range(2, len(blob)):
+    readings: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for cut in range(2, len(blob) - 1):          # both codes at least two letters
         left, right = blob[:cut], blob[cut:]
-        if not right or left == right or left not in codes or right not in codes:
-            continue
         if known_u is not None and known_u not in (left, right):
             continue
         away, home = canonical_from_ticker(sport, left), canonical_from_ticker(sport, right)
-        if not away or not home or away == home:
-            continue
-        hits.add((away, home))
-        if len(hits) > 1:
-            return None
-    return next(iter(hits)) if len(hits) == 1 else None
+        if away and home and away != home:
+            readings.setdefault((away, home), []).append((left, right))
+    if len(readings) > 1:
+        spelled = [p for p, cuts in readings.items()
+                   if any(kalshi_spelling(sport, p[0]) == l and kalshi_spelling(sport, p[1]) == r for l, r in cuts)]
+        return spelled[0] if len(spelled) == 1 else None
+    return next(iter(readings)) if readings else None
 
 
 def ticker_pair(event_ticker: str) -> Optional[str]:

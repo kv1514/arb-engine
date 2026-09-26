@@ -112,6 +112,20 @@ class LineKeyTests(unittest.TestCase):
         self.assertEqual(split_ticker_pair("LAFLA", "nhl", known="LA"), ("LA", "FLA"))
         self.assertEqual(split_ticker_pair("LAFLA", "nhl"), ("LA", "FLA"))
 
+    def test_ticker_pair_reads_kalshi_spellings_kept_as_aliases(self):
+        # Real 2026-09-26/27 tickers. Kalshi writes the Jaguars JAC, NC State NCST and Albany
+        # ALBY; the tables keep those as aliases, and every one of these games is on both venues.
+        self.assertEqual(split_ticker_pair("NEJAC", "nfl"), ("NE", "JAX"))
+        self.assertEqual(split_ticker_pair("NEJAC", "nfl", known="JAC"), ("NE", "JAX"))
+        self.assertEqual(split_ticker_pair("LADAL", "nfl", known="LA"), ("LAR", "DAL"))
+        self.assertEqual(split_ticker_pair("APPNCST", "ncaaf"), ("APP", "NCSU"))
+        self.assertEqual(split_ticker_pair("ALBYPRIN", "ncaaf", known="PRIN"), ("UALB", "PRIN"))
+
+    def test_ticker_pair_two_readings_settled_by_kalshi_spelling(self):
+        # TOWSDSU cuts as TOW+SDSU and TOWS+DSU. Kalshi spells Towson TOWS, so the game is
+        # Towson @ Delaware State; first-cut-wins had keyed it Towson @ San Diego State.
+        self.assertEqual(split_ticker_pair("TOWSDSU", "ncaaf"), ("TOW", "DSU"))
+
     def test_merge_keeps_lines_separate(self):
         def snap(venue, key, line):
             info = EventInfo(event_key=key, sport="nfl", market_type="spread", outcomes=["BUF-1.5", "DET+1.5"], line=line)

@@ -98,6 +98,19 @@ class KalshiAdapterTests(unittest.TestCase):
         adapter._ingest_line_markets(snap, "ncaaf", {"series": "KXNCAAFTOTAL", "market_type": "total"}, [total], {})
         self.assertEqual(snap.events, {})
 
+    def test_jaguars_spread_and_total_keep_their_kalshi_spelling(self):
+        # KXNFLSPREAD-26SEP27NEJAC: Kalshi's JAC is the table's JAX alias; the game must key
+        # exactly as Robinhood's does, or the pair is never compared.
+        adapter = KalshiAdapter(client=KalshiClient(env="prod", http=FakeHttp({})))
+        snap = VenueSnapshot(venue="kalshi")
+        spread = {"status": "active", "floor_strike": 3.5, "event_ticker": "KXNFLSPREAD-26SEP27NEJAC",
+                  "ticker": "KXNFLSPREAD-26SEP27NEJAC-JAC3", "yes_ask_dollars": "0.52", "yes_bid_dollars": "0.50"}
+        total = {"status": "active", "floor_strike": 44.5, "event_ticker": "KXNFLTOTAL-26SEP27NEJAC",
+                 "ticker": "KXNFLTOTAL-26SEP27NEJAC-45", "yes_ask_dollars": "0.50", "yes_bid_dollars": "0.48"}
+        adapter._ingest_line_markets(snap, "nfl", {"series": "KXNFLSPREAD", "market_type": "spread"}, [spread], {})
+        adapter._ingest_line_markets(snap, "nfl", {"series": "KXNFLTOTAL", "market_type": "total"}, [total], {})
+        self.assertEqual(sorted(snap.events), ["nfl:JAX|NE:2026-09-27:spread:JAX-3.5", "nfl:JAX|NE:2026-09-27:total:44.5"])
+
     def test_la_favorite_spread_splits_as_kings_not_laf(self):
         adapter = KalshiAdapter(client=KalshiClient(env="prod", http=FakeHttp({})))
         snap = VenueSnapshot(venue="kalshi")
