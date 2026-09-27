@@ -6,6 +6,269 @@ clone (`~/Documents/GitHub/arb-engine`) that runs the live stack. That clone's `
 (`3ca9684` at 13:00 PT, moved by another session this afternoon) is an ancestor of this branch,
 so deploying is a fast-forward. The original prompt for this session is kept at the end.
 
+## Deployment audit (17:10 PDT): what runs, what the runtime files say, how to deploy
+
+This section was written by a separate session, from 16:25 to 17:15 PDT on 2026-09-26.
+
+* **It changed nothing:** not the running stack, not `~/Documents/GitHub/arb-engine`, not the branch's code.
+* **It made GET requests only,** against the Kalshi **demo** account. It sent no production request and placed no order.
+* **It added two files:** this section and `docs/DEPLOY_RUNBOOK_2026-09-26.md`. The runbook is the step-by-step procedure (stop → reconcile → fast-forward a pinned hash → start → verify → demo check) and supersedes *Exact next steps* 2–4 below.
+* **Read-only analysis scripts:** `analysis/{A,B,C}/analyze.py` and `recon/demo_recon.py` in the session scratchpad, `/private/tmp/claude-501/-Users-kv15/70832a7e-…/scratchpad/`. That directory is wiped at reboot, so the numbers are copied here.
+
+### Read this first
+
+* **What is deployed.** `~/Documents/GitHub/arb-engine` runs `main` `3ca9684`; the bridge runs `b831e0d`.
+  * This branch is **not deployed**. No process has `arbitradge` as its working directory, and neither checkout has an order-ledger file.
+* **Execution is demo only.**
+  * `live` and `live-ncaaf` send LAG IOC orders to Kalshi's demo exchange (`--execute-lag demo`). The button and the maker are paper, and the week scanner only alerts.
+  * `~/.kalshi` holds only a demo key, and no process has `ARB_LIVE_TRADING` set.
+* **The demo account (16:36 and again at 16:47 PDT).**
+  * 0 resting orders, 0 open positions, balance $238.24 of play money.
+  * All 17 filled orders in the journal match exchange fills, and all 10 resulting positions have settled: +$138.42 net of $8.45 fees.
+  * The demo book is not production's, so this is **not** evidence of edge.
+* **The Mac slept through most slates** (lid closed, on battery):
+
+  | day | asleep (PDT) |
+  |---|---|
+  | Thu | 15:17–17:35, 18:18–18:53, 19:46–23:20 |
+  | Fri | 13:00–20:16 |
+  | Sat | 13:02–16:16 |
+
+  * Saturday's sleep alone cost about 66 in-play game-hours across 38 games (estimate). `caffeinate -i` does not prevent lid-closed sleep.
+  * No data from those windows means no data, not "no opportunities".
+* **No push has reached the phone since 10:52 PDT.** The ntfy free quota answered 429 from 11:16. As a result, none of the 134 "Robinhood done" buttons issued today could be tapped.
+* **Three of this branch's fixes do not take effect in the real run loop.** Per-game decision time, the post-fetch clock refresh and the `polling gap` records depend on an unpinned `tick()`. `run()` calls `tick(t0)`. See *Known issues* in the runbook.
+* **Other sessions were committing here during the audit.** This branch went `2414d8b` → `e2dd092` between 16:35 and 16:58, and `claude/micro-audit-3` was pushed from a `/private/tmp` worktree. At 17:08 both sessions were idle and this tree was clean. Deploy a pinned hash (runbook step 0).
+
+### The two checkouts
+
+| | `~/Documents/ChatGPT/arbitradge` | `~/Documents/GitHub/arb-engine` |
+|---|---|---|
+| role | development (Codex worktrees, Claude sessions) | **deployed**: cwd of every running process |
+| HEAD at 17:08 PDT | `claude/exec-readiness` `e2dd092` (docs-only after `a016721`, the last validated code); clean | `main` `3ca9684` (12:22:56) = GitHub `main`; clean |
+| relation | `3ca9684` is an ancestor: 46 files, +10,093 / −1,360 | – |
+| processes | none; `out/logs`, `out/run`, `out/orders` empty | bridge, live, live-ncaaf, maker, week, caffeinate |
+| order records | ledger code present, no ledger file | `out/orders/lag_intents.jsonl` (demo orders), `out/orders/arb_button.jsonl` (paper); no ledger |
+| worktrees | 6 Codex worktrees, all clean | none besides itself (the `/private/tmp` one was removed after its push) |
+| only on this Mac | `claude/exec-readiness`; `claude/order-buttons` (`a8b9246`, 5 ahead of GitHub); 8 `codex/*`; `stash@{0}` | nothing (all on GitHub) |
+| `origin/main` ref | stale (`02cd612`, fetched 09-23) | current |
+
+### What is running (`ps`, `lsof` cwd, `ps eww` filtered to non-secret names)
+
+| process | supervisor → child | child started (PDT) | code at start | command (from `ps`) | mode |
+|---|---|---|---|---|---|
+| bridge | 60054 → 60058 | Sat 11:02:46 | `b831e0d` | `python3 -m arb_engine bridge --port 8765` | overlay server, no orders |
+| live | 32255 → 32259 | Sat 12:23:02 | `3ca9684` | `live --sport nfl --every 5 --record out/history.db --journal out/live_journal.jsonl --bankroll 500 --kelly 0.25 --quiet --fast 1 --execute-lag demo` | LAG IOC to **Kalshi demo**; button paper |
+| live-ncaaf | 32408 → 32413 | Sat 12:23:04 | `3ca9684` | the same with `--sport ncaaf --journal out/live_ncaaf_journal.jsonl` | LAG IOC to **Kalshi demo**; button paper |
+| week | 32139 → 32143 | Sat 12:23:00 | `3ca9684` | `weekscan --sport nfl --sport ncaaf --every 120 --fast 5 --bankroll 500 --record out/history.db --journal out/week_journal.jsonl --quiet` | alerts only |
+| maker | 60164 → 14811 | Sat 16:37:11 (a new child every hour) | `3ca9684` | `maker --sport nfl --mode paper --size 10 --journal out/maker_journal.jsonl` | paper; writes nothing to `history.db` |
+| caffeinate | → 32257 | Sat 12:23:02 | – | `caffeinate -i -w 32255` | idle-sleep hold only |
+
+**Common to every process:**
+
+* **Working directory and launch:** `/Users/kv15/Documents/GitHub/arb-engine`, launched by `scripts/sunday.sh`.
+  * The last full `start` was at 10:27 PDT, with the week scanner off while its sizing bug was fixed.
+  * The 10:56 preflight then failed: the `venue:robinhood` category page timed out after 255 s while the Mac was in idle sleep.
+  * So every process was brought up by per-process `restart`: all five at 11:02, then `week`, `live` and `live-ncaaf` again at 11:25, 11:57 and 12:23.
+* **Persisted launcher settings:** `out/run/live.args` and `live-ncaaf.args` are `--execute-lag demo`; `bankroll` 500, `kelly` 0.25.
+* **Environment:** `KALSHI_ENV=demo`, `KALSHI_PRIVATE_KEY_PATH=…/demo.key`, `KALSHI_API_KEY` set (value not read), `ARB_ALERT_NTFY` set (topic not shown), `ARB_HTTP_TRANSPORT=curl`, `PYTHONUNBUFFERED=1`.
+* **Not set:** `ARB_LIVE_TRADING`, `ARB_BUTTON_MODE` (so the button defaults to paper), `KALSHI_BASE_URL`, `EXECUTABLE_VENUES`. Neither checkout has a `.env`.
+
+**Scheduled restarts.** `live --hours` defaults to 8, so the live slates will restart at about 20:23 PDT, which resets the deployed per-process caps. The maker restarts every hour (`--duration 3600`).
+
+**Not started by the launcher:**
+
+* **Four orphaned test supervisors:** `bash scripts/sunday.sh start`, PIDs 25788, 28381, 29273 and 30093, from 2026-09-22/23. Each runs in a deleted `/private/tmp/claude-501/sunday-*` directory and loops `sleep 1` (8–11 CPU-min each). None has a Kalshi environment.
+* **Another Claude session's practice loop:** zsh PID 51681. At 17:00:43 it started `arb_button_practice.py --sport ncaaf --phone --pairs 1 --mid --tap-wait 3600` (PID 93349): one paper practice push, then a wait of up to 1 h for your tap.
+
+### Code-version evidence
+
+**When HEAD moved** (`git reflog` of the GitHub clone, PDT):
+
+| time | HEAD |
+|---|---|
+| 10:52 | `b831e0d` |
+| 11:25 | `1ae9ef2` |
+| 11:41 | `57c657b` |
+| 11:42 | `1c39f82` |
+| 11:56 | `5fc9397` |
+| 12:22:56 | `3ca9684` |
+
+It has not moved since 12:22:56.
+
+**Which code each process loaded:**
+
+* **week, live and live-ncaaf** started 4–8 s after `3ca9684`. The current maker child started at 16:37.
+* **The bridge** started at 11:02 on `b831e0d`. Any module it imported lazily after 11:25 came from a later tree, so it is not pinned to one commit.
+* **No source file** under `arb_engine/` or `scripts/` is newer than 12:22.
+* **The `.pyc` compile times** (10:52, 11:42, 11:48, 12:20) line up with the commits.
+
+**Order ledgers on disk.** The only ones are temporary: `/private/tmp/claude-501/kalshi_demo_check_*/ledger.sqlite3` (138 directories, from demo checks and tests) and `arb_test_*` ledgers. Both are wiped at reboot.
+
+### Demo exchange reconciliation (GET only; the script refuses anything but a demo host)
+
+**Account and scope.** Host `external-api.demo.kalshi.co`. `~/.kalshi` holds `demo.key` (0600) and `env` (`KALSHI_ENV=demo`, a key ID, the `demo.key` path), and no production key.
+
+| item | exchange (demo), 16:36:35 PDT; rechecked 16:47:48, unchanged |
+|---|---|
+| balance | $238.24 play money; portfolio value $0 |
+| resting orders / open positions | **0 / 0** |
+| fills since 2026-09-22 | 26: 18 from the stack's LAG executor (17 orders, 585 ct, 10 tickers in 8 games), 8 from `kalshi_demo_check.py` round trips (PIT/CLE, 12:25–12:38 PDT) |
+| journal ↔ exchange | all 17 journal orders with `fill_count > 0` are in `/portfolio/fills`; no stack fill missing from the journal |
+| settlements | all 10 LAG positions: cost $248.13, revenue $395.00, fees $8.45 → +$138.42 (play money) |
+| fees | all taker, centicent-precise (e.g. $0.7207 for 50 @ $0.71; the engine's `cent` default says $0.73) |
+
+**The journal's prices are not fill prices.** The deployed executor journals `filled_notional` as filled contracts × its limit (the production ask the signal saw). Demo fills happen at the demo book's own prices:
+
+| ticker | limit | demo fill |
+|---|---|---|
+| ATL | 0.87 | 0.31 |
+| CLEM | 0.64–0.76 | 0.53 |
+| TEX | 0.84 | 0.71 |
+| COLO | 0.24 | 0.11 |
+
+Summed over the 17 fills, that is $335.36 at the limit against $248.13 paid.
+
+**The local files cannot resolve exposure on their own.** From them, 351 ct (ATL, CLEM, COLO, VT/BC) look unresolved, because the recorder slept through those finals. The exchange shows all settled.
+
+### Runtime evidence from the stack's own files (read-only)
+
+The windows are PT days, "since the previous audit" (after 11:54 PDT) and "current deployment" (from 12:23 PDT). "Markets" include spread and total lines; "games" strip them.
+
+**Orders sent to the Kalshi DEMO exchange** (`lag_intents.jsonl`, 536 rows at 16:50, every one `mode=demo`; $ at the limit)
+
+| window | entries sent (ct / $) | filled orders (ct / $) | zero-fill | skipped: unverified Robinhood settlement rule | lock IOCs |
+|---|---|---|---|---|---|
+| Thu 09-24 | 4 (200 / $107.50) | 1 (50 / $43.50) | 3 | 0 | 457, 0 filled |
+| Fri 09-25 | 3 (139 / $99.64) | 3 (139 / $99.64) | 0 | 11 | 0 |
+| Sat 09-26 | 44 (1,662 / $816.86) | 13 (396 / $192.22), 2 partial | 31 | 17 | 0 |
+| current deployment | 17 (732 / $350.18) | 1 (50 / $42.00) | 16 | 11 | 0 |
+| all | 51 entries to 19 games | 17 in 8 games | 34 | 28 | 457 |
+
+* **Every row is a moneyline,** so markets equal games for orders.
+* **The lock storm is still the only one.** ATL|GB on Thursday, 19:20–19:30 PDT: 457 IOCs averaging 47 a minute, $1,954 attempted, 0 filled.
+* **Ambiguous responses.**
+  * The journals and logs show none: 0 `error` rows, 0 missing `order_id`, 0 unknown `fill_count`, 0 `remaining_count > 0`, 0 EXEC ERROR pushes, and no order-code traceback. All 24 tracebacks are KeyboardInterrupt at restarts.
+  * That is an absence of recorded failures, not proof. The deployed `HttpClient` re-POSTs an identical order on a timeout, 429 or 5xx. The executor journals a failed request as `error` without charging its caps, and a process killed in the middle of a POST journals nothing.
+  * Two risky windows occurred: live-ncaaf restarted 11 s after two WAKE fills (12:23), and 2 orders went out during a 37 s dark wake at 13:20.
+  * The exchange reconciliation found nothing unaccounted for.
+* **Repeated signals became repeated orders.**
+  * In 11 clusters, the same game, ticker and limit went out again within 10 s. Each was a new signal whose edge had grown, not a retry.
+  * 4 of the extra orders filled: COLO 2×50, WAKE 2×50, VT 2×1, CLEM 50 then 39 a second later.
+  * Two games were bought on both sides (VT|BC, WAKE|LOU).
+  * The ledger's duplicate key includes the signal time, so it would not stop these.
+* **Caps.**
+  * No process exceeded its caps.
+  * Across the 28 live/live-ncaaf process starts since 09-24, 09-26 *attempted* $816.86 against the $500/day cap. LOU|WAKE took 11 entries from 5 process instances.
+  * The ledger's cross-process budgets fix this.
+* **Fees and cancels.**
+  * The deployed executor records no fees; the exchange has them (above).
+  * There were no explicit cancels. The exchange cancelled the unfilled remainders of 493 IOCs.
+  * `lag_locks` still shows 7 demo rows `watching`, all stale: lock watches are in memory and a restart drops them.
+
+**Paper and practice only**
+
+* **The "Robinhood done" button:** 134 issued, 110 confirm checks, 83 withdrawn (74 because Kalshi was short at the limit), 42 auto-practice runs (16 would have locked), 0 taps.
+  * 13 listen errors, all during sleep or within 271 s of a wake.
+  * 14 buttons were issued more than 60 s after their `created` time (worst +4,219 s), all across sleeps.
+  * Every row that carries a mode is paper.
+* **The maker:** paper only; 1,657 rests with `paper-` ids since 09-18, none since Thursday.
+  * Two HEDGE NOW pushes for *paper* fills (09-24 19:18 PDT) do not say "paper".
+
+**Alerts versus pushes** (alerts are signals, not trades)
+
+| journal · window | BIG ARB | ARB | ARB CLOSE | SMALL / SUSPECT / GONE | pushed† | throttled | withheld | push errors |
+|---|---|---|---|---|---|---|---|---|
+| live-ncaaf · Sat | 58 | 44 | 504 | 79 / 10 / 47 | 346 | 41 | 220 | 18 × 429 |
+| live-ncaaf · current | 1 | 1 | 126 | 25 / 6 / 45 | 0 | 0 | 142 | 2 × 429 |
+| week · Sat | 408 | 133 | – | 138 / 36 / 48 | 93 | 416 | 0 | 32 × 429 |
+| week · current | 10 | 15 | – | 42 / 18 / 47 | 0 | 0 | 0 | 25 × 429 |
+
+† The process *believed* it pushed. Those processes predate `b831e0d`, whose curl fallback recorded a 429 as sent, so no push row is verified as delivered.
+
+* **Nothing has been delivered since 10:51:57 PDT.** 50 ARB/BIG ARB attempts got 429. Every ARB CLOSE/FINAL since then was withheld, with ntfy reporting 0 remaining. The quota resets at 00:00 UTC (17:00 PDT).
+* **Markets versus games, Saturday:**
+
+  | process · tier | rows | markets | games |
+  |---|---|---|---|
+  | week · BIG ARB | 408 | 132 | 17 |
+  | week · ARB | 133 | 116 | 19 |
+  | live-ncaaf · ARB CLOSE | 504 | 48 | 48 |
+
+* **Alerted economics are not results.**
+  * Of week's BIG ARB rows on Saturday, 287 rows across 126 markets are plausible (cost ≤ $101, ≤ 1,000 contracts, margin ≤ 15c). Their median is 7.22c, and the first alert per market claims $564.45. None was bought.
+  * 85 rows above 15c (max 35.3c; SHSU|TTU) and 122 above 1,000 contracts (max 250,000) all predate the 10:52 fix.
+* **Repeats.**
+  * The same-process 60 s push throttle held.
+  * 14 ARB CLOSE re-alerts beat the 900 s cooldown, 9 of them across a sleep.
+  * 3,358 of 3,370 early near-lock repeats follow a sleep: the pinned tick clock again.
+  * 40 same-title, same-game pushes came from two processes less than 60 s apart, all before 11:54. The throttle is still per process.
+* **Journal and log volume.**
+  * The week journal is 99.4 % near-lock `info` rows (267,960; about 32 MB per awake day), and `Alerter.events` keeps every one in memory.
+  * Logs: 4,595 DNS errors, all right after wakes; 2,535 of them in the 5 minutes after the 16:18 wake.
+  * 66 Kalshi 429s, 55 while awake: the 1 s fast lane and the trade-print polling are being rate-limited.
+  * No "database is locked".
+
+**Recorder timing and coverage** (`history.db`, read-only)
+
+* **Cadence.**
+  * Full ticks run at 19–47 % of the 5 s target: p50 interval 9 s NFL, 21–29 s ncaaf; tick start to first write is 7.2 s / 24.6 s.
+  * The 1 s fast lane is on target (p50 1.01 s).
+* **Gaps.**
+  * Every live-recorder gap over 120 s overlaps sleep.
+  * The previous audit's 131 gaps across 20 games reproduce. Since then there have been 278 gaps across 49 games, 225 of them overlapping sleep.
+  * Every per-game gap outside sleep comes from 6 episodes: 3 restarts, 2 post-wake stalls and 1 timeout.
+  * The largest awake gap: the week scanner was deliberately off from 10:24 to 11:02 (1,664 s).
+* **Quote age.**
+  * Kalshi and Polymarket `*_quote_time` are **NULL in 100 %** of 256,578 `inplay_ticks` rows; the code never sets them.
+  * Robinhood in play, fast lane: p50 5.2 s, p90 149 s, over 30 s in 22 % of rows. In the current window: p50 4.9 s, p90 69 s, 19 %.
+  * Robinhood's "no timestamp" is −6,795,364,578 (Go's zero time) in 30.5 % / 17.6 % of home / away rows, and must be read as missing.
+  * Full ticks store the tick time, not the fetch time.
+* **Coverage.**
+  * Saturday: 76 ncaaf games in play. live-ncaaf recorded 55; the week scanner covered 1,482 markets in 71 games. 20 FCS games are not on ESPN, so the live slate never sees them.
+  * In-play game-hours lost to sleep (estimate): Saturday 76.3 of 130.9; in the current window 66.2 of 86.2 (77 %).
+* **Games stuck "live".**
+  * `live=1` after the game ended: ATL|GB and CCU|LIB 6.1 h, CAL|CLEM 4.0 h (new).
+  * Cause: `tick()` returns early when no game is wanted, before `_live_priced` is rebuilt. The idle loop then ran every 5 s instead of 60 s.
+  * Only 23 of 61 games since 09-24 ever got an ESPN `final` row.
+* **Size.** `history.db` is 6.02 GB (+54 MB WAL) and grows about 1.2 GB per hour with ~20 live games. 37 GiB is free; no write contention.
+
+### Missing evidence (absent is not success)
+
+1. Kalshi and Polymarket venue timestamps, so their quote age cannot be measured.
+2. Per-fill price and fee in local files (the deployed executor discards them). Only the exchange has them; they are reconciled above as of 16:47.
+3. The HTTP status of each order POST attempt, and any order POSTed but never journalled. The exchange shows none unaccounted for as of 16:47, but later orders need the same check.
+4. Push delivery: no row proves delivery, and none has been delivered since 10:52.
+5. Local finals for 4 games (the Mac was asleep); only exchange settlement shows them.
+6. Anything during sleep: about 3 h on Saturday and about 9 h on Thursday/Friday while games were live. Nothing recorded means no evidence either way about opportunities.
+7. The throttle's `now` is not journalled; the stale-clock attribution comes from the code.
+8. Week-scanner venue errors (not logged). Fast-lane errors are deduplicated.
+9. Time-in-force per order row (IOC by code only), which process issued each button, and the listener's uptime.
+10. Production behaviour of any kind: nothing ran there, and demo prices are not production prices.
+11. Robinhood settlement rules. Their being unverified is why 28 LAG entries were skipped.
+12. Why no executor rows exist before 09-24 18:59 PDT. Demo execution was on from 09-22 21:30, and there were no live games Tue/Wed, but that is not proven.
+
+### Exact next steps
+
+1. **Now, if tonight's slate matters:** put the Mac on AC and keep the lid open. It was on battery at 48 % at 16:30.
+2. **Optional cleanup:**
+   * `kill -TERM 25788 28381 29273 30093`, the orphaned test supervisors (check their cwd first; runbook §10).
+   * `kill 51681 93349` if you don't want the practice push.
+3. **Decide the known issues** in the runbook, above all #1: `run()` pins the tick clock, so the per-game time, clock refresh and polling-gap fixes are inert in production. The branch owner should fix it, add a test that goes through `run()`, re-run the suite, and only then pin `DEPLOY`. Deploying without it is safe on demo; those symptoms just continue.
+4. **Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`, steps 0–8, at a quiet moment:**
+   * `sunday.sh stop` **before** the fast-forward, so no process runs mixed code. The per-process restarts in *Exact next steps* below would leave the bridge and maker on old modules.
+   * Reconcile on the demo exchange before stopping.
+   * Deploy a pinned hash, and verify the commit, environment and account.
+   * Run `kalshi_demo_check.py`, then watch `kalshi ledger` for the first hour.
+5. **Pushing to GitHub is your decision** (public repo). Push `claude/exec-readiness`, and if you want them kept off this Mac, the 8 `codex/*` branches. Make the runbook's bundles regardless.
+6. **Before 2026-10-08:** merge the `claude/micro-audit-3` and `claude/exec-readiness` evaluator lines (see 6a below), then decide H3 strictness and freeze.
+7. **Not now, before production:**
+   * a production fee check (centicent);
+   * the Robinhood/Rothera settlement rules;
+   * a shared ntfy throttle plus a quota plan (the free 250/day is gone by late morning);
+   * keep-awake on AC;
+   * ledger seeding if deploying mid-day.
+
 ## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
 
 Branch `claude/exec-readiness`, commits `5dfae25` → `a016721` on top of `2414d8b`. Still not
@@ -247,6 +510,18 @@ Only Kalshi has an order API the engine can use. Robinhood's prediction markets 
 7. **Demo balance.** This session's checks sent a few $0.01 demo IOCs (nothing filled), three filled 1-contract round trips and one lock leg, all sold back; together well under $1 of play money including fees.
 
 ## Exact next steps
+
+> For deploying, steps 2–4 below are superseded by `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
+> That runbook stops the whole stack *before* the fast-forward, so no process runs mixed code, and adds:
+>
+> * reconciliation on the demo exchange first;
+> * a pinned hash;
+> * checks of the commit, environment and account;
+> * the demo check;
+> * recovery and shutdown.
+>
+> The expected test count is now 1003. Step 5 and *Also open* still stand.
+> See *Deployment audit (17:10 PDT)* at the top.
 
 ```bash
 # 1. Look at the branch (this clone)
