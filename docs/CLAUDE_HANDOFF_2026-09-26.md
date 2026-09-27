@@ -15,7 +15,7 @@ commits are listed in merge order:
 4. *Ledger evidence* (`f4b3356`).
 5. *Historical trade tapes* (`c2cd4d8`).
 6. *H4 same-timestamp ordering* (`5480dfc`).
-7. *Fill evidence only grows* (`8522074`, 2026-09-27): the ledger defects from the audit of
+7. *Fill evidence only grows* (`8522074`, release follow-up `aa7dda7`, 2026-09-27): the ledger defects from the audit of
    `bf7d2d5`. **Not deployed**; the GitHub clone still runs `bf7d2d5`.
 8. *Historical trade tapes, round 3* (`d161cf0`, 2026-09-27): a second review's findings, in
    the trade-tape section. Research code only; nothing the live stack runs.
@@ -121,9 +121,23 @@ legacy fields. Comparing `side` would have held every sell as contradicted.
 * **h05** (4xx under read lag) for re-sent POSTs, via `attempts`. The script's synthetic
   single-attempt 400 is still read as a refusal.
 * **h07** (row identity): market, book side and `client_order_id` are checked.
-* **h08:** a release of an intent that showed fills is refused.
+* **h08:** fully fixed only at `aa7dda7`; at `8522074` just H8a and H8c were.
+  * **H8a / H8c:** a release of an intent that showed fills is refused.
+  * **H8a' (`aa7dda7`):** any *accepted* intent is refused too. Released, a resting maker
+    order was skipped by every later reconcile and cancel, stayed on the book and filled
+    while the ledger said $0. A restarted maker now takes it off the book.
+  * **H8b (`aa7dda7`):** a client whose account cannot be proved to be the sender's is
+    refused, the rule `reconcile` already had. `kalshi release` with a key whose account
+    was unreadable used to release another account's unknown order.
 * **h09** (stale release over `done`): ignored.
-* **s16** (terminal while unresolved): now a wait.
+* **s16** (terminal while unresolved): now a wait. **Residual,** re-run at `1ef5d71` with the
+  auditor's `s16_verified.py`: when a lock leg's answer was lost and reconciliation later
+  finds it filled, the lock book ends the watch as "closed with 0 of 10 hedged" (status
+  `expired`).
+  * The ledger has the leg `done` with 10, and nothing is over- or under-hedged.
+  * `LagLockBook.locked_contracts` counts only fills from its own SUBMITTED records.
+  * That log line could lead a person to hedge by hand again. A fix would read the verified
+    lock legs from the ledger when a watch closes.
 * **r01** (NaN `quote_ts`): refused. The script pins its own checkout; run on this tree
   through a copy.
 
@@ -136,6 +150,20 @@ legacy fields. Comparing `side` would have held every sell as contradicted.
 * **h10:** `KalshiBroker.poll` reads a missing fill count as 0, in memory only; the ledger
   is unaffected.
 * **h11–h16:** no bound on a row's fill cost, and the lows.
+* **Single-attempt 4xx (h05's synthetic case):** still read as a definitive refusal.
+* **The auditor's non-finite-time sweep at `f496d78`,** outside the ledger (message of
+  2026-09-27, not verified here):
+  * `arbalert.py` (`if qt and now - qt > lag`): a NaN, +inf, far-future or microsecond
+    quote time gives a BIG ARB push instead of SUSPECT. This is the phone-button path.
+  * The in-play STEAL quote-old gate: a NaN, +inf or future quote time reads as age 0.
+  * `arbbutton`: a spec issued at NaN never expires.
+  * `KALSHI_GTD_HORIZON_S=inf`: an OverflowError after `reserve` leaves a pending row that
+    blocks exposure for 300 s.
+  * `LEADLAG_WINDOW_S=nan`: 10 IOC orders instead of 1.
+  * The scanner's stale flag misses NaN, +inf, future and zero timestamps.
+  * `reserve(now=<a finite past time>)` books onto another day and escapes the daily cap.
+    That is an API hazard only: live callers pass the wall clock, and the tests' own
+    `Clock(1000.0)` is such a time, so a range check needs its own round.
 
 ### Tests
 
