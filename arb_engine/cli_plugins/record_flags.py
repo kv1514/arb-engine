@@ -169,7 +169,7 @@ def cmd_event_study(args: argparse.Namespace, settings: Optional[dict[str, Any]]
         trades: dict[str, Any] = {}
         for sp in bound:
             try:
-                pages = {"max_pages": args.max_pages} if getattr(args, "max_pages", None) else {}
+                pages = {"max_pages": args.max_pages} if getattr(args, "max_pages", None) is not None else {}
                 tr = (client.kalshi_trades(sp["market"], t0, t1, **pages) if sp["venue"] == "kalshi"
                       else client.polymarket_trades(sp["market"], t0, t1, **pages))
             except (TapeError, FileNotFoundError) as e:   # never score a game on a tape not known to be complete
@@ -185,6 +185,17 @@ def cmd_event_study(args: argparse.Namespace, settings: Optional[dict[str, Any]]
             json.dump({"summary": summary, "events": pooled}, f, indent=1, default=str)
         print(f"wrote {args.json}")
     return 0
+
+
+def _page_budget(text: str) -> int:
+    """``--max-pages``: a whole number of pages, at least 1 (argparse reports anything else)."""
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number of pages") from None
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1 page (got {n})")
+    return n
 
 
 # ---- registration ------------------------------------------------------------------------------
@@ -229,7 +240,7 @@ def register(subparsers: Any, existing_parsers: Any = None) -> dict[str, Callabl
     es.add_argument("--limit", type=int)
     es.add_argument("--cache-dir", default="out/cache/trades")
     es.add_argument("--offline", action="store_true", help="fail instead of fetching when the trade tape is not cached")
-    es.add_argument("--max-pages", type=int, help="page budget per tape fetch (default: Kalshi 50, Polymarket 40); a Kalshi fetch that runs out resumes on the next run, a Polymarket one needs a larger budget")
+    es.add_argument("--max-pages", type=_page_budget, help="page budget per tape fetch (default: Kalshi 50, Polymarket 40); a Kalshi fetch that runs out resumes on the next run, a Polymarket one needs a larger budget")
     es.add_argument("--json")
     es.set_defaults(func=cmd_event_study)
     handlers["event-study"] = cmd_event_study

@@ -14,13 +14,18 @@ import random
 import shutil
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 
 from arb_engine.venues.http import HttpError
-from arb_engine.venues.trades import (ConflictingTrades, IncompleteTape, TapeError, Trade, TradesClient, _cache_key,
+from arb_engine.venues.trades import (SETTLE_S, ConflictingTrades, IncompleteTape, TapeError, Trade, TradesClient, _cache_key,
                                       _legacy_cache_key)
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 TK = "KXNFLGAME-26SEP27DENKC-KC"
 BASE = 1_790_000_000.0
@@ -226,30 +231,71 @@ class MalformedPageTests(TapeCase):
 
 
 class OpenWindowTests(TapeCase):
-    def test_an_open_ended_or_still_open_window_is_never_complete(self):
-        with self.assertRaises(IncompleteTape) as cm:
-            self.client(Pages(three_pages())).kalshi_trades(TK, None, None)
-        self.assertIn("no end", str(cm.exception))
-        self.now = HI + 10                                                  # the window ends 10 s before the pass
-        with self.assertRaises(IncompleteTape) as cm:
-            self.kt(Pages(three_pages()))
-        self.assertIn("still open", str(cm.exception))
-        self.assertEqual(self.doc()["complete"], False)
+    def test_an_open_ended_or_still_open_window_is_refused_before_any_request(self):
+        for hi, now, words in ((None, NOW, "no end"), (HI, HI - 100, "still open"), (HI, HI + SETTLE_S - 1, "still open")):
+            shutil.rmtree(self.dir, ignore_errors=True)
+            self.now = now
+            http = Pages(three_pages())
+            with self.assertRaises(IncompleteTape, msg=(hi, now)) as cm:
+                self.client(http).kalshi_trades(TK, None, hi)
+            self.assertIn(words, str(cm.exception))
+            self.assertIn("nothing was fetched", str(cm.exception))
+            with self.assertRaises(IncompleteTape, msg=(hi, now)):
+                self.client(NoNetwork()).polymarket_trades("123", None, hi)
+            self.assertEqual(http.calls, [])
+            self.assertFalse(os.path.isdir(self.dir) and os.listdir(self.dir))     # nothing cached either
+        self.now = HI + SETTLE_S                                            # closed from exactly the margin on
+        self.assertEqual(len(self.kt(Pages(three_pages()))), 30)
 
-    def test_a_window_open_when_the_pass_began_needs_a_fresh_pass_once_it_closes(self):
+    def test_a_saved_pass_that_cannot_end_complete_is_not_resumed(self):
+        # (a) A pass begun 10 s after the window's end by a client with no margin: by the
+        # default margin it began while the window was open, so it starts over.
         pages = three_pages()
         http = Pages(pages)
-        self.now = HI - 100                                                 # fetched during the window
+        self.now = HI + 10
+        eager = TradesClient(http=http, cache_dir=self.dir, clock=lambda: self.now, settle_s=0)
         with self.assertRaises(IncompleteTape):
-            self.kt(http, max_pages=1)
-        pages[None] = {"trades": [row(i, i) for i in range(31, 19, -1)], "cursor": "c1"}   # two prints arrive afterwards
-        self.now = NOW                                                      # the window has closed; the pass resumes ...
-        with self.assertRaises(IncompleteTape) as cm:
-            self.kt(http)
-        self.assertIn("still open when the pass began", str(cm.exception))  # ... but its first page predates the close
-        trades = self.kt(http)                                              # a fresh pass reads the newest page again
+            eager.kalshi_trades(TK, None, HI, max_pages=1)
+        self.assertEqual(self.doc()["next_cursor"], "c1")
+        pages[None] = {"trades": [row(i, i) for i in range(31, 19, -1)], "cursor": "c1"}   # two prints published late
+        self.now = NOW
+        trades = self.kt(http)
+        self.assertEqual([c.get("cursor") for c in http.calls], [None, None, "c1", "c2"])   # a fresh pass, not a resume at c1
         self.assertEqual(len(trades), 32)
         self.assertIn("t0031", self.ids(trades))
+        # (b) A saved pass stamped later than the clock (a clock that ran ahead, an edited file).
+        shutil.rmtree(self.dir)
+        http = Pages(three_pages())
+        with self.assertRaises(IncompleteTape):
+            self.kt(http, max_pages=1)
+        d = self.doc()
+        d["pass_started_at"] = NOW + 3600
+        Path(self.dir, _cache_key("kalshi", TK, None, HI) + ".json").write_text(json.dumps(d))
+        self.assertEqual(len(self.kt(http)), 30)
+        self.assertEqual([c.get("cursor") for c in http.calls], [None, None, "c1", "c2"])
+
+    def test_a_complete_file_is_checked_again_with_the_readers_margin(self):
+        self.now = HI + 1
+        TradesClient(http=Pages(three_pages()), cache_dir=self.dir, clock=lambda: self.now, settle_s=0).kalshi_trades(TK, None, HI)
+        self.assertEqual(self.doc()["complete"], True)
+        self.now = NOW
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.kt(NoNetwork(), offline=True)
+        self.assertIn("fails its checks: marked complete, but the window was still open", str(cm.exception))
+        http = Pages(three_pages())
+        self.assertEqual(len(self.kt(http)), 30)                           # online: fetched again under the margin
+        self.assertEqual(len(http.calls), 3)
+        self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
+
+    def test_a_bad_margin_timeout_or_clock_is_refused(self):
+        for bad in (float("nan"), float("inf"), -1.0, True, "60", None):
+            with self.assertRaises(ValueError, msg=bad):
+                TradesClient(http=NoNetwork(), cache_dir=self.dir, settle_s=bad)
+            with self.assertRaises(ValueError, msg=bad):
+                TradesClient(http=NoNetwork(), cache_dir=self.dir, lock_timeout_s=bad)
+        for t in (float("nan"), float("inf"), None, str(NOW)):
+            with self.assertRaises(ValueError, msg=t):
+                TradesClient(http=NoNetwork(), cache_dir=self.dir, clock=lambda t=t: t).kalshi_trades(TK, None, HI)
 
 
 class DedupeTests(TapeCase):
@@ -276,6 +322,29 @@ class DedupeTests(TapeCase):
         with self.assertRaises(IncompleteTape):
             self.kt(NoNetwork(), offline=True)
         self.assertEqual(len(self.kt(Pages(three_pages()))), 30)          # a consistent venue: not wedged forever
+
+    def test_a_fresh_pass_is_judged_alone(self):
+        # The pass ends early (a repeated cursor) holding t0025 at 0.50; the venue now reports
+        # 0.61 on every page: the new pass is the tape, not a conflict with the old one.
+        pages = three_pages()
+        pages["c2"] = {"trades": [row(i, i) for i in range(9, -1, -1)], "cursor": "c1"}
+        with self.assertRaises(IncompleteTape):
+            self.kt(Pages(pages))
+        revised = three_pages()
+        revised[None]["trades"] = [row(i, i, price=0.61 if i == 25 else 0.50) for i in range(29, 19, -1)]
+        self.assertEqual({t.trade_id: t.price for t in self.kt(Pages(revised))}["t0025"], 0.61)
+        # After a conflict inside one pass, a failed first page, then a retry: one clean pass.
+        shutil.rmtree(self.dir)
+        bad = three_pages()
+        bad["c1"]["trades"].insert(0, row(25, 25, price=0.61))
+        with self.assertRaises(ConflictingTrades):
+            self.kt(Pages(bad))
+        flaky = three_pages()
+        flaky[None] = [HttpError(503, "https://x/markets/trades", "busy"), flaky[None]]
+        http = Pages(flaky)
+        with self.assertRaises(IncompleteTape):
+            self.kt(http)
+        self.assertEqual(len(self.kt(http)), 30)
 
     def test_a_print_the_venue_no_longer_reports_does_not_survive_a_fresh_pass(self):
         pages = three_pages()
@@ -382,6 +451,16 @@ class CacheFileTests(TapeCase):
             "pages as NaN": lambda d: d.update(pages=float("nan")),
             "pages as text": lambda d: d.update(pages="3 pages"),
             "seen_cursors not a list": lambda d: d.update(seen_cursors=5),
+            "a price as text": lambda d: d["trades"][0].update(price="0.5"),
+            "a price above 1": lambda d: d["trades"][0].update(price=1.5),
+            "a negative size": lambda d: d["trades"][0].update(size=-1),
+            "a zero Kalshi size": lambda d: d["trades"][0].update(size=0),
+            "a side that is not text": lambda d: d["trades"][0].update(side=5),
+            "a trade id that is not text": lambda d: d["trades"][0].update(trade_id=7),
+            "an unknown field in a print": lambda d: d["trades"][0].update(fee=0.01),
+            "pass_started_at as text": lambda d: d.update(pass_started_at=str(NOW)),
+            "complete, but no pass start": lambda d: d.update(pass_started_at=0.0),
+            "complete, begun inside the margin": lambda d: d.update(pass_started_at=HI + SETTLE_S - 1),
         }
         for name, edit in edits.items():
             shutil.rmtree(self.dir, ignore_errors=True)
@@ -403,8 +482,15 @@ class CacheFileTests(TapeCase):
         for name, trades in bad.items():
             with self.assertRaises(ValueError, msg=name):
                 c.store_complete("kalshi", TK, BASE, HI, trades)
+        for lo, hi in ((None, None), (BASE, NOW - 10)):                     # open-ended, or still open now
+            with self.assertRaises(ValueError, msg=(lo, hi)):
+                c.store_complete("kalshi", TK, lo, hi, good)
+        with self.assertRaises(ValueError):
+            c.store_complete("kalshi-demo", TK, BASE, HI, good)
         tape = c.store_complete("kalshi", TK, BASE, HI, list(reversed(good)))
         self.assertEqual(self.ids(tape.trades), ["a", "b"])                  # stored sorted
+        self.assertEqual((tape.pass_started_at, type(tape.trades[0].size)), (NOW, float))
+        self.assertEqual(self.kt(NoNetwork(), BASE, HI, offline=True), tape.trades)
 
     def test_an_incomplete_state_never_replaces_a_complete_file(self):
         c = self.client(Pages(three_pages()))
@@ -420,7 +506,34 @@ class CacheFileTests(TapeCase):
         with self.assertRaises(IncompleteTape) as cm:
             c.kalshi_trades(TK, None, HI, max_pages=1)
         self.assertIn("could NOT be saved", str(cm.exception))
-        self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)             # the data itself is still whole
+        with self.assertLogs("arb_engine.venues.trades", "WARNING") as logs:
+            self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)         # the data itself is still whole ...
+        self.assertIn("was not cached", logs.output[0])                      # ... and not silently uncached
+
+    def test_a_read_only_lock_file_does_not_block_saves(self):
+        http = Pages(three_pages())
+        with self.assertRaises(IncompleteTape):
+            self.kt(http, max_pages=1)
+        lock = os.path.join(self.dir, "." + _cache_key("kalshi", TK, None, HI) + ".json.lock")
+        os.chmod(lock, 0o444)
+        self.addCleanup(os.chmod, lock, 0o644)
+        self.assertEqual(len(self.kt(http)), 30)
+        self.assertEqual(self.doc()["complete"], True)
+
+    @unittest.skipIf(fcntl is None, "no fcntl")
+    def test_a_writer_stuck_holding_the_lock_does_not_hang_a_fetch(self):
+        lock = os.path.join(self.dir, "." + _cache_key("kalshi", TK, None, HI) + ".json.lock")
+        fd = os.open(lock, os.O_RDONLY | os.O_CREAT, 0o644)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX)                                      # another writer, stopped mid-save
+        c = TradesClient(http=Pages(three_pages()), cache_dir=self.dir, clock=lambda: self.now, lock_timeout_s=0.05)
+        with self.assertLogs("arb_engine.venues.trades", "WARNING") as logs:
+            self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)         # the tape, uncached, and a warning
+        self.assertIn("TimeoutError", c.last_store_error)
+        self.assertIn("was not cached", logs.output[0])
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        self.assertEqual(len(self.kt(Pages(three_pages()))), 30)
+        self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
     def test_writes_are_atomic_and_leave_no_temporary_files(self):
         http = Pages(three_pages())
@@ -465,11 +578,36 @@ class LegacyCacheTests(TapeCase):
         self.assertTrue(os.path.exists(p))                                    # left for the migration script
         self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
+    def test_a_schema_2_file_is_never_used_and_is_named(self):
+        self.kt(Pages(three_pages()))
+        current = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+        d = self.doc()
+        d["schema"] = d["query"]["schema"] = 2                            # as the first two rounds wrote it
+        old = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI, schema=2) + ".json")
+        Path(old).write_text(json.dumps(d))
+        os.unlink(current)
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.kt(NoNetwork(), offline=True)
+        self.assertIn(old, str(cm.exception))
+        self.assertIn("never used", str(cm.exception))
+        http = Pages(three_pages())
+        self.assertEqual(len(self.kt(http)), 30)
+        self.assertEqual(len(http.calls), 3)
+
     def test_the_migration_script_moves_only_unusable_files_one_at_a_time(self):
         from scripts import migrate_trade_cache as mig
 
-        self.kt(Pages(three_pages()))                                         # one current tape
+        self.kt(Pages(three_pages()))                                         # one current tape ...
+        with self.assertRaises(IncompleteTape):
+            self.kt(Pages(three_pages()), BASE, BASE + 50, max_pages=1)       # ... and one resumable partial one
+        keep = sorted([_cache_key("kalshi", TK, None, HI) + ".json", _cache_key("kalshi", TK, BASE, BASE + 50) + ".json"])
+        doc = self.doc()
         old = self._legacy()
+        Path(self.dir, _cache_key("kalshi", TK, None, HI, schema=2) + ".json").write_text(
+            json.dumps(dict(doc, schema=2, query=dict(doc["query"], schema=2))))
+        dup = dict(doc, query=dict(doc["query"], max_ts=HI - 1), trades=doc["trades"] + doc["trades"][:1])
+        Path(self.dir, _cache_key("kalshi", TK, None, HI - 1) + ".json").write_text(json.dumps(dup))    # current schema, a check fails
+        Path(self.dir, "kalshi-renamed.json").write_text(json.dumps(doc))  # a good tape under another name
         Path(self.dir, "kalshi-X-1-2.json").write_text('{"venue": "kalshi", "tra')   # truncated by the old non-atomic writer
         Path(self.dir, "number.json").write_text("5")
         Path(self.dir, "notes.txt").write_text("keep me")
@@ -479,14 +617,18 @@ class LegacyCacheTests(TapeCase):
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", dest]), 0)   # dry run
-        self.assertIn("would move", out.getvalue())
+        for why in ("old format", "schema 2", "fails checks: kalshi trade id", "fails checks: the file name", "unreadable", "not an object"):
+            self.assertIn(f"would move ({why}", out.getvalue())
+        self.assertIn("2 current", out.getvalue())
+        self.assertTrue(os.path.exists(old))
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", self.dir + "/.", "--apply"]), 2)   # never into itself
         self.assertTrue(os.path.exists(old))
         with redirect_stdout(io.StringIO()):
             self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", dest, "--apply"]), 0)
-        left = sorted(n for n in os.listdir(self.dir) if n.endswith(".json"))
-        self.assertEqual(left, [_cache_key("kalshi", TK, None, HI) + ".json"])
+        self.assertEqual(sorted(n for n in os.listdir(self.dir) if n.endswith(".json")), keep)
         self.assertTrue(os.path.exists(os.path.join(self.dir, "notes.txt")))
-        self.assertEqual(len(os.listdir(dest)), 4)                          # three moved, one renamed beside the old one
+        self.assertEqual(len(os.listdir(dest)), 7)                          # six moved, one renamed beside the old one
         self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
 
@@ -540,6 +682,12 @@ class EventStudyCliTests(TapeCase):
         self.assertIn("no usable cached trades", str(cm.exception))
         a = p.parse_args(base + ["--max-pages", "3"])
         self.assertEqual(a.max_pages, 3)
+        for bad in ("0", "-1", "two"):
+            err = io.StringIO()
+            with self.assertRaises(SystemExit) as cm, redirect_stderr(err):
+                p.parse_args(base + ["--max-pages", bad])
+            self.assertEqual(cm.exception.code, 2, bad)                     # a usage error, not a traceback
+            self.assertIn("--max-pages", err.getvalue())
 
 
 if __name__ == "__main__":
