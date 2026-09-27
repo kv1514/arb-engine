@@ -15,10 +15,18 @@ new placement is refused (:class:`OrderRefused`). ``poll`` books each order row 
 the ledger and, every ``reconcile_every_s``, reconciles: an unknown order found resting is
 one the runner never tracked, so it is cancelled rather than left on the book. ``recover``
 (called by the maker runner at start) does the same for the resting orders of a maker
-process that is gone."""
+process that is gone.
+
+**Order identity.** The maker's watch key is ``f"{event_key}|kalshi:{outcome}"`` and event
+keys contain ``|`` themselves (``nfl:BUF|DET:2026-09-20:spread:BUF-1.5``), so a key is split
+on its *last* ``|kalshi:`` (:func:`watch_identity`), never on its first ``|`` - that cut
+``nfl:BUF`` out of every BUF game, market and date. ``place`` takes the market's
+``event_key`` and its ``game_key`` explicitly; every :class:`RestingOrder` and ledger row
+carries both."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -27,10 +35,35 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from ..execution.kalshi import gtd_horizon_s
-from ..execution.ledger import ACCEPTED, IOC as IOC_TIFS, FeeMultipliers, LedgerError, OrderLedger, env_host_problem
+from ..execution.ledger import ACCEPTED, IOC as IOC_TIFS, OPEN, FeeMultipliers, LedgerError, OrderLedger, env_host_problem
+from ..matching.normalize import game_event_key
 from ..venues.kalshi import KalshiClient, batch_cancel_reduced, build_order_payload, order_expiration, order_side_price
 
 log = logging.getLogger(__name__)
+
+
+WATCH_VENUE = "|kalshi:"
+
+
+def watch_key_for(event_key: str, outcome: str) -> str:
+    """The maker's watch key: one Kalshi outcome of one market (``event_key`` is the market's
+    full key, spread or total line included)."""
+    return f"{event_key}{WATCH_VENUE}{outcome}"
+
+
+def watch_identity(watch_key: str) -> tuple[str, str]:
+    """(market event key, Kalshi outcome) of a watch key, split on its last ``|kalshi:``. A
+    key without that marker is kept whole as its own identity - never cut at a ``|``."""
+    key = str(watch_key or "")
+    event_key, sep, outcome = key.rpartition(WATCH_VENUE)
+    return (event_key, outcome) if sep and event_key else (key, "")
+
+
+def order_identity(event_key: Optional[str], game_key: Optional[str], watch_key: str = "") -> tuple[str, str]:
+    """(market, game) for an order: the explicit keys when given, else read from the full
+    watch key; the game is the market's ``game_event_key`` (spread / total line dropped)."""
+    market = event_key or watch_identity(watch_key)[0]
+    return market, (game_key or (game_event_key(market) if market else ""))
 
 
 @dataclass
@@ -46,6 +79,13 @@ class RestingOrder:
     watch_key: str = ""
     payload: dict[str, Any] = field(default_factory=dict)
     intent_id: str = ""        # KalshiBroker: the order ledger's intent for this order
+    event_key: str = ""        # the market (full event key); "" = read from watch_key
+    game_key: str = ""         # the whole game (game_event_key of the market)
+
+    @property
+    def identity(self) -> tuple[str, str]:
+        """(market, game) - explicit when the broker was told, else from the full watch key."""
+        return order_identity(self.event_key, self.game_key, self.watch_key)
 
     @property
     def remaining(self) -> float:
@@ -149,11 +189,16 @@ class Broker:
             self.placed = []
         return self.placed
 
-    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None) -> RestingOrder:  # pragma: no cover - interface
+    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None, event_key: Optional[str] = None, game_key: Optional[str] = None) -> RestingOrder:  # pragma: no cover - interface
         raise NotImplementedError
 
     def cancel(self, order: RestingOrder) -> None:  # pragma: no cover - interface
         raise NotImplementedError
+
+    def untracked_open(self) -> list[dict[str, str]]:
+        """Open orders this broker holds a record of but did not place in this process (none
+        for a broker without a durable record): {intent_id, ticker, event_key, game_key}."""
+        return []
 
     def poll(self, orders: list[RestingOrder], market_state: dict[str, dict[str, float]]) -> list[tuple[RestingOrder, float, float]]:
         """Update orders in place; return (order, newly_filled_count, fill_price) for new fills."""
@@ -192,10 +237,12 @@ class PaperBroker(Broker):
 
     name = "paper"
 
-    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None) -> RestingOrder:
+    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None, event_key: Optional[str] = None, game_key: Optional[str] = None) -> RestingOrder:
         self._refuse_self_match(ticker, side, price, resting, hedge_book_id)
         payload = build_order_payload(ticker, "buy", side, count, price, post_only=True, exchange_index=exchange_index, expiration_time=order_expiration(kickoff, gtd_horizon_s=gtd_horizon_s()), cancel_order_on_pause=True)
-        order = RestingOrder(order_id="paper-" + uuid.uuid4().hex[:8], ticker=ticker, side=side, price=price, count=count, watch_key=watch_key, payload=payload)
+        market, game = order_identity(event_key, game_key, watch_key)
+        order = RestingOrder(order_id="paper-" + uuid.uuid4().hex[:8], ticker=ticker, side=side, price=price, count=count, watch_key=watch_key, payload=payload,
+                             event_key=market, game_key=game)
         self._placed.append(order)
         return order
 
@@ -249,17 +296,17 @@ class KalshiBroker(Broker):
         self.fee_multipliers = fee_multipliers if fee_multipliers is not None else FeeMultipliers(self.client, clock=clock)
         self.reconciled: list[dict] = []     # the last reconciliation's records (journal them)
 
-    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None, fee_multiplier: Any = None) -> RestingOrder:
+    def place(self, ticker: str, side: str, price: float, count: float, watch_key: str = "", exchange_index: Optional[int] = None, *, resting: Optional[Iterable[RestingOrder]] = None, hedge_book_id: Optional[str] = None, kickoff: Optional[float] = None, fee_multiplier: Any = None, event_key: Optional[str] = None, game_key: Optional[str] = None) -> RestingOrder:
         self._refuse_self_match(ticker, side, price, resting, hedge_book_id)
         if float(count) != int(count) or int(count) <= 0:
             raise OrderRefused(f"maker orders are whole contracts ({count!r})")
         mult, why = (fee_multiplier, None) if fee_multiplier is not None else self.fee_multipliers.resolve(ticker)
         if mult is None:
             raise OrderRefused(why)
-        game = watch_key.split("|", 1)[0] or None
+        market, game = order_identity(event_key, game_key, watch_key)
         try:
             res = self.ledger.reserve(strategy="maker", ticker=ticker, side=side, count=int(count), limit_price=price, tif="good_till_canceled",
-                                      event_key=game, game_key=game, fee_multiplier=mult, detail={"watch": watch_key, "post_only": True})
+                                      event_key=market or None, game_key=game or None, fee_multiplier=mult, detail={"watch": watch_key, "post_only": True})
         except LedgerError as e:
             raise OrderRefused(f"order ledger: {e}") from e
         if not res.ok:
@@ -281,7 +328,7 @@ class KalshiBroker(Broker):
         oid = str(od.get("order_id") or od.get("id"))
         status = str(od.get("status") or "resting")
         order = RestingOrder(order_id=oid, ticker=ticker, side=side, price=price, count=count, watch_key=watch_key, payload=payload,
-                             intent_id=res.intent_id)
+                             intent_id=res.intent_id, event_key=market, game_key=game)
         if status in ("canceled", "cancelled", "rejected"):
             order.status = "rejected"
         self._placed.append(order)
@@ -304,6 +351,29 @@ class KalshiBroker(Broker):
             out = [{"error": repr(e)[:300]}]
         out.extend(self._cancel_untracked(tracked))
         self.reconciled = out
+        return out
+
+    def untracked_open(self) -> list[dict[str, str]]:
+        """Maker orders the ledger still holds open (pending, unknown or accepted) that this
+        broker did not place: a dead predecessor's whose cancel is not yet confirmed, a
+        create whose answer was lost, another live maker's. The runner counts them against
+        its per-market and per-game limits, so neither a restart nor a lost answer adds a
+        second order where one is allowed. Identity comes from the full watch key each row
+        keeps (rows written before this fix carry event_key / game_key cut at the first ``|``)."""
+        mine = {o.intent_id for o in self._placed if o.intent_id}
+        out: list[dict[str, str]] = []
+        for row in self.ledger.rows(OPEN, limit=1000):
+            if row["strategy"] != "maker" or str(row["tif"]).lower() in IOC_TIFS or row["intent_id"] in mine:
+                continue
+            try:
+                watch = str((json.loads(row["detail"] or "{}") or {}).get("watch") or "")
+            except (TypeError, ValueError):
+                watch = ""
+            if WATCH_VENUE in watch:
+                market, game = order_identity(None, None, watch)
+            else:
+                market, game = order_identity(row["event_key"], row["game_key"], watch)
+            out.append({"intent_id": row["intent_id"], "ticker": row["ticker"], "event_key": market, "game_key": game})
         return out
 
     def recover(self) -> list[dict]:

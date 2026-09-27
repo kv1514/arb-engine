@@ -51,7 +51,7 @@ from ..models import OutcomeQuote
 from ..quant.arbitrage import Leg, evaluate, max_price_for_leg
 from .alerts import Alerter
 from . import ticket
-from .broker import Broker, PaperBroker, RestingOrder
+from .broker import Broker, PaperBroker, RestingOrder, order_identity, watch_key_for
 
 TICK = 0.01
 STATUS_POLL_S = 30.0   # exchange-status cadence: not per loop (rate limit), not per minute (a pause fills stale rests)
@@ -78,7 +78,8 @@ class MakerConfig:
     target_margin: float = 0.0   # margin baked into the max-buy price (0 = break-even bound; min_margin is the filter)
     max_orders: int = 8
     max_notional: float = 500.0  # dollars of resting collateral across all orders
-    max_per_event: int = 1
+    max_per_event: int = 1       # orders resting on one market (its full event key: one moneyline, one spread or total line)
+    max_per_game: int = 0        # orders resting on one game across all its markets (game_event_key); 0 = no whole-game limit
     queue_ahead: bool = True     # only rest at or above the current best bid (otherwise you are deep in the queue)
     min_hedge_size: float = 1.0  # hedge ask must show at least this many contracts (unknown size = ok)
     interval: float = 10.0       # seconds between refresh loops
@@ -228,6 +229,7 @@ class MakerRunner:
         self.last_balance_poll: float = -1e18
         self.balance: Optional[float] = None
         self._place_accepts_resting = _accepts_kwarg(self.broker.place, "resting")
+        self._place_accepts_identity = _accepts_kwarg(self.broker.place, "event_key") and _accepts_kwarg(self.broker.place, "game_key")
         self._hedge_cash_refused: set[str] = set()
 
     def _default_status_fn(self) -> Optional[Callable[[], dict]]:
@@ -278,7 +280,7 @@ class MakerRunner:
                     hedge_id, hedge_side = h.venue_market_id.split("#")[0], (h.meta.get("side") or "yes")
                 else:  # polymarket: which of the market's two outcome tokens the hedge is
                     hedge_id, hedge_side = h.venue_market_id, str(h.meta.get("outcome_index", 0))
-                key = f"{me.event_key}|kalshi:{k_out}"
+                key = watch_key_for(me.event_key, k_out)
                 w = Watch(key=key, event_key=me.event_key, title=info.title(), kalshi_ticker=kquote.meta["ticker"], kalshi_side=kquote.meta.get("side") or "yes", kalshi_outcome=k_out, kalshi_label=info.labels.get(k_out, k_out), kalshi_fee=fee_model_for_quote(kquote, self.settings), exchange_index=kquote.meta.get("exchange_index"), hedge_venue=h.venue, hedge_id=hedge_id, hedge_side=hedge_side, hedge_outcome=other, hedge_label=info.labels.get(other, other), hedge_fee=hfee, hedge_url=h.url, hedge_slug=h.meta.get("slug"), kalshi_bid=kquote.bid, kalshi_ask=kquote.ask, hedge_ask=h.ask, hedge_size=h.ask_size)
                 self._price(w)
                 found[key] = w
@@ -357,6 +359,30 @@ class MakerRunner:
     def _resting(self) -> list[RestingOrder]:
         return [o for o in self.orders if o.status == "resting"]
 
+    def _open_counts(self) -> Optional[tuple[dict[str, int], dict[str, int]]]:
+        """Orders resting per market (full event key) and per game (``game_event_key``): this
+        runner's own, plus the maker orders the broker's ledger still holds open that were not
+        placed here (``untracked_open``: a dead predecessor's not yet confirmed cancelled, a
+        lost create answer, another live maker's). None when that record cannot be read -
+        nothing new rests blind."""
+        per_market: dict[str, int] = {}
+        per_game: dict[str, int] = {}
+
+        def add(market: str, game: str) -> None:
+            per_market[market] = per_market.get(market, 0) + 1
+            per_game[game] = per_game.get(game, 0) + 1
+        for o in self._resting():
+            add(*order_identity(o.event_key, o.game_key, o.watch_key))
+        fn = getattr(self.broker, "untracked_open", None)
+        if callable(fn):
+            try:
+                for rec in fn() or []:
+                    add(*order_identity(rec.get("event_key"), rec.get("game_key")))
+            except Exception as e:  # noqa: BLE001
+                self.alerts.info(f"open-order check failed, resting nothing new this pass: {e!r}")
+                return None
+        return per_market, per_game
+
     def hedge_exposure(self) -> float:
         """Dollars of hand-executed hedge legs if every resting order filled now (size x hedge ask)."""
         total = 0.0
@@ -418,15 +444,21 @@ class MakerRunner:
         collateral_cap = self.collateral_cap()
         available = self.available_balance()
         hedge_cash = self.hedge_exposure()
-        per_event: dict[str, int] = {}
-        for o in resting:
-            per_event[o.watch_key.split("|")[0]] = per_event.get(o.watch_key.split("|")[0], 0) + 1
+        # Limits count full identities: a watch key is f"{event_key}|kalshi:{outcome}" and the
+        # event key holds a "|" itself, so cutting at the first "|" kept only "nfl:BUF" - no
+        # opponent, date or market - and never matched the event key the check looked up.
+        counts = self._open_counts()
+        if counts is None:
+            return
+        per_market, per_game = counts
         ranked = sorted((w for w in self.watches.values() if w.desired_price is not None and w.order is None), key=lambda w: -(w.margin_if_filled or 0))
         for w in ranked:
             if len(self._resting()) >= cfg.max_orders:
                 break
-            ev = w.event_key
-            if per_event.get(ev, 0) >= cfg.max_per_event:
+            ev, game = order_identity(w.event_key, None)
+            if per_market.get(ev, 0) >= cfg.max_per_event:
+                continue
+            if cfg.max_per_game > 0 and per_game.get(game, 0) >= cfg.max_per_game:
                 continue
             cost = w.desired_price * cfg.size
             if notional + cost > collateral_cap:
@@ -451,6 +483,8 @@ class MakerRunner:
                 self.alerts.alert("TAKER ARB", msg, watch=w.key, event=game_event_key(w.event_key), ntfy_title=f"TAKER ARB {ticket.headline('', w.event_key).replace(' - ', '')}".strip(),
                                   kalshi_ticker=w.kalshi_ticker, hedge_url=w.hedge_url, hedge_eligibility=note, contracts=size, margin=cross.margin, profit=cross.profit, cost=cross.total_cost)
             kwargs: dict[str, Any] = {"watch_key": w.key, "exchange_index": w.exchange_index}
+            if self._place_accepts_identity:   # the market and the game, never re-read from the key
+                kwargs.update(event_key=ev, game_key=game)
             if self._place_accepts_resting:  # P12's SelfMatchGuard wants our own open orders on this ticker
                 kwargs["resting"] = [o for o in self._resting() if o.ticker == w.kalshi_ticker]
             try:
@@ -465,7 +499,8 @@ class MakerRunner:
             self.orders.append(o)
             notional += cost
             hedge_cash += hedge_cost
-            per_event[ev] = per_event.get(ev, 0) + 1
+            per_market[ev] = per_market.get(ev, 0) + 1
+            per_game[game] = per_game.get(game, 0) + 1
             self._hedge_cash_refused.discard(w.key)
             self.alerts.info(f"rest {self.broker.name}: buy {w.kalshi_side.upper()} {o.ticker} @ {o.price:.2f} x{o.count:g}  ({w.kalshi_label}; hedge {w.hedge_label} on {w.hedge_venue} @ {w.hedge_ask:.2f}, {compliance.eligibility_note(w.hedge_venue, self.settings)}; margin if filled {w.margin_if_filled:.2%}; hedge cash ${hedge_cash:.0f}/{cfg.hedge_cash:g})", order_id=o.order_id, watch=w.key, payload=o.payload)
 

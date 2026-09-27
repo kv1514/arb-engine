@@ -230,7 +230,7 @@ def cmd_maker(args: argparse.Namespace, settings: Optional[dict[str, Any]] = Non
     else:
         env = "demo" if args.mode == "demo" else "prod"
         broker = KalshiBroker(KalshiClient(env=env), confirm=args.confirm)
-    cfg = MakerConfig(sport=args.sport, market_types=markets, size=args.size, min_margin=args.min_margin, target_margin=args.target_margin, max_orders=args.max_orders, max_notional=args.max_notional, max_per_event=args.max_per_event, queue_ahead=not args.deep_queue, interval=args.interval, rescan=args.rescan)
+    cfg = MakerConfig(sport=args.sport, market_types=markets, size=args.size, min_margin=args.min_margin, target_margin=args.target_margin, max_orders=args.max_orders, max_notional=args.max_notional, max_per_event=args.max_per_event, max_per_game=getattr(args, "max_per_game", 0), queue_ahead=not args.deep_queue, interval=args.interval, rescan=args.rescan)
     runner = MakerRunner(cfg, feed, broker, Alerter(journal_path=args.journal), settings, scan_fn)
     print(f"mode={args.mode}  broker={broker.name}  journal={args.journal}  (Ctrl-C cancels all resting orders and exits)")
     try:

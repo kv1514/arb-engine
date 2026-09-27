@@ -389,7 +389,7 @@ def maker_path(chk: "Check", client: KalshiClient, led_path: str, ticker: str) -
 
     kb = KalshiBroker(client, confirm=True, ledger=OrderLedger.for_client(client, path=led_path), settle_s=READ_SETTLE_S)
     o = chk.step(f"maker: KalshiBroker.place post-only bid 1 x {ticker} @ 0.01 through the ledger",
-                 lambda: kb.place(ticker, "yes", 0.01, 1, watch_key=f"democheck:{ticker}|maker", kickoff=time.time() + 3600))
+                 lambda: kb.place(ticker, "yes", 0.01, 1, watch_key=f"democheck:{ticker}|maker", event_key=f"democheck:{ticker}", game_key=f"democheck:{ticker}", kickoff=time.time() + 3600))
     if o is None:
         return []
     row = kb.ledger.get(o.intent_id) or {}

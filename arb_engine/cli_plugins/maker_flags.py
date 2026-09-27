@@ -50,6 +50,8 @@ def register(subparsers: Any, existing_parsers: Any = None) -> dict[str, Callabl
     if mk is not None:
         if not _has_option(mk, "--hedge-venues"):
             mk.add_argument("--hedge-venues", default=None, help="comma list of hedge venues (default robinhood); include polymarket only if this account can execute there — it is not executable for US persons")
+        if not _has_option(mk, "--max-per-game"):
+            mk.add_argument("--max-per-game", type=int, default=0, help="orders resting on one game across all its markets (--max-per-event counts one market: a moneyline, one spread line or one total line); 0 = no whole-game limit")
         if not _has_option(mk, "--hedge-cash"):
             mk.add_argument("--hedge-cash", type=float, default=None, help="max dollars of hand-executed hedge legs resting at once, sum of size x hedge ask (default MAKER_HEDGE_CASH or 250; 0 = unbounded)")
         if not _has_option(mk, "--allowed-venues"):
@@ -189,7 +191,7 @@ def run_maker(args: argparse.Namespace, settings: Optional[Mapping[str, Any]] = 
         if why:
             print(f"WARNING: hedge venue {why}. Fills will be alerted as NOT EXECUTABLE; drop it from --hedge-venues unless this account can trade there.")
     markets = tuple(m.strip() for m in args.markets.split(",") if m.strip())
-    cfg = MakerConfig(sport=args.sport, market_types=markets, size=args.size, min_margin=args.min_margin, target_margin=args.target_margin, max_orders=args.max_orders, max_notional=args.max_notional, max_per_event=args.max_per_event, queue_ahead=not args.deep_queue, interval=args.interval, rescan=args.rescan, hedge_venues=hv, hedge_cash=hedge_cash(getattr(args, "hedge_cash", None), settings))
+    cfg = MakerConfig(sport=args.sport, market_types=markets, size=args.size, min_margin=args.min_margin, target_margin=args.target_margin, max_orders=args.max_orders, max_notional=args.max_notional, max_per_event=args.max_per_event, max_per_game=getattr(args, "max_per_game", 0), queue_ahead=not args.deep_queue, interval=args.interval, rescan=args.rescan, hedge_venues=hv, hedge_cash=hedge_cash(getattr(args, "hedge_cash", None), settings))
     if runner_factory is not None:
         runner = runner_factory(cfg, settings, venues)
     else:

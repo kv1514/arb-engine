@@ -202,7 +202,8 @@ re-runs the cross-venue scan. The price it rests at is
 `min(max_buy_maker(hedge ask), Kalshi ask − 1 tick)`, only when the margin-if-filled clears
 `--min-margin` and (by default) the price is at or above Kalshi's best bid — resting behind
 the bid rarely fills; `--deep-queue` allows it. Limits: `--max-orders`, `--max-notional`,
-`--max-per-event`, `--hedge-cash` (dollars of hand-executed hedge legs resting at once, $250
+`--max-per-event` (orders resting on one market: a moneyline, one spread line or one total
+line), `--max-per-game` (orders across all of one game's markets; off by default), `--hedge-cash` (dollars of hand-executed hedge legs resting at once, $250
 by default) and the Kalshi balance. Hedges are only taken on venues this account can execute on
 (`--hedge-venues`, default `robinhood`; a watch whose hedge sits on Polymarket alerts `HEDGE
 VENUE NOT EXECUTABLE` instead of resting — on the fixture scans that was 5 of 8 NFL hedges).
@@ -315,7 +316,7 @@ repo, capped and journalled, and a per-call confirmation cannot be answered insi
 
 ## Status (2026-09-19)
 
-Live data verified for all three venues; **1003 Python tests** and the JS suites
+Live data verified for all three venues; **1012 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results
