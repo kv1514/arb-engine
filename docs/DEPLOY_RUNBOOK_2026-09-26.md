@@ -33,14 +33,17 @@ git -C "$GH" worktree list          # only $GH itself
 
 **2. Pick the commit and pin it by hash.**
 
-* The code was last validated at `a016721`: 1003 Python tests, JS parity, render check, and the
-  demo check ALL PASS twice (per the branch's own handoff).
-* The commits after it (`d725316`, `e2dd092` and the audit's docs commit) change only documents.
+* **Code has landed since the audit.** Three sessions merged code after this runbook was
+  first written: the lock-leg proof (`75a17e0`), the watch-key audit (`91ab70d`, merged in
+  `58aa18f`) and the ledger evidence rules (`f4b3356`).
+* **The last validation on the combined code** was at `f4b3356`: 1053 Python tests, JS
+  parity and the render check. The demo check has **not** been re-run on it: run step 7.
+  Docs-only commits after it change nothing to deploy.
 * Pin the hash so a later commit cannot slip in:
 
 ```bash
 DEPLOY=$(git -C "$AT" rev-parse claude/exec-readiness)          # or a hash you choose
-git -C "$AT" diff --stat a016721 "$DEPLOY" -- arb_engine scripts tests extension   # must print nothing (docs-only after a016721)
+git -C "$AT" diff --stat f4b3356 "$DEPLOY" -- arb_engine scripts tests extension   # empty = the code validated at f4b3356; else re-validate
 git -C "$AT" merge-base --is-ancestor 3ca9684 "$DEPLOY" && echo "fast-forward from 3ca9684: OK"
 ```
 
@@ -177,7 +180,7 @@ git fetch "$AT" claude/exec-readiness                 # brings $DEPLOY's objects
 git merge --ff-only "$DEPLOY"                         # main moves to exactly $DEPLOY
 test "$(git rev-parse HEAD)" = "$(git -C "$AT" rev-parse "$DEPLOY")" && echo "HEAD = DEPLOY"
 git status --porcelain                                # nothing
-python3 -m unittest discover -s tests -t . 2>&1 | tail -3     # "Ran 1003 tests ... OK" (AGENTS.md at a016721)
+python3 -m unittest discover -s tests -t . 2>&1 | tail -3     # "Ran <AGENTS.md's count> tests ... OK" (1053 at f4b3356)
 bash scripts/test_js.sh 2>&1 | tail -4                # 0 mismatches; ok 3769 / ok 159; extension PASS
 python3 scripts/render_results.py --check             # OK
 pgrep -fl "sunday.sh start"                           # only the four known orphans (see Shutdown), no new ones from the suite
@@ -261,6 +264,16 @@ tail -n 5 out/orders/lag_intents.jsonl | cut -c1-220
 
 `blocked` must stay `None`. `committed_today` counts actual fill cost plus fees from the
 exchange, not the limit.
+
+**Open `accepted` rows with a `reason`** mean the ledger held back: the order row or fills
+were not final yet (`f4b3356`). Examples: "1.00 filled, no taker_fees_dollars: fills kept at
+the limit plus the fee bound", "order not final: …", "order and fills disagree: …". They cost
+budget, never free it.
+
+* On Kalshi's real answers they clear within seconds.
+* If one persists, run `python3 -m arb_engine kalshi reconcile`, which also re-reads orders the
+  automatic polling gave up on. Then compare with `kalshi orders --status all` and
+  `kalshi fills`.
 
 ## 9. Recovery
 

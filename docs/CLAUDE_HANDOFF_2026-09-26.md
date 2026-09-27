@@ -6,6 +6,16 @@ clone (`~/Documents/GitHub/arb-engine`) that runs the live stack. That clone's `
 (`3ca9684` at 13:00 PT, moved by another session this afternoon) is an ancestor of this branch,
 so deploying is a fast-forward. The original prompt for this session is kept at the end.
 
+**Sections added on the evening of 2026-09-26.** Each was written by its own session; code
+commits are listed in merge order:
+
+1. *Deployment audit*: docs only.
+2. *Lock legs* (`75a17e0`).
+3. *Watch-key identity audit* (`91ab70d`, merged as `58aa18f`).
+4. *Ledger evidence* (`f4b3356`).
+
+Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
+
 ## Deployment audit (17:10 PDT): what runs, what the runtime files say, how to deploy
 
 This section was written by a separate session, from 16:25 to 17:15 PDT on 2026-09-26.
@@ -15,53 +25,7 @@ This section was written by a separate session, from 16:25 to 17:15 PDT on 2026-
 * **It added two files:** this section and `docs/DEPLOY_RUNBOOK_2026-09-26.md`. The runbook is the step-by-step procedure (stop → reconcile → fast-forward a pinned hash → start → verify → demo check) and supersedes *Exact next steps* 2–4 below.
 * **Read-only analysis scripts:** `analysis/{A,B,C}/analyze.py` and `recon/demo_recon.py` in the session scratchpad, `/private/tmp/claude-501/-Users-kv15/70832a7e-…/scratchpad/`. That directory is wiped at reboot, so the numbers are copied here.
 
-### Lock legs: the budget exemption only for proven hedges (`75a17e0`)
-
-**What was wrong.** Reproduced in memory: `OrderLedger.reserve(parent_id=...)` granted a
-budget-exempt 10-contract "lock" on `KXNFLGAME-26SEP21BUFMIA-BUF` (game B) against a filled KC
-entry in game A. A direct `LagExecutor.buy_lock` sent both a same-side addition (more KC)
-and an unrelated-game order priced on a quote 900 s old. The entry's quantity bounded the
-count, but nothing checked the relationship between the two contracts.
-
-**Which layer checks what.**
-
-| layer | checks |
-|---|---|
-| caller: `LagExecutor.buy_lock` | the quote is Kalshi's, for the entry's market (quote event = position event = entry event), no older than `lock_quote_max_age_s` (10 s), priced at or under its ask; the lock contract's settlement identity comes from the registry's *verified* rule (unknown → refused); the exchange still shows the entry's contracts (`GET /portfolio/positions?ticker=`; unreadable → refused, fewer → capped) |
-| ledger: `OrderLedger._lock_check` (atomic with the reservation) | the entry is this account's verified purchase with a recorded settlement identity, and not itself a lock; same market (event key and Kalshi event ticker); no same-side addition (not the entry's own contract or outcome; outcomes named by the moneyline key); complementary payoffs (tie payouts known and summing to ≥ $1 where the market can tie; a NO of the entry's own market qualifies); the claimed quote time within 10 s; no *related* order of unknown outcome (the entry, its lock legs, anything on either ticker); remaining inventory = fill − exits since the entry (any strategy) − every earlier lock leg; attempt cap |
-
-**Unrelated unknown orders.** An unknown order in another game still blocks new exposure,
-but not a proven hedge (test
-`test_a_legitimate_hedge_goes_out_while_an_unrelated_order_is_unknown`).
-
-**Transient refusals.** The lock book now ends a watch only on terminal refusals (attempts
-used up, nothing left to hedge). A transient one, such as a stale quote or a failed read,
-keeps watching.
-
-**Validation (`75a17e0`).**
-* **Tests:** 1030 Python tests pass, 27 of them new in `tests/test_lock_identity.py`.
-* **Checks:** JS parity (3650 + 54 vectors, 0 mismatches, `ok 3769` + `ok 159`),
-  `render_results.py --check` and `git diff --check` all pass.
-* **Kalshi demo check** (`--fill --confirm-demo`): **ALL PASS** on the run after two
-  transient demo HTTP 500s. Those runs stopped before any order, or had the lock refused
-  fail-closed on the failed positions read. The passing run shows:
-  * the entry recorded its settlement identity;
-  * the exchange showed 1.00 held;
-  * the lock (5 requested) was bounded to 1 and sent;
-  * a second lock was refused with "nothing left to hedge (filled 1.00, exited 0, hedged or
-    unresolved 1.00)".
-
-**Gaps.**
-* **Inventory is attributed conservatively.**
-  * Sells or opposite-side buys on the entry's ticker count as exits of *every* entry on
-    that ticker (never under-counted).
-  * The exchange-position cap is per ticker, not per entry.
-* **Old entries are never hedged.** Entries written before this commit carry no settlement
-  identity, so the exemption refuses to hedge them.
-* **Pushes block hedges.** A market that can push but whose registry rule states no push
-  payout (e.g. Kalshi NFL spreads on integer lines) is never hedged under the exemption.
-
-## Read this first
+### Read this first
 
 * **What is deployed.** `~/Documents/GitHub/arb-engine` runs `main` `3ca9684`; the bridge runs `b831e0d`.
   * This branch is **not deployed**. No process has `arbitradge` as its working directory, and neither checkout has an order-ledger file.
@@ -315,6 +279,52 @@ The windows are PT days, "since the previous audit" (after 11:54 PDT) and "curre
    * keep-awake on AC;
    * ledger seeding if deploying mid-day.
 
+## Lock legs: the budget exemption only for proven hedges (`75a17e0`, session db5ad6)
+
+**What was wrong.** Reproduced in memory: `OrderLedger.reserve(parent_id=...)` granted a
+budget-exempt 10-contract "lock" on `KXNFLGAME-26SEP21BUFMIA-BUF` (game B) against a filled KC
+entry in game A. A direct `LagExecutor.buy_lock` sent both a same-side addition (more KC)
+and an unrelated-game order priced on a quote 900 s old. The entry's quantity bounded the
+count, but nothing checked the relationship between the two contracts.
+
+**Which layer checks what.**
+
+| layer | checks |
+|---|---|
+| caller: `LagExecutor.buy_lock` | the quote is Kalshi's, for the entry's market (quote event = position event = entry event), no older than `lock_quote_max_age_s` (10 s), priced at or under its ask; the lock contract's settlement identity comes from the registry's *verified* rule (unknown → refused); the exchange still shows the entry's contracts (`GET /portfolio/positions?ticker=`; unreadable → refused, fewer → capped) |
+| ledger: `OrderLedger._lock_check` (atomic with the reservation) | the entry is this account's verified purchase with a recorded settlement identity, and not itself a lock; same market (event key and Kalshi event ticker); no same-side addition (not the entry's own contract or outcome; outcomes named by the moneyline key); complementary payoffs (tie payouts known and summing to ≥ $1 where the market can tie; a NO of the entry's own market qualifies); the claimed quote time within 10 s; no *related* order of unknown outcome (the entry, its lock legs, anything on either ticker); remaining inventory = fill − exits since the entry (any strategy) − every earlier lock leg; attempt cap |
+
+**Unrelated unknown orders.** An unknown order in another game still blocks new exposure,
+but not a proven hedge (test
+`test_a_legitimate_hedge_goes_out_while_an_unrelated_order_is_unknown`).
+
+**Transient refusals.** The lock book now ends a watch only on terminal refusals (attempts
+used up, nothing left to hedge). A transient one, such as a stale quote or a failed read,
+keeps watching.
+
+**Validation (`75a17e0`).**
+* **Tests:** 1030 Python tests pass, 27 of them new in `tests/test_lock_identity.py`.
+* **Checks:** JS parity (3650 + 54 vectors, 0 mismatches, `ok 3769` + `ok 159`),
+  `render_results.py --check` and `git diff --check` all pass.
+* **Kalshi demo check** (`--fill --confirm-demo`): **ALL PASS** on the run after two
+  transient demo HTTP 500s. Those runs stopped before any order, or had the lock refused
+  fail-closed on the failed positions read. The passing run shows:
+  * the entry recorded its settlement identity;
+  * the exchange showed 1.00 held;
+  * the lock (5 requested) was bounded to 1 and sent;
+  * a second lock was refused with "nothing left to hedge (filled 1.00, exited 0, hedged or
+    unresolved 1.00)".
+
+**Gaps.**
+* **Inventory is attributed conservatively.**
+  * Sells or opposite-side buys on the entry's ticker count as exits of *every* entry on
+    that ticker (never under-counted).
+  * The exchange-position cap is per ticker, not per entry.
+* **Old entries are never hedged.** Entries written before this commit carry no settlement
+  identity, so the exemption refuses to hedge them.
+* **Pushes block hedges.** A market that can push but whose registry rule states no push
+  payout (e.g. Kalshi NFL spreads on integer lines) is never hedged under the exemption.
+
 ## Watch-key identity audit (session c1ab42, 17:30 PDT): maker limits and ledger attribution
 
 Branch **`claude/watchkey-audit`** off `claude/exec-readiness` `3c6b232`, commit `91ab70d`, built in
@@ -377,6 +387,137 @@ themselves (`nfl:BUF|DET:2026-09-20:spread:BUF-1.5`). Both readers cut at the fi
   lines.
 * **Merge.** Merge into `claude/exec-readiness` next to the ledger sessions' work; conflicts are
   expected only in the AGENTS and README counts and in this document.
+
+## Ledger evidence: a reservation is released only on final evidence (`f4b3356`, session 89f99c)
+
+This round covers `arb_engine/execution/ledger.py`: `accepted`, `_apply_order` and the fills
+cross-check, plus two new module helpers, `order_evidence` and `fills_evidence`. It made no
+schema change. The APIs the other rounds depend on are unchanged: `rows()`, the row keys,
+`reserve(...)`, and the lock-leg check.
+
+### What was wrong
+
+**The two reported defects**, reproduced offline on `3c6b232`:
+
+* **Missing status and remaining.** `apply_row` with an order id and `fill_count=0`, but no
+  `status` and no remaining quantity, marked the intent `done`. A resting 10-lot's $6.20
+  reservation was freed while the order could still fill.
+* **Missing fees.** `status=executed`, `fill_count=1`, `taker_fill_cost_dollars=0.50` and no
+  fee fields finalized with $0 fees. The $0.02 fee bound was dropped: exposure $0.50 instead
+  of $0.52.
+
+**The same class of defect, found in the audit:**
+
+* **Truncated listings looked complete.** The fills cross-check went through `fills_v2`,
+  whose paging stops at 20 pages without saying so.
+* **Duplicate fills were summed twice.**
+* **Rows without an `order_id` were counted** as this order's.
+* **More fills than the order row still finished the intent.**
+* **Absent fields were read as zero.** A missing fee field read as $0 fees.
+* **Partial fills were booked too early.** An IOC create answer without a remaining quantity
+  booked its fill count. A partial fill then released the unfilled remainder's reservation at
+  acceptance.
+
+### The rules now
+
+| evidence | result |
+|---|---|
+| terminal status (executed / canceled), remaining explicitly 0, fill count within the order, cost stated, fees stated by the row or by a complete fills listing | `done`: the reservation is replaced by the actual cost plus fees |
+| no status, an unknown or open one, remaining missing or above 0, fill count missing or outside the order, `executed` short of the order, another initial count, cost or fees billed on an unfilled row | stays open (`held` event; `reason` says why), reservation unchanged |
+| final fills, but fees (or cost) absent | stays open. An IOC keeps fills × limit + `fee_bound`; any other order keeps its whole worst case. It is read again, so late fees land |
+| fees stated as `"0.000000"` | zero fees are final. Blank or absent is unknown |
+| fills listing truncated, failed, with unattributed or malformed rows | establishes nothing. A complete order row still finishes on its own |
+| fills listing shows more contracts than the row (even on a truncated page), or one fill id with two contents | contradiction: stays open. An IOC's fill count goes back to unverified: the whole worst case counts, and no lock leg is sized on it |
+| fills listing shows fewer than the row (it trails) | a complete row finishes; the event is noted `fills_trail` |
+| the same fill id listed twice with the same contents | counted once |
+| IOC create answer | fill count booked only with an explicit remaining 0, or when every contract filled (that releases nothing) |
+| `max_checks` reads without final evidence | the bounded reservation stays. `kalshi reconcile` now passes `recheck_exhausted=True` and reads it again |
+
+**Real data** (demo, GET only, 2026-09-26):
+
+* 300 canceled and 31 executed order rows: every one carried the status,
+  `remaining_count_fp "0.00"` and all four dollar fields.
+* 39 fills: none duplicated, all with `fee_cost` and a `fill_id`.
+
+Real reconciliation is therefore unchanged. The recorded fixtures still reach `done`
+(`test_real_demo_rows_are_final`).
+
+### Tests
+
+14 new tests in `tests/test_order_ledger.py::EvidenceTests`. On the pre-fix ledger, 13 of them
+fail (49 failures and 1 error across subtests).
+
+| requested case | tests |
+|---|---|
+| missing or unknown status | `test_a_row_without_status_or_remaining_quantity_releases_nothing`, `test_an_unknown_or_open_status_is_not_final` |
+| missing remaining quantity | `test_a_missing_or_open_remaining_quantity_is_not_final`, `test_a_create_answer_books_an_iocs_fills_only_when_nothing_can_remain` |
+| delayed fees | `test_absent_fees_keep_the_fee_bound_until_they_are_reported`, `test_fees_come_from_a_complete_fills_listing_when_the_row_has_none`, `test_late_fills_and_fees_are_reconciled_even_after_polling_gave_up` |
+| absent vs explicit zero fees | `test_explicitly_reported_zero_fees_are_final` |
+| truncated fill pages | `test_a_truncated_fills_listing_establishes_nothing` |
+| duplicate fills | `test_duplicate_fills_are_counted_once` |
+| contradictory order/fill totals | `test_order_and_fill_totals_that_contradict_release_nothing` |
+| incomplete responses cannot free budget | `test_incomplete_answers_never_free_budget` |
+
+**How the budget test shows it.** It runs 15 incomplete variants, each after both a final and a
+non-final create answer:
+
+* none reaches `done`;
+* exposure never falls below $0.52;
+* a second order that needs the room is refused on a per-game budget of $1.018;
+* after the complete answer, the same second order is accepted;
+* with the fee booked as zero, as the pre-fix ledger did, it would have been accepted every time.
+
+**Other new tests:** `test_the_manual_reconcile_reads_exhausted_orders_again` (the CLI flag) and
+`test_real_demo_rows_are_final` (recorded fixtures).
+
+**Changed:**
+
+* `test_an_order_row_without_cost_fields_…` now expects `accepted` at $31.00, where it was
+  `done` at the limit plus the bound. It expects `done` at the actual cost once the cost fields
+  arrive.
+* The test `FakeKalshi` serves fills through `paged`, so truncation is known. It now also has
+  fill ids and the `omit`, `fills_hidden` and `extra_fills` switches.
+
+### Validation
+
+On `f4b3356`, which is `04639ac` plus this commit:
+
+* 1053 Python tests OK (109 s).
+* JS parity: 3650 fee and 54 arb vectors with 0 mismatches, `ok 3769` + `ok 159`, extension PASS.
+* `render_results.py --check` OK and `git diff --check` clean.
+* No new orphaned launcher supervisors.
+* Unchanged: the fee formulas (`fees/`), `fee_bound`, and every gate (host and environment,
+  account binding, budgets, lock proof).
+
+**The Kalshi demo check was not run in this round,** and no demo order was placed. The reads it
+exercises were checked GET-only against the 331 real rows and 39 fills above. Run it on the
+combined tip before deploying (runbook step 7).
+
+### Gaps
+
+* **A complete row can finish unchecked.** When the fills listing is truncated or fails, the
+  order row finishes the intent on its own. Only a listing that shows *more* than the row
+  blocks it.
+* **Order rows need an explicit remaining quantity,** even when fully executed. Real rows
+  always carry one. Create answers accept a full fill without it.
+* **`done` is final.** A fill that later appeared on a terminal order would not be booked.
+  Kalshi does not add fills to terminal orders.
+* **Automatic polling still stops after 120 reads.** The bounded reservation then stays until
+  `kalshi reconcile`.
+* **Still open from the deployment audit:**
+  * the pinned tick clock in `LiveSlate.run()` (`live.py:496`);
+  * a re-signalled LAG buying full size again within seconds;
+  * finished games left `live=1`.
+
+### Next steps
+
+1. **Run the demo check on the combined tip.** Run `python3 scripts/kalshi_demo_check.py`,
+   then `--fill --confirm-demo`; expect ALL PASS. Afterwards `kalshi ledger` should show no
+   `held` rows.
+2. **Deploy with the runbook**, with `DEPLOY` = the tip; the code was validated at `f4b3356`.
+3. **In the first hour, watch for `accepted` rows** whose reason reads "… filled, no …: fills
+   kept at the limit plus the fee bound". On Kalshi's real answers they should not appear. If
+   they persist, run `python3 -m arb_engine kalshi reconcile`.
 
 ## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
 

@@ -30,7 +30,12 @@ data flow.
    1) are written and reserved before the request, the ledger's `client_order_id` goes on
    the order, an answer that never came back is `ambiguous` and blocks new exposure until
    reconciliation finds the order on the exchange, and actual fills and fees replace the
-   reservation. Budgets are sums over the ledger, so they survive restarts and span
+   reservation - only on final evidence (`order_evidence` / `fills_evidence`): a terminal
+   status, an explicit zero remaining quantity, the fill cost, and fees stated by the order
+   row or a complete, de-duplicated fills listing. An absent fee is unknown, never zero:
+   until it is stated, an IOC's final fills count at the limit plus the fee bound. Anything
+   less - or order and fill totals that disagree - releases nothing and is read again.
+   Budgets are sums over the ledger, so they survive restarts and span
    processes. A ledger belongs to one Kalshi account (fingerprints of the key id and of
    `GET /communications/id`, never the identifiers): another account's client is refused,
    and an order is released as never accepted only by a client provably of the account
@@ -99,7 +104,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1039)
+python3 -m unittest discover -s tests -t .     # Python tests (1053)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
