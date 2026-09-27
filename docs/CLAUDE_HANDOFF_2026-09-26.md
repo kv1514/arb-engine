@@ -319,7 +319,7 @@ The windows are PT days, "since the previous audit" (after 11:54 PDT) and "curre
 
 Branch **`claude/watchkey-audit`** off `claude/exec-readiness` `3c6b232`, commit `91ab70d`, built in
 its own worktree. Not pushed, not deployed, not yet merged into `claude/exec-readiness`. It touches
-`strategy/maker.py`, `strategy/broker.py`, `cli.py` (one keyword), `cli_plugins/maker_flags.py`,
+`strategy/maker.py`, `strategy/broker.py`, `cli_plugins/maker_flags.py` (`cli.py` is untouched, AGENTS rule 8),
 `scripts/kalshi_demo_check.py` (one call), README and AGENTS test count, and the new
 `tests/test_watch_identity.py`. It does not touch `execution/ledger.py`, which two other sessions
 are editing. **1012 Python tests OK** on `91ab70d`; merged with `claude/exec-readiness` `14ada17`
