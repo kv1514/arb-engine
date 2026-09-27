@@ -64,6 +64,10 @@ class FakeKalshi:
         self.multiplier = 1                          # the series' fee_multiplier (GET /series/{ticker})
         self.rounding = "centicent"                  # what Kalshi's demo charged on 2026-09-26
         self.series_error = None
+        self.omit = set()                            # order-row fields a read leaves out (an incomplete answer)
+        self.fills_truncated = False                 # GET /portfolio/fills says more pages exist
+        self.fills_hidden = False                    # the fills listing trails the order row (nothing listed yet)
+        self.extra_fills = []                        # rows the fills listing adds (duplicates, contradictions)
 
     def communications_id(self):
         if self.comms_error is not None:
@@ -94,7 +98,9 @@ class FakeKalshi:
             row.update(taker_fill_cost_dollars=str(price * got), maker_fill_cost_dollars="0.0000", taker_fees_dollars=str(fee), maker_fees_dollars="0.0000")
         self.rows[oid] = row
         if got:
-            self.fill_rows.append({"order_id": oid, "count_fp": f"{got}.00", "fee_cost": str(fee + self.extra_fill_fee), "yes_price_dollars": str(yes)})
+            fid = f"f{len(self.fill_rows) + 1}"
+            self.fill_rows.append({"fill_id": fid, "trade_id": "t" + fid, "order_id": oid, "count_fp": f"{got}.00",
+                                   "fee_cost": str(fee + self.extra_fill_fee), "yes_price_dollars": str(yes)})
         if self.lose_answer is not None:
             raise self.lose_answer
         if self.blank_answer:
@@ -123,20 +129,28 @@ class FakeKalshi:
     def _visible(self, row):
         return self.clock() - row["created"] >= self.read_lag
 
+    def _read(self, row):
+        return {k: v for k, v in row.items() if k not in ("created", "_price") and k not in self.omit}
+
     def order(self, oid):
         row = self.rows.get(oid)
         if row is None or not self._visible(row):
             raise HttpError(404, f"{DEMO_URL}/portfolio/orders/{oid}", "not found")
-        return {k: v for k, v in row.items() if k not in ("created", "_price")}
+        return self._read(row)
+
+    def _fills(self, order_id):
+        return [] if self.fills_hidden else [dict(f) for f in self.fill_rows + self.extra_fills if f["order_id"] == order_id]
 
     def paged(self, path, key, params):
+        if path == "/portfolio/fills":
+            assert key == "fills"
+            return self._fills(params.get("order_id")), self.fills_truncated
         assert path == "/portfolio/orders" and key == "orders"
-        rows = [{k: v for k, v in r.items() if k not in ("created", "_price")} for r in self.rows.values()
-                if self._visible(r) and r["ticker"] == params.get("ticker", r["ticker"])]
+        rows = [self._read(r) for r in self.rows.values() if self._visible(r) and r["ticker"] == params.get("ticker", r["ticker"])]
         return rows, self.truncated
 
     def fills_v2(self, **params):
-        return [f for f in self.fill_rows if f["order_id"] == params.get("order_id")]
+        return self._fills(params.get("order_id"))
 
 
 def sig(ts=1000.0, ask=0.60, contracts=50, event=KEY):
@@ -744,7 +758,7 @@ class AccountingTests(unittest.TestCase):
         done = [e for e in ex.ledger.events(rec["intent_id"]) if e["kind"] == "done"][0]
         self.assertTrue(json.loads(done["detail"])["fills_mismatch"])
 
-    def test_an_order_row_without_cost_fields_is_priced_at_the_limit_plus_the_fee_bound(self):
+    def test_an_order_row_without_cost_fields_keeps_the_fills_at_the_limit_plus_the_fee_bound(self):
         clock = Clock()
         client = FakeKalshi(clock)
         client.cost_fields = False
@@ -753,7 +767,18 @@ class AccountingTests(unittest.TestCase):
         clock.t += 3
         ex.reconcile(force=True)
         row = ex.ledger.get(rec["intent_id"])
-        self.assertEqual((Decimal(row["fill_cost"]), Decimal(row["fees"])), (Decimal("30.00"), Decimal("1.00")))
+        # What the fills cost is not established: not done, the fills stay at the limit + the fee bound.
+        self.assertEqual((row["state"], row["fill_count"], row["fill_cost"], row["fees"]), ("accepted", "50.00", None, None))
+        self.assertIn("no taker_fill_cost_dollars", row["reason"])
+        self.assertEqual(ex.ledger.exposure(), Decimal("31.00"))
+        # The exchange reports them later: booked at what was paid.
+        client.rows["o1"].update(taker_fill_cost_dollars="30.000000", maker_fill_cost_dollars="0.000000",
+                                 taker_fees_dollars="0.840000", maker_fees_dollars="0.000000")
+        clock.t += 3
+        ex.reconcile(force=True)
+        row = ex.ledger.get(rec["intent_id"])
+        self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("30.00"), Decimal("0.84")))
+        self.assertEqual(ex.ledger.exposure(), Decimal("30.84"))
 
     def test_an_ioc_that_filled_nothing_releases_its_budget(self):
         clock = Clock()
@@ -762,6 +787,294 @@ class AccountingTests(unittest.TestCase):
         self.assertEqual(ex.on_signal(sig(ts=1.0), quotes())["fill_count"], "0.00")
         self.assertEqual(ex.sent_notional, 0.0)
         self.assertEqual(ex.on_signal(sig(ts=2.0), quotes())["count"], 50)   # the whole game budget is still there
+
+
+def order_row(oid="o1", **fields):
+    """A final GET /portfolio/orders/{id} row of an IOC buy of 1 at $0.50, shaped like the demo
+    rows recorded on 2026-09-26; ``field=None`` leaves that field out."""
+    row = {"order_id": oid, "status": "executed", "fill_count_fp": "1.00", "remaining_count_fp": "0.00", "initial_count_fp": "1.00",
+           "taker_fill_cost_dollars": "0.500000", "maker_fill_cost_dollars": "0.000000",
+           "taker_fees_dollars": "0.017500", "maker_fees_dollars": "0.000000"}
+    row.update(fields)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def fill_row(fid="f1", oid="o1", count="1.00", fee="0.017500", **fields):
+    row = {"fill_id": fid, "trade_id": "t" + fid, "order_id": oid, "count_fp": count, "fee_cost": fee, "yes_price_dollars": "0.5000", "is_taker": True}
+    row.update(fields)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+class Fills:
+    """Only ``GET /portfolio/fills`` (``apply_row`` is handed the order row itself)."""
+
+    env, base_url = "demo", DEMO_URL
+
+    def __init__(self, rows=(), truncated=False, error=None):
+        self.rows, self.truncated, self.error = list(rows), truncated, error
+
+    def paged(self, path, key, params):
+        assert (path, key) == ("/portfolio/fills", "fills")
+        if self.error is not None:
+            raise self.error
+        return [dict(r) for r in self.rows if r.get("order_id") == params["order_id"]], self.truncated
+
+
+class EvidenceTests(unittest.TestCase):
+    """Only adequate evidence releases a reservation: a final order row (a terminal status, an
+    explicit zero remaining quantity, a fill count within the order) with its cost, and fees
+    that the row or a complete, de-duplicated fills listing states. An absent fee is unknown,
+    not zero. Anything less keeps the intent open, and late fills and fees still land."""
+
+    BOUND = Decimal("0.52")         # 1 x $0.50 + the fee bound (0.07 x 0.25 rounded up to the cent)
+    PAID = Decimal("0.5175")        # 1 x $0.50 + the fee demo charges (centicent)
+
+    def open_ioc(self, count=1, limit="0.50", final_answer=False, clock=None, budget=None):
+        """An IOC buy recorded and sent. ``final_answer``: its create answer said it filled in
+        full with nothing remaining (the fills are booked); otherwise it said nothing final
+        (no fills, no remaining quantity: the whole worst case stays)."""
+        led = OrderLedger(tmp(), "demo", DEMO_URL, clock=clock or Clock())
+        res = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=count, limit_price=limit, event_key=KEY, game_key=KEY,
+                          fee_multiplier=1, budget=budget)
+        answer = {"order_id": "o1", "fill_count": f"{count}.00", "remaining_count": "0.00"} if final_answer else {"order_id": "o1", "fill_count": "0.00"}
+        self.assertEqual(led.accepted(res.intent_id, answer), "accepted")
+        return led, res.intent_id
+
+    def test_a_row_without_status_or_remaining_quantity_releases_nothing(self):
+        # Reported: order_id and fill_count=0, no status, no remaining quantity -> was "done", budget freed.
+        maker = OrderLedger(tmp(), "demo", DEMO_URL, clock=Clock())
+        res = maker.reserve(strategy="maker", ticker=TICKER, side="yes", count=10, limit_price="0.60", tif="good_till_canceled", fee_multiplier=1)
+        maker.accepted(res.intent_id, {"order_id": "o1", "fill_count": "0.00", "remaining_count": "10.00"})
+        self.assertEqual(maker.exposure(), Decimal("6.20"))
+        note = maker.apply_row(res.intent_id, {"order_id": "o1", "fill_count": "0"})
+        row = maker.get(res.intent_id)
+        self.assertEqual(row["state"], "accepted")
+        self.assertEqual(maker.exposure(), Decimal("6.20"))              # a resting order may still fill: nothing released
+        self.assertIn("no status", note)
+        self.assertIn("no remaining quantity", row["reason"])
+        ioc, iid = self.open_ioc()
+        self.assertEqual(ioc.exposure(), self.BOUND)
+        ioc.apply_row(iid, {"order_id": "o1", "fill_count": "0"})
+        self.assertEqual((ioc.get(iid)["state"], ioc.exposure()), ("accepted", self.BOUND))
+
+    def test_an_unknown_or_open_status_is_not_final(self):
+        for status in ("", "pending", "resting", "partially_filled", "EXECUTED?", "open"):
+            with self.subTest(status=status):
+                led, iid = self.open_ioc()
+                led.apply_row(iid, order_row(status=status or None))
+                self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND))
+        led, iid = self.open_ioc()
+        led.apply_row(iid, order_row(status="Executed"))                  # a terminal status, however spelt
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
+
+    def test_a_missing_or_open_remaining_quantity_is_not_final(self):
+        for fields in ({"remaining_count_fp": None}, {"remaining_count_fp": "1.00", "status": "canceled"},
+                       {"remaining_count_fp": "n/a"}, {"remaining_count_fp": None, "remaining_count": "0.5"}):
+            with self.subTest(fields=fields):
+                led, iid = self.open_ioc()
+                note = led.apply_row(iid, order_row(**fields))
+                self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND), note)
+        led, iid = self.open_ioc()                                         # the legacy spelling is read too
+        led.apply_row(iid, order_row(remaining_count_fp=None, remaining_count=0))
+        self.assertEqual(led.get(iid)["state"], "done")
+
+    def test_a_create_answer_books_an_iocs_fills_only_when_nothing_can_remain(self):
+        def answered(**answer):
+            led = OrderLedger(tmp(), "demo", DEMO_URL, clock=Clock())
+            iid = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=10, limit_price="0.50", fee_multiplier=1).intent_id
+            led.accepted(iid, {"order_id": "o9", **answer})
+            return led, led.get(iid)
+
+        led, row = answered(fill_count="0.00", remaining_count="0.00")          # provably filled nothing: its budget is free
+        self.assertEqual((row["fill_count"], led.exposure()), ("0.00", Decimal("0")))
+        led, row = answered(fill_count="4.00", remaining_count="0.00")          # 4 filled, the rest provably gone
+        self.assertEqual((row["fill_count"], led.exposure()), ("4.00", Decimal("2.08")))
+        led, row = answered(fill_count="10.00")                                 # all 10 filled: nothing can remain
+        self.assertEqual((row["fill_count"], led.exposure()), ("10.00", Decimal("5.20")))
+        for answer in ({"fill_count": "0.00"}, {"fill_count": "4.00"}, {"fill_count": "4.00", "remaining_count": "6.00"},
+                       {"fill_count": "4.00", "remaining_count": "0.00", "status": "resting"}, {"remaining_count": "0.00"},
+                       {"fill_count": "11.00", "remaining_count": "0.00"}):
+            with self.subTest(answer=answer):
+                led, row = answered(**answer)
+                self.assertIsNone(row["fill_count"])
+                self.assertIn("create answer not final", row["reason"])
+                self.assertEqual(led.exposure(), Decimal("5.20"))           # 10 x 0.50 + 10 x 2c: nothing released
+
+    def test_absent_fees_keep_the_fee_bound_until_they_are_reported(self):
+        # Reported: executed, 1 filled, taker cost $0.50, no fee fields -> was "done" with $0 fees.
+        led, iid = self.open_ioc(final_answer=True)
+        note = led.apply_row(iid, order_row(taker_fees_dollars=None, maker_fees_dollars=None))
+        row = led.get(iid)
+        self.assertEqual((row["state"], row["fill_count"], row["fees"]), ("accepted", "1.00", None))
+        self.assertIn("no taker_fees_dollars", note)
+        self.assertEqual(led.exposure(), self.BOUND)                       # not $0.50: the fee is unknown, so it is bounded
+        # The fees arrive on a later read: booked at what was charged.
+        self.assertTrue(led.apply_row(iid, order_row()).startswith("done"))
+        self.assertEqual((Decimal(led.get(iid)["fees"]), led.exposure()), (Decimal("0.0175"), self.PAID))
+
+    def test_explicitly_reported_zero_fees_are_final(self):
+        led, iid = self.open_ioc(final_answer=True)
+        led.apply_row(iid, order_row(taker_fees_dollars="0.000000"))      # stated, not absent
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", Decimal("0.5")))
+        led, iid = self.open_ioc(final_answer=True)
+        led.apply_row(iid, order_row(taker_fees_dollars=""))                # blank is absent
+        self.assertEqual(led.get(iid)["state"], "accepted")
+        # Nothing filled: nothing paid, whether or not the row repeats the zero dollar fields.
+        for fields in ({}, {k: None for k in ("taker_fill_cost_dollars", "maker_fill_cost_dollars", "taker_fees_dollars", "maker_fees_dollars")}):
+            with self.subTest(fields=fields):
+                led, iid = self.open_ioc()
+                led.apply_row(iid, order_row(status="canceled", fill_count_fp="0.00", **{**{"taker_fill_cost_dollars": "0.000000",
+                                                                                             "taker_fees_dollars": "0.000000"}, **fields}))
+                self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", Decimal("0")))
+        led, iid = self.open_ioc()                                         # ... but a row billing an order with no fills contradicts itself
+        led.apply_row(iid, order_row(status="canceled", fill_count_fp="0.00", taker_fees_dollars="0.017500"))
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND))
+
+    def test_fees_come_from_a_complete_fills_listing_when_the_row_has_none(self):
+        led, iid = self.open_ioc(final_answer=True)
+        no_fees = order_row(taker_fees_dollars=None, maker_fees_dollars=None)
+        led.apply_row(iid, no_fees, client=Fills([]))                      # the fills trail the row: nothing to read yet
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND))
+        led.apply_row(iid, no_fees, client=Fills([fill_row(fee=None)]))     # a fill without its fee_cost establishes nothing
+        self.assertEqual(led.get(iid)["state"], "accepted")
+        led.apply_row(iid, no_fees, client=Fills([fill_row()]))             # late fills with their fees: booked
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
+        done = [e for e in led.events(iid) if e["kind"] == "done"][0]
+        self.assertEqual(json.loads(done["detail"])["source"], "order + fills (fees)")
+
+    def test_a_truncated_fills_listing_establishes_nothing(self):
+        led, iid = self.open_ioc(final_answer=True)
+        no_fees = order_row(taker_fees_dollars=None, maker_fees_dollars=None)
+        note = led.apply_row(iid, no_fees, client=Fills([fill_row()], truncated=True))
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND), note)
+        held = [e for e in led.events(iid) if e["kind"] == "held"][-1]
+        self.assertTrue(json.loads(held["detail"])["fills_truncated"])
+        led.apply_row(iid, no_fees, client=Fills(error=HttpError(500, DEMO_URL, "internal")))   # a failed read neither
+        self.assertEqual(led.get(iid)["state"], "accepted")
+        # Even a truncated page that already lists more contracts than the row contradicts it.
+        led2, iid2 = self.open_ioc(final_answer=True)
+        led2.apply_row(iid2, order_row(), client=Fills([fill_row("f1"), fill_row("f2")], truncated=True))
+        self.assertEqual((led2.get(iid2)["state"], led2.get(iid2)["fill_count"]), ("accepted", None))
+        # The complete listing settles the first one.
+        led.apply_row(iid, no_fees, client=Fills([fill_row()]))
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
+
+    def test_duplicate_fills_are_counted_once(self):
+        led, iid = self.open_ioc(count=2, final_answer=True)
+        row = order_row(fill_count_fp="2.00", initial_count_fp="2.00", taker_fill_cost_dollars="1.000000", taker_fees_dollars=None, maker_fees_dollars=None)
+        led.apply_row(iid, row, client=Fills([fill_row("f1"), fill_row("f2"), fill_row("f1")]))   # f1 listed twice (overlapping pages)
+        got = led.get(iid)
+        self.assertEqual((got["state"], Decimal(got["fees"])), ("done", Decimal("0.035")))           # not 0.0525
+        done = json.loads([e for e in led.events(iid) if e["kind"] == "done"][0]["detail"])
+        self.assertEqual((done["fills"], done["fills_duplicates"]), (2, 1))
+        # One fill id with two different contents is a contradiction, not a duplicate.
+        led, iid = self.open_ioc(count=2, final_answer=True)
+        led.apply_row(iid, row, client=Fills([fill_row("f1"), fill_row("f2"), fill_row("f1", fee="0.035000")]))
+        self.assertEqual((led.get(iid)["state"], led.get(iid)["fill_count"], led.exposure()), ("accepted", None, Decimal("1.04")))
+
+    def test_order_and_fill_totals_that_contradict_release_nothing(self):
+        led, iid = self.open_ioc(final_answer=True)
+        note = led.apply_row(iid, order_row(), client=Fills([fill_row("f1"), fill_row("f2")]))     # 2 fills, the row says 1
+        row = led.get(iid)
+        self.assertIn("disagree", note)
+        self.assertEqual((row["state"], row["fill_count"]), ("accepted", None))                    # the fill is unverified again
+        self.assertEqual(led.exposure(), self.BOUND)                                               # the whole worst case counts
+        lock = led.reserve(strategy="lag-lock", ticker=TICKER.replace("-KC", "-DEN"), side="yes", count=1, limit_price="0.40",
+                           parent_id=iid, fee_multiplier=1)
+        self.assertFalse(lock.ok)
+        self.assertIn("not verified", lock.reason)                                                # no lock leg sized on it
+        # Fills that merely trail the row (fewer listed so far) do not contradict a complete row.
+        led.apply_row(iid, order_row(), client=Fills([]))
+        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
+        done = json.loads([e for e in led.events(iid) if e["kind"] == "done"][0]["detail"])
+        self.assertTrue(done["fills_trail"])
+
+    def test_incomplete_answers_never_free_budget(self):
+        """A per-game budget sized so that a second order fits after a complete answer
+        (0.5175 + 0.50 <= 1.018) but not while any evidence is missing (0.52 + 0.50 > 1.018)
+        - and would have, had a missing fee been booked as zero (0.50 + 0.50)."""
+        budget = Budget(per_game=Decimal("1.018"))
+        incomplete = {
+            "no status": {"status": None}, "unknown status": {"status": "pending"}, "resting IOC": {"status": "resting"},
+            "no remaining quantity": {"remaining_count_fp": None}, "remaining open": {"remaining_count_fp": "1.00"},
+            "no fill count": {"fill_count_fp": None}, "fill count not a number": {"fill_count_fp": "?"},
+            "more filled than ordered": {"fill_count_fp": "2.00"}, "executed short": {"fill_count_fp": "0.50"},
+            "other initial count": {"initial_count_fp": "3.00"}, "no taker cost": {"taker_fill_cost_dollars": None},
+            "zero cost for a fill": {"taker_fill_cost_dollars": "0.000000"}, "no taker fees": {"taker_fees_dollars": None},
+            "fees not a number": {"taker_fees_dollars": "NaN"}, "negative fees": {"taker_fees_dollars": "-0.01"},
+        }
+        for name, fields in incomplete.items():
+            for final_answer in (False, True):
+                with self.subTest(name=name, final_answer=final_answer):
+                    led, iid = self.open_ioc(final_answer=final_answer, budget=budget)
+                    led.apply_row(iid, order_row(**fields), client=Fills([]))
+                    self.assertNotEqual(led.get(iid)["state"], "done")
+                    self.assertGreaterEqual(led.exposure(), self.BOUND)
+                    second = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=1, limit_price="0.48", event_key=KEY, game_key=KEY,
+                                         fee_multiplier=1, budget=budget)
+                    self.assertFalse(second.ok, "incomplete evidence freed the budget")
+        led, iid = self.open_ioc(final_answer=True, budget=budget)
+        led.apply_row(iid, order_row(), client=Fills([fill_row()]))
+        self.assertTrue(led.reserve(strategy="lag", ticker=TICKER, side="yes", count=1, limit_price="0.48", event_key=KEY, game_key=KEY,
+                                    fee_multiplier=1, budget=budget).ok)
+
+    def test_late_fills_and_fees_are_reconciled_even_after_polling_gave_up(self):
+        clock = Clock(1000.0)
+        client = FakeKalshi(clock)
+        client.omit = {"taker_fees_dollars", "maker_fees_dollars"}          # the row reports no fees yet
+        client.fills_hidden = True                                          # and the fills listing has nothing yet
+        ex = executor(client, clock)
+        ex.ledger.max_checks = 3
+        rec = ex.on_signal(sig(), quotes())
+        for _ in range(5):
+            clock.t += 3
+            ex.reconcile(force=True)
+        row = ex.ledger.get(rec["intent_id"])
+        self.assertEqual((row["state"], row["checks"]), ("accepted", 3))    # polled 3 times, then left at its bound
+        self.assertEqual(ex.ledger.exposure(), Decimal("31.00"))
+        client.fills_hidden = False                                         # the fills (with their fees) arrive late
+        clock.t += 3
+        self.assertEqual(ex.ledger.reconcile(client), [])                   # automatic polling has given up on it ...
+        res = ex.ledger.reconcile(client, recheck_exhausted=True)           # ... `kalshi reconcile` reads it again
+        self.assertEqual([(r["before"], r["after"]) for r in res], [("accepted", "done")])
+        self.assertEqual(ex.ledger.exposure(), Decimal("30.84"))
+
+    def test_the_manual_reconcile_reads_exhausted_orders_again(self):
+        from arb_engine.cli_plugins import kalshi_ops
+
+        calls = []
+
+        class Led:
+            def reconcile(self, client, **kw):
+                calls.append(kw)
+                return []
+
+            def status(self):
+                return {"blocked": None}
+
+            def rows(self, states):
+                return []
+
+        args = argparse.Namespace(action="reconcile", no_account_env=True)
+        with mock.patch("arb_engine.execution.kalshi.KalshiExecutor"), \
+                mock.patch("arb_engine.execution.ledger.OrderLedger.for_client", return_value=Led()), redirect_stdout(io.StringIO()):
+            self.assertEqual(kalshi_ops.run_kalshi(args), 0)
+        self.assertEqual(calls, [{"recheck_exhausted": True}])
+
+    def test_real_demo_rows_are_final(self):
+        """The recorded demo answer, order row and fill of 2026-09-26 still reconcile to done."""
+        def load(name):
+            with open(os.path.join(os.path.dirname(__file__), "fixtures", "kalshi_orders", name + ".json"), encoding="utf-8") as f:
+                return json.load(f)
+
+        od, fills = load("order_filled")["order"], load("fills_v2")["fills"]
+        led = OrderLedger(tmp(), "demo", DEMO_URL, clock=Clock())
+        res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56", fee_multiplier=1)
+        led.accepted(res.intent_id, load("create_order_fill"))
+        self.assertEqual(led.get(res.intent_id)["fill_count"], "1.00")      # the real create answer is final (remaining "0.00")
+        led.apply_row(res.intent_id, od, client=Fills(fills))
+        row = led.get(res.intent_id)
+        self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("0.56"), Decimal("0.0173")))
 
 
 class RestartTests(unittest.TestCase):

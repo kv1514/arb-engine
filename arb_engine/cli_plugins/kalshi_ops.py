@@ -203,7 +203,9 @@ def run_kalshi(args: argparse.Namespace, settings: Mapping[str, Any] | None = No
         except LedgerError as e:
             _print({"status": f"BLOCKED: {e}"})
             return EXIT_BLOCKED
-        result = {"reconciled": led.reconcile(ex.client)} if action == "reconcile" else {}
+        # A person asking for a reconcile also re-reads orders the automatic polling gave up on
+        # (fees still unreported after max_checks reads): late fills and fees land here.
+        result = {"reconciled": led.reconcile(ex.client, recheck_exhausted=True)} if action == "reconcile" else {}
         result.update(led.status())
         result["open"] = [{k: r[k] for k in ("intent_id", "strategy", "ticker", "side", "count", "limit_price", "state", "order_id", "fill_count", "reason", "created_ts")}
                           for r in led.rows(("pending", "ambiguous", "accepted"))]

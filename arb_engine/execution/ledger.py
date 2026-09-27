@@ -59,6 +59,18 @@ shared by every process that trades it:
    the reserved worst case with what was paid. An intent that complete listings still do not
    show ``not_found_s`` after it was sent was never accepted: its reservation is released.
    An incomplete (truncated) listing proves nothing and never releases anything.
+6. **Only evidence releases a reservation** (:func:`order_evidence`, :func:`fills_evidence`).
+   An order is final only when its row shows a terminal status (executed / canceled), an
+   explicit remaining quantity of zero and a fill count within what was ordered; anything
+   less - no status, an unknown one, no remaining quantity - leaves the intent open with its
+   reservation. An absent fee field is *unknown*, never zero (an explicit ``"0.0000"`` is
+   zero): until the order row or a complete, de-duplicated fills listing states the fees, an
+   IOC whose fills are final keeps ``fill_count x limit`` plus :func:`fee_bound` reserved and
+   is reconciled again later. Order and fill totals that contradict each other (more fills
+   listed than the row reports, one fill id with two contents) release nothing, and an IOC's
+   fill count goes back to unverified - the whole worst case counts and no lock leg is sized
+   on it - until they agree. A create answer is an IOC's final fill count only with an
+   explicit zero remaining quantity, or when every contract ordered filled.
 
 Budgets are dollars **including fees**. An open intent counts at its worst case
 (``count x limit`` + :func:`fee_bound` at the market's own fee multiplier), an accepted
@@ -84,7 +96,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from typing import Any, Iterable, Iterator, Optional
 
@@ -107,6 +119,9 @@ OPEN = (PENDING, AMBIGUOUS, ACCEPTED)
 ZERO = Decimal("0")
 HALF = Decimal("0.5")
 IOC = ("immediate_or_cancel", "fill_or_kill", "ioc", "fok")
+# Order statuses after which nothing more can fill (Kalshi: resting | canceled | executed).
+TERMINAL_STATUSES = ("executed", "canceled", "cancelled", "expired")
+_KEEP = object()   # OrderLedger._hold: leave the booked fill count as it is
 
 # Kalshi REST hosts per environment (venues/kalshi.ENV_REST_BASE + LEGACY_REST_BASE, and the
 # pre-2025 trading host). Orders only go to a host whose environment is the client's.
@@ -843,21 +858,45 @@ class OrderLedger:
     # ---- 2. every answer recorded --------------------------------------------------------
     def accepted(self, intent_id: str, response: Any, now: Optional[float] = None, req_ts: Optional[float] = None) -> str:
         """The create-order answer: an order id makes it ``accepted`` (fills provisional
-        until reconciled); a response without one is ``ambiguous``. Returns the new state."""
+        until reconciled); a response without one is ``ambiguous``. Returns the new state.
+
+        An IOC's reported fill count is booked - and its reservation shrinks to those fills
+        at the limit plus the fee bound - only when the answer is final: a fill count within
+        the order, no non-terminal status, and nothing left - an explicit zero remaining
+        quantity, or every contract ordered filled (booking a full fill releases nothing: its
+        worst case is the whole reservation). Any other answer keeps the whole worst case
+        until reconciliation reads the order."""
         now = self.clock() if now is None else float(now)
         od = (response or {}).get("order") if isinstance(response, dict) and isinstance(response.get("order"), dict) else (response or {})
         if not isinstance(od, dict) or not (od.get("order_id") or od.get("id")):
             self.ambiguous(intent_id, "create response carried no order id", now=now, req_ts=req_ts, response=response)
             return AMBIGUOUS
         oid = str(od.get("order_id") or od.get("id"))
-        fill = _dec(od.get("fill_count") if od.get("fill_count") is not None else od.get("fill_count_fp"))
+        fill = _count_field(od, "fill_count")[1]
+        remaining = _count_field(od, "remaining_count")[1]
+        status = str(od.get("status") or "").strip().lower()
         raw = {k: od.get(k) for k in ("order_id", "client_order_id", "fill_count", "remaining_count", "average_fill_price",
                                       "average_fee_paid", "ts_ms", "status") if od.get(k) is not None}
 
         def txn(c: sqlite3.Connection) -> str:
-            c.execute("UPDATE intents SET state=?, order_id=?, fill_count=?, req_ts=COALESCE(?, req_ts), resp_ts=?, updated_ts=?, reason=NULL WHERE intent_id=?",
-                      (ACCEPTED, oid, _s(fill), req_ts, now, now, intent_id))
-            self._event(c, now, intent_id, "accepted", **raw)
+            row = c.execute("SELECT tif, count FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
+            ioc = row is not None and str(row["tif"]).lower() in IOC
+            ordered = D(row["count"]) if row is not None else None
+            within = fill is not None and ordered is not None and ZERO <= fill <= ordered
+            nothing_left = (remaining is not None and remaining == 0) or (remaining is None and within and fill == ordered)
+            final = within and nothing_left and (not status or status in TERMINAL_STATUSES)
+            book = fill if (final or not ioc) else None
+            why = None if book is not None or not ioc else (
+                "create answer not final (" + ", ".join(p for p in (
+                    "no fill count" if fill is None else None,
+                    f"fill count {fill} outside the order" if fill is not None and not within else None,
+                    f"{remaining} remaining" if remaining is not None and remaining != 0 else None,
+                    "no remaining quantity for a partial fill" if remaining is None and within and fill != ordered else None,
+                    f"status {status!r}" if status and status not in TERMINAL_STATUSES else None)
+                    if p) + "): the whole worst case stays reserved until reconciled")
+            c.execute("UPDATE intents SET state=?, order_id=?, fill_count=?, req_ts=COALESCE(?, req_ts), resp_ts=?, updated_ts=?, reason=? WHERE intent_id=?",
+                      (ACCEPTED, oid, _s(book), req_ts, now, now, why, intent_id))
+            self._event(c, now, intent_id, "accepted", final=final, **raw)
             return ACCEPTED
 
         return self._write(txn)
@@ -954,7 +993,7 @@ class OrderLedger:
         return self._owner_gone(owner)
 
     def reconcile(self, client: Any, now: Optional[float] = None, include_resting: bool = False,
-                  skip: Iterable[str] = ()) -> list[dict]:
+                  skip: Iterable[str] = (), recheck_exhausted: bool = False) -> list[dict]:
         """Resolve every open intent against the exchange. Returns one record per intent
         looked at: ``{intent_id, before, after, note}``. Errors leave the intent as it was
         (an ambiguous one stays blocking) and are reported, never raised.
@@ -963,7 +1002,10 @@ class OrderLedger:
         that placed it, which reads it every poll and hands the rows to :meth:`apply_row`;
         it is only looked at with ``include_resting`` - by that process, or by its successor
         once the owner is gone - and never when its owner is another live process. ``skip``
-        names intents the caller is reading itself."""
+        names intents the caller is reading itself. An accepted order read ``max_checks``
+        times without final evidence (fees still unreported, say) keeps its bounded
+        reservation and is no longer polled automatically; ``recheck_exhausted`` (the
+        ``kalshi reconcile`` command) reads it again, so late fills and fees still land."""
         self._check_client(client)
         now = self.clock() if now is None else float(now)
         ident = self._identity_for(client)
@@ -989,7 +1031,7 @@ class OrderLedger:
                 out.append({"intent_id": r["intent_id"], "strategy": r["strategy"], "ticker": r["ticker"], "before": r["state"],
                             "after": r["state"], "note": "sent by another Kalshi account: not reconciled with this client"})
                 continue
-            if r["state"] == ACCEPTED and int(r["checks"] or 0) >= self.max_checks:
+            if r["state"] == ACCEPTED and int(r["checks"] or 0) >= self.max_checks and not recheck_exhausted:
                 continue                           # known order, exposure bounded: stop polling it
             since = float(r["resp_ts"] or r["updated_ts"] or r["created_ts"])
             if now - since < self.settle_s:
@@ -1062,45 +1104,67 @@ class OrderLedger:
         return self._apply_order(client, row, order, now)
 
     def _apply_order(self, client: Any, r: dict, order: Optional[dict], now: float) -> str:
+        """Book one order row. ``done`` - the reservation replaced by what was paid - needs a
+        final row (see :func:`order_evidence`), its fill cost, and its fees from the row or a
+        complete fills listing; anything less keeps the intent open (``_hold``)."""
         iid = r["intent_id"]
         if not order:
             self._bump(iid, now, "empty order read")
             return "empty order read"
-        status = str(order.get("status") or "").lower()
-        filled = _dec(order.get("fill_count_fp") if order.get("fill_count_fp") is not None else order.get("fill_count"))
-        remaining = _dec(order.get("remaining_count_fp") if order.get("remaining_count_fp") is not None else order.get("remaining_count"))
-        if status == "resting" or (status not in ("executed", "canceled", "cancelled", "expired") and (remaining or ZERO) > 0):
-            self._write(lambda c: (c.execute("UPDATE intents SET fill_count=?, checks=checks+1 WHERE intent_id=?", (_s(filled), iid)),
-                                   self._event(c, now, iid, "still-resting", status=status, remaining=_s(remaining))))
-            return f"order {status or 'open'}: {remaining} resting"
-        if filled is None:
-            self._bump(iid, now, f"order row without a fill count (status {status!r})")
-            return "no fill count"
-        cost = sum((_dec(order.get(k)) or ZERO for k in ("taker_fill_cost_dollars", "maker_fill_cost_dollars")), ZERO)
-        fees = sum((_dec(order.get(k)) or ZERO for k in ("taker_fees_dollars", "maker_fees_dollars")), ZERO)
-        detail: dict[str, Any] = {"status": status, "source": "order"}
-        if filled > 0 and cost == 0:
-            # No cost fields: price the fills at the limit (the most an IOC buy can pay) and
-            # the fee at its bound, so the budget errs high.
-            cost, fees = D(r["limit_price"]) * filled, fee_bound(r["limit_price"], filled, _dec(r.get("fee_mult")) or Decimal(1))
-            detail["source"] = "order-without-cost-fields: limit x fills + fee bound"
-        if filled > 0 and client is not None and hasattr(client, "fills_v2"):
-            try:
-                fills = [f for f in (client.fills_v2(order_id=order.get("order_id") or r["order_id"]) or [])
-                         if str(f.get("order_id") or "") in ("", str(order.get("order_id") or r["order_id"]))]
-            except Exception as e:  # noqa: BLE001 - the order row stands on its own
-                fills, detail["fills_error"] = [], repr(e)[:200]
-            if fills:
-                f_count = sum((_dec(f.get("count_fp") if f.get("count_fp") is not None else f.get("count")) or ZERO for f in fills), ZERO)
-                f_fees = sum((_dec(f.get("fee_cost")) or ZERO for f in fills), ZERO)
-                detail.update(fills=len(fills), fills_count=str(f_count), fills_fees=str(f_fees))
-                if f_count != filled or f_fees != fees:
-                    detail["fills_mismatch"] = True
-                    fees = max(fees, f_fees)       # the budget keeps the larger of the two
-            else:
-                detail["fills"] = 0                # fills trail the order row; nothing to compare yet
-        self.done(iid, filled, cost, fees, now=now, **detail)
-        return f"done: {filled} filled, ${cost} + ${fees} fees"
+        ioc = str(r["tif"]).lower() in IOC
+        ev = order_evidence(order, r["count"], ioc)
+        if not ev.final:
+            if not ioc and ev.status == "resting" and ev.filled is not None and ZERO <= ev.filled <= D(r["count"]):
+                # A resting order's fills so far: booked for the record, nothing released (a
+                # resting order counts at its whole worst case until a final row).
+                self._write(lambda c: (c.execute("UPDATE intents SET fill_count=?, checks=checks+1 WHERE intent_id=?", (_s(ev.filled), iid)),
+                                       self._event(c, now, iid, "still-resting", status=ev.status, remaining=_s(ev.remaining))))
+                return f"order resting: {ev.remaining if ev.remaining is not None else '?'} resting"
+            return self._hold(iid, now, "order not final: " + "; ".join(ev.problems), status=ev.status or None,
+                              filled=_s(ev.filled), remaining=_s(ev.remaining))
+        oid = str(order.get("order_id") or order.get("id") or r["order_id"] or "")
+        detail: dict[str, Any] = {"status": ev.status, "source": "order"}
+        fills: Optional[FillsEvidence] = None
+        if ev.filled > 0 and client is not None:
+            fills = fills_evidence(*list_fills(client, oid), order_id=oid)
+            detail.update(fills.notes)
+        if fills is not None and fills.contradiction(ev.filled):
+            # The row and the fills disagree: nothing is released, and an IOC's fill count is
+            # unverified again (the whole worst case counts, no lock leg is sized on it).
+            return self._hold(iid, now, "order and fills disagree: " + fills.contradiction(ev.filled),
+                              fill=None if ioc else _KEEP, **detail)
+        cost, fees = ev.cost, ev.fees
+        if fills is not None and fills.conclusive and fills.count == ev.filled and fills.fees is not None:
+            if fees is None:
+                fees = fills.fees
+                detail["source"] = "order + fills (fees)"
+            elif fills.fees != fees:
+                detail["fills_mismatch"] = True
+                fees = max(fees, fills.fees)       # both are the exchange's: the budget keeps the larger
+        elif fills is not None and fills.count < ev.filled:
+            detail["fills_trail"] = True           # the fills listing lags the order row
+        if cost is None or fees is None:
+            # The fills are final; what they cost (or their fees) is not established yet: book
+            # the fills - an IOC then counts them at the limit plus the fee bound, any other
+            # order keeps its whole worst case - and read again (late fees land then).
+            keep = "fills kept at the limit plus the fee bound" if ioc else "the whole worst case stays reserved"
+            return self._hold(iid, now, f"{ev.filled} filled, " + "; ".join(ev.missing or ["fees not reported"]) + f": {keep} until the exchange reports it",
+                              fill=ev.filled, **detail)
+        self.done(iid, ev.filled, cost, fees, now=now, **detail)
+        return f"done: {ev.filled} filled, ${cost} + ${fees} fees"
+
+    def _hold(self, iid: str, now: float, note: str, fill: Any = _KEEP, **detail: Any) -> str:
+        """Keep an intent open - nothing is released - and say why (``reason``, a ``held``
+        event). ``fill``: a final fill count to book, ``None`` to unverify the booked one, or
+        the ``_KEEP`` default leaves it as it is."""
+        def txn(c: sqlite3.Connection) -> str:
+            if fill is not _KEEP:
+                c.execute("UPDATE intents SET fill_count=?, updated_ts=? WHERE intent_id=?", (_s(fill), now, iid))
+            c.execute("UPDATE intents SET checks = checks + 1, reason = ? WHERE intent_id = ?", (note[:500], iid))
+            self._event(c, now, iid, "held", note=note[:500], **detail)
+            return note
+
+        return self._write(txn)
 
     def _bump(self, iid: str, now: float, note: str) -> None:
         self._write(lambda c: (c.execute("UPDATE intents SET checks = checks + 1 WHERE intent_id = ?", (iid,)),
@@ -1114,6 +1178,191 @@ def list_orders(client: Any, **params: Any) -> tuple[list[dict], bool]:
     if hasattr(client, "paged"):
         return client.paged("/portfolio/orders", "orders", params)
     return list(client.orders_v2(**params) or []), False
+
+
+def list_fills(client: Any, order_id: str) -> tuple[list[dict], Optional[bool], Optional[str]]:
+    """(rows, truncated, error) of ``GET /portfolio/fills?order_id=``, every page the client
+    will walk. A client without ``paged`` (test fakes) is taken as complete, like
+    :func:`list_orders`; a read that fails returns the error and proves nothing."""
+    try:
+        if callable(getattr(client, "paged", None)):
+            rows, truncated = client.paged("/portfolio/fills", "fills", {"order_id": order_id})
+            return list(rows or []), bool(truncated), None
+        if callable(getattr(client, "fills_v2", None)):
+            return list(client.fills_v2(order_id=order_id) or []), False, None
+    except Exception as e:  # noqa: BLE001 - reported with the evidence, never raised
+        return [], None, repr(e)[:200]
+    return [], None, "this client cannot read fills"
+
+
+# ---- what an exchange answer proves -------------------------------------------------------
+def _count_field(od: dict, name: str) -> tuple[bool, Optional[Decimal]]:
+    """(present, value) of a Kalshi count: the fixed-point ``<name>_fp`` spelling first, then
+    ``<name>``. A present value that is not a number reads ``(True, None)``."""
+    for k in (f"{name}_fp", name):
+        v = od.get(k)
+        if v is not None and v != "":
+            return True, _dec(v)
+    return False, None
+
+
+def _money(od: dict, required: tuple[str, ...], optional: tuple[str, ...] = ()) -> tuple[Optional[Decimal], Optional[str]]:
+    """The sum of dollar fields, or (None, why): a required field that is absent is
+    *unknown*, never zero (an explicit ``"0.0000"`` is zero), and a present field that is
+    not a non-negative number makes the whole sum unknown."""
+    total = ZERO
+    for k in required + optional:
+        raw = od.get(k)
+        if raw is None or raw == "":
+            if k in required:
+                return None, f"no {k}"
+            continue
+        v = _dec(raw)
+        if v is None or v < 0:
+            return None, f"{k}={raw!r} is not a dollar amount"
+        total += v
+    return total, None
+
+
+@dataclass
+class OrderEvidence:
+    """What one order row proves. ``final``: a terminal status, an explicit zero remaining
+    quantity and a fill count within the order, all present and consistent (``problems``
+    says what is missing or contradictory). ``cost`` / ``fees``: None when not established
+    (``missing`` says why)."""
+    status: str
+    filled: Optional[Decimal]
+    remaining: Optional[Decimal]
+    final: bool
+    problems: list = field(default_factory=list)
+    cost: Optional[Decimal] = None
+    fees: Optional[Decimal] = None
+    missing: list = field(default_factory=list)
+
+
+def order_evidence(order: dict, count: Any, ioc: bool) -> OrderEvidence:
+    """Read ``GET /portfolio/orders/{id}`` (or a listing row) for an order of ``count``.
+
+    Cost and fees are taken per liquidity side: an IOC never rests, so it needs the taker
+    fields (maker ones are added when present); any other order needs both sides. Recorded
+    on demo 2026-09-26, every terminal row (300 canceled, 31 executed) carried the status,
+    ``remaining_count_fp: "0.00"`` and all four dollar fields."""
+    status = str(order.get("status") or "").strip().lower()
+    has_f, filled = _count_field(order, "fill_count")
+    has_r, remaining = _count_field(order, "remaining_count")
+    has_i, initial = _count_field(order, "initial_count")
+    ordered = D(count)
+    problems: list[str] = []
+    if not status:
+        problems.append("no status")
+    elif status not in TERMINAL_STATUSES:
+        problems.append(f"status {status!r} is not terminal")
+    if filled is None:
+        problems.append("fill count is not a number" if has_f else "no fill count")
+    elif not ZERO <= filled <= ordered:
+        problems.append(f"fill count {filled} outside 0..{ordered}")
+    if remaining is None:
+        problems.append("remaining quantity is not a number" if has_r else "no remaining quantity")
+    elif remaining != 0:
+        problems.append(f"{remaining} still open")
+    if has_i and initial != ordered:
+        problems.append(f"initial count {initial} but {ordered} ordered")
+    if status == "executed" and filled is not None and filled != ordered:
+        problems.append(f"executed with {filled} of {ordered} filled")
+    ev = OrderEvidence(status, filled, remaining, False, problems)
+    cost_req = ("taker_fill_cost_dollars",) if ioc else ("taker_fill_cost_dollars", "maker_fill_cost_dollars")
+    fee_req = ("taker_fees_dollars",) if ioc else ("taker_fees_dollars", "maker_fees_dollars")
+    cost_opt = ("maker_fill_cost_dollars",) if ioc else ()
+    fee_opt = ("maker_fees_dollars",) if ioc else ()
+    if filled is not None and filled == 0:
+        # Nothing filled: nothing paid. A row that reports cost or fees anyway contradicts itself.
+        cost, _ = _money(order, (), cost_req + cost_opt)
+        fees, _ = _money(order, (), fee_req + fee_opt)
+        if cost is None or fees is None or cost > 0 or fees > 0:
+            problems.append("cost or fees reported for an order with no fills")
+        ev.cost, ev.fees = ZERO, ZERO
+    elif filled is not None:
+        cost, why_c = _money(order, cost_req, cost_opt)
+        if cost is not None and cost <= 0:
+            cost, why_c = None, f"fill cost {cost} for {filled} contracts"
+        fees, why_f = _money(order, fee_req, fee_opt)
+        ev.cost, ev.fees = cost, fees
+        ev.missing = [w for w in (why_c, why_f) if w]
+    ev.final = not problems
+    return ev
+
+
+@dataclass
+class FillsEvidence:
+    """What a fills listing for one order proves. ``count`` / ``fees`` are de-duplicated by
+    fill id; ``fees`` is None when a fill carries no ``fee_cost``. ``conclusive``: every page
+    read, every row this order's, no fill id listed twice with different contents, every row
+    well formed - only then can the listing establish fees or show that fills trail."""
+    count: Decimal
+    fees: Optional[Decimal]
+    conclusive: bool
+    conflicts: int = 0
+    notes: dict = field(default_factory=dict)
+
+    def contradiction(self, filled: Decimal) -> Optional[str]:
+        """Why the listing contradicts an order row reporting ``filled``, or None. More fills
+        than the row counts contradict it even when the listing is truncated: they are a
+        lower bound."""
+        if self.count > filled:
+            return f"the fills listing shows {self.count} contracts, the order row {filled}"
+        if self.conflicts:
+            return f"{self.conflicts} fill id(s) listed twice with different contents"
+        return None
+
+
+def _fill_content(f: dict) -> tuple:
+    return tuple(str(f.get(k)) for k in ("count_fp", "count", "fee_cost", "yes_price_dollars", "no_price_dollars", "outcome_side", "side", "action", "is_taker"))
+
+
+def fills_evidence(rows: list[dict], truncated: Optional[bool], error: Optional[str], order_id: str) -> FillsEvidence:
+    """Summarise ``GET /portfolio/fills?order_id=`` rows (see :class:`FillsEvidence`)."""
+    mine, unattributed, foreign = [], 0, 0
+    for f in rows or []:
+        o = str(f.get("order_id") or "")
+        if o == str(order_id):
+            mine.append(f)
+        elif not o:
+            unattributed += 1
+        else:
+            foreign += 1
+    seen: dict[str, dict] = {}
+    unique, duplicates, conflicts, without_id = [], 0, 0, 0
+    for f in mine:
+        key = str(f.get("fill_id") or f.get("trade_id") or "")
+        if not key:
+            without_id += 1
+            unique.append(f)
+        elif key in seen:
+            duplicates += 1
+            conflicts += _fill_content(seen[key]) != _fill_content(f)
+        else:
+            seen[key] = f
+            unique.append(f)
+    count, fees, fee_missing, malformed = ZERO, ZERO, 0, 0
+    for f in unique:
+        n = _count_field(f, "count")[1]
+        if n is None or n <= 0:
+            malformed += 1
+            continue
+        count += n
+        fee = _dec(f.get("fee_cost")) if f.get("fee_cost") not in (None, "") else None
+        if fee is None or fee < 0:
+            fee_missing += 1
+        else:
+            fees += fee
+    notes: dict[str, Any] = {"fills": len(unique), "fills_count": str(count), "fills_fees": None if fee_missing else str(fees)}
+    for k, v in (("fills_truncated", truncated is not False and error is None), ("fills_error", error), ("fills_duplicates", duplicates),
+                 ("fills_conflicting", conflicts), ("fills_without_id", without_id), ("fills_unattributed", unattributed),
+                 ("fills_foreign", foreign), ("fills_malformed", malformed), ("fills_without_fee", fee_missing)):
+        if v:
+            notes[k] = v
+    conclusive = error is None and truncated is False and not (unattributed or conflicts or malformed)
+    return FillsEvidence(count, None if fee_missing else fees, conclusive, conflicts, notes)
 
 
 def finite_positive(x: Any) -> bool:
