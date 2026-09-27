@@ -610,6 +610,91 @@ only).
    kept at the limit plus the fee bound". On Kalshi's real answers they should not appear. If
    they persist, run `python3 -m arb_engine kalshi reconcile`.
 
+## Historical trade tapes (`c2cd4d8`, session c1ab42)
+
+`arb_engine/venues/trades.py` is the **research** tape client used by `event-study`. The live
+recorder's print poller (`strategy/fastlane.py`) is a separate client and is unchanged. The
+fix is on branch `claude/trades-cache` off `claude/exec-readiness` `c13a49c`.
+
+### What was wrong (reproduced at `c13a49c` through the public API only)
+
+A fake of the cursor-paginated trades endpoint serving 30 prints over 3 pages:
+
+| case | at `c13a49c` | now |
+|---|---|---|
+| `max_pages` used up with a cursor left | 10 of 30 prints returned, no error, cached | `IncompleteTape`; progress kept |
+| offline replay afterwards | the 10 served as the tape | `IncompleteTape` |
+| the same query with `max_pages=50` | still 10 of 30, backlog never fetched | 30 of 30, fetching only pages `c1`, `c2` |
+| overlapping pages | 2 duplicate trade ids kept | 0 |
+| one trade id, two prices | both kept | `ConflictingTrades` |
+| windows [100.2, 200.7] then [100.9, 200.1] | one cache file; the second answered with the first's prints | separate keys |
+| window ending 200.5 | API asked `max_ts=200` | asked 99 … 202, trimmed exactly |
+| `"NaN"` price string | parsed as `nan` | row rejected |
+| old cache file, offline | served, completeness unknown | never served; the error names it |
+
+### The rules now
+
+* **Completeness is explicit.** Tapes carry schema 2, `complete`, `reason`, `pages`, `next_cursor`,
+  `seen_cursors`, `duplicates`, `rejected` and `restarts`. Only a complete tape is returned.
+* **Resuming.** The page budget running out, a failed page, a cursor the venue repeats, or
+  unreadable rows keep an incomplete tape and raise `IncompleteTape`. The next call resumes from
+  the saved cursor with its own budget. A saved cursor the venue rejects (HTTP 4xx) restarts
+  from the top and merges by trade id. Progress is checkpointed every 10 pages and on every
+  stop, and every write is atomic.
+* **Deduplication.** Kalshi prints are deduplicated by `trade_id`. The same id with a different
+  payload is a conflict. A row without an id, of another ticker, or with a non-finite time,
+  price or size is rejected, and a tape with rejected rows is never complete.
+* **Windows.** `min_ts` and `max_ts` must be finite, with min ≤ max. The API window is widened
+  by a second on each side and trimmed exactly.
+* **Cache keys.** `<venue>-<market>-<sha256 of the exact query>`, and the stored query is
+  checked again on every read.
+* **Polymarket.** No new features: a used-up page budget raises instead of being cached as
+  complete. There is no dedupe (a transaction hash can carry several prints) and no resume.
+
+### Cache migration and invalidation
+
+* **Old files are never used.** Files named `<venue>-<market>-<int>-<int>.json`, with no
+  `schema` key, cannot say whether their fetch ran out of pages. Online they are ignored
+  and the tape is fetched whole under the new key. Offline, `event-study --offline` fails and
+  names the old file. Nothing is deleted automatically.
+* **Rebuild offline replays.** Run each event study once **online**, without `--offline`. A tape
+  longer than the page budget (50 pages, 50,000 prints) stops with "page budget … used up";
+  run the same command again and it resumes.
+* **Move old files aside once new tapes exist.** This moves only files that have no `schema`:
+
+  ```bash
+  mkdir -p out/cache/trades-legacy && python3 -c "import json,os,glob,shutil; [shutil.move(p, 'out/cache/trades-legacy/') for p in glob.glob('out/cache/trades/*.json') if 'schema' not in json.load(open(p))]"
+  ```
+
+* **Invalidating one tape.** Delete its file; its name starts with `<venue>-<market>-`.
+  `IncompleteTape.tape` and `TradesClient.kalshi_tape` expose the record.
+* **Fixtures.** `TradesClient.store_complete(venue, market, min_ts, max_ts, trades)` records a
+  tape known to be complete. `tests/test_tickreplay.py` uses it.
+
+### Tests and validation (on `c2cd4d8`)
+
+* **New tests.** `tests/test_trade_tapes.py` (20) covers:
+  * the page budget, and a second request with a larger budget and with the same budget;
+  * failed pages (HTTP and non-HTTP);
+  * restart from a checkpoint after the process was killed;
+  * a stale cursor restarting from the top;
+  * repeated cursors;
+  * overlap and same-second dedupe, conflicts and rejected rows;
+  * window edges, key collisions, a mismatched stored query and non-finite windows;
+  * old files online and offline;
+  * atomic writes, shuffled pages, and the Polymarket budget.
+* **The old code.** It has no `IncompleteTape`, so the new file cannot import there. The
+  behavioural proof is the reproduction above: `repro_trades.py` in the session scratchpad,
+  using only `kalshi_trades` and `parse_kalshi_trade`.
+* **Changed tests.** `test_trades`' window test now asks for its fixture's own ticker (the old
+  code had filed another ticker's prints under `"T"`), and `test_tickreplay` seeds with
+  `store_complete`.
+* **Validation.** **1074 Python tests OK**; JS parity 3650 fee + 54 arb vectors, 0 mismatches,
+  `ok 3769`, `ok 159`, extension PASS; `render_results.py --check` OK; `git diff --check` clean.
+* **Evidence.** The tests are offline and prove behaviour only. No real Kalshi tape was fetched
+  in this round, so the venue's actual cursor, `min_ts` / `max_ts` inclusivity and page-overlap
+  behaviour are unverified. The widening and the dedupe are built to hold either way.
+
 ## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
 
 Branch `claude/exec-readiness`, commits `5dfae25` → `a016721` on top of `2414d8b`. Still not
