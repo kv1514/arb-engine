@@ -357,6 +357,48 @@ class BuyLockCallerTests(unittest.TestCase):
         self.assertEqual(blocked["status"], "blocked")                    # while new exposure stays blocked
 
 
+class NotFinalEntryTests(unittest.TestCase):
+    """With the ledger's final-evidence rule (f4b3356), an IOC entry whose create answer is
+    not final (a partial fill and no remaining quantity) has no verified fill until it is
+    reconciled: its lock leg waits, then hedges exactly what the exchange says filled."""
+
+    def test_the_lock_waits_for_reconciliation_then_hedges_the_real_fill(self):
+        from arb_engine.strategy.leadlag import LagSignal
+
+        class PartialAnswer(FakeKalshi):
+            def create_order(self, payload):
+                if not self.sent:                           # the entry: 4 of 10, no remaining quantity in the answer
+                    self.sent.append(payload)
+                    return {"order_id": "e1", "client_order_id": payload.get("client_order_id"), "fill_count": "4.00"}
+                return super().create_order(payload)
+
+            def order(self, oid):                           # what reconciliation reads: the IOC's final row
+                return {"order_id": "e1", "status": "canceled", "fill_count_fp": "4.00", "remaining_count_fp": "0.00",
+                        "taker_fill_cost_dollars": "2.400000", "taker_fees_dollars": "0.067200",
+                        "maker_fill_cost_dollars": "0.000000", "maker_fees_dollars": "0.000000"}
+
+            def fills_v2(self, **params):
+                return []
+
+        clock = Clock()
+        client = PartialAnswer(holding="4.00")
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=tmp("lag.jsonl"), ledger_path=tmp(), clock=clock)
+        sig = LagSignal(event_key=KEY, title="DEN @ KC", leader="robinhood", follower="kalshi", outcome="KC", label="Kansas City", lead_move=0.08,
+                        follower_move=0.0, leader_mid=0.675, follower_ask=0.60, follower_all_in=0.617, edge=0.058, depth=300,
+                        suggested_contracts=10, lag_s=0.0, ts=clock())
+        entry = ex.on_signal(sig, {"kalshi": [kq(KC, "KC", 0.60, clock())]})
+        self.assertIsNone(ex.ledger.get(entry["intent_id"])["fill_count"])            # not final: unverified
+        wait = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+        self.assertEqual(wait["status"], "skipped")
+        self.assertIn("the entry's fill is not verified", wait["reason"])
+        self.assertFalse(wait.get("terminal"))                                        # the lock book keeps watching
+        clock.t += 3
+        ex.reconcile(force=True)
+        self.assertEqual(ex.ledger.get(entry["intent_id"])["fill_count"], "4.00")
+        go = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+        self.assertEqual((go["status"], go["count"]), ("SUBMITTED", 4))               # exactly what filled
+
+
 class LockBookTests(unittest.TestCase):
     """strategy/laglock.py with the executor: a transient refusal keeps the watch; only a
     terminal one (attempts used up, nothing left to hedge) ends it."""
