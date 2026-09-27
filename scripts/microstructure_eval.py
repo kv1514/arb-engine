@@ -436,7 +436,7 @@ def select(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]], Any],
     """Executable decision points a rule fires on, once per contract per ``cooldown_s``."""
     last: dict[tuple, float] = {}
     out = []
-    for s in sorted(samples, key=lambda x: x["t"]):
+    for s in sorted(samples, key=lambda x: (x["t"], x["event_key"], x["book_id"], x["outcome"], x["side"], x.get("kind") or "")):
         if s.get("venue") not in EXECUTABLE or not rule(s):
             continue
         k = (s["event_key"], s["book_id"], s["outcome"], s["side"])
@@ -468,12 +468,19 @@ def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]]
     KC" and are one trade, whichever contract signalled first. The exposure is the bought
     contract itself - event, book, outcome paid on *and side* - because a Rothera YES-KC and a
     Rothera NO-DEN both pay on KC but differ on a tie ($0 vs $1). A fall with no executable
-    complement is counted, not traded."""
+    complement is counted, not traded.
+
+    Decisions at one instant are resolved together, never in the order of their names: with a
+    cooldown, per exposure the cheapest ask of the bought contract wins, then a direct buy over
+    one through a complement, and only then the decision's identity - the cooldown is applied
+    to that instant's winner after the instant is resolved. Without one every decision trades,
+    as before. Simultaneous trades are listed cheapest first."""
     last: dict[tuple, float] = {}
     out = []
     unavailable: Counter = Counter()
     dup = 0
-    for s in sorted(samples, key=lambda x: (x["t"], x["event_key"], x["book_id"], x["outcome"], x["side"], x["kind"])):
+    by_t: dict[float, list] = defaultdict(list)
+    for s in samples:
         if s.get("venue") not in EXECUTABLE:
             continue
         d = rule(s)
@@ -483,12 +490,15 @@ def select_trades(samples: list[dict[str, Any]], rule: Callable[[dict[str, Any]]
         if bc is None or bc.get("venue") not in EXECUTABLE:
             unavailable[s.get("complement_missing") or "not-executable"] += 1
             continue
-        exposure = tuple(bc["key"])
-        if cooldown_s and exposure in last and s["t"] - last[exposure] < cooldown_s:
-            dup += 1
-            continue
-        last[exposure] = s["t"]
-        out.append((s, d, bc))
+        rank = (float(bc["ask"]), 0 if d > 0 else 1, str(s["event_key"]), str(s["book_id"]), str(s["outcome"]), str(s["side"]), str(s["kind"]))
+        by_t[s["t"]].append((rank, tuple(bc["key"]), s, d, bc))
+    for t in sorted(by_t):
+        for rank, exposure, s, d, bc in sorted(by_t[t], key=lambda x: (x[0], x[1])):
+            if cooldown_s and exposure in last and t - last[exposure] < cooldown_s:
+                dup += 1                    # an earlier instant's trade, or this instant's better-ranked one
+                continue
+            last[exposure] = t
+            out.append((s, d, bc))
     return out, {"complement_unavailable": dict(unavailable), "complement_unavailable_total": sum(unavailable.values()),
                  "same_exposure_dropped": dup, "long": sum(1 for _, d, _ in out if d > 0), "via_complement": sum(1 for _, d, _ in out if d < 0)}
 
@@ -849,30 +859,44 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
         t_exit = t + lat + watch_s                                                  # when the remainder's exit is decided
         etie = tie_value(erow)
         comp_keys = [k for k in series if k[0] == key[0] and k[2] != key[2]]      # rows are normalized: any side
-        stream = sorted((r["obs_ts"], k, r) for k in comp_keys for r in series[k]
-                        if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE)
+        # The hedge watch, one instant at a time: every hedge quote observed at an instant is a
+        # candidate together - the cheapest all-in one that locks (then the larger tie payout,
+        # then the contract) is the order - never the first one in the contracts' name order.
+        stream: dict[float, list] = defaultdict(list)
+        for k in comp_keys:
+            for r in series[k]:
+                if t_in < r["obs_ts"] <= t_in + watch_s and r.get("venue") in EXECUTABLE:
+                    stream[r["obs_ts"]].append((k, r))
         locked, hedge_cost, busy_until = 0, Decimal("0"), -math.inf
         hedged_by: Counter = Counter()                                              # hedge contract -> contracts filled
-        for tt, k, r in stream:
+        for tt in sorted(stream):
             remaining = held - locked
             if remaining <= 0:
                 break
             if tt < busy_until:
                 continue                                    # the previous hedge order is still out
-            ask, cfee = r.get("ask"), fee_for_row(r)
-            if ask is None or cfee is None:
-                continue
-            leg_lat = float(vl.get(str(r.get("venue")), latency_s))
-            if tt + leg_lat + 2.0 > t_exit:
-                inv["hedges_too_late"] += 1
-                break                                       # it could not fill before the remainder is sold
-            c_all_in = float(ask) + float(cfee.fee(ask, remaining, "taker")) / remaining
-            if float(cost) / held + c_all_in > 1.0:
-                continue
-            if tie_safe:
-                ct = tie_value(r)
-                if etie is None or ct is None or etie + ct < 1.0 - 1e-9:
+            cands, late = [], 0
+            for k, r in stream[tt]:
+                ask, cfee = r.get("ask"), fee_for_row(r)
+                if ask is None or cfee is None:
                     continue
+                leg_lat = float(vl.get(str(r.get("venue")), latency_s))
+                if tt + leg_lat + 2.0 > t_exit:
+                    late += 1
+                    continue
+                c_all_in = float(ask) + float(cfee.fee(ask, remaining, "taker")) / remaining
+                if float(cost) / held + c_all_in > 1.0:
+                    continue
+                ct = tie_value(r)
+                if tie_safe and (etie is None or ct is None or etie + ct < 1.0 - 1e-9):
+                    continue
+                cands.append(((round(c_all_in, 12), -(ct if ct is not None else -1.0), k), k, r, float(ask), cfee, leg_lat))
+            if late:
+                inv["hedges_too_late"] += 1
+                break                                       # a hedge quoted now could not fill before the remainder is sold
+            if not cands:
+                continue
+            _, k, r, ask, cfee, leg_lat = min(cands, key=lambda c: c[0])
             leg, lrow = ioc_entry([x for x in series[k] if x["obs_ts"] > tt], tt, float(ask), remaining, cfee, leg_lat)
             inv["hedge_orders"] += 1
             busy_until = lrow["obs_ts"] if lrow is not None else tt + leg_lat + 2.0
@@ -944,25 +968,36 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
     """H4: moments where independent executable books' all-in asks for both outcomes sum < $1
     (each quote fresh: <= 2 s on the fast-lane venues, <= 6 s elsewhere). Each leg meets its
     own book after its own latency; the win-case, tie-case and worst-case P&L are recorded
-    (a pair whose tie payout is unknown is excluded, not guessed)."""
-    from arb_engine.quant.microdata import TIE_PRIOR, contract_key, fresh_limit, is_observation, observation_time, settlement_relation, tie_value
+    (a pair whose tie payout is unknown is excluded, not guessed).
+
+    One decision per instant, never per row: every observation received at ``t`` is installed
+    (and every contract whose rows at ``t`` conflict is voided - ``microdata.resolve_instant``)
+    before freshness, the pair, the cooldown or anything else is evaluated at ``t``, and no
+    observation after ``t`` is read to decide at ``t``. Otherwise a batch processed row by row
+    pairs one contract's new quote with the other's stale one (A .60 -> .40 and B .50 -> .70 at
+    the same instant read as a .40 + .50 arb when A's row came first). Among qualifying pairs
+    the choice is by economics - the cheapest all-in cost, then the fresher older leg, then the
+    deeper thinner leg - and only an exact economic tie falls back to the contracts' identity.
+    The legs execute against the de-duplicated series of their own contracts."""
+    from arb_engine.quant.microdata import TIE_PRIOR, contract_key, fresh_limit, observation_instants, series_by_contract, settlement_relation, tie_value
     from arb_engine.quant.paperexec import two_leg_arb
 
+    exe = [r for r in rows if r.get("venue") in EXECUTABLE]
     by_event: dict[str, list] = defaultdict(list)
-    for r in rows:
-        if r.get("venue") in EXECUTABLE and is_observation(r):
-            by_event[r["event_key"]].append((observation_time(r)[0], r))
+    for r in exe:
+        by_event[str(r.get("event_key") or "")].append(r)
     records: list[dict[str, Any]] = []
-    for ev, obs in by_event.items():
-        obs.sort(key=lambda x: x[0])
-        latest: dict[tuple, tuple[float, dict]] = {}
-        series: dict[tuple, list] = defaultdict(list)
-        for t, r in obs:
-            series[contract_key(r)].append(dict(r, obs_ts=t))
+    for ev in sorted(by_event):
+        ev_rows = by_event[ev]
+        series = series_by_contract(ev_rows)
+        latest: dict[tuple, tuple[float, Optional[dict]]] = {}
         last_fire = -math.inf
-        for t, r in obs:
-            latest[contract_key(r)] = (t, r)
-            fresh = [(k, x) for k, x in latest.items() if t - x[0] <= fresh_limit(x[1])]
+        for t, rows_t, voids in observation_instants(ev_rows):
+            for _, r in rows_t:
+                latest[contract_key(r)] = (t, r)
+            for k in voids:
+                latest[k] = (t, None)                  # ambiguous at t: not a leg until observed cleanly again
+            fresh = sorted((k, x) for k, x in latest.items() if x[1] is not None and t - x[0] <= fresh_limit(x[1]))
             outcomes = sorted({k[2] for k, _ in fresh})
             if len(outcomes) != 2 or t - last_fire < cooldown_s:
                 continue
@@ -975,18 +1010,22 @@ def arb_scan(rows: list[dict[str, Any]], fee_for_row: Callable, latency_k: float
                     if fa is None or fb is None:
                         continue
                     cost = float(ra["ask"]) + float(fa.fee(ra["ask"], seed_n, "taker")) / seed_n + float(rb["ask"]) + float(fb.fee(rb["ask"], seed_n, "taker")) / seed_n
-                    if cost < 1.0 and (best is None or cost < best[0]):
-                        best = (cost, ka, ra, fa, kb, rb, fb)
+                    if cost >= 1.0:
+                        continue
+                    depth = min(float(ra.get("ask_size") or 0.0), float(rb.get("ask_size") or 0.0))
+                    rank = (round(cost, 12), max(t - ta, t - tb), -depth, ka, kb)
+                    if best is None or rank < best[0]:
+                        best = (rank, cost, ka, ra, fa, kb, rb, fb)
             if best is None:
                 continue
             last_fire = t
-            cost, ka, ra, fa, kb, rb, fb = best
+            _, cost, ka, ra, fa, kb, rb, fb = best
             la = latency_rh if ra.get("venue") == "robinhood" else latency_k
             lb = latency_rh if rb.get("venue") == "robinhood" else latency_k
             ties = (tie_value(ra), tie_value(rb))
             rel = settlement_relation(ra, rb)          # every case but the tie (the tie is priced by ``ties``)
             compat = True if rel == "identical" else (False if rel == "mismatch" else None)
-            res = two_leg_arb([x for x in series[ka] if x["obs_ts"] > t], [x for x in series[kb] if x["obs_ts"] > t], t,
+            res = two_leg_arb([x for x in series.get(ka, []) if x["obs_ts"] > t], [x for x in series.get(kb, []) if x["obs_ts"] > t], t,
                               float(ra["ask"]), float(rb["ask"]), seed_n, fa, fb, latency_a_s=la, latency_b_s=lb, haircut=haircut,
                               tie_payouts=ties, settlement_compatible=compat, book_id_a=ka[1], book_id_b=kb[1])
             legs_filled = sum(1 for l in res.legs if l.filled)

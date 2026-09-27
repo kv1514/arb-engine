@@ -133,20 +133,21 @@ def is_observation(row: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------------------
 # streaming state per contract
 class _Book:
-    __slots__ = ("hist", "last_change_t", "last_mid", "row")
+    __slots__ = ("hist", "last_change_t", "last_mid", "row", "void")
 
     def __init__(self) -> None:
         self.hist: deque = deque()          # (t, bid, ask, mid)
         self.last_change_t: Optional[float] = None
         self.last_mid: Optional[float] = None
         self.row: Optional[dict[str, Any]] = None
+        self.void: Optional[float] = None   # the instant its latest information was ambiguous (a conflict)
 
     def push(self, t: float, row: dict[str, Any]) -> None:
         bid, ask = float(row["bid"]), float(row["ask"])
         mid = (bid + ask) / 2.0
         if self.last_mid is None or abs(mid - self.last_mid) > 1e-9:
             self.last_change_t = t
-        self.last_mid, self.row = mid, row
+        self.last_mid, self.row, self.void = mid, row, None
         self.hist.append((t, bid, ask, mid))
         while self.hist and t - self.hist[0][0] > HISTORY_S:
             self.hist.popleft()
@@ -304,20 +305,85 @@ class _Prints:
 
 
 # ---------------------------------------------------------------------------------------
-def _dedupe(rows: Iterable[dict[str, Any]]) -> list[tuple[float, int, dict[str, Any]]]:
-    """(t, approx, row) observations sorted by time, one per contract per instant: the
-    direct venue's row wins over a reseller's (Robinhood's Kalshi-routed rows)."""
-    best: dict[tuple, tuple[float, int, dict[str, Any]]] = {}
+# What one contract's observation says at an instant. Two rows of the same identity, instant
+# and route that differ in any of these disagree about the market (or about what it pays and
+# costs); rows that differ only elsewhere (request timing, source, ...) are the same
+# observation.
+SIGNATURE_FIELDS = ("bid", "ask", "bid_size", "ask_size", "tie_payout", "fee_params", "venue", "exchange", "no_of", "mirror_of")
+
+
+def _route_rank(row: dict[str, Any]) -> int:
+    """0 for the book's own venue (Kalshi direct for book ``kalshi``), 1 for a resale route
+    (Robinhood's Kalshi-routed rows show the same book)."""
+    return 0 if str(row.get("venue")) == str(row.get("book_id") or row.get("venue")) else 1
+
+
+def _signature(row: dict[str, Any]) -> str:
+    return json.dumps({k: (_f(row.get(k)) if k in ("bid", "ask", "bid_size", "ask_size", "tie_payout") else row.get(k))
+                       for k in SIGNATURE_FIELDS}, sort_keys=True, default=str)
+
+
+def resolve_instant(rows_at: list[tuple[int, dict[str, Any]]]) -> tuple[Optional[tuple[int, dict[str, Any]]], Optional[str]]:
+    """One contract's usable rows at one instant -> ((approx, row), None), or (None, why) when
+    they conflict. Deterministic whatever order the rows arrived in:
+
+    * the direct venue's rows outrank a reseller's (a Robinhood KX row never replaces the
+      Kalshi row it resells, whatever it shows);
+    * among the best route's rows, identical observations are one (a measured time outranks
+      an approximate one, then the smallest canonical JSON);
+    * rows of the best route that disagree (``SIGNATURE_FIELDS``) are a **conflict**: no
+      observation of that contract at that instant is trusted - it is no decision, leg,
+      fill or label there, and its earlier quote is not carried past that instant either
+      (``observation_instants`` reports it, consumers void the contract until its next
+      unambiguous observation). Conservative: an ambiguous instant can only remove
+      opportunities, never create one."""
+    best = min(_route_rank(r) for _, r in rows_at)
+    top = [(a, r) for a, r in rows_at if _route_rank(r) == best]
+    if len({_signature(r) for _, r in top}) > 1:
+        return None, f"{len(top)} disagreeing rows"
+    return min(top, key=lambda ar: (ar[0], json.dumps(ar[1], sort_keys=True, default=str))), None
+
+
+def _instants(rows: Iterable[dict[str, Any]]) -> tuple[list[tuple[float, int, dict[str, Any]]], list[tuple[float, tuple, str]]]:
+    """(clean observations, conflicts): one resolved row per contract per instant, sorted by
+    (time, contract), and the (time, contract, why) of every conflicted instant."""
+    groups: dict[tuple, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
     for r in rows:
         if not is_observation(r):
             continue
         t, approx = observation_time(r)
-        key = (contract_key(r), t)
-        prev = best.get(key)
-        direct = str(r.get("venue")) == str(r.get("book_id") or r.get("venue"))
-        if prev is None or (direct and str(prev[2].get("venue")) != str(prev[2].get("book_id") or prev[2].get("venue"))):
-            best[key] = (t, approx, r)
-    return sorted(best.values(), key=lambda x: (x[0], contract_key(x[2])))
+        groups[(t, contract_key(r))].append((approx, r))
+    clean, conflicts = [], []
+    for (t, key), rows_at in groups.items():
+        got, why = resolve_instant(rows_at)
+        if got is None:
+            conflicts.append((t, key, why or "conflict"))
+        else:
+            clean.append((t, got[0], got[1]))
+    clean.sort(key=lambda x: (x[0], contract_key(x[2])))
+    conflicts.sort()
+    return clean, conflicts
+
+
+def _dedupe(rows: Iterable[dict[str, Any]]) -> list[tuple[float, int, dict[str, Any]]]:
+    """(t, approx, row) observations sorted by time, one per contract per instant
+    (``resolve_instant``: the direct venue first, content-based among equals, a conflicted
+    instant left out)."""
+    return _instants(rows)[0]
+
+
+def observation_instants(rows: Iterable[dict[str, Any]]) -> list[tuple[float, list[tuple[int, dict[str, Any]]], list[tuple]]]:
+    """The observations as atomic information batches, in time order: ``(t, [(approx, row),
+    ...], [contract keys voided at t])``. A consumer installs every row of a batch - and voids
+    every conflicted contract - before it computes any feature, eligibility, choice or
+    cooldown at ``t``, and never reads a batch after ``t`` to decide at ``t``."""
+    clean, conflicts = _instants(rows)
+    by_t: dict[float, tuple[list, list]] = {}
+    for t, approx, r in clean:
+        by_t.setdefault(t, ([], []))[0].append((approx, r))
+    for t, key, _ in conflicts:
+        by_t.setdefault(t, ([], []))[1].append(key)
+    return [(t, rows_t, sorted(voids)) for t, (rows_t, voids) in sorted(by_t.items())]
 
 
 def features_at(rows: Iterable[dict[str, Any]], t: float) -> dict[tuple, dict[str, Any]]:
@@ -353,13 +419,14 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     Each sample also names its executable *complement* (``_complement``): the contract on the
     same book paying on the other outcome, as observed at the decision - never chosen with
     anything recorded later."""
-    obs = _dedupe(rows)
+    instants = observation_instants(rows)
     espn_idx, prints_idx = _Espn(espn), _Prints(prints, approx=prints_approx)
     build.print_counts = prints_idx.counts()
     books: dict[tuple, _Book] = defaultdict(_Book)
     by_contract: dict[tuple, list[tuple[float, dict[str, Any]]]] = defaultdict(list)
-    for t, _, r in obs:
-        by_contract[contract_key(r)].append((t, r))
+    for t, rows_t, _ in instants:
+        for _, r in rows_t:
+            by_contract[contract_key(r)].append((t, r))
     times = {k: [x[0] for x in v] for k, v in by_contract.items()}
     last_trigger: dict[tuple, float] = {}
     last_uncond: dict[tuple, float] = {}
@@ -367,18 +434,17 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     out: list[dict[str, Any]] = []
     fee_for_row = fee_for_row or _default_fee
     venue_latency = venue_latency or {}
-    pos = 0
-    while pos < len(obs):
-        t = obs[pos][0]
-        end = pos + 1
-        while end < len(obs) and obs[end][0] == t:
-            end += 1
-        group = obs[pos:end]
+    for t, rows_t, voids in instants:
         # One response completion is an atomic information boundary. Every contract received
-        # at exactly t is available to every decision at t, independent of key/name ordering.
-        for _, _, row in group:
+        # at exactly t is available to every decision at t, independent of key/name ordering;
+        # a contract whose rows at t disagree is void from t until its next clean observation
+        # (``resolve_instant``): no cross-book or complement use, no decision of its own.
+        for _, row in rows_t:
             books[contract_key(row)].push(t, row)
-        for _, approx, r in group:
+        for key in voids:
+            if key in books:
+                books[key].void = t
+        for approx, r in rows_t:
             key = contract_key(r)
             b = books[key]
             f = _book_features(b, t)
@@ -411,6 +477,9 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
             excluded: dict[str, int] = defaultdict(int)
             for (ev, book, oc, sd), ob in books.items():
                 if ev != key[0] or oc != key[2] or sd != key[3] or book == key[1] or not ob.hist:
+                    continue
+                if ob.void is not None:
+                    excluded["ambiguous"] += 1
                     continue
                 age = t - ob.hist[-1][0]
                 if age > fresh_limit(ob.row or {}):
@@ -476,7 +545,6 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
                 s[f"exec_{h}"] = exec_record(trade)
             for kind in kinds:
                 out.append({**s, "kind": kind})
-        pos = end
     return out
 
 
@@ -512,12 +580,15 @@ def _complement(key: tuple, t: float, my_tie: Optional[float], can_tie: bool, bo
         return None, "not-two-outcome"
     if len(seen_outcomes) != 2:
         return None, "not-two-outcome"
-    seen = stale = inexact = unknown = 0
+    seen = stale = inexact = unknown = ambiguous = 0
     best: Optional[dict[str, Any]] = None
     for k2, ob in books.items():
         if k2[0] != ev or k2[1] != book or k2[2] == oc or not ob.hist or ob.row is None:
             continue
         seen += 1
+        if ob.void is not None:            # its latest observation was a conflict: not a known quote
+            ambiguous += 1
+            continue
         age = t - ob.hist[-1][0]
         if age > fresh_limit(ob.row):
             stale += 1
@@ -542,7 +613,7 @@ def _complement(key: tuple, t: float, my_tie: Optional[float], can_tie: bool, bo
         return best, None
     if not seen:
         return None, "none-observed"
-    return None, "unknown-tie" if unknown else ("tie-inexact" if inexact else "stale")
+    return None, "unknown-tie" if unknown else ("tie-inexact" if inexact else ("ambiguous" if ambiguous else "stale"))
 
 
 def _exec_trade(series: list[tuple[float, dict[str, Any]]], t: float, ask: float, h: int, fee_model: Any, n: int,
