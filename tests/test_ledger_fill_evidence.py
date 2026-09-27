@@ -527,11 +527,57 @@ class ExchangeCorrectionTests(unittest.TestCase):
         with self.assertRaisesRegex(LedgerError, "not complete"):
             self.led.accept_correction(self.iid, CorrectionExchange(self.zero, [fill_row("f2", "o2")], filtered=False), "x")
 
-    def test_a_manual_release_refuses_an_intent_that_showed_fills(self):
+    def test_a_manual_release_only_takes_what_the_exchange_never_showed_and_only_by_its_account(self):
         with self.assertRaisesRegex(LedgerError, "showed 1 filled"):
             self.led.release(self.iid, "I checked")
-        led, iid = one_lot(final_fill="0")                                 # nothing seen filled: releasable
-        self.assertEqual(led.release(iid, "checked: never on the exchange")["state"], "rejected")
+        led, iid = one_lot(bound(), final_fill="0")                        # accepted, nothing filled: the order exists
+        with self.assertRaisesRegex(LedgerError, "is accepted"):
+            led.release(iid, "checked")
+        res = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=1, limit_price="0.50", fee_multiplier=1)
+        led.ambiguous(res.intent_id, "timeout")
+        led.bind(Identity(fingerprint("key", "demo", "X9"), None, "GET /communications/id failed"))   # a key whose account is unreadable
+        with self.assertRaisesRegex(LedgerError, "not provably the account"):
+            led.release(res.intent_id, "checked on kalshi.com")
+        self.assertEqual(led.get(res.intent_id)["state"], "ambiguous")
+        led.bind(ACCOUNT)                                                  # the sending account's own client
+        self.assertEqual(led.release(res.intent_id, "checked on kalshi.com: never placed")["state"], "rejected")
+
+    def test_a_resting_maker_order_is_never_released_and_a_restarted_maker_still_cancels_it(self):
+        """Audit H8a': a released resting order was skipped by every later reconcile and cancel,
+        and filled on the book while the ledger said $0."""
+        clock, path = Clock(1000.0), tmp()
+        client = FakeKalshi(clock)
+        a = maker(client, clock, path, owner="maker-host:101")
+        o = a.place(TICKER, "yes", 0.40, 10, watch_key=f"{KEY}|kalshi:KC", event_key=KEY, game_key=KEY)
+        with self.assertRaisesRegex(LedgerError, "is accepted"):
+            a.ledger.release(o.intent_id, "cleaning up")
+        clock.t = 1100.0
+        b = maker(client, clock, path, owner="maker-host:202", owner_alive=lambda owner: owner != "maker-host:101")
+        b.recover()
+        self.assertIn(o.order_id, client.cancels)                          # taken off the book, not orphaned
+
+    def test_kalshi_release_by_a_client_that_cannot_prove_the_account_is_refused(self):
+        """Audit H8b: `kalshi release --confirm` with a key whose account could not be read
+        released another account's unknown order (exit 0, exposure $0)."""
+        from arb_engine.cli_plugins.kalshi_ops import run_kalshi
+
+        clock = Clock(1000.0)
+        path = tmp("kalshi_demo_ledger.sqlite3")                          # where the CLI looks under ARB_ORDER_LEDGER_DIR
+        owner = FakeKalshi(clock)                                          # account A sends it; the answer is lost
+        owner.lose_answer = HttpError(0, DEMO_URL, "timeout")
+        rec = executor(owner, clock, path=path).on_signal(sig(), quotes())
+        self.assertEqual(rec["status"], "UNKNOWN")
+        stranger = FakeKalshi(clock, api_key="key-id-X9")
+        stranger.comms_error = HttpError(503, DEMO_URL, "down")
+        args = argparse.Namespace(action="release", no_account_env=True, intent_id=rec["intent_id"], reason="checked", confirm=True, status="resting")
+        out = io.StringIO()
+        with mock.patch("arb_engine.execution.kalshi.KalshiClient", return_value=stranger), \
+                mock.patch.dict(os.environ, {"ARB_ORDER_LEDGER_DIR": os.path.dirname(path)}), redirect_stdout(out):
+            self.assertEqual(run_kalshi(args), 3)
+        self.assertIn("not provably the account", out.getvalue())
+        led = OrderLedger(path, "demo", DEMO_URL, clock=clock)
+        self.assertEqual((led.get(rec["intent_id"])["state"], led.blocked() is not None), ("ambiguous", True))
+        led.close()
 
     def test_the_kalshi_correct_command_dry_runs_without_confirm(self):
         from arb_engine.cli_plugins import kalshi_ops

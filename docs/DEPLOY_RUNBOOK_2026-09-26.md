@@ -294,7 +294,9 @@ sized on the order.
 3. Add `--confirm` to book it. It is refused unless the order row is final, the fills listing
    is complete, and both agree on the lower count.
 
-`kalshi release` refuses an order an exchange answer showed filled.
+`kalshi release` refuses any order an exchange answer showed filled, and any *accepted* order
+(the exchange has it; `kalshi cancel` takes a resting one off the book, and `kalshi reconcile`
+reads it). It also refuses a client whose account cannot be proved to be the sender's.
 
 ## 9. Recovery
 

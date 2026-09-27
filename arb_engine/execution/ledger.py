@@ -1137,9 +1137,15 @@ class OrderLedger:
         """An operator's decision, after checking the exchange by hand: this open intent was
         never accepted (or is dealt with) - release its reservation. Recorded as such.
 
-        Refused for an intent that an exchange answer showed filled: releasing it would book
-        those contracts as never bought. An exchange correction goes through
-        :meth:`accept_correction` (``kalshi correct``), which books what the exchange shows."""
+        Only a pending or unknown intent - one the exchange never showed as accepted - and only
+        with a client that provably is the account that sent it (``bind`` / ``for_client``):
+        another account's check proves nothing about this one's order, the same rule as
+        :meth:`reconcile`. Refused for an intent an exchange answer showed filled (releasing it
+        would book those contracts as never bought: an exchange correction goes through
+        :meth:`accept_correction`, ``kalshi correct``) and for an accepted one - the exchange has
+        that order, which may still rest or fill; a release would drop it from the budget and
+        from every later reconcile and cancel (``kalshi reconcile`` reads it; ``kalshi cancel``
+        takes a resting one off the book)."""
         if not str(reason or "").strip():
             raise LedgerError("a manual release needs a reason")
         row = self.get(intent_id)
@@ -1150,7 +1156,14 @@ class OrderLedger:
             raise LedgerError(f"intent {intent_id}: {row.get('fill_source') or 'an exchange answer'} showed {seen} filled - a release "
                               "would book them as never bought. If the exchange corrected the fills, use `kalshi correct` (it books "
                               "what the exchange shows now)")
-        if not self.rejected(intent_id, f"released by hand: {reason}", now=now, from_states=OPEN, manual=True, was=row["state"]):
+        if row["state"] == ACCEPTED:
+            raise LedgerError(f"intent {intent_id} is accepted: the exchange has order {row.get('order_id')}, which may still rest or fill - "
+                              "a release would drop it from the budget and from every reconcile and cancel. `kalshi reconcile` reads it; "
+                              "`kalshi cancel --order-id ... --confirm` takes a resting one off the book")
+        if self._relation(row, self.identity) != "same":
+            raise LedgerError(f"intent {intent_id}: this client is not provably the account that sent it (its account could not be read, "
+                              "or it is another one) - its check of the exchange proves nothing about that order; nothing released")
+        if not self.rejected(intent_id, f"released by hand: {reason}", now=now, from_states=(PENDING, AMBIGUOUS), manual=True, was=row["state"]):
             raise LedgerError(f"intent {intent_id} changed meanwhile: nothing released")
         return self.get(intent_id) or {}
 

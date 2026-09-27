@@ -18,8 +18,10 @@ demo gates at a production host).
 * ``reconcile`` resolves the ledger's open orders against the exchange (reads only);
   ``ledger`` prints the ledger's state and its open orders; ``release --intent-id X --reason
   "..." --confirm`` releases one open intent by hand after you checked the exchange yourself
-  (the escape hatch for an order the engine cannot prove either way; recorded as such; it
-  refuses an order an exchange answer showed filled).
+  (the escape hatch for an order the engine cannot prove either way; recorded as such). It
+  takes only a pending or unknown intent - never an accepted order, which the exchange has
+  and which may still rest or fill, never one an answer showed filled - and only when this
+  client provably is the account that sent it.
 * ``correct --intent-id X --reason "..." [--confirm]``: the exchange corrected an order's
   fills (a busted trade) and the ledger holds it *contradicted* - fewer fills than an earlier
   answer showed. It re-reads the order row and its complete fills listing and, only when both

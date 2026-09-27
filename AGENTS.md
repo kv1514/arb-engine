@@ -41,7 +41,8 @@ data flow.
    listing apart, is *contradicted* - the whole worst case stays reserved, no lock leg is
    sized on it, the executor alerts - and a genuine exchange correction is booked only by an
    operator (`kalshi correct` / `OrderLedger.accept_correction`: re-read, final, complete,
-   agreeing); `kalshi release` refuses an intent that showed fills. A missing, failed,
+   agreeing); `kalshi release` takes only a pending or unknown intent (never an accepted one,
+   never one that showed fills) and only from a client provably of the sending account. A missing, failed,
    truncated or wrongly scoped read releases nothing and is read again. Writes are
    compare-and-set on the state (a stale decision never overwrites what another process
    recorded), every time handed to the ledger must be finite (a NaN passes every age check),
@@ -117,7 +118,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1142)
+python3 -m unittest discover -s tests -t .     # Python tests (1144)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
