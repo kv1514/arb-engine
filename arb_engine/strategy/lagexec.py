@@ -35,9 +35,17 @@ Demo / live orders go through the environment's durable order ledger
 * if the ledger cannot be opened or written, nothing is sent (``blocked``).
 
 Lock legs (``buy_lock``, strategy/laglock.py) are exempt from the budgets - they cut
-exposure - but only for contracts the entry verifiably filled that are not already hedged or
-unresolved, and at most ``max_lock_attempts`` times per entry, so a partial or unknown lock
-fill can never over-hedge.
+exposure - but only once they are proven hedges of their entry. ``buy_lock`` checks what
+market data can show: the quote is a Kalshi quote of the entry's market, no older than
+``lock_quote_max_age_s``, priced at or under its ask; the lock contract's settlement identity
+(the outcome it pays on, its side, its tie payout, whether the market can tie) comes from
+the settlement registry, or the lock is refused; and the exchange still holds the entry's
+contracts (``GET /portfolio/positions?ticker=``; unreadable -> refused, fewer -> capped).
+The ledger then proves the rest atomically (``execution/ledger.OrderLedger._lock_check``):
+same market and Kalshi event, the *other* outcome, complementary payoffs, no related order
+with an unknown outcome, and the remaining inventory after exits and earlier lock legs; at
+most ``max_lock_attempts`` legs per entry. Every entry records its own settlement identity
+for that proof.
 """
 
 from __future__ import annotations
@@ -50,7 +58,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
-from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, OrderLedger, quote_fee_multiplier
+from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, OrderLedger, quote_fee_multiplier, settlement_identity
 
 MODES = ("off", "intent", "demo", "live")
 BLOCK_ALERT_EVERY_S = 600.0
@@ -75,6 +83,8 @@ class LagExecutor:
     blocked_reason: Optional[str] = None  # the ledger is unusable: nothing is sent
     journal_errors: int = 0
     fee_multipliers: Any = None          # execution.ledger.FeeMultipliers on the trading client (demo/live)
+    lock_quote_max_age_s: float = 10.0   # a lock leg is priced on a quote no older than this (laglock's fresh_s)
+    verify_position: bool = True         # lock legs: the exchange must still show the entry's contracts
     _last_reconcile: float = field(default=-math.inf, repr=False)
     _last_alert: dict = field(default_factory=dict, repr=False)
 
@@ -94,7 +104,8 @@ class LagExecutor:
                 self.fee_multipliers = FeeMultipliers(self.executor.client, clock=self.clock)
             if self.ledger is None:
                 try:
-                    self.ledger = OrderLedger.for_client(self.executor.client, path=self.ledger_path, clock=self.clock)
+                    self.ledger = OrderLedger.for_client(self.executor.client, path=self.ledger_path, clock=self.clock,
+                                                         lock_quote_max_age_s=self.lock_quote_max_age_s)
                 except LedgerError as e:
                     self.blocked_reason = f"order ledger unusable: {e}"
             if self.ledger is not None:
@@ -287,13 +298,67 @@ class LagExecutor:
             out.update(status="UNKNOWN", reason="create response without an order id" if state != "unrecorded" else self.blocked_reason)
         return out
 
+    # ---- lock legs: what the caller checks before the ledger's proof --------------------
+    def _lock_quote_problem(self, quote: Any, ticker: str, price: float, event_key: str, now: float) -> Optional[str]:
+        """Why this quote cannot price a lock leg of ``event_key``'s entry, or None."""
+        if str(getattr(quote, "venue", "")).lower() != "kalshi":
+            return f"not a Kalshi quote ({getattr(quote, 'venue', None)}): the lock is sent to Kalshi"
+        if not ticker:
+            return "the quote names no Kalshi ticker"
+        if str(getattr(quote, "event_key", "") or "") != str(event_key or ""):
+            return f"unrelated market: the quote is for {getattr(quote, 'event_key', None)}, the position for {event_key}"
+        t = _quote_time(quote)
+        if t is None:
+            return "the quote has no time: its freshness cannot be shown"
+        age = now - t
+        if age > self.lock_quote_max_age_s:
+            return f"stale quote: {age:.1f}s old (max {self.lock_quote_max_age_s:g}s)"
+        if age < -2.0:
+            return f"quote time {-age:.1f}s in the future"
+        ask = _num(getattr(quote, "ask", None))
+        p = _num(price)
+        if ask is None or not 0 < ask < 1:
+            return "the quote has no ask"
+        if p is None or not 0 < p <= ask + 1e-9:
+            return f"price {price!r} is not at or under the quote's ask {ask}"
+        return None
+
+    def _exchange_holding(self, ticker: str, side: str) -> tuple[Optional[Decimal], Optional[str]]:
+        """(contracts of ``ticker``/``side`` the exchange shows this account holding, None) or
+        (None, why unreadable). Kalshi nets a market's YES and NO into one signed position."""
+        fn = getattr(self.executor.client, "positions", None)
+        if not callable(fn):
+            return None, "this client cannot read positions"
+        try:
+            res = fn(ticker=ticker)
+        except Exception as e:  # noqa: BLE001
+            status = getattr(e, "status", None)
+            return None, f"GET /portfolio/positions failed ({type(e).__name__}{f' {status}' if status is not None else ''})"
+        rows = (res or {}).get("market_positions") if isinstance(res, dict) else None
+        if not isinstance(rows, list):
+            return None, "GET /portfolio/positions answered without market_positions"
+        pos = Decimal(0)
+        for r in rows:
+            if str(r.get("ticker") or r.get("market_ticker") or "") == ticker:
+                v = r.get("position_fp") if r.get("position_fp") is not None else r.get("position")
+                try:
+                    pos = Decimal(str(v))
+                except Exception:  # noqa: BLE001
+                    return None, f"unreadable position {v!r}"
+                break
+        held = pos if str(side).lower() == "yes" else -pos
+        return max(held, Decimal(0)), None
+
     def buy_lock(self, quote: Any, count: int, price: float, event_key: str, now: Optional[float] = None,
                  parent_id: Optional[str] = None) -> Optional[dict[str, Any]]:
         """The lock leg of a filled LAG (strategy/laglock.py): an immediate-or-cancel buy of
         the other outcome's Kalshi contract at ``price``. Exempt from the notional budgets -
         it cuts exposure, and a cap that blocked it would leave the position unhedged - but
-        bounded by the entry's verified fill (``parent_id`` = the entry's intent), the lock
-        contracts already bought or unresolved, and ``max_lock_attempts``."""
+        only as a proven hedge of the entry ``parent_id``: the checks here (Kalshi quote of
+        the entry's market, fresh, priced at or under its ask; the lock contract's settlement
+        identity from the registry; the exchange still showing the entry's contracts) and
+        the ledger's (same market, other outcome, complementary payoffs, no related unknown
+        order, remaining inventory after exits and earlier lock legs, ``max_lock_attempts``)."""
         if self.mode in ("off", "intent"):
             return {"status": self.mode, "reason": "lock legs are only sent in demo / live"}
         now = self.clock() if now is None else now
@@ -311,21 +376,46 @@ class LagExecutor:
             rec.update(status="skipped", reason="lock leg without its entry intent: the inventory cannot be verified")
             self._journal(rec)
             return rec
-        mult, why = self._fee_multiplier(ticker, quote)
-        if mult is None:
-            rec.update(status="skipped", reason=why)
+
+        def skip(why: str) -> dict[str, Any]:
+            rec.update(status="skipped", reason=f"lock leg: {why}")
             self._journal(rec)
             return rec
+
+        why = self._lock_quote_problem(quote, ticker, price, event_key, now)
+        if why:
+            return skip(why)
+        parent = self.ledger.get(parent_id)
+        if parent is None:
+            return skip("unknown entry intent")
+        if str(parent.get("event_key") or "") != str(event_key):
+            return skip(f"unrelated market: the entry is in {parent.get('event_key')}, the lock quote in {event_key}")
+        sd, why = settlement_of(quote, event_key)
+        if sd is None:
+            return skip(f"unknown settlement identity ({why})")
+        rec["settlement"] = sd
+        if self.verify_position:
+            held, why = self._exchange_holding(str(parent["ticker"]), str(parent["side"]))
+            if held is None:
+                return skip(f"the entry's contracts cannot be verified on the exchange ({why})")
+            rec["exchange_holding"] = str(held)
+            if held < 1:
+                return skip(f"the exchange shows none of the entry's {parent['ticker']} {parent['side']} held")
+            count = min(int(count), int(held))
+        mult, why = self._fee_multiplier(ticker, quote)
+        if mult is None:
+            return skip(why)
         try:
             res = self.ledger.reserve(strategy="lock", ticker=ticker, side=side, count=int(count), limit_price=price, event_key=event_key,
                                       game_key=_game(event_key), parent_id=parent_id, max_lock_attempts=self.max_lock_attempts, now=now,
-                                      fee_multiplier=mult, detail={"kind": "lock"})
+                                      fee_multiplier=mult, settlement=sd, quote_ts=_quote_time(quote), detail={"kind": "lock"})
         except LedgerError as e:
             rec.update(status="blocked", reason=f"order ledger: {e}")
             self._journal(rec)
             return rec
         if not res.ok:
-            rec.update(status="skipped", reason=res.reason)
+            # Terminal when no later lock leg of this entry can pass either (the watch can end).
+            rec.update(status="skipped", reason=res.reason, terminal=("attempts already" in res.reason or "nothing left to hedge" in res.reason))
             self._journal(rec)
             return rec
         rec.update(count=res.count, intent_id=res.intent_id, client_order_id=res.client_order_id, max_cost=float(res.max_cost))
@@ -379,17 +469,19 @@ class LagExecutor:
             self._journal(rec)
             return rec
         dedupe = f"lag:{sig.event_key}:{sig.outcome}:{sig.leader}:{float(sig.ts):.3f}" if isinstance(getattr(sig, "ts", None), (int, float)) else None
-        mult, why = self._fee_multiplier(ticker, self._kalshi_quote(sig, quotes_by_venue))
+        kq = self._kalshi_quote(sig, quotes_by_venue)
+        mult, why = self._fee_multiplier(ticker, kq)
         if mult is None:
             rec.update(count=count, status="skipped", reason=why)
             self._journal(rec)
             return rec
         rec["fee_multiplier"] = str(mult)
+        entry_settlement, _ = settlement_of(kq, sig.event_key)     # recorded: a lock leg must prove itself against it
         try:
             res = self.ledger.reserve(strategy="lag", ticker=ticker, side=side, count=count, limit_price=sig.follower_ask, event_key=sig.event_key,
                                       game_key=_game(sig.event_key), dedupe_key=dedupe,
                                       budget=Budget(daily=Decimal(str(self.daily_notional)), per_game=Decimal(str(self.max_notional_per_game))),
-                                      fee_multiplier=mult, now=now,
+                                      fee_multiplier=mult, now=now, settlement=entry_settlement,
                                       detail={"leader": sig.leader, "edge": round(sig.edge, 4), "signal_ts": getattr(sig, "ts", None),
                                               "quote_age_s": rec.get("quote_age_s"), "leader_mid": getattr(sig, "leader_mid", None)})
         except LedgerError as e:
@@ -412,6 +504,66 @@ class LagExecutor:
             rec["filled_notional"] = round((filled if filled is not None else res.count) * px, 4)
         self._journal(rec)
         return rec
+
+
+# Sports whose games cannot end tied (overtime / shootout / tiebreak decide them).
+SPORTS_WITHOUT_TIES = frozenset({"ncaaf", "nba", "tennis", "mlb"})
+
+
+def can_tie(event_key: str, rule: Optional[dict] = None) -> bool:
+    """Whether a market can settle on a tie / push, which is when a pair's tie payouts matter:
+    an integer spread or total line can push, a half-point one cannot; a moneyline can tie
+    unless the sport cannot end level - or whenever the venue's rule states a tie clause.
+    Unknown sports count as able to tie."""
+    ek = str(event_key or "")
+    if ":spread:" in ek or ":total:" in ek:
+        tail = ek.rsplit(":", 1)[-1]
+        num = tail.rsplit("-", 1)[-1] if ":spread:" in ek else tail
+        try:
+            v = float(num.lstrip("+"))
+        except ValueError:
+            return True
+        return abs(v - round(v)) < 1e-9
+    if rule and rule.get("tie"):
+        return True
+    return ek.split(":", 1)[0].lower() not in SPORTS_WITHOUT_TIES
+
+
+def settlement_of(quote: Any, event_key: str) -> tuple[Optional[dict], Optional[str]]:
+    """The settlement identity of the contract ``quote`` buys (execution/ledger.
+    settlement_identity), from the settlement registry's *verified* rule for its venue and
+    market; (None, why) when there is no verified rule or a tie payout the market needs is
+    unknown. A NO row pays ``1 - tie`` on a tie."""
+    if quote is None:
+        return None, "no quote"
+    ek = str(event_key or getattr(quote, "event_key", "") or "")
+    sport = ek.split(":", 1)[0].lower()
+    mtype = "spread" if ":spread:" in ek else ("total" if ":total:" in ek else "moneyline")
+    try:
+        from ..matching.settlement_rules import rule_for_quote
+
+        rule = rule_for_quote(quote, sport, mtype)
+    except Exception as e:  # noqa: BLE001
+        return None, f"settlement rule lookup failed ({type(e).__name__})"
+    if not rule:
+        return None, f"no settlement rule for {getattr(quote, 'venue', None)} {sport} {mtype}"
+    if str(rule.get("status") or "") != "verbatim":
+        return None, f"the {getattr(quote, 'venue', None)} {sport} {mtype} rule is not verified ({rule.get('status')})"
+    side = str((getattr(quote, "meta", None) or {}).get("side") or "yes").lower()
+    tie = {"half": 0.5, "no_winner": 0.0}.get(rule.get("tie"))
+    if tie is not None and side == "no":
+        tie = 1.0 - tie
+    tied = can_tie(ek, rule)
+    if tied and tie is None:
+        return None, f"the market can tie but the {sport} {mtype} rule states no tie payout"
+    return settlement_identity(getattr(quote, "venue", ""), ek, getattr(quote, "outcome", ""), side, tie, tied), None
+
+
+def _quote_time(q: Any) -> Optional[float]:
+    """When the quote was observed: its receipt time when recorded, else its ts."""
+    meta = getattr(q, "meta", None) or {}
+    t = _num(meta.get("obs_ts")) if meta.get("obs_ts") is not None else _num(getattr(q, "ts", None))
+    return t
 
 
 def _num(x: Any) -> Optional[float]:

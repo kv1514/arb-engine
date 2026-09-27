@@ -319,10 +319,20 @@ def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: 
         ticker, price = pick_ticker(client, series_list[0]), 0.01
     ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=os.path.join(tempfile.mkdtemp(prefix="kalshi_demo_check_"), "lag.jsonl"),
                      ledger=OrderLedger.for_client(client, path=led_path), max_contracts=1, max_notional_per_game=5.0, daily_notional=5.0)
-    key = f"democheck:{ticker}"
-    sig = LagSignal(event_key=key, title="demo check", leader="robinhood", follower="kalshi", outcome="A", label=ticker, lead_move=0.05, follower_move=0.0,
+    # A real market identity: the sport of the series, the two outcomes named by the event's
+    # market suffixes. A lock leg is only ever a proven hedge of its entry (same market, the
+    # other outcome, complementary payoffs from the settlement registry).
+    sport = SERIES_SPORT.get(ticker.split("-", 1)[0].upper(), "nfl")
+    a, other = ticker.rsplit("-", 1)[-1], None
+    if fill:
+        ev = client.market(ticker).get("event_ticker")
+        others = [m for m in client.get("/markets", {"event_ticker": ev}).get("markets", []) if m.get("ticker") != ticker] if ev else []
+        other = others[0]["ticker"] if others else None
+    b = other.rsplit("-", 1)[-1] if other else "OTHER"
+    key = f"{sport}:{a}|{b}:{time.strftime('%Y-%m-%d')}"
+    sig = LagSignal(event_key=key, title="demo check", leader="robinhood", follower="kalshi", outcome=a, label=ticker, lead_move=0.05, follower_move=0.0,
                     leader_mid=min(0.99, price + 0.05), follower_ask=price, follower_all_in=price, edge=0.05, depth=1, suggested_contracts=1, lag_s=0.0, ts=time.time())
-    quotes = {"kalshi": [OutcomeQuote("kalshi", ticker, key, "A", ask=price, meta={"ticker": ticker, "side": "yes"}, ts=time.time())]}
+    quotes = {"kalshi": [OutcomeQuote("kalshi", ticker, key, a, ask=price, meta={"ticker": ticker, "side": "yes"}, ts=time.time())]}
     rec = ex.on_signal(sig, quotes)
     chk.expect(f"LAG executor sends IOC 1 x {ticker} @ {price} through the ledger", rec.get("status") == "SUBMITTED" and bool(rec.get("intent_id")),
                f"status={rec.get('status')} state={rec.get('state')} reason={rec.get('reason')} latency_ms={rec.get('latency_ms')}")
@@ -333,19 +343,22 @@ def engine_path(chk: "Check", client: KalshiClient, led_path: str, series_list: 
     chk.expect("the executor's order is reconciled from the exchange", row.get("state") == DONE, f"fill={row.get('fill_count')} cost={row.get('fill_cost')} fees={row.get('fees')}")
     if not fill or float(row.get("fill_count") or 0) < 1:
         return [i for i in ids if i]
-    # The lock leg: the other outcome of the same event, through buy_lock (inventory-bounded).
-    ev = client.market(ticker).get("event_ticker")
-    others = [m for m in client.get("/markets", {"event_ticker": ev}).get("markets", []) if m.get("ticker") != ticker] if ev else []
-    if not others:
+    # The lock leg: the other outcome of the same event, through buy_lock (a proven hedge only).
+    if not other:
         print("  no other outcome in this event: lock leg not exercised")
         return [i for i in ids if i]
-    other = others[0]["ticker"]
+    if not (ex.ledger.get(rec["intent_id"]) or {}).get("settlement"):
+        print(f"  SKIP lock leg: no verified {sport} moneyline settlement rule, so the entry has no settlement identity to hedge against")
+        return [i for i in ids if i]
+    # The exchange must show the entry's contract before a lock leg may hedge it (reads trail writes).
+    held, _ = settle(lambda: ex._exchange_holding(ticker, "yes")[0], lambda h: h is not None and h >= 1)
+    chk.expect("the exchange shows the entry's contract (GET /portfolio/positions)", held is not None and held >= 1, f"holding {held}")
     yes_book, _ = parse_orderbook(client.orderbook(other, depth=3))
     if not yes_book.asks:
         print(f"  {other} shows no ask: lock leg not exercised")
         return [i for i in ids if i]
     lock_px = float(yes_book.asks[0].price)
-    q = OutcomeQuote("kalshi", other, key, "B", ask=lock_px, meta={"ticker": other, "side": "yes"}, ts=time.time())
+    q = OutcomeQuote("kalshi", other, key, b, ask=lock_px, meta={"ticker": other, "side": "yes"}, ts=time.time())
     lock = ex.buy_lock(q, 5, lock_px, key, parent_id=rec["intent_id"])
     chk.expect("buy_lock asks only for the entry's verified fill (5 requested, 1 held)", lock.get("count") == 1 and lock.get("status") == "SUBMITTED",
                f"count={lock.get('count')} status={lock.get('status')} reason={lock.get('reason')}")
@@ -410,6 +423,10 @@ def maker_path(chk: "Check", client: KalshiClient, led_path: str, ticker: str) -
     chk.expect("after the cancel the ledger has its final state (done, nothing filled)", row.get("state") == DONE and float(row.get("fill_count") or 0) == 0,
                f"state={row.get('state')} fill={row.get('fill_count')}")
     return [o.order_id]
+
+
+# The sport of each series the demo check can trade (for the settlement registry's rule).
+SERIES_SPORT = {"KXNFLGAME": "nfl", "KXNCAAFGAME": "ncaaf", "KXNBAGAME": "nba", "KXNHLGAME": "nhl", "KXMLBGAME": "mlb"}
 
 
 def pick_ticker(client: KalshiClient, series: str) -> str:

@@ -34,8 +34,15 @@ data flow.
    processes. A ledger belongs to one Kalshi account (fingerprints of the key id and of
    `GET /communications/id`, never the identifiers): another account's client is refused,
    and an order is released as never accepted only by a client provably of the account
-   that sent it. Lock legs are bounded by the entry's verified fill and a maximum number of
-   attempts. A resting maker order is read by the process that placed it; a restarted maker
+   that sent it. A lock leg gets the budget exemption only as a proven hedge of its entry,
+   checked in two layers: the caller (`LagExecutor.buy_lock`) - a fresh Kalshi quote of the
+   entry's market priced at or under its ask, the lock contract's settlement identity from the
+   registry, the exchange still showing the entry's contracts; the ledger
+   (`OrderLedger._lock_check`, atomic with the reservation) - same market and Kalshi event,
+   the other outcome (no same-side additions), complementary payoffs (tie payouts known and
+   summing to $1 where the market can tie), no *related* order of unknown outcome (unrelated
+   ones do not stop a hedge), and the remaining inventory after exits and earlier lock legs,
+   at most a set number of attempts. A resting maker order is read by the process that placed it; a restarted maker
    cancels what a dead one left resting. A sweep counts as a shutdown only when a complete
    listing shows the book empty. Tests never write to `out/` (`tests/__init__.py` points
    `ARB_ORDER_LEDGER_DIR` at a temporary directory).
@@ -92,7 +99,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1003)
+python3 -m unittest discover -s tests -t .     # Python tests (1030)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

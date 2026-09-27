@@ -31,7 +31,27 @@ shared by every process that trades it:
    Reconciliation leaves another account's intents alone, and releases a never-seen order
    only when the reconciling client is provably the account that sent it - an order absent
    from *another* account's listing proves nothing.
-5. **Reconciliation** (:meth:`reconcile`) finds each unresolved intent on the exchange by
+5. **Lock legs are hedges, not exemptions.** A lock leg (``reserve(parent_id=...)``) skips
+   the budgets and the block of *unrelated* unknown orders, so the exemption is granted only
+   to a proven hedge. The two layers check different things:
+
+   * the caller (``strategy/lagexec.LagExecutor.buy_lock``) checks what only market data and
+     the settlement registry can show: the quote is Kalshi's, for the entry's market, fresh,
+     priced at or under its ask; the lock contract's settlement identity (outcome paid on,
+     side, tie payout, whether the market can tie) comes from the registry; and the exchange
+     still shows the entry's contracts in the account (``GET /portfolio/positions``);
+   * the ledger checks, atomically with the reservation, everything its records can prove:
+     the entry is this account's verified purchase with a recorded settlement identity; the
+     lock buys the same market (event key and Kalshi event ticker), pays on the *other*
+     outcome (never the entry's own contract or outcome), and the pair's payoffs are
+     complementary (tie payouts known and summing to at least $1 where the market can tie);
+     the quote the caller priced it on is within ``lock_quote_max_age_s``; no *related*
+     order (the entry, its locks, anything on either ticker) has an unknown outcome; and the
+     remaining inventory - the entry's fill minus exits (sells of its contract and buys of
+     the opposite side on its market since, by any strategy) minus every earlier lock leg
+     (unresolved ones at full count) - bounds the count.
+
+6. **Reconciliation** (:meth:`reconcile`) finds each unresolved intent on the exchange by
    its ``client_order_id`` (``GET /portfolio/orders?ticker=&min_ts=``, every page; Kalshi
    has no client_order_id filter) and reads each accepted order's final fills and fees
    (``GET /portfolio/orders/{id}``: ``fill_count_fp``, ``taker|maker_fill_cost_dollars``,
@@ -105,7 +125,8 @@ _SCHEMA = (
   tif TEXT NOT NULL, count INTEGER NOT NULL, limit_price TEXT NOT NULL, max_cost TEXT NOT NULL,
   state TEXT NOT NULL, order_id TEXT, fill_count TEXT, fill_cost TEXT, fees TEXT,
   req_ts REAL, resp_ts REAL, reconciled_ts REAL, checks INTEGER NOT NULL DEFAULT 0,
-  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT, fee_mult TEXT, key_fp TEXT, account_fp TEXT)""",
+  misses INTEGER NOT NULL DEFAULT 0, hint INTEGER, reason TEXT, detail TEXT, fee_mult TEXT, key_fp TEXT, account_fp TEXT,
+  settlement TEXT)""",
     """CREATE INDEX IF NOT EXISTS intents_open ON intents (state)""",
     """CREATE INDEX IF NOT EXISTS intents_day ON intents (strategy, day)""",
     """CREATE INDEX IF NOT EXISTS intents_game ON intents (strategy, game_key)""",
@@ -117,7 +138,7 @@ _SCHEMA = (
 
 
 # Columns added after the first ledgers were written (added in place on open).
-_MIGRATIONS = (("fee_mult", "TEXT"), ("key_fp", "TEXT"), ("account_fp", "TEXT"))
+_MIGRATIONS = (("fee_mult", "TEXT"), ("key_fp", "TEXT"), ("account_fp", "TEXT"), ("settlement", "TEXT"))
 
 
 class LedgerError(RuntimeError):
@@ -337,6 +358,52 @@ def client_identity(client: Any, env: Optional[str] = None) -> Identity:
     return Identity(key_fp, fingerprint("account", env, str(cid)), None)
 
 
+def kalshi_event_ticker(ticker: Any) -> Optional[str]:
+    """The Kalshi event a market ticker belongs to (``KXNFLGAME-26SEP21DENKC-KC`` ->
+    ``KXNFLGAME-26SEP21DENKC``); None for anything that is not ``SERIES-EVENT-MARKET``."""
+    parts = str(ticker or "").split("#", 1)[0].upper().split("-")
+    if len(parts) < 3 or not all(parts):
+        return None
+    return "-".join(parts[:-1])
+
+
+def _named_outcomes(event_key: str) -> Optional[set[str]]:
+    """The two outcomes a moneyline key names (``nfl:DEN|KC:2026-09-21``); None for lines."""
+    ek = str(event_key or "")
+    if ":spread:" in ek or ":total:" in ek:
+        return None
+    parts = ek.split(":")
+    if len(parts) < 3 or "|" not in parts[1]:
+        return None
+    a, _, b = parts[1].partition("|")
+    return {a, b} if a and b and a != b else None
+
+
+def settlement_identity(venue: str, event_key: str, outcome: str, side: str, tie_payout: Any, can_tie: bool) -> dict:
+    """What a contract pays, as the order ledger records it: the book (``venue``), the market
+    (``event_key``), the outcome it pays $1 on (normalized: a NO row names the team it pays
+    on), its ``side``, what it pays on a tie / push (``tie_payout``, None when unknown) and
+    whether the market can end that way at all (``can_tie``)."""
+    return {"venue": str(venue).lower(), "event_key": str(event_key), "outcome": str(outcome), "side": str(side).lower(),
+            "tie_payout": None if tie_payout is None else str(tie_payout), "can_tie": bool(can_tie)}
+
+
+def _settlement(sd: Any) -> tuple[Optional[dict], Optional[str]]:
+    """A validated settlement identity (tie payout as Decimal), or (None, why)."""
+    if not isinstance(sd, dict):
+        return None, "no settlement identity"
+    venue, ek, oc, side = (str(sd.get(k) or "") for k in ("venue", "event_key", "outcome", "side"))
+    if not venue or not ek or not oc or side.lower() not in ("yes", "no"):
+        return None, "incomplete settlement identity (venue, event_key, outcome, side)"
+    if not isinstance(sd.get("can_tie"), bool):
+        return None, "the settlement identity does not say whether the market can tie"
+    tie = sd.get("tie_payout")
+    t = _dec(tie) if tie is not None else None
+    if tie is not None and (t is None or t < 0 or t > 1):
+        return None, f"tie payout {tie!r} outside [0, 1]"
+    return {"venue": venue.lower(), "event_key": ek, "outcome": oc, "side": side.lower(), "tie_payout": t, "can_tie": sd["can_tie"]}, None
+
+
 @dataclass
 class Budget:
     """Dollars (fees included) a strategy may commit per local day and per game."""
@@ -358,9 +425,11 @@ class Reservation:
 class OrderLedger:
     def __init__(self, path: str, env: str, host: str, clock: Any = time.time, owner: Optional[str] = None,
                  pending_stale_s: float = 300.0, not_found_s: float = 30.0, settle_s: float = 2.0, max_checks: int = 120,
-                 owner_alive: Any = None) -> None:
+                 owner_alive: Any = None, lock_quote_max_age_s: float = 10.0) -> None:
         self.path, self.env, self.host, self.clock = path, str(env).lower(), str(host), clock
         self.identity = Identity(error="not bound to a client")   # set by bind() / for_client()
+        # A lock leg must be priced on a quote no older than this (the lock book's own fresh_s).
+        self.lock_quote_max_age_s = float(lock_quote_max_age_s)
         self._owner_alive = owner_alive                            # owner -> bool | None; tests and other hosts
         self.owner = owner or f"{socket.gethostname()}:{os.getpid()}"
         # HttpClient re-sends a POST up to 3 times with 20 s timeouts (+curl slack): a pending
@@ -590,14 +659,19 @@ class OrderLedger:
                 tif: str = "immediate_or_cancel", event_key: Optional[str] = None, game_key: Optional[str] = None,
                 dedupe_key: Optional[str] = None, parent_id: Optional[str] = None, budget: Optional[Budget] = None,
                 max_cost_per_contract: Any = None, fee_multiplier: Any = None, max_lock_attempts: int = 3,
-                now: Optional[float] = None, detail: Optional[dict] = None) -> Reservation:
+                now: Optional[float] = None, detail: Optional[dict] = None, settlement: Optional[dict] = None,
+                quote_ts: Optional[float] = None) -> Reservation:
         """Record an intent and reserve its worst case, atomically; a refusal records nothing
         but an event. ``count`` shrinks to what the budget has room for (at least 1).
+        ``settlement`` (:func:`settlement_identity`) records what the contract pays; an entry
+        without one can never be hedged under the lock exemption.
 
         A lock leg (``parent_id`` = the entry's intent) is exempt from the budgets and from
-        the unknown-outcome block of *other* intents - it cuts exposure - but only up to the
-        entry's verified fill minus the lock contracts already bought or still unresolved,
-        and at most ``max_lock_attempts`` times, so it can never over-hedge."""
+        the unknown-outcome block of *unrelated* intents - it cuts exposure - only once
+        :meth:`_lock_check` has proven it a hedge of that entry (see the module docstring:
+        same market, the other outcome, complementary payoffs, a fresh quote ``quote_ts``, no
+        related unknown order), and only for the entry's remaining inventory (fill minus
+        exits minus earlier lock legs), at most ``max_lock_attempts`` times."""
         now = self.clock() if now is None else float(now)
         try:
             count = int(count)
@@ -617,6 +691,11 @@ class OrderLedger:
         if per is None and mult is None:
             # Without the market's multiplier the fee - and so the worst case - is not bounded.
             return Reservation(False, "fee multiplier of the market unknown: the fee cannot be bounded")
+        sd = None
+        if settlement is not None:
+            sd, why = _settlement(settlement)
+            if sd is None:
+                return Reservation(False, f"settlement identity rejected: {why}")
         day = self.day_of(now)
 
         def txn(c: sqlite3.Connection) -> Reservation:
@@ -628,22 +707,9 @@ class OrderLedger:
                     self._event(c, now, None, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
                     return Reservation(False, why)
             else:
-                parent = c.execute("SELECT * FROM intents WHERE intent_id = ?", (parent_id,)).fetchone()
-                inv = _dec(parent["fill_count"]) if parent is not None and parent["state"] in (ACCEPTED, DONE) else None
-                if inv is None:
-                    why = "lock leg: the entry's fill is not verified" if parent is not None else "lock leg: unknown entry intent"
-                    self._event(c, now, parent_id, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
-                    return Reservation(False, why)
-                locks = c.execute("SELECT * FROM intents WHERE parent_id = ?", (parent_id,)).fetchall()
-                if len(locks) >= max_lock_attempts:
-                    why = f"lock leg: {len(locks)} attempts already (max {max_lock_attempts})"
-                    self._event(c, now, parent_id, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
-                    return Reservation(False, why)
-                committed = sum((self._contracts_committed(r) for r in locks), ZERO)
-                room_ct = int((inv - committed).to_integral_value(ROUND_FLOOR))
-                if room_ct <= 0:
-                    why = f"lock leg: {committed} of {inv} contracts already hedged or unresolved"
-                    self._event(c, now, parent_id, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
+                room_ct, why, inventory = self._lock_check(c, parent_id, ticker, side, action, settlement, quote_ts, now, max_lock_attempts)
+                if room_ct is None:
+                    self._event(c, now, parent_id, "refused", strategy=strategy, ticker=ticker, count=count, reason=why, **inventory)
                     return Reservation(False, why)
                 n = min(n, room_ct)
             if dedupe_key and c.execute("SELECT 1 FROM intents WHERE dedupe_key = ?", (dedupe_key,)).fetchone():
@@ -671,16 +737,97 @@ class OrderLedger:
             iid, coid = uuid.uuid4().hex, str(uuid.uuid4())
             c.execute("""INSERT INTO intents (intent_id, client_order_id, dedupe_key, strategy, parent_id, env, host, owner,
                 created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail,
-                fee_mult, key_fp, account_fp)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                fee_mult, key_fp, account_fp, settlement)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                       (iid, coid, dedupe_key, strategy, parent_id, self.env, self.host, self.owner, now, now, day, event_key,
                        game_key, ticker, action, side, tif, n, str(limit), str(max_cost), PENDING,
-                       json.dumps(detail or {}, default=str, sort_keys=True), _s(mult), self.identity.key_fp, self.identity.account_fp))
+                       json.dumps(detail or {}, default=str, sort_keys=True), _s(mult), self.identity.key_fp, self.identity.account_fp,
+                       json.dumps({**sd, "tie_payout": _s(sd["tie_payout"])}, sort_keys=True) if sd is not None else None))
             self._event(c, now, iid, "reserved", count=n, requested=count, limit=str(limit), max_cost=str(max_cost), room=_s(room),
                         fee_multiplier=_s(mult))
             return Reservation(True, intent_id=iid, client_order_id=coid, count=n, max_cost=max_cost, room=room)
 
         return self._write(txn)
+
+    def _lock_check(self, c: sqlite3.Connection, parent_id: str, ticker: str, side: str, action: str, settlement: Any,
+                    quote_ts: Optional[float], now: float, max_attempts: int) -> tuple[Optional[int], Optional[str], dict]:
+        """(contracts the lock leg may buy, None, inventory) when it is a proven hedge of the
+        entry ``parent_id``; (None, why, inventory) otherwise. Runs inside the reservation's
+        transaction, so the inventory it counts cannot change before the intent is written."""
+        def no(why: str, **info: Any) -> tuple[None, str, dict]:
+            return None, f"lock leg: {why}", info
+
+        parent = c.execute("SELECT * FROM intents WHERE intent_id = ?", (parent_id,)).fetchone()
+        if parent is None:
+            return no("unknown entry intent")
+        if parent["parent_id"]:
+            return no("the entry is itself a lock leg")
+        if str(parent["action"]).lower() != "buy":
+            return no("the entry is not a purchase")
+        if str(action).lower() != "buy":
+            return no("a lock leg buys the other outcome; selling is an exit, not a hedge")
+        fill = _dec(parent["fill_count"]) if parent["state"] in (ACCEPTED, DONE) else None
+        if fill is None:
+            return no("the entry's fill is not verified")
+        if self._relation(parent, self.identity) != "same":
+            return no("the entry was not sent by this account (or its account cannot be verified): its contracts are not this client's to hedge")
+        psd, why = _settlement(json.loads(parent["settlement"]) if parent["settlement"] else None)
+        if psd is None:
+            return no(f"the entry's settlement identity is unknown ({why}): it cannot be hedged under the exemption")
+        lsd, why = _settlement(settlement)
+        if lsd is None:
+            return no(f"unknown settlement identity of the lock contract ({why})")
+        # The same market: same book, same event key, same Kalshi event.
+        if lsd["venue"] != psd["venue"]:
+            return no(f"unrelated book: {lsd['venue']} is not the entry's {psd['venue']}")
+        if lsd["event_key"] != psd["event_key"] or (parent["event_key"] and parent["event_key"] != psd["event_key"]):
+            return no(f"unrelated market: {lsd['event_key']} is not the entry's {psd['event_key']}")
+        pev, lev = kalshi_event_ticker(parent["ticker"]), kalshi_event_ticker(ticker)
+        if pev is None or lev is None or pev != lev:
+            return no(f"unrelated market: {ticker} is not in the entry's Kalshi event {pev or parent['ticker']}")
+        # The other outcome, never more of the entry's own.
+        if ticker == parent["ticker"] and str(side).lower() == str(parent["side"]).lower():
+            return no("same-side addition: the lock buys the entry's own contract")
+        if lsd["outcome"] == psd["outcome"]:
+            return no(f"same-side addition: the lock pays on the entry's own outcome {psd['outcome']}")
+        named = _named_outcomes(psd["event_key"])
+        if named is not None and not {psd["outcome"], lsd["outcome"]} <= named:
+            return no(f"outcome not of this market: {sorted({psd['outcome'], lsd['outcome']} - named)}")
+        # Complementary payoffs: $1 when either outcome wins; on a tie / push, the two tie payouts.
+        if psd["can_tie"] or lsd["can_tie"]:
+            if psd["tie_payout"] is None or lsd["tie_payout"] is None:
+                return no("unknown settlement identity: what the pair pays on a tie is unknown")
+            pays = psd["tie_payout"] + lsd["tie_payout"]
+            if pays < Decimal(1) - Decimal("1e-9"):
+                return no(f"not complementary: the pair pays ${pays} on a tie, less than the $1 it pays otherwise")
+        # A fresh quote.
+        if quote_ts is None:
+            return no("no quote time: the price it was decided on cannot be shown fresh")
+        age = now - float(quote_ts)
+        if age > self.lock_quote_max_age_s:
+            return no(f"stale quote: {age:.1f}s old (max {self.lock_quote_max_age_s:g}s)")
+        if age < -2.0:
+            return no(f"quote time {-age:.1f}s in the future")
+        # No related order whose outcome is unknown (an unrelated one does not stop a hedge).
+        related = [r for r in self._unknown(c, now)
+                   if r["intent_id"] == parent_id or r["parent_id"] == parent_id or r["ticker"] in (parent["ticker"], ticker)]
+        if related:
+            return no(f"{len(related)} related order(s) with unknown outcome ({related[0]['strategy']} {related[0]['ticker']}): the inventory cannot be verified")
+        locks = c.execute("SELECT * FROM intents WHERE parent_id = ?", (parent_id,)).fetchall()
+        if len(locks) >= max_attempts:
+            return no(f"{len(locks)} attempts already (max {max_attempts})")
+        # Remaining inventory: fill - exits since the entry (any strategy) - every lock leg.
+        exits_rows = c.execute(
+            """SELECT * FROM intents WHERE ticker = ? AND intent_id != ? AND state != 'rejected' AND created_ts >= ?
+               AND ((action = 'sell' AND side = ?) OR (action = 'buy' AND side != ? AND COALESCE(parent_id, '') != ?))""",
+            (parent["ticker"], parent_id, parent["created_ts"], parent["side"], parent["side"], parent_id)).fetchall()
+        exits = sum((self._contracts_committed(r) for r in exits_rows), ZERO)
+        hedged = sum((self._contracts_committed(r) for r in locks), ZERO)
+        info = {"fill": str(fill), "exits": str(exits), "hedged": str(hedged)}
+        room = int((fill - exits - hedged).to_integral_value(ROUND_FLOOR))
+        if room <= 0:
+            return None, f"lock leg: nothing left to hedge (filled {fill}, exited {exits}, hedged or unresolved {hedged})", info
+        return room, None, info
 
     @staticmethod
     def _contracts_committed(r: Any) -> Decimal:
