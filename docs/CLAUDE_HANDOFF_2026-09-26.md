@@ -17,6 +17,8 @@ commits are listed in merge order:
 6. *H4 same-timestamp ordering* (`5480dfc`).
 7. *Fill evidence only grows* (`8522074`, 2026-09-27): the ledger defects from the audit of
    `bf7d2d5`. **Not deployed**; the GitHub clone still runs `bf7d2d5`.
+8. *Historical trade tapes, round 3* (`d161cf0`, 2026-09-27): a second review's findings, in
+   the trade-tape section. Research code only; nothing the live stack runs.
 
 Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
 
@@ -805,11 +807,12 @@ only).
    kept at the limit plus the fee bound". On Kalshi's real answers they should not appear. If
    they persist, run `python3 -m arb_engine kalshi reconcile`.
 
-## Historical trade tapes (`c2cd4d8`, review fixes `faaf6c0`, session c1ab42)
+## Historical trade tapes (`c2cd4d8`, review fixes `faaf6c0` and `d161cf0`, session c1ab42)
 
 `arb_engine/venues/trades.py` is the **research** tape client used by `event-study`. The live
 recorder's print poller (`strategy/fastlane.py`) is a separate client and is unchanged. The
-fix is on branch `claude/trades-cache` off `claude/exec-readiness` `c13a49c`.
+work is on branch `claude/trades-cache`; round 3 (`d161cf0`) sits on `claude/exec-readiness`
+`f496d78`.
 
 ### What was wrong (reproduced at `c13a49c` through the public API only)
 
@@ -827,22 +830,36 @@ A fake of the cursor-paginated trades endpoint serving 30 prints over 3 pages:
 | `"NaN"` price string | parsed as `nan` | row rejected |
 | old cache file, offline | served, completeness unknown | never served; the error names it |
 
-### The rules now
+### The rules now (after round 3)
 
-* **Completeness is explicit.** Tapes carry schema 2, `complete`, `reason`, `pages`, `next_cursor`,
-  `seen_cursors`, `duplicates`, `rejected` and `restarts`. Only a complete tape is returned.
-* **Resuming.** The page budget running out, a failed page, a cursor the venue repeats, or
-  unreadable rows keep an incomplete tape and raise `IncompleteTape`. The next call resumes from
-  the saved cursor with its own budget. A saved cursor the venue rejects (HTTP 4xx) restarts
-  from the top and merges by trade id. Progress is checkpointed every 10 pages and on every
-  stop, and every write is atomic.
-* **Deduplication.** Kalshi prints are deduplicated by `trade_id`. The same id with a different
-  payload is a conflict. A row without an id, of another ticker, or with a non-finite time,
-  price or size is rejected, and a tape with rejected rows is never complete.
+* **Completeness is explicit.** Tapes carry schema 3, `complete`, `reason`, `pages`,
+  `next_cursor`, `seen_cursors`, `pass_started_at`, `duplicates`, `rejected` and `restarts`.
+  Only a complete tape is returned, online or offline.
+* **Closed windows only.** A tape is complete only if `max_ts` is set and at least `settle_s`
+  (default **15 min**) before the pass's first page. An open or open-ended window is refused
+  before any request. The margin covers late publication by the venue and a local clock running
+  ahead; the rule trusts the local clock to within it.
+* **Resuming.** The page budget running out, a failed page or a crash keep an incomplete tape
+  and raise `IncompleteTape`; the next call resumes from the saved cursor with its own budget.
+  It starts a fresh pass instead when:
+  * the venue rejects the cursor (HTTP 400/404/410/422; 429/401/403/408 keep it);
+  * the saved pass began before the close by this client's margin, or later than now;
+  * the pass ended on a repeated cursor, a conflict or unreadable rows.
+  Progress is checkpointed after page 1 and every 10 pages, and every write is atomic.
+* **Fresh passes are judged alone.** A fresh pass starts empty and is not compared with earlier
+  passes: the venue's current answer is the tape.
+* **Deduplication.** Kalshi prints are deduplicated by `trade_id` within a pass. The same id
+  with a different payload in one pass raises `ConflictingTrades` once; the next consistent pass
+  heals. A row is rejected, and its tape is never complete, if it has no id, belongs to another
+  ticker, or has a time, price or size that is missing or non-finite, a price outside [0, 1], or
+  a size that is not positive.
 * **Windows.** `min_ts` and `max_ts` must be finite, with min ≤ max. The API window is widened
   by a second on each side and trimmed exactly.
-* **Cache keys.** `<venue>-<market>-<sha256 of the exact query>`, and the stored query is
-  checked again on every read.
+* **Cache files.** `<venue>-<market>-<sha256 of the exact query>`. On every read,
+  `trades.tape_from_doc` checks the query, every field's type and range, and for a complete tape
+  the closed-window rule with the reader's `settle_s`. Writes hold a per-tape `flock` (opened
+  read-only, waited on for at most 30 s); a complete tape that cannot be cached is returned
+  with a logged warning.
 * **Polymarket.** No new features: a used-up page budget raises instead of being cached as
   complete. There is no dedupe (a transaction hash can carry several prints) and no resume.
 
@@ -856,13 +873,13 @@ still served as complete. All are fixed:
   fetch took that (or an error object, or a page without a cursor) as the last page. It now
   requires a `trades` list and a string `cursor`; anything else is a failed page.
 * **Open windows (High).** A window still open when fetched was cached as complete forever.
-  Now a tape is complete only if `max_ts` is set and at least 60 s (`settle_s`) before the
-  pass's first page. An open or open-ended window is never complete, and a pass begun while
-  the window was open is redone by a fresh pass. Since `max_ts` bounds the query, a pass over a
-  closed window reads a fixed set, which is what makes resuming sound.
-* **Fresh passes (Medium).** A fresh pass now starts empty; old prints only serve as conflict
-  evidence. Phantom prints no longer survive, and a single conflict no longer wedges every
-  later call.
+  Now a tape is complete only if `max_ts` is set and at least `settle_s` (60 s in round 2,
+  15 min since round 3) before the pass's first page. An open or open-ended window is never
+  complete. Since `max_ts` bounds the query, a pass over a closed window reads a fixed set,
+  which is what makes resuming sound.
+* **Fresh passes (Medium).** A fresh pass now starts empty, so phantom prints no longer survive
+  and a single conflict no longer wedges every later call. (Round 2 still used old prints as
+  conflict evidence; round 3 dropped that.)
 * **4xx on resume (Medium).** Only HTTP 400/404/410/422 restart the pass; 429/401/403/408 keep
   the cursor.
 * **Polymarket key (Medium).** Polymarket's `condition_id` is now part of the key.
@@ -879,25 +896,100 @@ still served as complete. All are fixed:
 **Evidence:**
 
 * The reviewer's scripts show each fix.
-* Its fuzz: 1,500 seeds, 32,317 calls, 3,030 kills mid-fetch and 1,592 inside the atomic write,
-  **0 violations**.
+* Its fuzz with every window closed (`r12b`): 1,500 of 1,500 seeds complete, 623 kills
+  mid-fetch and 356 inside the atomic write, **0 violations**. (An earlier figure here, 32,317
+  calls, came from its first fuzz, where only 1,047 of 1,500 seeds could complete because the
+  rest used `max_ts=None`.)
 * A threaded closed-window run: 4,596 complete tapes, 0 wrong, 0 downgrades.
+
+### Round 3: a second review of `faaf6c0`, fixed in `d161cf0`
+
+The same reviewer attacked the round-2 logic (`audit_scratch/tapes_review/s01`–`s08`). It found
+one Medium and five Lows, all fixed:
+
+* **Complete files were never re-checked (Medium).** `_read` accepted any `complete: true` file
+  whose fields type-checked. Round-1 files (cut short by an empty 200 body, or fetched while the
+  window was open) were served as complete, offline and online, and the migration script called
+  them current. Now:
+  * the schema is 3, so schema 2 files are not read and an offline miss names them;
+  * a complete file needs `max_ts`, and a pass start that closes the window under the reader's
+    `settle_s`;
+  * `store_complete` needs a window closed now.
+* **The closed-window margin (Low).**
+  * `settle_s` must be finite and ≥ 0 (NaN or −120 used to make an open window "closed").
+  * The default is 15 min instead of 60 s.
+  * An open window is refused before any request; round 2 paged the whole tape first.
+  * A saved pass is resumed only if it began after the close and not later than now, so a
+    doomed pass is no longer resumed to its end and then redone.
+  * A non-finite clock is refused.
+* **Conflict evidence across passes (Low).** A permanent correction raised twice before
+  healing, or never, depending on how `max_pages` split the pass, and a 503 erased the evidence.
+  Evidence is now kept within one pass only (see *The rules now*).
+* **The lock (Low).**
+  * A read-only lock file used to block every save; the lock is now opened read-only.
+  * `flock` could wait forever; it now waits at most `lock_timeout_s` (30 s).
+  * A complete tape that could not be cached was silently not cached; it now logs a warning.
+  * The docstring now says that without `fcntl` (Windows) the guard is best effort.
+* **The validator (Low).** A stored price `"0.5"` was served as text and broke
+  `as_home_prices`. Prices, sizes and times must now be numbers, prices in [0, 1], Kalshi sizes
+  above 0, and side and trade id text; the parsers reject the same rows.
+* **The migration script (Low).** It looked only at `schema`. It now:
+  * runs the client's own checks (`tape_from_doc`) and prints what fails;
+  * checks that each file name is the key of its query;
+  * moves schema 2 files;
+  * refuses `--to` equal to `--cache-dir` (which used to rename files in place on every run).
+* **Info.** `event-study --max-pages 0` was ignored and `-1` escaped as a traceback; both are
+  usage errors now.
+
+**Evidence (reviewer scripts re-run on `d161cf0`):**
+
+* `s01`: round-1 files are no longer served; offline names the old file; the migration dry run
+  lists them.
+* `s03`: a correction raises `ConflictingTrades` once, then 30 of 30. A split pass, a whole pass
+  and a 503 then retry all end complete at the corrected price.
+* `s04`:
+  * 5 processes: 0 wrong, 0 downgrades.
+  * 6 threads: 0 wrong, 0 downgrades.
+  * Without `fcntl`: 19 downgrades (documented as best effort).
+  * With a read-only lock file, saves work.
+* `s05`: 0 of 400-plus code-written files rejected, and no mutation to text or out-of-range
+  values is accepted. Mutations to other valid values (another in-window time, a price of 0 or
+  1, another side string) are served as written.
+* `s07` (live venue, 400 seeds each), with no lag, a clock 30 s slow, lag ≤ 45 s, lag ≤ 150 s
+  and a clock 120 s fast: **0 wrong tapes each**. Round 2 had 86 and 89 wrong in the last two.
+  The margin's limit (200 seeds each): lag ≤ 600 s and a clock 600 s fast give 0 wrong; lag
+  ≤ 1,500 s gives 162 wrong and a clock 1,200 s fast gives 88. Lag plus clock skew must stay
+  under `settle_s`.
+* `s08`: an open window costs 0 requests. The doomed-pass case takes 10 requests instead of 20.
+  `--max-pages 0` and `-1` exit 2.
+* `r3_margin_and_resume.py`:
+  * a saved pass stamped 10,000 s ahead is not resumed;
+  * the margin edge is exact (900.0 s closed, 899.999999 s open);
+  * `store_complete` refuses open and open-ended windows.
 
 ### Cache migration and invalidation
 
-* **Old files are never used.** Files named `<venue>-<market>-<int>-<int>.json`, with no
-  `schema`, cannot show whether their fetch ran out of pages. Online they are ignored and the
-  tape is fetched whole under the new key. Offline, `event-study --offline` exits and names
-  the old file. Nothing is deleted automatically.
+* **Older files are never used.** This covers two kinds of file:
+  * the pre-schema format (`<venue>-<market>-<int>-<int>.json`), which cannot show whether its
+    fetch ran out of pages;
+  * schema 2 files (rounds 1 and 2), which were never re-checked against the closed-window rule.
+
+  Online, the tape is fetched whole under the schema 3 key. Offline, `event-study --offline`
+  exits and names the old file. Nothing is deleted automatically.
 * **Rebuild offline replays online, after the window has closed.** Run each event study once
-  without `--offline`, at least a minute after the window's end. `event-study`'s window ends
-  30 minutes after the game's last recorded row, so wait at least that long. A Kalshi tape
-  longer than the page budget (default 50 pages) stops with "page budget … used up"; run the
-  same command again and it resumes. A Polymarket tape cannot resume, so raise `--max-pages`
-  instead.
-* **Move unusable files aside** with the script. It dry-runs by default, handles errors file
-  by file, never overwrites, and never deletes. It moves old-format, unreadable and non-object
-  `.json` files and leaves current ones and dot-files alone:
+  without `--offline`, at least 15 minutes (`settle_s`) after the window's end. `event-study`'s
+  window ends 30 minutes after the game's last recorded row, so wait at least **45 minutes** after
+  it; earlier, the command exits with the time the window counts as closed. A Kalshi tape longer
+  than the page budget (default 50 pages) stops with "page budget … used up"; run the same
+  command again and it resumes. A Polymarket tape cannot resume, so raise `--max-pages` instead.
+* **Move unusable files aside** with the script. It dry-runs by default, handles errors file by
+  file, never overwrites, and never deletes. Using the client's own checks, it moves:
+  * old-format and schema 2 files;
+  * schema 3 files that fail a check, or whose name is not their query's key;
+  * unreadable and non-object `.json` files.
+
+  It leaves current complete and resumable files, and dot-files, alone. `--to` must not be the
+  cache directory.
 
   ```bash
   python3 scripts/migrate_trade_cache.py --cache-dir out/cache/trades --to out/cache/trades-legacy
@@ -911,9 +1003,9 @@ still served as complete. All are fixed:
 * **Fixtures.** `TradesClient.store_complete(venue, market, min_ts, max_ts, trades)` validates
   and records a tape known to be complete. `tests/test_tickreplay.py` uses it.
 
-### Tests and validation (on `faaf6c0`)
+### Tests and validation (on `faaf6c0`; round 3 below)
 
-* **New tests.** `tests/test_trade_tapes.py` (35) covers:
+* **New tests.** `tests/test_trade_tapes.py` (35 at `faaf6c0`, 41 at `d161cf0`) covers:
   * the page budget, and a second request with a larger budget and with the same budget;
   * failed pages (HTTP and non-HTTP);
   * restart from a checkpoint after the process was killed;
@@ -930,7 +1022,18 @@ still served as complete. All are fixed:
     * 4xx statuses on resume;
     * the Polymarket condition id;
     * damaged cache files, `store_complete` input, and an unwritable cache;
-    * the late-writer guard, the migration script, and the CLI.
+    * the late-writer guard, the migration script, and the CLI;
+  * round 3:
+    * open windows refused before any request;
+    * saved passes that cannot end complete not resumed;
+    * a complete file re-checked with the reader's margin;
+    * bad margins, timeouts and clocks;
+    * fresh passes judged alone;
+    * text or out-of-range print fields;
+    * a read-only lock file, a stuck lock, and the uncached-tape warning;
+    * schema 2 files;
+    * the migration script's checks and its `--to` guard;
+    * `--max-pages` usage errors.
 * **The old code.** It has no `IncompleteTape`, so the new file cannot import there. The
   behavioural proof is the reproduction above: `repro_trades.py` in the session scratchpad,
   using only `kalshi_trades` and `parse_kalshi_trade`.
@@ -939,9 +1042,18 @@ still served as complete. All are fixed:
   `store_complete`.
 * **Validation.** **1101 Python tests OK** (with `5480dfc`'s evaluator work); JS parity 3650 fee + 54 arb vectors, 0 mismatches,
   `ok 3769`, `ok 159`, extension PASS; `render_results.py --check` OK; `git diff --check` clean.
+* **Round 3 (`d161cf0`).**
+  * **Against `f496d78`, 13 of the 41 tests fail**: 10 on behaviour, and 3 because they use the
+    new `lock_timeout_s` / `schema=` parameters. For those three the old behaviour is shown by
+    `s01` (round-1 files served) and `s04` (a lock without a timeout).
+  * **1142 Python tests OK** (118 s); the 14 ResourceWarnings are the same test-code sites as
+    before, none from the tape code.
+  * JS parity 3650 fee + 54 arb vectors, 0 mismatches, `ok 3769`, `ok 159`, extension PASS;
+    `render_results.py --check` OK; `git diff --check` clean.
 * **Evidence.** The tests are offline and prove behaviour only. No real Kalshi tape was fetched
-  in this round, so the venue's actual cursor, `min_ts` / `max_ts` inclusivity and page-overlap
-  behaviour are unverified. The widening and the dedupe are built to hold either way.
+  in any round, so the venue's actual cursor, `min_ts` / `max_ts` inclusivity, page-overlap
+  behaviour and publication lag are unverified. The widening and the dedupe are built to hold
+  either way; the 15-minute margin is an assumption about lag and clock skew, not a measurement.
 
 ## H4 same-timestamp ordering: one instant, one decision (`5480dfc`, session 89f99c)
 
