@@ -1,10 +1,10 @@
 # Engine audit and execution handoff — 2026-09-26
 
 Repo: `/Users/kv15/Documents/ChatGPT/arbitradge`, branch **`claude/exec-readiness`** (created
-this session from `claude/order-buttons` @ `a8b9246`). Not pushed. Not merged into the GitHub
-clone (`~/Documents/GitHub/arb-engine`) that runs the live stack. That clone's `main`
-(`3ca9684` at 13:00 PT, moved by another session this afternoon) is an ancestor of this branch,
-so deploying is a fast-forward. The original prompt for this session is kept at the end.
+this session from `claude/order-buttons` @ `a8b9246`). Not pushed. **Deployed at `bf7d2d5`** to
+the GitHub clone (`~/Documents/GitHub/arb-engine`) that runs the live stack, at 19:27 PDT, as a
+fast-forward from `3ca9684` (see *Deployed* below). The original prompt for this session is kept
+at the end.
 
 **Sections added on the evening of 2026-09-26.** Each was written by its own session; code
 commits are listed in merge order:
@@ -15,6 +15,74 @@ commits are listed in merge order:
 4. *Ledger evidence* (`f4b3356`).
 
 Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
+
+## Deployed: `bf7d2d5` on the GitHub clone (19:27 PDT, session db5ad6)
+
+The runbook was followed step by step, except the power check. Execution stays on Kalshi
+**demo**; nothing turned production on.
+
+* **Power (step 0.4) failed and was overridden.**
+  * The Mac was on battery: 14 %, 1 h 08 min left, Low Power Mode on.
+  * The deploy adds no order risk. A stopped stack sends nothing, and the new code records
+    every order in the ledger before sending it.
+  * **Plug the Mac in.** `caffeinate -i` stops neither a battery shutdown nor lid-closed sleep.
+* **Backups (step 1).**
+  * `~/Documents/arb-backups/2026-09-26/{arbitradge-all,arb-engine-all}.bundle`, both verified.
+    The uncommitted-work patch is empty.
+  * The rollback point is the local tag `pre-deploy-2026-09-26` → `3ca9684` in the clone.
+* **Demo account before the stop (step 2).**
+  * 0 resting orders (not truncated).
+  * 8 open positions from the day's LAG entries: OKST 50 / WVU 50, TROY 28 / USU 24,
+    ARIZ 28 / WSU 6, MSST 145, USC 120.
+  * Cash $5.32, portfolio $237.24.
+  * No LAG fill in the 10 minutes before the stop.
+* **Stop (step 3).** 18:47:08–18:47:19: all five down, no engine process, `caffeinate` gone.
+  0 resting after the stop.
+* **Fast-forward (step 4).**
+  * `main` moved from `3ca9684` to `bf7d2d5` (50 files), and the tree is clean.
+  * Suite: `Ran 1054 tests in 114.685s`, **OK**.
+  * JS: fee vectors 3650 / 0 mismatches, arb vectors 54 / 0, `ok 3769`, `ok 159`, extension PASS.
+    Render check OK.
+  * No new `sunday.sh start` orphans (only the four known ones).
+  * **The suite process ran 21 minutes wall-clock** (18:47:38–19:08:57).
+    * Discovery takes 0.3 s, so about 19 minutes came after the last test, at ~98 % CPU. The
+      likely cause is a non-daemon thread spinning at interpreter shutdown.
+    * No demo order was created in that window.
+    * Not investigated further; it doubled this deploy's downtime.
+* **Start (step 5).**
+  * `BANKROLL=500 KELLY=0.25 scripts/sunday.sh start -- --execute-lag demo`, 19:27:29–19:27:40.
+  * Preflight: GO WITH WARNINGS (9 pass, 3 warn). The warnings: no NFL game today, so no ESPN
+    matches; the bridge was not up yet.
+  * The stack was down for 40 minutes in total, mostly for the slow suite.
+* **Verify (step 6).**
+  * **Processes.** All five up, started 19:27:33–19:27:40, with cwd = the clone at `bf7d2d5`.
+  * **Environment.** `live` and `live-ncaaf` carry `KALSHI_ENV=demo` and none of
+    `ARB_LIVE_TRADING` / `ARB_BUTTON_MODE` / `KALSHI_BASE_URL` / `EXECUTABLE_VENUES`.
+  * **Logs.** `LAG execution: demo (caps: 50 ct/order, $100/game, $500/day)` twice.
+  * **Sleep.** `caffeinate -i -w` holds on the new live supervisor.
+  * **Keys.** `~/.kalshi` holds `demo.key` and `env` only; `kalshi_connect.py --env demo` PASS.
+  * **Ledger.** `kalshi ledger`: env demo, `blocked` None, 0 intents. It is bound to the demo
+    account by fingerprint (`meta.account_fp`).
+  * **Recovery.** Each live process journaled a `recover` row (`reconciled: []`, `blocked: null`).
+  * **Errors.** No Traceback, UNKNOWN or EXEC ERROR since the start.
+* **Demo order check (step 7).** Not re-run from the clone. Session 89f99c ran it on a clean
+  export of `bf7d2d5` at 18:44–18:45: ALL PASS, plain and `--fill`. See *Ledger evidence →
+  Validation*.
+* **Watch the demo cash.**
+  * With $5.32 left, most of the stack's demo orders will be refused for lack of balance until
+    the demo account is topped up. `LagExecutor` does not read the balance before sending.
+  * **Each refusal starts as UNKNOWN.**
+    * An exception from the create call is booked as **ambiguous**, with the HTTP status as
+      its `hint` (`lagexec.py` `_send`).
+    * The executor pushes "LAG auto-trade (demo) outcome unknown", and new LAG orders are
+      blocked.
+  * **The next complete order listing without the order releases it as `rejected`**
+    (`ledger.py` `_reconcile_one`):
+    * after 2 s for a 4xx other than 409/429;
+    * otherwise after 30 s and two listings.
+  * Demo's intermittent HTTP 500s on reads can stretch a block.
+  * Top up the demo account, or run `--execute-lag intent`, to avoid a stream of these.
+  * The runbook's step 8 (first hour) applies as written.
 
 ## Deployment audit (17:10 PDT): what runs, what the runtime files say, how to deploy
 
