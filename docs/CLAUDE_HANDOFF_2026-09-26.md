@@ -612,7 +612,7 @@ only).
    kept at the limit plus the fee bound". On Kalshi's real answers they should not appear. If
    they persist, run `python3 -m arb_engine kalshi reconcile`.
 
-## Historical trade tapes (`c2cd4d8`, session c1ab42)
+## Historical trade tapes (`c2cd4d8`, review fixes `faaf6c0`, session c1ab42)
 
 `arb_engine/venues/trades.py` is the **research** tape client used by `event-study`. The live
 recorder's print poller (`strategy/fastlane.py`) is a separate client and is unchanged. The
@@ -653,29 +653,74 @@ A fake of the cursor-paginated trades endpoint serving 30 prints over 3 pages:
 * **Polymarket.** No new features: a used-up page budget raises instead of being cached as
   complete. There is no dedupe (a transaction hash can carry several prints) and no resume.
 
+### Round 2: an independent review of `c2cd4d8`, fixed in `faaf6c0`
+
+A reviewer that had not seen the implementation tried to break it
+(`audit_scratch/tapes_review` in the session scratchpad). It found ways a truncated tape was
+still served as complete. All are fixed:
+
+* **Malformed pages (High).** The real `HttpClient` returns `{}` for an empty 200 body, and the
+  fetch took that (or an error object, or a page without a cursor) as the last page. It now
+  requires a `trades` list and a string `cursor`; anything else is a failed page.
+* **Open windows (High).** A window still open when fetched was cached as complete forever.
+  Now a tape is complete only if `max_ts` is set and at least 60 s (`settle_s`) before the
+  pass's first page. An open or open-ended window is never complete, and a pass begun while
+  the window was open is redone by a fresh pass. Since `max_ts` bounds the query, a pass over a
+  closed window reads a fixed set, which is what makes resuming sound.
+* **Fresh passes (Medium).** A fresh pass now starts empty; old prints only serve as conflict
+  evidence. Phantom prints no longer survive, and a single conflict no longer wedges every
+  later call.
+* **4xx on resume (Medium).** Only HTTP 400/404/410/422 restart the pass; 429/401/403/408 keep
+  the cursor.
+* **Polymarket key (Medium).** Polymarket's `condition_id` is now part of the key.
+* **Lows:**
+  * an unwritable cache now says progress was not saved;
+  * `event-study` exits with the reason, and has `--max-pages`;
+  * cache files are validated field by field;
+  * `store_complete` validates its input;
+  * conflicts just outside the window are caught;
+  * a migration script replaces the one-liner.
+* **Concurrency.** A per-tape `flock` around the "never replace a complete file" check and the
+  write took a threaded run from 93 downgrades to 0.
+
+**Evidence:**
+
+* The reviewer's scripts show each fix.
+* Its fuzz: 1,500 seeds, 32,317 calls, 3,030 kills mid-fetch and 1,592 inside the atomic write,
+  **0 violations**.
+* A threaded closed-window run: 4,596 complete tapes, 0 wrong, 0 downgrades.
+
 ### Cache migration and invalidation
 
 * **Old files are never used.** Files named `<venue>-<market>-<int>-<int>.json`, with no
-  `schema` key, cannot say whether their fetch ran out of pages. Online they are ignored
-  and the tape is fetched whole under the new key. Offline, `event-study --offline` fails and
-  names the old file. Nothing is deleted automatically.
-* **Rebuild offline replays.** Run each event study once **online**, without `--offline`. A tape
-  longer than the page budget (50 pages, 50,000 prints) stops with "page budget … used up";
-  run the same command again and it resumes.
-* **Move old files aside once new tapes exist.** This moves only files that have no `schema`:
+  `schema`, cannot show whether their fetch ran out of pages. Online they are ignored and the
+  tape is fetched whole under the new key. Offline, `event-study --offline` exits and names
+  the old file. Nothing is deleted automatically.
+* **Rebuild offline replays online, after the window has closed.** Run each event study once
+  without `--offline`, at least a minute after the window's end. `event-study`'s window ends
+  30 minutes after the game's last recorded row, so wait at least that long. A Kalshi tape
+  longer than the page budget (default 50 pages) stops with "page budget … used up"; run the
+  same command again and it resumes. A Polymarket tape cannot resume, so raise `--max-pages`
+  instead.
+* **Move unusable files aside** with the script. It dry-runs by default, handles errors file
+  by file, never overwrites, and never deletes. It moves old-format, unreadable and non-object
+  `.json` files and leaves current ones and dot-files alone:
 
   ```bash
-  mkdir -p out/cache/trades-legacy && python3 -c "import json,os,glob,shutil; [shutil.move(p, 'out/cache/trades-legacy/') for p in glob.glob('out/cache/trades/*.json') if 'schema' not in json.load(open(p))]"
+  python3 scripts/migrate_trade_cache.py --cache-dir out/cache/trades --to out/cache/trades-legacy
   ```
 
-* **Invalidating one tape.** Delete its file; its name starts with `<venue>-<market>-`.
-  `IncompleteTape.tape` and `TradesClient.kalshi_tape` expose the record.
-* **Fixtures.** `TradesClient.store_complete(venue, market, min_ts, max_ts, trades)` records a
-  tape known to be complete. `tests/test_tickreplay.py` uses it.
+  Add `--apply` to move the files it lists.
+* **Invalidating one tape.** Delete its `.json` file. The name starts with a sanitised, possibly
+  shortened `<venue>-<market>` prefix followed by a digest of the exact query; a dot-file
+  `.lock` beside it is only the write lock. `IncompleteTape.tape` and `TradesClient.kalshi_tape`
+  expose the record.
+* **Fixtures.** `TradesClient.store_complete(venue, market, min_ts, max_ts, trades)` validates
+  and records a tape known to be complete. `tests/test_tickreplay.py` uses it.
 
-### Tests and validation (on `c2cd4d8`)
+### Tests and validation (on `faaf6c0`)
 
-* **New tests.** `tests/test_trade_tapes.py` (20) covers:
+* **New tests.** `tests/test_trade_tapes.py` (35) covers:
   * the page budget, and a second request with a larger budget and with the same budget;
   * failed pages (HTTP and non-HTTP);
   * restart from a checkpoint after the process was killed;
@@ -684,14 +729,22 @@ A fake of the cursor-paginated trades endpoint serving 30 prints over 3 pages:
   * overlap and same-second dedupe, conflicts and rejected rows;
   * window edges, key collisions, a mismatched stored query and non-finite windows;
   * old files online and offline;
-  * atomic writes, shuffled pages, and the Polymarket budget.
+  * atomic writes, shuffled pages, and the Polymarket budget;
+  * round 2:
+    * malformed pages, including the real client's empty body;
+    * open and still-open windows;
+    * phantom removal and conflict healing;
+    * 4xx statuses on resume;
+    * the Polymarket condition id;
+    * damaged cache files, `store_complete` input, and an unwritable cache;
+    * the late-writer guard, the migration script, and the CLI.
 * **The old code.** It has no `IncompleteTape`, so the new file cannot import there. The
   behavioural proof is the reproduction above: `repro_trades.py` in the session scratchpad,
   using only `kalshi_trades` and `parse_kalshi_trade`.
 * **Changed tests.** `test_trades`' window test now asks for its fixture's own ticker (the old
   code had filed another ticker's prints under `"T"`), and `test_tickreplay` seeds with
   `store_complete`.
-* **Validation.** **1074 Python tests OK**; JS parity 3650 fee + 54 arb vectors, 0 mismatches,
+* **Validation.** **1101 Python tests OK** (with `5480dfc`'s evaluator work); JS parity 3650 fee + 54 arb vectors, 0 mismatches,
   `ok 3769`, `ok 159`, extension PASS; `render_results.py --check` OK; `git diff --check` clean.
 * **Evidence.** The tests are offline and prove behaviour only. No real Kalshi tape was fetched
   in this round, so the venue's actual cursor, `min_ts` / `max_ts` inclusivity and page-overlap
