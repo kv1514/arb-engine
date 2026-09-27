@@ -37,7 +37,8 @@ git -C "$GH" worktree list          # only $GH itself
   first written: the lock-leg proof (`75a17e0`), the watch-key audit (`91ab70d`, merged in
   `58aa18f`) and the ledger evidence rules (`f4b3356`).
 * **The last validation on the combined code** was at `f4b3356`: 1053 Python tests, JS
-  parity and the render check. The demo check has **not** been re-run on it: run step 7.
+  parity and the render check. The demo check (plain and `--fill`) passed on `bf7d2d5` at
+  18:44 PDT. Run it again after deploying (step 7); it needs about $2 of demo play money.
   Docs-only commits after it change nothing to deploy.
 * Pin the hash so a later commit cannot slip in:
 

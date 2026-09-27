@@ -489,9 +489,24 @@ On `f4b3356`, which is `04639ac` plus this commit:
 * Unchanged: the fee formulas (`fees/`), `fee_bound`, and every gate (host and environment,
   account binding, budgets, lock proof).
 
-**The Kalshi demo check was not run in this round,** and no demo order was placed. The reads it
-exercises were checked GET-only against the 331 real rows and 39 fills above. Run it on the
-combined tip before deploying (runbook step 7).
+**Kalshi demo check on `bf7d2d5`: ALL PASS on both runs** (18:44–18:45 PDT, demo play money
+only).
+
+* **Plain run.** Lost-answer recovery, the LAG executor's IOC and the maker's resting bid all
+  reconciled to `done`, with 0 filled.
+* **`--fill --confirm-demo` run.**
+  * The LAG entry (1 @ $0.57) and step 7's fill reconciled from the exchange at $0.57 plus a
+    $0.0172 fee: centicent, and within the $0.02 bound.
+  * Step 7's fill reached `done` on its first read. The order row and a complete fills listing
+    agreed: 1 fill, $0.0172.
+  * The lock leg was bounded to the 1 contract held, and a second lock was refused.
+  * Everything was sold back, and 0 orders were resting at the end.
+* **Cost.** The check's 6 fills cost $0.13 of play money in spread and fees. A read-only
+  before/after comparison showed nothing of the check left open, and none of the running
+  stack's positions changed in that window.
+* **The demo account is nearly out of play money.** It held $5.45 before the check, because
+  the live stack's evening LAG entries hold 8 positions (about $225). The check itself needs
+  about $2.
 
 ### Gaps
 
@@ -511,9 +526,9 @@ combined tip before deploying (runbook step 7).
 
 ### Next steps
 
-1. **Run the demo check on the combined tip.** Run `python3 scripts/kalshi_demo_check.py`,
-   then `--fill --confirm-demo`; expect ALL PASS. Afterwards `kalshi ledger` should show no
-   `held` rows.
+1. **Demo check: done on `bf7d2d5`, ALL PASS on both runs** (see *Validation*). Run it again
+   after deploying (runbook step 7). The demo account had $5.45 of play money left, so wait
+   for open positions to settle first.
 2. **Deploy with the runbook**, with `DEPLOY` = the tip; the code was validated at `f4b3356`.
 3. **In the first hour, watch for `accepted` rows** whose reason reads "… filled, no …: fills
    kept at the limit plus the fee bound". On Kalshi's real answers they should not appear. If
