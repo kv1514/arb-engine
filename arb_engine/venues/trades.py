@@ -15,41 +15,52 @@ around a model move needs (candles blur the first 30 s of repricing):
 This is the *historical* tape for research. The live recorder's print poller
 (``strategy/fastlane.py``) is a different client and does not use this cache.
 
-**Completeness is explicit.** Every cached tape (``out/cache/trades/<venue>-<market>-<digest>.json``,
-schema ``TAPE_SCHEMA``) says whether it is ``complete``: the venue's pagination ran to its end
-(Kalshi: an empty cursor; Polymarket: a short page or a page older than ``min_ts``), no row was
-unreadable, and no trade id came back with two different payloads. Only a complete tape is
-ever returned. A page budget (``max_pages``) that runs out, a failed page request, a cursor the
-venue repeats, or a restart mid-fetch leaves an *incomplete* tape on disk with where to resume
-(``next_cursor``, the cursors already seen, the trades so far) and raises
-:class:`IncompleteTape`. The next call for the same query resumes from there with its own page
-budget instead of starting over; a saved cursor the venue no longer accepts (HTTP 4xx) restarts
-the pagination from the top and merges by trade id. ``offline=True`` never fetches: it returns a
-complete cached tape or raises.
+**Only a complete tape is returned**, online or offline; anything else raises
+:class:`IncompleteTape` (carrying what is known so far as ``.tape``). A Kalshi tape is complete
+when, in one *pass* (a pagination from the newest page to an empty cursor):
 
-**Kalshi prints are deduplicated by ``trade_id``.** Overlapping pages (a resumed cursor, a
-restart, prints sharing a second at a page boundary) keep one copy; the same id with a
-different payload raises :class:`ConflictingTrades` and nothing is cached as complete. A print
-without a trade id, or with an unreadable time, price or size, is counted as rejected and keeps
-the tape from being complete. (Polymarket prints are not deduplicated: one transaction hash
-can carry several prints.)
+* every page was a well-formed answer (a JSON object with a ``trades`` list and a string
+  ``cursor``; anything else - an empty body, an error object - is a failed page, never the end);
+* no row was unreadable (no trade id, another ticker, a non-finite or missing time, price or
+  size) and no trade id came back with two payloads (:class:`ConflictingTrades`);
+* the window was **closed** when the pass began: ``max_ts`` is set and is at least
+  ``settle_s`` (60 s) before the pass's first page was fetched. A window still open, or an
+  open-ended one (``max_ts=None``), can gain prints, so it is never complete (and, because the
+  query's ``max_ts`` bounds what the venue returns, a pass over a closed window reads a set that
+  can no longer change, which is what makes a resumed pass sound).
 
-**Windows.** ``min_ts`` / ``max_ts`` are exact float seconds and must be finite. Kalshi's query
-takes whole seconds, so the request is widened by a second on each side and trimmed locally
-to the exact window: a print in the window's first or last second is never lost to rounding.
+The page budget (``max_pages``) running out, a failed page, a saved cursor the venue repeats,
+or a restart mid-fetch leave an incomplete tape on disk and raise :class:`IncompleteTape`. The
+next call continues the same pass from the saved cursor with its own budget; a saved cursor
+the venue rejects as unknown (HTTP 400/404/410/422) starts a fresh pass. A repeated cursor, a
+conflict, an open window or unreadable rows also end the pass, and the next call starts a fresh
+one. A fresh pass starts empty - prints of an earlier pass are used only to detect a changed
+payload, never carried into the new tape - so a print the venue no longer reports does not
+survive. Progress is checkpointed after the first page and every ``checkpoint_every`` pages;
+writes are atomic, and an incomplete state never overwrites a complete file.
 
-**Cache keys** hash the exact query (venue, market, the float window, the schema), so two
-windows that round to the same whole seconds, or two market names that sanitise alike, never
-share a file; the stored query is checked again on every read. Files are written atomically.
+**Kalshi prints are deduplicated by ``trade_id``** (overlapping pages, a resumed cursor,
+prints sharing a second at a page boundary); the same id with a different payload, inside or
+just outside the window, raises :class:`ConflictingTrades`. Polymarket prints are not
+deduplicated (one transaction hash can carry several prints), and, as before, a Polymarket
+row that cannot be read is skipped; its pass cannot resume (offsets shift as prints arrive).
 
-**Old cache files** (``<venue>-<market>-<int min>-<int max>.json``, no schema) cannot say whether
-their fetch ran out of pages, so they are never served: online they are ignored and the tape is
-fetched again under the new key; offline the error names the old file. See
-docs/CLAUDE_HANDOFF_2026-09-26.md ("Historical trade tapes") for the migration.
+**Windows.** ``min_ts`` / ``max_ts`` are exact finite seconds (not bools). Kalshi's query takes
+whole seconds, so the request is widened by a second each side and trimmed to the exact window.
+
+**Cache keys** hash the exact query (venue, market, window, Polymarket ``condition_id``,
+schema); the file name keeps a sanitised prefix of ``<venue>-<market>`` for humans (possibly
+shortened), and the stored query and every stored field are checked again on read: a file
+that fails any check is not used.
+
+**Old cache files** (no schema) cannot say whether their fetch ran out of pages, so they are
+never served: online the tape is fetched again under the new key; offline the error names the
+old file. ``scripts/migrate_trade_cache.py`` moves them aside.
 """
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import json
@@ -59,16 +70,23 @@ import re
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from ..matching.normalize import parse_iso
 from .http import HttpClient, HttpError
+
+try:  # POSIX advisory locks (stdlib); without them the check-then-write below is best effort
+    import fcntl
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2"
 POLY_DATA = "https://data-api.polymarket.com"
 KALSHI_PAGE = 1000
 POLY_PAGE = 500
 TAPE_SCHEMA = 2
+SETTLE_S = 60.0                         # a window is closed once its end is this far behind the pass's start
+STALE_CURSOR_STATUS = (400, 404, 410, 422)
 
 
 @dataclass
@@ -91,9 +109,8 @@ class TapeError(RuntimeError):
 
 
 class IncompleteTape(TapeError):
-    """The tape is not known to be complete: the page budget ran out, a page failed, the
-    venue repeated a cursor, rows were unreadable, or (offline) only a partial or old-format
-    cache exists. ``tape`` is what is known so far (never to be used as the whole tape)."""
+    """The tape is not known to be complete (see the module docstring). ``tape`` is what is
+    known so far - never to be used as the whole tape."""
 
     def __init__(self, message: str, tape: Optional["Tape"] = None):
         super().__init__(message)
@@ -113,17 +130,21 @@ class Tape:
     trades: list[Trade] = field(default_factory=list)
     complete: bool = False
     reason: str = ""                    # why not complete ("" when complete)
-    pages: int = 0                      # pages fetched for this tape, over every call
-    next_cursor: Optional[str] = None   # Kalshi: where an incomplete fetch resumes
+    pages: int = 0                      # pages fetched in the current pass, over every call
+    next_cursor: Optional[str] = None   # Kalshi: where the current pass resumes (None: start a fresh pass)
     seen_cursors: list[str] = field(default_factory=list)
+    pass_started_at: float = 0.0        # when the current pass fetched its first page
     duplicates: int = 0                 # overlapping copies of a trade id dropped
-    rejected: int = 0                   # rows without a trade id or with an unreadable time / price / size
-    restarts: int = 0                   # times the pagination restarted from the top
+    rejected: int = 0                   # rows without a trade id, of another ticker, or with an unreadable time / price / size
+    restarts: int = 0                   # passes started over because the venue no longer knew the saved cursor
     fetched_at: float = 0.0
+    condition_id: Optional[str] = None  # Polymarket: the market filter the query used
 
 
 def _f(x: Any) -> Optional[float]:
-    """A finite float, or None (``float('nan')`` and ``'inf'`` are not numbers here)."""
+    """A finite float, or None (``float('nan')``, ``'inf'`` and bools are not numbers here)."""
+    if isinstance(x, bool):
+        return None
     try:
         v = float(x) if x is not None and x != "" else None
     except (TypeError, ValueError):
@@ -157,32 +178,49 @@ def parse_polymarket_trade(t: dict[str, Any]) -> Optional[Trade]:
     return Trade(venue="polymarket", market=str(t.get("asset") or ""), ts=ts, price=price, size=_f(t.get("size")) or 0.0, side=str(t.get("side") or ""), trade_id=str(t.get("transactionHash") or t.get("id") or ""))
 
 
-def _window(min_ts: Optional[float], max_ts: Optional[float]) -> tuple[Optional[float], Optional[float]]:
-    out = []
+def _window(min_ts: Any, max_ts: Any) -> tuple[Optional[float], Optional[float]]:
+    out: list[Optional[float]] = []
     for name, v in (("min_ts", min_ts), ("max_ts", max_ts)):
         if v is None:
             out.append(None)
             continue
+        if isinstance(v, bool):
+            raise ValueError(f"{name} {v!r} is not a timestamp")
         try:
             f = float(v)
         except (TypeError, ValueError):
             raise ValueError(f"{name} {v!r} is not a number") from None
         if not math.isfinite(f):
             raise ValueError(f"{name} {v!r} is not finite")
-        out.append(f)
+        out.append(f + 0.0)            # -0.0 and 0.0 are one window
     if out[0] is not None and out[1] is not None and out[0] > out[1]:
         raise ValueError(f"min_ts {out[0]} is after max_ts {out[1]}")
     return out[0], out[1]
 
 
-def _query(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float]) -> dict[str, Any]:
-    return {"schema": TAPE_SCHEMA, "venue": venue, "market": str(market), "min_ts": min_ts, "max_ts": max_ts}
+def _pages(max_pages: Any) -> int:
+    if isinstance(max_pages, bool):
+        raise ValueError(f"max_pages {max_pages!r} is not a page count")
+    try:
+        n = int(max_pages)
+    except (TypeError, ValueError):
+        raise ValueError(f"max_pages {max_pages!r} is not a page count") from None
+    if n != max_pages or n < 1:
+        raise ValueError(f"max_pages must be a whole number of pages, at least 1 (got {max_pages!r})")
+    return n
 
 
-def _cache_key(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float]) -> str:
-    """``<venue>-<market>-<digest of the exact query>``: the readable part is sanitised, the
-    digest is not, so neither rounded windows nor look-alike market names can collide."""
-    digest = hashlib.sha256(json.dumps(_query(venue, market, min_ts, max_ts), sort_keys=True).encode()).hexdigest()[:24]
+def _query(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], condition_id: Optional[str] = None) -> dict[str, Any]:
+    q: dict[str, Any] = {"schema": TAPE_SCHEMA, "venue": venue, "market": str(market), "min_ts": min_ts, "max_ts": max_ts}
+    if condition_id is not None:
+        q["condition_id"] = str(condition_id)
+    return q
+
+
+def _cache_key(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], condition_id: Optional[str] = None) -> str:
+    """``<sanitised venue-market prefix>-<digest of the exact query>``: the prefix is for humans
+    (and may be shortened); the digest, not the prefix, tells tapes apart."""
+    digest = hashlib.sha256(json.dumps(_query(venue, market, min_ts, max_ts, condition_id), sort_keys=True).encode()).hexdigest()[:24]
     return re.sub(r"[^A-Za-z0-9_.-]", "_", f"{venue}-{market}")[:80] + f"-{digest}"
 
 
@@ -192,46 +230,117 @@ def _legacy_cache_key(venue: str, market: str, min_ts: Optional[float], max_ts: 
     return re.sub(r"[^A-Za-z0-9_.-]", "_", raw)
 
 
+def _check_trades(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], trades: Iterable[Any]) -> list[Trade]:
+    """The trades of one tape, validated: right venue and market, finite values inside the
+    window, and (Kalshi) one per trade id. Raises ValueError on the first violation."""
+    out: list[Trade] = []
+    ids: set[str] = set()
+    for t in trades:
+        if not isinstance(t, Trade):
+            raise ValueError(f"not a Trade: {t!r}")
+        if t.venue != venue or t.market != str(market):
+            raise ValueError(f"trade {t.trade_id!r} is of {t.venue} {t.market!r}, not {venue} {market!r}")
+        if any(_f(v) is None for v in (t.ts, t.price, t.size)):
+            raise ValueError(f"trade {t.trade_id!r} has a non-finite or missing time, price or size")
+        if (min_ts is not None and t.ts < min_ts) or (max_ts is not None and t.ts > max_ts):
+            raise ValueError(f"trade {t.trade_id!r} at {t.ts} is outside the window [{min_ts}, {max_ts}]")
+        if venue == "kalshi":
+            if not t.trade_id or t.trade_id in ids:
+                raise ValueError(f"kalshi trade id {t.trade_id!r} is missing or repeated")
+            ids.add(t.trade_id)
+        out.append(t)
+    return sorted(out, key=lambda t: (t.ts, t.trade_id))
+
+
 class TradesClient:
-    def __init__(self, http: Optional[HttpClient] = None, cache_dir: str = "out/cache/trades", offline: bool = False):
+    def __init__(self, http: Optional[HttpClient] = None, cache_dir: str = "out/cache/trades", offline: bool = False,
+                 clock: Callable[[], float] = time.time, settle_s: float = SETTLE_S):
         self.http = http or HttpClient(rate_limit=6)
         self.cache_dir = cache_dir
         self.offline = offline
+        self.clock = clock
+        self.settle_s = float(settle_s)
+        self.last_store_error: Optional[str] = None
 
     # ---- cache -----------------------------------------------------------------------
     def _cache_path(self, key: str) -> str:
         return os.path.join(self.cache_dir, key + ".json")
 
-    def _load(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float]) -> Optional[Tape]:
-        """The cached tape for exactly this query, complete or not; None when there is none
-        (or the file is unreadable, of another schema, or of another query)."""
-        p = self._cache_path(_cache_key(venue, market, min_ts, max_ts))
+    def _path_for(self, tape: Tape) -> str:
+        return self._cache_path(_cache_key(tape.venue, tape.market, tape.min_ts, tape.max_ts, tape.condition_id))
+
+    def _read(self, path: str, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float],
+              condition_id: Optional[str]) -> Optional[Tape]:
+        """The tape stored at ``path`` for exactly this query, after checking every field;
+        None when the file is missing, unreadable, of another schema or query, or fails a check."""
         try:
-            with open(p, encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 doc = json.load(f)
         except (OSError, ValueError):
             return None
-        if not isinstance(doc, dict) or doc.get("schema") != TAPE_SCHEMA or doc.get("query") != _query(venue, market, min_ts, max_ts):
-            return None
         try:
-            trades = [Trade(**t) for t in doc.get("trades") or []]
-        except TypeError:
+            if not isinstance(doc, dict) or doc.get("schema") != TAPE_SCHEMA or doc.get("query") != _query(venue, market, min_ts, max_ts, condition_id):
+                return None
+            complete = doc.get("complete")
+            ints = {k: doc.get(k, 0) for k in ("pages", "duplicates", "rejected", "restarts")}
+            if type(complete) is not bool or any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in ints.values()):
+                return None
+            nxt, seen = doc.get("next_cursor"), doc.get("seen_cursors") or []
+            if (nxt is not None and not isinstance(nxt, str)) or not isinstance(seen, list) or not all(isinstance(c, str) for c in seen):
+                return None
+            started, fetched = _f(doc.get("pass_started_at", 0.0)), _f(doc.get("fetched_at", 0.0))
+            if started is None or fetched is None or not isinstance(doc.get("trades"), list):
+                return None
+            trades = _check_trades(venue, market, min_ts, max_ts, [Trade(**t) if isinstance(t, dict) else t for t in doc["trades"]])
+            if complete and (nxt is not None or ints["rejected"]):
+                return None
+        except (TypeError, ValueError):
             return None
-        return Tape(venue=venue, market=str(market), min_ts=min_ts, max_ts=max_ts, trades=trades, complete=bool(doc.get("complete")),
-                    reason=str(doc.get("reason") or ""), pages=int(doc.get("pages") or 0), next_cursor=doc.get("next_cursor") or None,
-                    seen_cursors=[str(c) for c in doc.get("seen_cursors") or []], duplicates=int(doc.get("duplicates") or 0),
-                    rejected=int(doc.get("rejected") or 0), restarts=int(doc.get("restarts") or 0), fetched_at=float(doc.get("fetched_at") or 0.0))
+        return Tape(venue=venue, market=str(market), min_ts=min_ts, max_ts=max_ts, trades=trades, complete=complete,
+                    reason=str(doc.get("reason") or ""), pages=ints["pages"], next_cursor=nxt, seen_cursors=list(seen),
+                    pass_started_at=started, duplicates=ints["duplicates"], rejected=ints["rejected"], restarts=ints["restarts"],
+                    fetched_at=fetched, condition_id=condition_id)
+
+    def _load(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], condition_id: Optional[str] = None) -> Optional[Tape]:
+        return self._read(self._cache_path(_cache_key(venue, market, min_ts, max_ts, condition_id)), venue, market, min_ts, max_ts, condition_id)
+
+    @contextlib.contextmanager
+    def _locked(self, path: str):
+        """One writer at a time per tape, across threads and processes (a dot-file lock beside it)."""
+        if fcntl is None:
+            yield
+            return
+        lock = os.path.join(os.path.dirname(path), "." + os.path.basename(path) + ".lock")
+        fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
 
     def _store(self, tape: Tape) -> None:
-        """Write the tape atomically (a crash leaves the previous file, never half of one)."""
-        doc = {"query": _query(tape.venue, tape.market, tape.min_ts, tape.max_ts), "schema": TAPE_SCHEMA, **{k: v for k, v in asdict(tape).items() if k != "trades"},
-               "trades": [asdict(t) for t in tape.trades]}
+        """Write the tape atomically (a crash leaves the previous file, never half of one). An
+        incomplete state never replaces a complete file of the same query (a late writer): the
+        check and the write happen under the tape's lock."""
+        path = self._path_for(tape)
         os.makedirs(self.cache_dir, exist_ok=True)
-        path = self._cache_path(_cache_key(tape.venue, tape.market, tape.min_ts, tape.max_ts))
+        with self._locked(path):
+            if not tape.complete:
+                have = self._read(path, tape.venue, tape.market, tape.min_ts, tape.max_ts, tape.condition_id)
+                if have is not None and have.complete:
+                    return
+            self._write(path, tape)
+
+    def _write(self, path: str, tape: Tape) -> None:
+        doc = {"query": _query(tape.venue, tape.market, tape.min_ts, tape.max_ts, tape.condition_id), "schema": TAPE_SCHEMA,
+               **{k: v for k, v in asdict(tape).items() if k not in ("trades", "condition_id")}, "trades": [asdict(t) for t in tape.trades]}
         fd, tmp = tempfile.mkstemp(dir=self.cache_dir, prefix=".tape-", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(doc, f)
+                json.dump(doc, f, allow_nan=False)
             os.replace(tmp, path)
         except BaseException:
             try:
@@ -240,38 +349,59 @@ class TradesClient:
                 pass
             raise
 
-    def _try_store(self, tape: Tape) -> None:
-        """Cache the tape if the directory is writable; a fetch is not lost to a full disk."""
+    def _try_store(self, tape: Tape) -> bool:
+        """Cache the tape if possible; a fetch is not lost to an unwritable directory, but the
+        failure is kept (``last_store_error``) and named in any resume advice."""
         try:
             self._store(tape)
-        except OSError:
-            pass
+            self.last_store_error = None
+            return True
+        except (OSError, ValueError) as e:
+            self.last_store_error = f"{type(e).__name__}: {e}"
+            return False
 
-    def store_complete(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], trades: Iterable[Trade]) -> Tape:
-        """Record a tape known to be complete (a fixture, or one checked by hand) for offline use."""
+    def _resume_advice(self, saved: bool) -> str:
+        return ("call again to resume from the saved state" if saved else
+                f"progress could NOT be saved ({self.last_store_error}): the next call starts again - fix the cache directory {self.cache_dir}")
+
+    def store_complete(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], trades: Iterable[Trade],
+                       condition_id: Optional[str] = None) -> Tape:
+        """Record a tape known to be complete (a fixture, or one checked by hand) for offline
+        use. The trades are validated like a cached tape's (ValueError otherwise)."""
         min_ts, max_ts = _window(min_ts, max_ts)
-        tape = Tape(venue=venue, market=str(market), min_ts=min_ts, max_ts=max_ts, trades=sorted(trades, key=lambda t: (t.ts, t.trade_id)),
-                    complete=True, fetched_at=time.time())
+        tape = Tape(venue=venue, market=str(market), min_ts=min_ts, max_ts=max_ts, trades=_check_trades(venue, market, min_ts, max_ts, trades),
+                    complete=True, fetched_at=self.clock(), condition_id=condition_id)
         self._store(tape)
         return tape
 
     def _legacy_note(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float]) -> str:
         p = self._cache_path(_legacy_cache_key(venue, market, min_ts, max_ts))
         return (f"; an old-format cache file exists at {p} but it cannot show whether its fetch ran out of pages, so it is "
-                "never used - fetch online once to replace it") if os.path.exists(p) else ""
+                "never used - fetch online once to replace it (scripts/migrate_trade_cache.py moves old files aside)") if os.path.exists(p) else ""
 
-    def _cached_or_offline(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float]) -> tuple[Optional[Tape], Optional[Tape]]:
-        """(complete tape to return, partial tape to resume from)."""
-        tape = self._load(venue, market, min_ts, max_ts)
+    def _cached_or_offline(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float],
+                           condition_id: Optional[str] = None) -> tuple[Optional[Tape], Optional[Tape]]:
+        """(complete tape to return, partial tape of the current pass)."""
+        tape = self._load(venue, market, min_ts, max_ts, condition_id)
         if tape is not None and tape.complete:
             return tape, None
         if self.offline:
-            where = self._cache_path(_cache_key(venue, market, min_ts, max_ts))
+            where = self._cache_path(_cache_key(venue, market, min_ts, max_ts, condition_id))
             if tape is not None:
-                raise IncompleteTape(f"offline: the cached {venue} tape of {market} is incomplete ({tape.reason}; {len(tape.trades)} prints over "
-                                     f"{tape.pages} pages) at {where}; fetch online to finish it", tape)
-            raise FileNotFoundError(f"offline: no cached trades at {where}" + self._legacy_note(venue, market, min_ts, max_ts))
+                raise IncompleteTape(f"offline: the cached {venue} tape of {market} is incomplete ({tape.reason}; {len(tape.trades)} prints) "
+                                     f"at {where}; fetch online to finish it", tape)
+            note = " (a file exists there but fails its checks)" if os.path.exists(where) else ""
+            raise FileNotFoundError(f"offline: no usable cached trades at {where}{note}" + self._legacy_note(venue, market, min_ts, max_ts))
         return None, tape
+
+    def _closed(self, max_ts: Optional[float], started: float) -> Optional[str]:
+        """None when the window was closed at the pass's start; else why it was not."""
+        if max_ts is None:
+            return "the window has no end (max_ts=None): more prints can arrive"
+        if max_ts > started - self.settle_s:
+            return (f"the window was still open when the pass began (it ends at {max_ts:.0f}, the pass began at {started:.0f}; "
+                    f"a window counts as closed {self.settle_s:g} s after its end)")
+        return None
 
     # ---- venues ----------------------------------------------------------------------
     def kalshi_trades(self, ticker: str, min_ts: Optional[float] = None, max_ts: Optional[float] = None, max_pages: int = 50) -> list[Trade]:
@@ -282,127 +412,146 @@ class TradesClient:
     def kalshi_tape(self, ticker: str, min_ts: Optional[float] = None, max_ts: Optional[float] = None, max_pages: int = 50,
                     checkpoint_every: int = 10) -> Tape:
         """The complete Kalshi tape with its record (see the module docstring), or
-        :class:`IncompleteTape` / :class:`ConflictingTrades`. Progress is kept on disk every
-        ``checkpoint_every`` pages and whenever the fetch stops, so the next call - a larger
-        ``max_pages``, a restarted process - resumes where it stopped."""
+        :class:`IncompleteTape` / :class:`ConflictingTrades`."""
         min_ts, max_ts = _window(min_ts, max_ts)
-        if int(max_pages) < 1:
-            raise ValueError("max_pages must be at least 1")
+        budget = _pages(max_pages)
         done, tape = self._cached_or_offline("kalshi", ticker, min_ts, max_ts)
         if done is not None:
             return done
-        tape = tape or Tape(venue="kalshi", market=str(ticker), min_ts=min_ts, max_ts=max_ts)
-        by_id = {t.trade_id: t for t in tape.trades}
-        cursor = tape.next_cursor
-        resumed = cursor is not None
-        # Cursors already followed belong to one pass: a resumed pass keeps them (a cursor coming
-        # back is a loop), a pass from the top starts clean and counts its own unreadable rows.
+        prior = tape
+        resumed = prior is not None and prior.next_cursor is not None
+        if resumed:
+            tape = prior
+            by_id = {t.trade_id: t for t in tape.trades}
+        else:                                    # a fresh pass: nothing carried over but conflict evidence
+            tape = Tape(venue="kalshi", market=str(ticker), min_ts=min_ts, max_ts=max_ts, restarts=prior.restarts if prior else 0)
+            by_id = {}
+        earlier = {t.trade_id: t for t in prior.trades} if prior is not None and not resumed else {}
+        seen_all: dict[str, Trade] = dict(by_id)   # every row of this pass, window margin included
         seen = list(tape.seen_cursors) if resumed else []
-        if not resumed:
-            tape.rejected = 0
+        cursor = tape.next_cursor if resumed else None
         # Kalshi's bounds are whole seconds (and their inclusivity is not documented): ask for
         # a second more on each side and trim to the exact window here.
         lo = math.floor(min_ts) - 1 if min_ts is not None else None
         hi = math.ceil(max_ts) + 1 if max_ts is not None else None
 
-        def keep(reason: str, next_cursor: Optional[str]) -> Tape:
+        def keep(reason: str, next_cursor: Optional[str]) -> tuple[Tape, bool]:
             tape.trades = sorted(by_id.values(), key=lambda t: (t.ts, t.trade_id))
-            tape.complete, tape.reason, tape.next_cursor, tape.seen_cursors = False, reason, next_cursor, list(seen)
-            tape.fetched_at = time.time()
-            self._try_store(tape)
-            return tape
+            tape.complete, tape.reason, tape.next_cursor = False, reason, next_cursor
+            tape.seen_cursors = list(seen) if next_cursor is not None else []
+            tape.fetched_at = self.clock()
+            return tape, self._try_store(tape)
+
+        def stop(reason: str, next_cursor: Optional[str], message: str) -> IncompleteTape:
+            t, saved = keep(reason, next_cursor)
+            advice = self._resume_advice(saved) if next_cursor is not None or not saved else "the next call starts a fresh pass"
+            return IncompleteTape(f"kalshi tape of {ticker}: {message}; {advice}", t)
 
         fetched = 0
         while True:
-            if fetched >= int(max_pages):
-                raise IncompleteTape(f"kalshi tape of {ticker}: page budget {max_pages} used up with more pages left ({len(by_id)} prints "
-                                     "so far); call again - with the same or a larger budget - to resume from the saved cursor",
-                                     keep(f"page budget {max_pages} used up", cursor))
+            if fetched >= budget:
+                raise stop(f"page budget {budget} used up", cursor, f"page budget {budget} used up with more pages left ({len(by_id)} prints so far)")
             params: dict[str, Any] = {"ticker": ticker, "limit": KALSHI_PAGE, "min_ts": lo, "max_ts": hi, "cursor": cursor}
+            if cursor is None and not tape.pages:
+                tape.pass_started_at = self.clock()
             try:
-                data = self.http.get(f"{KALSHI}/markets/trades", params) or {}
+                data = self.http.get(f"{KALSHI}/markets/trades", params)
             except Exception as e:  # noqa: BLE001 - every failure leaves a resumable, incomplete tape
                 status = int(getattr(e, "status", 0) or 0)
-                if resumed and cursor is not None and isinstance(e, HttpError) and 400 <= status < 500:
-                    # The saved cursor is no longer accepted: start again from the newest page;
-                    # prints already kept merge by trade id.
-                    cursor, seen, resumed = None, [], False
+                if resumed and cursor is not None and isinstance(e, HttpError) and status in STALE_CURSOR_STATUS:
+                    # The venue no longer knows the saved cursor: a fresh pass, prints of the old
+                    # one kept only as conflict evidence.
+                    earlier.update(by_id)
+                    by_id, seen_all, seen, cursor, resumed = {}, {}, [], None, False
+                    tape.trades, tape.pages, tape.rejected, tape.duplicates = [], 0, 0, 0
                     tape.restarts += 1
-                    tape.rejected = 0
                     fetched += 1
                     continue
-                raise IncompleteTape(f"kalshi tape of {ticker}: page request failed ({e}); call again to resume",
-                                     keep(f"page request failed: {type(e).__name__}", cursor)) from e
+                raise stop(f"page request failed: {type(e).__name__}", cursor, f"page request failed ({e})") from e
+            if not isinstance(data, dict) or not isinstance(data.get("trades"), list) or not isinstance(data.get("cursor"), str):
+                # An empty body, an error object or a page without its cursor is not the last
+                # page: it is a failed one.
+                shape = type(data).__name__ if not isinstance(data, dict) else f"keys {sorted(data)[:6]}"
+                raise stop("malformed page", cursor, f"malformed page ({shape}: needs a trades list and a string cursor)")
             fetched += 1
             tape.pages += 1
             resumed = False
-            for raw in (data.get("trades") or []) if isinstance(data, dict) else []:
+            for raw in data["trades"]:
                 tr = parse_kalshi_trade(raw) if isinstance(raw, dict) else None
                 if tr is None or not tr.trade_id or (tr.market and tr.market != ticker):
                     tape.rejected += 1
                     continue
                 if not tr.market:
                     tr = dataclasses.replace(tr, market=str(ticker))
-                if (min_ts is not None and tr.ts < min_ts) or (max_ts is not None and tr.ts > max_ts):
-                    continue
-                prev = by_id.get(tr.trade_id)
-                if prev is None:
-                    by_id[tr.trade_id] = tr
-                elif prev == tr:
-                    tape.duplicates += 1
-                else:
+                prev = seen_all.get(tr.trade_id) or earlier.get(tr.trade_id)
+                if prev is not None and prev != tr:
                     keep(f"trade {tr.trade_id} came back with two payloads", None)
                     raise ConflictingTrades(f"kalshi tape of {ticker}: trade {tr.trade_id} came back with two different payloads "
-                                            f"({prev} vs {tr}); the tape is kept incomplete")
-            nxt = (data.get("cursor") if isinstance(data, dict) else None) or None
+                                            f"({prev} vs {tr}); the tape is kept incomplete and the next call starts a fresh pass "
+                                            f"(the cached file is {self._path_for(tape)})")
+                if tr.trade_id in seen_all:
+                    tape.duplicates += 1
+                    continue
+                seen_all[tr.trade_id] = tr
+                if (min_ts is not None and tr.ts < min_ts) or (max_ts is not None and tr.ts > max_ts):
+                    continue
+                by_id[tr.trade_id] = tr
+            nxt = data["cursor"] or None
             if nxt is None:
                 break
             if nxt == cursor or nxt in seen:
-                # A cursor the venue already gave: following it would loop. Nothing proves the
-                # tape is whole, so it stays incomplete and the next call starts from the top.
-                raise IncompleteTape(f"kalshi tape of {ticker}: the venue repeated cursor {nxt!r}; not complete",
-                                     keep("the venue repeated a cursor", None))
+                # A cursor the venue already gave: following it would loop.
+                raise stop("the venue repeated a cursor", None, f"the venue repeated cursor {nxt!r}")
             seen.append(nxt)
             cursor = nxt
-            if checkpoint_every and tape.pages % int(checkpoint_every) == 0:
+            if tape.pages == 1 or (checkpoint_every and tape.pages % int(checkpoint_every) == 0):
                 keep("fetch in progress", cursor)          # a crash resumes from here
-        tape.trades = sorted(by_id.values(), key=lambda t: (t.ts, t.trade_id))
-        tape.next_cursor, tape.seen_cursors, tape.fetched_at = None, [], time.time()
         if tape.rejected:
-            tape.complete, tape.reason = False, f"{tape.rejected} unreadable row(s)"
-            self._try_store(tape)
-            raise IncompleteTape(f"kalshi tape of {ticker}: {tape.rejected} print(s) could not be read (no trade id, another ticker, "
-                                 "or no time, price or size); it is not a complete research input", tape)
-        tape.complete, tape.reason = True, ""
+            raise stop(f"{tape.rejected} unreadable row(s)", None,
+                       f"{tape.rejected} print(s) could not be read (no trade id, another ticker, or no time, price or size)")
+        still_open = self._closed(max_ts, tape.pass_started_at)
+        if still_open:
+            raise stop("window still open", None, still_open)
+        tape.trades = sorted(by_id.values(), key=lambda t: (t.ts, t.trade_id))
+        tape.complete, tape.reason, tape.next_cursor, tape.seen_cursors, tape.fetched_at = True, "", None, [], self.clock()
         self._try_store(tape)
         return tape
 
     def polymarket_trades(self, token_id: str, min_ts: Optional[float] = None, max_ts: Optional[float] = None, condition_id: Optional[str] = None, max_pages: int = 40) -> list[Trade]:
         """Every print of ``token_id`` in [min_ts, max_ts], oldest first (offset paginated on
         the data API, which filters by condition id; pass it to avoid paging the whole tape).
-        Complete when a short page or a page older than ``min_ts`` ends the tape; a page budget
-        that runs out raises :class:`IncompleteTape` (offsets shift as prints arrive, so there is
-        no resume: the next call starts again)."""
+        Complete when a short page or a page older than ``min_ts`` ends the tape, every page was
+        well formed, and the window was closed when the fetch began; otherwise
+        :class:`IncompleteTape` (no resume: the next call starts again)."""
         min_ts, max_ts = _window(min_ts, max_ts)
-        done, _ = self._cached_or_offline("polymarket", str(token_id), min_ts, max_ts)
+        budget = _pages(max_pages)
+        cond = str(condition_id) if condition_id is not None else None
+        done, _ = self._cached_or_offline("polymarket", str(token_id), min_ts, max_ts, cond)
         if done is not None:
             return done.trades
         out: list[Trade] = []
-        offset = 0
-        complete = False
-        pages = 0
-        for _ in range(max_pages):
-            pages += 1
+        offset, pages, reason = 0, 0, ""
+        started = self.clock()
+        for _ in range(budget):
             params: dict[str, Any] = {"limit": POLY_PAGE, "offset": offset, "takerOnly": "true"}
-            if condition_id:
-                params["market"] = condition_id
+            if cond:
+                params["market"] = cond
             else:
                 params["asset"] = token_id
-            data = self.http.get(f"{POLY_DATA}/trades", params) or []
-            batch = data if isinstance(data, list) else (data.get("trades") or data.get("data") or [])
+            try:
+                data = self.http.get(f"{POLY_DATA}/trades", params)
+            except Exception as e:  # noqa: BLE001
+                reason = f"page request failed: {type(e).__name__}: {e}"
+                break
+            batch = data if isinstance(data, list) else (data.get("trades") if isinstance(data, dict) and isinstance(data.get("trades"), list) else
+                                                         data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), list) else None)
+            if batch is None:
+                reason = f"malformed page ({type(data).__name__})"
+                break
+            pages += 1
             oldest = None
             for t in batch:
-                tr = parse_polymarket_trade(t)
+                tr = parse_polymarket_trade(t) if isinstance(t, dict) else None
                 if tr is None:
                     continue
                 oldest = tr.ts if oldest is None else min(oldest, tr.ts)
@@ -411,16 +560,21 @@ class TradesClient:
                 if (min_ts is None or tr.ts >= min_ts) and (max_ts is None or tr.ts <= max_ts):
                     out.append(tr)
             if len(batch) < POLY_PAGE or (min_ts is not None and oldest is not None and oldest < min_ts):
-                complete = True
                 break
             offset += len(batch)
+        else:
+            reason = f"page budget {budget} used up"
+        if not reason:
+            reason = self._closed(max_ts, started) or ""
         out.sort(key=lambda t: (t.ts, t.trade_id))
-        tape = Tape(venue="polymarket", market=str(token_id), min_ts=min_ts, max_ts=max_ts, trades=out, complete=complete,
-                    reason="" if complete else f"page budget {max_pages} used up", pages=pages, fetched_at=time.time())
-        self._try_store(tape)
-        if not complete:
-            raise IncompleteTape(f"polymarket tape of {token_id}: page budget {max_pages} used up with more pages left; "
-                                 "call again with a larger max_pages", tape)
+        tape = Tape(venue="polymarket", market=str(token_id), min_ts=min_ts, max_ts=max_ts, trades=out, complete=not reason,
+                    reason=reason, pages=pages, pass_started_at=started, fetched_at=self.clock(), condition_id=cond)
+        saved = self._try_store(tape)
+        if reason:
+            advice = "call again with a larger max_pages" if "budget" in reason else "call again"
+            if not saved:
+                advice += f" (progress could not be saved: {self.last_store_error})"
+            raise IncompleteTape(f"polymarket tape of {token_id}: {reason}; {advice}", tape)
         return out
 
 

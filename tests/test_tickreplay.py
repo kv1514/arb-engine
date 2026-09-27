@@ -245,7 +245,8 @@ class CliPluginTests(unittest.TestCase):
         tss = [r["ts"] for r in g1["rows"]]
         t0, t1 = min(tss) - 3600, max(tss) + 1800
         for ticker in ("KXNFLGAME-DETBUF-DET", "KXNFLGAME-DENKC-KC"):
-            tape = [Trade("kalshi", ticker, r["ts"] - 1, r["kalshi_before_p"], 1) for r in g1["rows"]] + [Trade("kalshi", ticker, r["ts"] + 60, r["kalshi_after_p"], 1) for r in g1["rows"]]
+            tape = ([Trade("kalshi", ticker, r["ts"] - 1, r["kalshi_before_p"], 1, trade_id=f"b{i}") for i, r in enumerate(g1["rows"])]
+                    + [Trade("kalshi", ticker, r["ts"] + 60, r["kalshi_after_p"], 1, trade_id=f"a{i}") for i, r in enumerate(g1["rows"])])
             client.store_complete("kalshi", ticker, t0, t1, tape)          # a known-complete tape, for offline use
         p = argparse.ArgumentParser()
         handlers = record_flags.register(p.add_subparsers(dest="cmd"), {})

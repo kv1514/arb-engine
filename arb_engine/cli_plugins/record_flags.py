@@ -169,8 +169,10 @@ def cmd_event_study(args: argparse.Namespace, settings: Optional[dict[str, Any]]
         trades: dict[str, Any] = {}
         for sp in bound:
             try:
-                tr = client.kalshi_trades(sp["market"], t0, t1) if sp["venue"] == "kalshi" else client.polymarket_trades(sp["market"], t0, t1)
-            except TapeError as e:   # never score a game on a tape not known to be complete
+                pages = {"max_pages": args.max_pages} if getattr(args, "max_pages", None) else {}
+                tr = (client.kalshi_trades(sp["market"], t0, t1, **pages) if sp["venue"] == "kalshi"
+                      else client.polymarket_trades(sp["market"], t0, t1, **pages))
+            except (TapeError, FileNotFoundError) as e:   # never score a game on a tape not known to be complete
                 raise SystemExit(f"{game_label(g)}: {e}") from e
             trades[sp["venue"]] = as_home_prices(tr, is_home=sp["is_home"])
         res = event_study(rows, trades, window=(args.window_pre, args.window_post), dwp_min=args.dwp_min, game=game_label(g))
@@ -227,6 +229,7 @@ def register(subparsers: Any, existing_parsers: Any = None) -> dict[str, Callabl
     es.add_argument("--limit", type=int)
     es.add_argument("--cache-dir", default="out/cache/trades")
     es.add_argument("--offline", action="store_true", help="fail instead of fetching when the trade tape is not cached")
+    es.add_argument("--max-pages", type=int, help="page budget per tape fetch (default: Kalshi 50, Polymarket 40); a Kalshi fetch that runs out resumes on the next run, a Polymarket one needs a larger budget")
     es.add_argument("--json")
     es.set_defaults(func=cmd_event_study)
     handlers["event-study"] = cmd_event_study

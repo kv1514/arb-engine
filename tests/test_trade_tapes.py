@@ -2,10 +2,11 @@
 
 Adversarial cases for ``venues/trades.py`` (the research tape, not the live print poller in
 ``strategy/fastlane.py``), all offline: a scripted cursor-paginated fake of
-``GET /markets/trades`` and temporary cache directories.
+``GET /markets/trades``, an injected clock and temporary cache directories.
 """
 from __future__ import annotations
 
+import io
 import json
 import math
 import os
@@ -13,21 +14,24 @@ import random
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from pathlib import Path
 
 from arb_engine.venues.http import HttpError
-from arb_engine.venues.trades import (ConflictingTrades, IncompleteTape, TapeError, TradesClient, _cache_key, _legacy_cache_key)
+from arb_engine.venues.trades import (ConflictingTrades, IncompleteTape, TapeError, Trade, TradesClient, _cache_key,
+                                      _legacy_cache_key)
 
 TK = "KXNFLGAME-26SEP27DENKC-KC"
 BASE = 1_790_000_000.0
+HI = BASE + 5_000.0             # a window end after every print below
+NOW = BASE + 100_000.0          # the clock: the window closed long ago
 
 
-def row(i, sec, price=0.50, count=1.0, ticker=TK, tid=None, frac=0.25, **kw):
+def row(i, sec, price=0.50, count=1.0, ticker=TK, tid=None, frac=0.25):
     t = datetime.fromtimestamp(BASE + sec + frac, tz=timezone.utc)
-    r = {"trade_id": f"t{i:04d}" if tid is None else tid, "ticker": ticker, "created_time": t.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-         "yes_price_dollars": f"{price:.4f}", "count_fp": f"{count:.2f}", "taker_side": "yes"}
-    r.update(kw)
-    return r
+    return {"trade_id": f"t{i:04d}" if tid is None else tid, "ticker": ticker, "created_time": t.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "yes_price_dollars": f"{price:.4f}", "count_fp": f"{count:.2f}", "taker_side": "yes"}
 
 
 class Pages:
@@ -65,11 +69,15 @@ class TapeCase(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="arb_tapes_")
         self.addCleanup(shutil.rmtree, self.dir, True)
+        self.now = NOW
 
-    def client(self, http, offline=False):
-        return TradesClient(http=http, cache_dir=self.dir, offline=offline)
+    def client(self, http, offline=False, cache_dir=None):
+        return TradesClient(http=http, cache_dir=cache_dir or self.dir, offline=offline, clock=lambda: self.now)
 
-    def doc(self, market=TK, lo=None, hi=None, venue="kalshi"):
+    def kt(self, http, lo=None, hi=HI, offline=False, **kw):
+        return self.client(http, offline).kalshi_trades(TK, lo, hi, **kw)
+
+    def doc(self, lo=None, hi=HI, market=TK, venue="kalshi"):
         with open(os.path.join(self.dir, _cache_key(venue, market, lo, hi) + ".json"), encoding="utf-8") as f:
             return json.load(f)
 
@@ -81,32 +89,31 @@ class BudgetAndResumeTests(TapeCase):
     def test_a_used_up_budget_is_never_served_as_the_tape(self):
         http = Pages(three_pages())
         with self.assertRaises(IncompleteTape) as cm:
-            self.client(http).kalshi_trades(TK, max_pages=2)
+            self.kt(http, max_pages=2)
         self.assertEqual(len(http.calls), 2)
         self.assertIn("page budget 2", str(cm.exception))
         self.assertEqual(len(cm.exception.tape.trades), 20)             # what is known so far, flagged incomplete
         d = self.doc()
         self.assertEqual((d["complete"], d["next_cursor"], d["pages"]), (False, "c2", 2))
         with self.assertRaises(IncompleteTape):                           # offline: the partial file is not an answer
-            self.client(NoNetwork(), offline=True).kalshi_trades(TK)
+            self.kt(NoNetwork(), offline=True)
 
     def test_the_same_query_with_a_larger_budget_fetches_only_the_backlog(self):
         http = Pages(three_pages())
         with self.assertRaises(IncompleteTape):
-            self.client(http).kalshi_trades(TK, max_pages=1)
-        trades = self.client(http).kalshi_trades(TK, max_pages=50)
+            self.kt(http, max_pages=1)
+        trades = self.kt(http, max_pages=50)
         self.assertEqual([c.get("cursor") for c in http.calls], [None, "c1", "c2"])   # resumed at c1, nothing refetched
         self.assertEqual(self.ids(trades), [f"t{i:04d}" for i in range(30)])
         self.assertEqual(self.doc()["complete"], True)
-        again = self.client(NoNetwork(), offline=True).kalshi_trades(TK)             # complete: offline replay works
-        self.assertEqual(again, trades)
+        self.assertEqual(self.kt(NoNetwork(), offline=True), trades)                    # complete: offline replay works
 
     def test_the_same_budget_again_keeps_progressing(self):
         http = Pages(three_pages())
         for _ in range(2):
             with self.assertRaises(IncompleteTape):
-                self.client(http).kalshi_trades(TK, max_pages=1)
-        self.assertEqual(len(self.client(http).kalshi_trades(TK, max_pages=1)), 30)
+                self.kt(http, max_pages=1)
+        self.assertEqual(len(self.kt(http, max_pages=1)), 30)
         self.assertEqual([c.get("cursor") for c in http.calls], [None, "c1", "c2"])
 
     def test_a_failed_page_keeps_progress_and_the_next_call_resumes(self):
@@ -114,19 +121,18 @@ class BudgetAndResumeTests(TapeCase):
         pages["c1"] = [HttpError(503, "https://x/markets/trades", "unavailable"), pages["c1"]]
         http = Pages(pages)
         with self.assertRaises(IncompleteTape) as cm:
-            self.client(http).kalshi_trades(TK)
+            self.kt(http)
         self.assertIn("page request failed", str(cm.exception))
         self.assertEqual(self.doc()["next_cursor"], "c1")
-        self.assertEqual(len(self.client(http).kalshi_trades(TK)), 30)
+        self.assertEqual(len(self.kt(http)), 30)
         self.assertEqual([c.get("cursor") for c in http.calls], [None, "c1", "c1", "c2"])
-        # A non-HTTP failure (a broken connection, a bad body) is kept the same way.
-        shutil.rmtree(self.dir)
+        shutil.rmtree(self.dir)                                           # a non-HTTP failure is kept the same way
         pages = three_pages()
         pages["c2"] = [ValueError("truncated JSON"), pages["c2"]]
         http = Pages(pages)
         with self.assertRaises(IncompleteTape):
-            self.client(http).kalshi_trades(TK)
-        self.assertEqual(len(self.client(http).kalshi_trades(TK)), 30)
+            self.kt(http)
+        self.assertEqual(len(self.kt(http)), 30)
 
     def test_a_restarted_process_resumes_from_its_last_checkpoint(self):
         class Killed(BaseException):
@@ -135,70 +141,159 @@ class BudgetAndResumeTests(TapeCase):
         pages["c2"] = [Killed(), pages["c2"]]
         http = Pages(pages)
         with self.assertRaises(Killed):
-            self.client(http).kalshi_tape(TK, checkpoint_every=1)
+            self.client(http).kalshi_tape(TK, None, HI, checkpoint_every=1)
         d = self.doc()
         self.assertEqual((d["complete"], d["next_cursor"], len(d["trades"])), (False, "c2", 20))
-        trades = TradesClient(http=http, cache_dir=self.dir).kalshi_trades(TK)     # a new process, same cache
+        trades = self.kt(http)                                             # a new process, same cache
         self.assertEqual(len(trades), 30)
         self.assertEqual([c.get("cursor") for c in http.calls], [None, "c1", "c2", "c2"])
 
-    def test_a_saved_cursor_the_venue_no_longer_accepts_restarts_from_the_top(self):
+    def test_a_crash_after_the_first_page_is_resumable(self):
+        class Killed(BaseException):
+            pass
+        pages = three_pages()
+        pages["c1"] = [Killed(), pages["c1"]]
+        http = Pages(pages)
+        with self.assertRaises(Killed):
+            self.kt(http)                                                  # default checkpointing: page 1 is kept
+        self.assertEqual(self.doc()["next_cursor"], "c1")
+
+    def test_a_saved_cursor_the_venue_no_longer_knows_starts_a_fresh_pass(self):
         pages = three_pages()
         http = Pages(pages)
         with self.assertRaises(IncompleteTape):
-            self.client(http).kalshi_trades(TK, max_pages=1)
-        pages["c1"] = HttpError(400, "https://x/markets/trades", "invalid cursor")
+            self.kt(http, max_pages=1)
+        pages["c1"] = HttpError(410, "https://x/markets/trades", "cursor expired")
         pages[None] = {"trades": [row(i, i) for i in range(29, -1, -1)], "cursor": ""}   # one page now holds everything
-        tape = self.client(http).kalshi_tape(TK)
+        tape = self.client(http).kalshi_tape(TK, None, HI)
         self.assertEqual(([c.get("cursor") for c in http.calls], tape.restarts), ([None, "c1", None], 1))
         self.assertEqual(self.ids(tape.trades), [f"t{i:04d}" for i in range(30)])
-        self.assertEqual(tape.duplicates, 10)                            # the first page's prints came back once more
+
+    def test_throttling_or_auth_errors_on_a_resume_keep_the_saved_cursor(self):
+        for status in (429, 401, 403, 408):
+            shutil.rmtree(self.dir, ignore_errors=True)
+            pages = three_pages()
+            http = Pages(pages)
+            with self.assertRaises(IncompleteTape):
+                self.kt(http, max_pages=1)
+            pages["c1"] = [HttpError(status, "https://x/markets/trades", "no"), pages["c1"]]
+            with self.assertRaises(IncompleteTape, msg=status) as cm:
+                self.kt(http)
+            self.assertEqual((self.doc()["next_cursor"], cm.exception.tape.restarts), ("c1", 0), status)   # not a fresh pass
+            self.assertEqual(len(self.kt(http)), 30, status)
 
     def test_a_repeated_cursor_is_never_followed_and_never_complete(self):
         pages = three_pages()
         pages["c2"] = {"trades": [row(i, i) for i in range(9, -1, -1)], "cursor": "c1"}   # loops back
         http = Pages(pages)
         with self.assertRaises(IncompleteTape) as cm:
-            self.client(http).kalshi_trades(TK)
+            self.kt(http)
         self.assertIn("repeated cursor", str(cm.exception))
         self.assertEqual(len(http.calls), 3)
         d = self.doc()
         self.assertEqual((d["complete"], d["next_cursor"]), (False, None))  # next call starts again from the top
         pages["c2"] = {"trades": [row(i, i) for i in range(9, -1, -1)], "cursor": ""}
-        self.assertEqual(len(self.client(http).kalshi_trades(TK)), 30)
+        self.assertEqual(len(self.kt(http)), 30)
         self.assertEqual(http.calls[3].get("cursor"), None)
+
+
+class MalformedPageTests(TapeCase):
+    """An answer that is not a well-formed page is a failed page - never the last page."""
+
+    def test_empty_error_or_cursorless_answers_are_failed_pages(self):
+        for bad in ({}, None, [], {"error": {"code": "internal"}}, {"trades": [row(1, 1)]}, {"trades": 5, "cursor": ""},
+                    {"trades": [row(1, 1)], "cursor": None}, {"trades": [row(1, 1)], "cursor": 0}, "oops"):
+            shutil.rmtree(self.dir, ignore_errors=True)
+            pages = three_pages()
+            pages["c1"] = [bad, pages["c1"]]
+            http = Pages(pages)
+            with self.assertRaises(IncompleteTape, msg=repr(bad)) as cm:
+                self.kt(http)
+            self.assertIn("malformed page", str(cm.exception), repr(bad))
+            self.assertEqual(self.doc()["next_cursor"], "c1", repr(bad))     # resumes at the failed page
+            with self.assertRaises(IncompleteTape):
+                self.kt(NoNetwork(), offline=True)
+            self.assertEqual(len(self.kt(http)), 30, repr(bad))
+
+    def test_the_real_http_client_empty_200_is_not_the_end_of_the_tape(self):
+        from arb_engine.venues.http import HttpClient
+
+        class Empty(HttpClient):
+            def _request_retrying(self, method, url, hdrs, data, raw):   # an empty 200 body, as the client parses it
+                return {}
+        with self.assertRaises(IncompleteTape):
+            self.kt(Empty())
+
+
+class OpenWindowTests(TapeCase):
+    def test_an_open_ended_or_still_open_window_is_never_complete(self):
+        with self.assertRaises(IncompleteTape) as cm:
+            self.client(Pages(three_pages())).kalshi_trades(TK, None, None)
+        self.assertIn("no end", str(cm.exception))
+        self.now = HI + 10                                                  # the window ends 10 s before the pass
+        with self.assertRaises(IncompleteTape) as cm:
+            self.kt(Pages(three_pages()))
+        self.assertIn("still open", str(cm.exception))
+        self.assertEqual(self.doc()["complete"], False)
+
+    def test_a_window_open_when_the_pass_began_needs_a_fresh_pass_once_it_closes(self):
+        pages = three_pages()
+        http = Pages(pages)
+        self.now = HI - 100                                                 # fetched during the window
+        with self.assertRaises(IncompleteTape):
+            self.kt(http, max_pages=1)
+        pages[None] = {"trades": [row(i, i) for i in range(31, 19, -1)], "cursor": "c1"}   # two prints arrive afterwards
+        self.now = NOW                                                      # the window has closed; the pass resumes ...
+        with self.assertRaises(IncompleteTape) as cm:
+            self.kt(http)
+        self.assertIn("still open when the pass began", str(cm.exception))  # ... but its first page predates the close
+        trades = self.kt(http)                                              # a fresh pass reads the newest page again
+        self.assertEqual(len(trades), 32)
+        self.assertIn("t0031", self.ids(trades))
 
 
 class DedupeTests(TapeCase):
     def test_overlapping_pages_and_same_second_prints_keep_one_copy_each(self):
-        # Page boundaries inside one second: the last print of a page comes back first on the next
-        # page, beside another print of the same second.
         same = [row(100, 10, frac=0.1), row(101, 10, frac=0.1, count=3.0), row(102, 10, frac=0.9)]
         pages = {None: {"trades": [row(i, i) for i in range(20, 10, -1)] + [same[2], same[1]], "cursor": "c1"},
                  "c1": {"trades": [same[1], same[0]] + [row(i, i) for i in range(9, -1, -1)], "cursor": ""}}
-        tape = self.client(Pages(pages)).kalshi_tape(TK)
+        tape = self.client(Pages(pages)).kalshi_tape(TK, None, HI)
         ids = self.ids(tape.trades)
         self.assertEqual(len(ids), len(set(ids)))
         sent = {r["trade_id"] for p in pages.values() for r in p["trades"]}
-        self.assertEqual(sorted(ids), sorted(sent))                      # every id once: 10 + 10 + 3
+        self.assertEqual(sorted(ids), sorted(sent))
         self.assertEqual(tape.duplicates, 1)
         self.assertEqual([t.ts for t in tape.trades], sorted(t.ts for t in tape.trades))
 
-    def test_one_trade_id_with_two_payloads_fails_and_is_not_cached_complete(self):
+    def test_one_trade_id_with_two_payloads_fails_then_the_next_consistent_pass_heals(self):
         pages = three_pages()
-        pages["c1"] = {"trades": [row(25, 25, price=0.61)] + [row(i, i) for i in range(19, 9, -1)], "cursor": "c2"}   # t0025 again, repriced
+        pages["c1"] = {"trades": [row(25, 25, price=0.61)] + [row(i, i) for i in range(19, 9, -1)], "cursor": "c2"}
         with self.assertRaises(ConflictingTrades) as cm:
-            self.client(Pages(pages)).kalshi_trades(TK)
+            self.kt(Pages(pages))
         self.assertIn("t0025", str(cm.exception))
         self.assertIsInstance(cm.exception, TapeError)
         self.assertEqual(self.doc()["complete"], False)
         with self.assertRaises(IncompleteTape):
-            self.client(NoNetwork(), offline=True).kalshi_trades(TK)
-        # Identical copies are not a conflict.
-        shutil.rmtree(self.dir)
+            self.kt(NoNetwork(), offline=True)
+        self.assertEqual(len(self.kt(Pages(three_pages()))), 30)          # a consistent venue: not wedged forever
+
+    def test_a_print_the_venue_no_longer_reports_does_not_survive_a_fresh_pass(self):
         pages = three_pages()
-        pages["c1"]["trades"].insert(0, row(25, 25))
-        self.assertEqual(len(self.client(Pages(pages)).kalshi_trades(TK)), 30)
+        pages["c2"] = {"trades": [row(i, i) for i in range(9, -1, -1)], "cursor": "c1"}   # repeated cursor: the pass ends
+        with self.assertRaises(IncompleteTape):
+            self.kt(Pages(pages))
+        clean = three_pages()
+        clean[None]["trades"] = [r for r in clean[None]["trades"] if r["trade_id"] != "t0025"]
+        trades = self.kt(Pages(clean))
+        self.assertNotIn("t0025", self.ids(trades))
+        self.assertEqual(len(trades), 29)
+
+    def test_a_conflict_just_outside_the_window_is_still_caught(self):
+        lo, hi = BASE + 100.0, BASE + 200.5
+        pages = {None: {"trades": [row(1, 200, frac=0.4), row(2, 150)], "cursor": "c1"},
+                 "c1": {"trades": [row(1, 200, frac=0.6, price=0.61), row(3, 120)], "cursor": ""}}   # t0001 moved past the edge
+        with self.assertRaises(ConflictingTrades):
+            self.client(Pages(pages)).kalshi_trades(TK, lo, hi)
 
     def test_unreadable_or_foreign_rows_keep_the_tape_incomplete(self):
         for bad in ({"trade_id": ""}, {"created_time": "garbage"}, {"yes_price_dollars": "NaN", "yes_price": None},
@@ -209,7 +304,7 @@ class DedupeTests(TapeCase):
             broken.update(bad)
             pages["c1"]["trades"][3] = broken
             with self.assertRaises(IncompleteTape, msg=bad) as cm:
-                self.client(Pages(pages)).kalshi_trades(TK)
+                self.kt(Pages(pages))
             self.assertEqual(cm.exception.tape.rejected, 1, bad)
             self.assertEqual(self.doc()["complete"], False, bad)
 
@@ -238,8 +333,7 @@ class WindowAndKeyTests(TapeCase):
         self.assertNotEqual(_cache_key("kalshi", "A/B", None, None), _cache_key("kalshi", "A_B", None, None))
 
     def test_a_file_whose_stored_query_differs_is_not_used(self):
-        http = Pages(three_pages())
-        self.client(http).kalshi_trades(TK, BASE, BASE + 50)
+        self.kt(Pages(three_pages()), BASE, BASE + 50)
         path = os.path.join(self.dir, _cache_key("kalshi", TK, BASE, BASE + 50) + ".json")
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
@@ -247,18 +341,108 @@ class WindowAndKeyTests(TapeCase):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(d, f)
         with self.assertRaises(FileNotFoundError):
-            self.client(NoNetwork(), offline=True).kalshi_trades(TK, BASE, BASE + 50)
+            self.kt(NoNetwork(), BASE, BASE + 50, offline=True)
 
-    def test_non_finite_or_reversed_windows_are_refused(self):
-        for lo, hi in ((float("nan"), None), (None, float("inf")), (float("-inf"), 5.0), ("nan", None), (10.0, 5.0)):
+    def test_bad_windows_and_budgets_are_refused(self):
+        for lo, hi in ((float("nan"), HI), (None, float("inf")), (float("-inf"), 5.0), ("nan", HI), (10.0, 5.0), (True, HI), (None, False)):
             with self.assertRaises(ValueError, msg=(lo, hi)):
                 self.client(NoNetwork()).kalshi_trades(TK, lo, hi)
-        with self.assertRaises(ValueError):
-            self.client(NoNetwork()).kalshi_trades(TK, max_pages=0)
+        for mp in (0, -1, 1.5, "2", True, None):
+            with self.assertRaises(ValueError, msg=mp):
+                self.client(NoNetwork()).kalshi_trades(TK, None, HI, max_pages=mp)
+            with self.assertRaises(ValueError, msg=mp):
+                self.client(NoNetwork()).polymarket_trades("123", None, HI, max_pages=mp)
+        # -0.0 and 0.0 are one window (one cache file).
+        self.kt(Pages(three_pages()), 0.0, HI)
+        self.assertEqual(len(self.kt(NoNetwork(), -0.0, HI, offline=True)), 30)
+
+
+class CacheFileTests(TapeCase):
+    def _complete_then_edit(self, edit):
+        self.kt(Pages(three_pages()))
+        path = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+        edit(d)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(d))                     # json.dumps writes NaN / Infinity literals when present
+        return path
+
+    def test_a_hand_edited_or_damaged_file_is_never_used(self):
+        edits = {
+            "complete as a string": lambda d: d.update(complete="false"),
+            "complete as 1": lambda d: d.update(complete=1),
+            "complete with a cursor left": lambda d: d.update(next_cursor="c9"),
+            "complete with rejected rows": lambda d: d.update(rejected=3),
+            "a trade outside the window": lambda d: d["trades"].append(dict(d["trades"][0], ts=HI + 1, trade_id="x1")),
+            "a trade of another ticker": lambda d: d["trades"].append(dict(d["trades"][0], market="OTHER", trade_id="x2")),
+            "a duplicated trade id": lambda d: d["trades"].append(dict(d["trades"][0])),
+            "a NaN price": lambda d: d["trades"][0].update(price=float("nan")),
+            "an Infinity time": lambda d: d["trades"][0].update(ts=float("inf")),
+            "pages as NaN": lambda d: d.update(pages=float("nan")),
+            "pages as text": lambda d: d.update(pages="3 pages"),
+            "seen_cursors not a list": lambda d: d.update(seen_cursors=5),
+        }
+        for name, edit in edits.items():
+            shutil.rmtree(self.dir, ignore_errors=True)
+            self._complete_then_edit(edit)
+            with self.assertRaises(FileNotFoundError, msg=name) as cm:
+                self.kt(NoNetwork(), offline=True)
+            self.assertIn("fails its checks", str(cm.exception), name)
+            self.assertEqual(len(self.kt(Pages(three_pages()))), 30, name)   # online: refetched and replaced
+
+    def test_store_complete_checks_what_it_is_given(self):
+        c = self.client(NoNetwork())
+        good = [Trade("kalshi", TK, BASE + 1, .5, 1, "yes", "a"), Trade("kalshi", TK, BASE + 2, .5, 1, "yes", "b")]
+        bad = {"duplicate id": good + [Trade("kalshi", TK, BASE + 3, .5, 1, "yes", "a")],
+               "outside the window": good + [Trade("kalshi", TK, HI + 50, .5, 1, "yes", "c")],
+               "another ticker": good + [Trade("kalshi", "OTHER", BASE + 3, .5, 1, "yes", "d")],
+               "another venue": good + [Trade("polymarket", TK, BASE + 3, .5, 1, "BUY", "e")],
+               "a NaN price": good + [Trade("kalshi", TK, BASE + 3, float("nan"), 1, "yes", "f")],
+               "no trade id": good + [Trade("kalshi", TK, BASE + 3, .5, 1, "yes", "")]}
+        for name, trades in bad.items():
+            with self.assertRaises(ValueError, msg=name):
+                c.store_complete("kalshi", TK, BASE, HI, trades)
+        tape = c.store_complete("kalshi", TK, BASE, HI, list(reversed(good)))
+        self.assertEqual(self.ids(tape.trades), ["a", "b"])                  # stored sorted
+
+    def test_an_incomplete_state_never_replaces_a_complete_file(self):
+        c = self.client(Pages(three_pages()))
+        done = c.kalshi_tape(TK, None, HI)
+        stale = done.__class__(**{**done.__dict__, "complete": False, "reason": "late writer", "trades": done.trades[:3], "next_cursor": "c1"})
+        c._store(stale)
+        self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
+
+    def test_an_unwritable_cache_says_progress_was_not_saved(self):
+        blocker = os.path.join(self.dir, "not-a-dir")
+        Path(blocker).write_text("x")
+        c = self.client(Pages(three_pages()), cache_dir=os.path.join(blocker, "cache"))
+        with self.assertRaises(IncompleteTape) as cm:
+            c.kalshi_trades(TK, None, HI, max_pages=1)
+        self.assertIn("could NOT be saved", str(cm.exception))
+        self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)             # the data itself is still whole
+
+    def test_writes_are_atomic_and_leave_no_temporary_files(self):
+        http = Pages(three_pages())
+        with self.assertRaises(IncompleteTape):
+            self.client(http).kalshi_tape(TK, None, HI, max_pages=2, checkpoint_every=1)
+        self.kt(http)
+        names = os.listdir(self.dir)
+        self.assertEqual([x for x in names if x.startswith(".tape-")], [])                 # no temporary file left
+        self.assertEqual([x for x in names if not x.startswith(".")], [_cache_key("kalshi", TK, None, HI) + ".json"])
+
+    def test_shuffled_pages_give_the_same_tape(self):
+        base = self.kt(Pages(three_pages()))
+        for seed in range(3):
+            shutil.rmtree(self.dir)
+            pages = three_pages()
+            for p in pages.values():
+                random.Random(seed).shuffle(p["trades"])
+            self.assertEqual(self.kt(Pages(pages)), base)
 
 
 class LegacyCacheTests(TapeCase):
-    def _legacy(self, lo=None, hi=None):
+    def _legacy(self, lo=None, hi=HI):
         os.makedirs(self.dir, exist_ok=True)
         p = os.path.join(self.dir, _legacy_cache_key("kalshi", TK, lo, hi) + ".json")
         with open(p, "w", encoding="utf-8") as f:     # the old format: no schema, no completeness, a truncated tape
@@ -269,59 +453,93 @@ class LegacyCacheTests(TapeCase):
     def test_an_old_file_is_never_served_offline_and_is_named(self):
         p = self._legacy()
         with self.assertRaises(FileNotFoundError) as cm:
-            self.client(NoNetwork(), offline=True).kalshi_trades(TK)
+            self.kt(NoNetwork(), offline=True)
         self.assertIn(p, str(cm.exception))
         self.assertIn("never used", str(cm.exception))
 
     def test_online_an_old_file_is_ignored_and_the_tape_fetched_whole(self):
         p = self._legacy()
         http = Pages(three_pages())
-        self.assertEqual(len(self.client(http).kalshi_trades(TK)), 30)
+        self.assertEqual(len(self.kt(http)), 30)
         self.assertEqual(len(http.calls), 3)
-        self.assertTrue(os.path.exists(p))                                    # left for the user to delete
-        self.assertEqual(len(self.client(NoNetwork(), offline=True).kalshi_trades(TK)), 30)
+        self.assertTrue(os.path.exists(p))                                    # left for the migration script
+        self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
-    def test_a_file_of_an_older_schema_under_the_new_name_is_ignored(self):
-        os.makedirs(self.dir, exist_ok=True)
-        with open(os.path.join(self.dir, _cache_key("kalshi", TK, None, None) + ".json"), "w", encoding="utf-8") as f:
-            json.dump({"venue": "kalshi", "market": TK, "trades": []}, f)
+    def test_the_migration_script_moves_only_unusable_files_one_at_a_time(self):
+        from scripts import migrate_trade_cache as mig
+
+        self.kt(Pages(three_pages()))                                         # one current tape
+        old = self._legacy()
+        Path(self.dir, "kalshi-X-1-2.json").write_text('{"venue": "kalshi", "tra')   # truncated by the old non-atomic writer
+        Path(self.dir, "number.json").write_text("5")
+        Path(self.dir, "notes.txt").write_text("keep me")
+        dest = os.path.join(self.dir, "legacy")
+        os.makedirs(dest)
+        Path(dest, os.path.basename(old)).write_text("{}")                   # a name already taken there
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", dest]), 0)   # dry run
+        self.assertIn("would move", out.getvalue())
+        self.assertTrue(os.path.exists(old))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", dest, "--apply"]), 0)
+        left = sorted(n for n in os.listdir(self.dir) if n.endswith(".json"))
+        self.assertEqual(left, [_cache_key("kalshi", TK, None, HI) + ".json"])
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "notes.txt")))
+        self.assertEqual(len(os.listdir(dest)), 4)                          # three moved, one renamed beside the old one
+        self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
+
+
+class PolymarketTests(TapeCase):
+    class Full:
+        def __init__(self, rows=500):
+            self.calls, self.rows = 0, rows
+
+        def get(self, url, params=None, headers=None, raw=False):
+            self.calls += 1
+            return [{"asset": "123", "price": 0.5, "size": 1, "side": "BUY", "timestamp": BASE + i, "transactionHash": f"h{self.calls}-{i}"}
+                    for i in range(self.rows)]
+
+    def test_a_used_up_budget_raises_and_is_not_cached_complete(self):
+        full = self.Full()
+        with self.assertRaises(IncompleteTape):
+            self.client(full).polymarket_trades("123", None, HI, max_pages=2)
+        self.assertEqual(full.calls, 2)
+        with self.assertRaises(IncompleteTape):
+            self.client(NoNetwork(), offline=True).polymarket_trades("123", None, HI)
+
+    def test_the_condition_id_is_part_of_the_cache_key(self):
+        self.assertEqual(self.client(self.Full(rows=0)).polymarket_trades("123", None, HI, condition_id="0xwrong"), [])
+        seven = self.Full(rows=7)
+        self.assertEqual(len(self.client(seven).polymarket_trades("123", None, HI, condition_id="0xright")), 7)
+        self.assertEqual(seven.calls, 1)                                   # not answered by the wrong id's empty tape
         with self.assertRaises(FileNotFoundError):
-            self.client(NoNetwork(), offline=True).kalshi_trades(TK)
+            self.client(NoNetwork(), offline=True).polymarket_trades("123", None, HI)
 
-
-class CacheHygieneTests(TapeCase):
-    def test_writes_are_atomic_and_leave_no_temporary_files(self):
-        http = Pages(three_pages())
-        with self.assertRaises(IncompleteTape):
-            self.client(http).kalshi_tape(TK, max_pages=2, checkpoint_every=1)
-        self.client(http).kalshi_trades(TK)
-        self.assertEqual([n for n in os.listdir(self.dir) if not n.endswith(".json")], [])
-        self.assertEqual(len(os.listdir(self.dir)), 1)
-
-    def test_shuffled_pages_give_the_same_tape(self):
-        # The tape does not depend on the order prints arrive in inside the pages.
-        base = self.client(Pages(three_pages())).kalshi_trades(TK)
-        for seed in range(3):
-            shutil.rmtree(self.dir)
-            pages = three_pages()
-            for p in pages.values():
-                random.Random(seed).shuffle(p["trades"])
-            self.assertEqual(self.client(Pages(pages)).kalshi_trades(TK), base)
-
-
-class PolymarketBudgetTests(TapeCase):
-    def test_a_used_up_polymarket_budget_raises_and_is_not_cached_complete(self):
-        class Full:
-            calls = 0
-
+    def test_a_malformed_page_is_not_the_end(self):
+        class Err:
             def get(self, url, params=None, headers=None, raw=False):
-                Full.calls += 1
-                return [{"asset": "123", "price": 0.5, "size": 1, "side": "BUY", "timestamp": BASE + i, "transactionHash": f"h{Full.calls}-{i}"} for i in range(500)]
-        with self.assertRaises(IncompleteTape):
-            self.client(Full()).polymarket_trades("123", max_pages=2)
-        self.assertEqual(Full.calls, 2)
-        with self.assertRaises(IncompleteTape):
-            self.client(NoNetwork(), offline=True).polymarket_trades("123")
+                return {"error": "rate limited"}
+        with self.assertRaises(IncompleteTape) as cm:
+            self.client(Err()).polymarket_trades("123", None, HI)
+        self.assertIn("malformed page", str(cm.exception))
+
+
+class EventStudyCliTests(TapeCase):
+    def test_missing_or_incomplete_tapes_exit_with_the_reason(self):
+        import argparse
+
+        from arb_engine.cli_plugins import record_flags
+
+        fixture = Path(__file__).resolve().parent / "fixtures" / "trades" / "replay_rows_trim.json"
+        p = argparse.ArgumentParser()
+        handlers = record_flags.register(p.add_subparsers(dest="cmd"), {})
+        base = ["event-study", "--rows", str(fixture), "--limit", "1", "--cache-dir", self.dir, "--trades", "kalshi=KXNFLGAME-DETBUF-DET"]
+        with self.assertRaises(SystemExit) as cm, redirect_stdout(io.StringIO()):
+            handlers["event-study"](p.parse_args(base + ["--offline"]), {})
+        self.assertIn("no usable cached trades", str(cm.exception))
+        a = p.parse_args(base + ["--max-pages", "3"])
+        self.assertEqual(a.max_pages, 3)
 
 
 if __name__ == "__main__":

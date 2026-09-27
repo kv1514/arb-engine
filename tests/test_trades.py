@@ -6,6 +6,8 @@ from arb_engine.venues.trades import TradesClient, as_home_prices, parse_kalshi_
 
 from .helpers import FakeHttp, load
 
+CLOSED = 1_789_500_000.0   # 2026-09-15: the fixtures' prints are from 2026-09-14, so this window has closed
+
 
 class NoNetwork(FakeHttp):
     """Any request is a test failure: the cache must answer."""
@@ -24,7 +26,7 @@ class KalshiTradesTests(unittest.TestCase):
     def test_cursor_pagination_and_microsecond_timestamps(self):
         http = FakeHttp({"cursor=abc123": load("trades/kalshi_trades_page2.json"), "/markets/trades": load("trades/kalshi_trades_page1.json")})
         cache = _cache_dir("k")
-        trades = TradesClient(http=http, cache_dir=cache).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF")
+        trades = TradesClient(http=http, cache_dir=cache).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF", None, CLOSED)
         self.assertEqual(len(http.calls), 2)
         self.assertIn("limit=1000", http.calls[0])
         self.assertNotIn("cursor", http.calls[0])
@@ -40,17 +42,17 @@ class KalshiTradesTests(unittest.TestCase):
         self.assertAlmostEqual(t1.ts % 1, 0.345801, places=5)
         self.assertEqual(t1.ts_ms % 1000, 346)
         # Cache hit: a client with no transport answers from disk, identically.
-        again = TradesClient(http=NoNetwork(), cache_dir=cache).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF")
+        again = TradesClient(http=NoNetwork(), cache_dir=cache).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF", None, CLOSED)
         self.assertEqual(again, trades)
         # A different window is a different key -> offline mode refuses to fetch.
         with self.assertRaises(FileNotFoundError):
-            TradesClient(http=NoNetwork(), cache_dir=cache, offline=True).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF", min_ts=1)
+            TradesClient(http=NoNetwork(), cache_dir=cache, offline=True).kalshi_trades("KXNFLGAME-26SEP14DETBUF-BUF", 1, CLOSED)
         shutil.rmtree(cache, ignore_errors=True)
 
     def test_window_filter_and_bad_rows(self):
         http = FakeHttp({"cursor=abc123": load("trades/kalshi_trades_page2.json"), "/markets/trades": load("trades/kalshi_trades_page1.json")})
         tk = "KXNFLGAME-26SEP14DETBUF-BUF"            # the fixture's ticker: another ticker's prints are rejected
-        all_trades = TradesClient(http=http, cache_dir=_cache_dir("w")).kalshi_trades(tk)
+        all_trades = TradesClient(http=http, cache_dir=_cache_dir("w")).kalshi_trades(tk, None, CLOSED)
         mid = all_trades[3].ts
         cache = _cache_dir("w2")
         some = TradesClient(http=http, cache_dir=cache).kalshi_trades(tk, min_ts=mid, max_ts=all_trades[5].ts)
@@ -68,7 +70,7 @@ class PolymarketTradesTests(unittest.TestCase):
     def test_data_api_parsing_filters_token_and_caches(self):
         http = FakeHttp({"data-api.polymarket.com/trades": load("trades/polymarket_trades.json")})
         cache = _cache_dir("p")
-        trades = TradesClient(http=http, cache_dir=cache).polymarket_trades("1122334455", condition_id="0xcond")
+        trades = TradesClient(http=http, cache_dir=cache).polymarket_trades("1122334455", None, CLOSED, condition_id="0xcond")
         self.assertEqual(len(http.calls), 1)                       # fewer than a page -> no second call
         self.assertIn("market=0xcond", http.calls[0])
         self.assertEqual(len(trades), 5)                           # the other asset's print is dropped
@@ -76,7 +78,7 @@ class PolymarketTradesTests(unittest.TestCase):
         self.assertEqual((trades[0].venue, trades[0].market, trades[0].side, trades[0].size), ("polymarket", "1122334455", "BUY", 15.0))
         self.assertEqual(trades[0].price, 0.45)
         self.assertEqual(trades[-1].ts_ms, 1789405392 * 1000 + 3000000)
-        again = TradesClient(http=NoNetwork(), cache_dir=cache).polymarket_trades("1122334455", condition_id="0xcond")
+        again = TradesClient(http=NoNetwork(), cache_dir=cache).polymarket_trades("1122334455", None, CLOSED, condition_id="0xcond")
         self.assertEqual(again, trades)
         home = as_home_prices(trades, is_home=False)
         self.assertAlmostEqual(home[0][1], 0.55)
