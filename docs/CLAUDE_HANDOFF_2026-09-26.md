@@ -13,6 +13,8 @@ commits are listed in merge order:
 2. *Lock legs* (`75a17e0`).
 3. *Watch-key identity audit* (`91ab70d`, merged as `58aa18f`).
 4. *Ledger evidence* (`f4b3356`).
+5. *Historical trade tapes* (`c2cd4d8`).
+6. *H4 same-timestamp ordering* (`5480dfc`).
 
 Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
 
@@ -694,6 +696,189 @@ A fake of the cursor-paginated trades endpoint serving 30 prints over 3 pages:
 * **Evidence.** The tests are offline and prove behaviour only. No real Kalshi tape was fetched
   in this round, so the venue's actual cursor, `min_ts` / `max_ts` inclusivity and page-overlap
   behaviour are unverified. The widening and the dedupe are built to hold either way.
+
+## H4 same-timestamp ordering: one instant, one decision (`5480dfc`, session 89f99c)
+
+### Reproduction
+
+The case: synthetic independent books (Kalshi A, Rothera B), compatible settlement, a $0.50
+tie payout on each leg, zero fees.
+
+| t | A ask | B ask |
+|---|---|---|
+| 0 | .60 | .50 |
+| 1 | .40 | .70 |
+
+Run from a checkout root: `python3 repro_h4.py` (session scratchpad; the same case is
+`test_the_audit_case_fires_in_neither_order_and_a_real_move_in_both`).
+
+| code | t=1 fed as [A, B] | t=1 fed as [B, A] |
+|---|---|---|
+| `bf7d2d5` (and `c13a49c`, identical evaluator) | 1 signal: t=1, margin .10, guaranteed-eligible | none |
+| `5480dfc` | none | none |
+
+**Why:** `arb_scan` decided after every row. With A's row first, A's new .40 met B's stale .50.
+
+### Fix: every path installs the whole instant, then decides once
+
+The paths, and what each one now does:
+
+| path | change |
+|---|---|
+| `microdata.resolve_instant` / `observation_instants` | one observation per contract identity per instant |
+| `microdata.build` | installs each batch and voids its conflicts, then computes features |
+| `arb_scan` | one decision per instant; the pair by economics; fills from de-duplicated series |
+| `select_trades` | one exposure at one instant goes to the cheapest bought contract, then a direct buy; was the outcome-name sort |
+| `h3_lock_trades` | hedge quotes of one instant chosen together; was the first by contract name |
+| `select()` | deterministic order |
+
+**The policy** is documented in `docs/MICROSTRUCTURE_INTERFACES.md`, "One instant, one batch,
+one decision":
+
+* **Routes:** a direct route beats a resale route.
+* **Identical rows:** count as one observation.
+* **Conflicts:** rows of the same identity, instant and route that disagree void that
+  contract from `t` until its next clean observation. It is then no decision, leg, fill,
+  label, cross-book comparison or complement.
+* **Choices:** made by economics, with identity used only on an exact economic tie.
+* **Late hedges:** a hedge quote too late to fill before the remainder's exit ends the watch
+  at that instant, before anything is sent.
+
+**Preserved:** decision-time book identities, settlement checks, tie handling, fee models and
+paper-execution latencies.
+
+### Tests
+
+`tests/test_microstructure_instants.py`, 12 tests:
+
+* the audit case in both orders, and a real move in both;
+* all 24 permutations of a 4-row instant;
+* book, venue and outcome renames;
+* every decision replayed from rows up to its own instant;
+* future-append invariance;
+* resale routes and same-book pairs;
+* identical duplicates;
+* conflicts in every order;
+* conflicted instants never filled;
+* `build` voids;
+* same-instant exposures;
+* the cheapest hedge whatever the book is called.
+
+**11 of the 12 fail on `bf7d2d5`.**
+
+### Validation on `5480dfc`
+
+**Tests and checks** (on the combined tree: `f74cb19` plus this round)
+
+| check | result |
+|---|---|
+| `python3 -m unittest discover -s tests -t .` | 1086 tests OK in 117 s of test time. The run took 361 s of wall-clock because the Mac was in lid-closed sleep for part of it (`pmset -g log`: sleep at 00:20:16, dark wakes until 00:25). `unittest` times itself with a clock that stops during sleep, so this was not a shutdown tail. |
+| `bash scripts/test_js.sh` | fee vectors 3650 with 0 mismatches, `ok 3769`, `ok 159`, extension PASS |
+| `python3 scripts/render_results.py --check` | OK |
+| `git diff --check` | clean |
+
+**Discovery replay**
+
+* **Data:** the 15 NFL games of 2026-09-20/21, read-only from `~/Documents/GitHub/arb-engine/out/history.db`.
+* **Logs:** both runs are appended to `~/Documents/ChatGPT/arbitradge/out/eval_log.jsonl`.
+* **No `--freeze`, and the test fold was not opened.**
+
+**Commands:**
+
+```bash
+# baseline: unchanged evaluator, from a git-archive export of bf7d2d5 (its log row has git_head null)
+python3 scripts/microstructure_eval.py --fold discovery --db ~/Documents/GitHub/arb-engine/out/history.db --results <scratch>/discovery_before.json --log ~/Documents/ChatGPT/arbitradge/out/eval_log.jsonl
+# after: the same command from the worktree that became 5480dfc
+python3 scripts/microstructure_eval.py --fold discovery --db ~/Documents/GitHub/arb-engine/out/history.db --results <scratch>/discovery_after.json --log ~/Documents/ChatGPT/arbitradge/out/eval_log.jsonl
+```
+
+**Provenance.** The after run's log row says `git_head` c13a49c, because the fix was not yet
+committed. Its spec hash, `a29bf2673e75`, equals the hash of the committed `5480dfc` tree.
+
+**Results**
+
+* **The baseline reproduces the committed fixture exactly:** all 3,587 values of
+  `tests/fixtures/results/micro_discovery.json`. The fixture's hashes predate this work: spec
+  `52cab7ec…`, against `e3b49c2c…` for the baseline run.
+* **After the fix, 24 of the 3,587 values change.** All of them are the selection split,
+  "long" against "via complement", repeated at each horizon:
+
+  | selection | long before → after | via complement before → after |
+  |---|---|---|
+  | H1 momentum | 141 → 194 | 61 → 8 |
+  | H3 diagnostic, any settlement | 82 → 97 | 66 → 51 |
+  | H3 diagnostic, tie-matched | 11 → 16 | 10 → 5 |
+
+  Mirror decisions at one instant used to be labelled by outcome name and now go to the
+  direct buy. The same contracts are bought at the same times and prices.
+* **Nothing else changes:** no trade count, bought contract, return, test, decision, and no H4
+  number. H4 has 162 signals, with 0 field differences across the 162 records.
+* **Row order on real data** (recorded, reversed and shuffled rows):
+  * the new code gives identical H4 records and H1 selections in all three orders;
+  * the old code's H4 records came out in a different order each time, with identical content
+    once sorted;
+  * the old H1 selection was already order-free.
+* **The synthetic fold is identical before and after.**
+
+**Why discovery barely moves**
+
+* All 68,735 discovery observations are legacy full ticks (about 5.4 s, `approx_time=1`).
+* 14,256 of 14,281 executable instants carry at least 2 contracts, and 5,877 carry both
+  outcomes on at least 2 books.
+* There are 0 duplicate or conflicting contract-instants.
+* The other book's previous quote is more than 2 s old at every new tick, so the row-by-row
+  defect could not produce a phantom here. It bites on 1 s fast-lane data.
+
+### Affected claims: not overwritten, your approval needed
+
+**One rendered claim changes.** In `docs/MODEL.md`, table `micro_discovery_selection`, row
+"H1 momentum":
+
+* "bought itself" goes from 141 to 194, and "bought its complement" from 61 to 8;
+* trades stay 202;
+* every other rendered number is unchanged.
+
+**Its provenance** is `tests/fixtures/results/micro_discovery.json`. Its `_fixture` note says it
+was replayed on 2026-09-26 on this branch under spec v4, spec hash `52cab7ec…`.
+
+**The H3-diagnostic splits** change the same way, but they are not rendered anywhere.
+
+**Other results fixtures are unaffected:**
+
+* `micro_synthetic` is identical before and after;
+* `scripts/arb_backtest.py` (`arb_backtest_w2`) imports only the unchanged `tie_value`;
+* `scripts/leadlag_study.py` (`leadlag_nfl_2026_w2`) and `render_results.py` only name the
+  evaluator in text.
+
+**The live stack is unaffected too.** No live engine module imports `quant.microdata` or the
+evaluator, so no redeploy is needed.
+
+**To apply after approval.** Replace the fixture's `_fixture` text with a note of this replay:
+the date, the commit and the spec hash `a29bf2673e75`. Then:
+
+```bash
+python3 scripts/microstructure_eval.py --fold discovery --db ~/Documents/GitHub/arb-engine/out/history.db --results tests/fixtures/results/micro_discovery.json
+python3 scripts/render_results.py --write && python3 scripts/render_results.py --check
+```
+
+### Differences from `claude/micro-audit-3` `b1238ce`, for the merge of the two evaluator lines
+
+| topic | `b1238ce` | here |
+|---|---|---|
+| conflicting rows | picks one, the smallest canonical JSON | voids the contract (more conservative) |
+| `select_trades` second key | tie payout | a direct buy |
+| H3-lock hedges | also requires `settlement_relation == identical` | not adopted: a new exclusion, outside this defect; decide when merging |
+| too-late hedges | — | end the watch at that instant, before anything is sent |
+
+### Still empirically unverified
+
+* **The effect on 1 s fast-lane data** (recorded from 2026-09-24). The validation fold was not
+  run here, and the test fold stays sealed.
+* **Conflicting same-identity observations.** None exist in discovery, so the policy is
+  exercised only synthetically.
+* **Direct versus resale disagreement.** Whether Kalshi-direct and Robinhood KX rows ever
+  disagree at one instant in real data.
+* **How often same-instant mirror decisions occur** on fast data.
 
 ## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
 

@@ -32,6 +32,48 @@ times fall back to their tick time with `approx_time=1` and must be reported sep
 Rows sharing an exact `obs_ts` form one response-time information batch: all are installed
 before any feature at that timestamp is computed.
 
+### One instant, one batch, one decision
+
+`quant.microdata.observation_instants(rows)` gives the batches in time order. Every
+evaluator path installs a whole batch, and voids its conflicted contracts, before it
+evaluates anything at that `t`: features, freshness, eligibility, pair or hedge choice, or
+cooldowns. No path reads an observation after `t` to decide at `t`. The paths are:
+
+* `microdata.build`;
+* H4 `arb_scan`;
+* `select_trades`;
+* the H3-lock hedge watch.
+
+**Choices within an instant are made on economics, never on names or arrival order.** A path
+falls back to the contracts' identity only on an exact economic tie.
+
+| path | order of preference |
+|---|---|
+| H4 pair | cheapest all-in cost, then the fresher older leg, then the deeper thinner leg |
+| decisions for one exposure (`select_trades`, with a cooldown) | cheapest ask of the bought contract, then a direct buy before one through a complement |
+| hedge at an instant | cheapest all-in hedge that locks, then the larger tie payout |
+
+A hedge quote that could not fill before the remainder's exit ends the watch at that instant,
+before any hedge there is sent.
+
+**Several rows for one contract identity `(event_key, book_id, outcome, side)` at one
+instant** are resolved by `microdata.resolve_instant`:
+
+1. The direct venue's rows outrank a resale route's. A Robinhood KX row never replaces the
+   Kalshi row it resells, whatever either shows.
+2. Rows of the best route that agree on `bid`, `ask`, `bid_size`, `ask_size`, `tie_payout`,
+   `fee_params`, `venue`, `exchange`, `no_of` and `mirror_of` are one observation. A measured
+   time outranks an approximate one, then the smallest canonical JSON.
+3. Rows of the best route that disagree on any of those fields are a **conflict**, and
+   nothing about that contract at that instant is trusted:
+   * it is no decision, no H4 leg, no fill and no label at `t`;
+   * its earlier quote is **void** from `t` until its next unambiguous observation, so it is
+     no cross-book comparison, complement or leg in that span either (reported as
+     `ambiguous`).
+
+This is conservative. An ambiguous instant can only remove opportunities and fills, never
+create one, and the outcome is identical in every arrival order.
+
 ## Settlement-value contract
 
 `quant.microdata.settlement_values()` returns exact values keyed by
