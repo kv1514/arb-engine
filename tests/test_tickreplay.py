@@ -225,7 +225,7 @@ class CliPluginTests(unittest.TestCase):
         import shutil
 
         from arb_engine.cli_plugins import record_flags
-        from arb_engine.venues.trades import Trade, TradesClient, _cache_key
+        from arb_engine.venues.trades import Trade, TradesClient
 
         class NoNetwork:
             def get_json(self, *a, **k):
@@ -246,7 +246,7 @@ class CliPluginTests(unittest.TestCase):
         t0, t1 = min(tss) - 3600, max(tss) + 1800
         for ticker in ("KXNFLGAME-DETBUF-DET", "KXNFLGAME-DENKC-KC"):
             tape = [Trade("kalshi", ticker, r["ts"] - 1, r["kalshi_before_p"], 1) for r in g1["rows"]] + [Trade("kalshi", ticker, r["ts"] + 60, r["kalshi_after_p"], 1) for r in g1["rows"]]
-            client._save(_cache_key("kalshi", ticker, t0, t1), "kalshi", ticker, t0, t1, tape)
+            client.store_complete("kalshi", ticker, t0, t1, tape)          # a known-complete tape, for offline use
         p = argparse.ArgumentParser()
         handlers = record_flags.register(p.add_subparsers(dest="cmd"), {})
         out_json = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"arb_es_out_{os.getpid()}.json")

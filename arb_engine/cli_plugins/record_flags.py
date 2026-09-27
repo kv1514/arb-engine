@@ -148,7 +148,7 @@ def cmd_event_study(args: argparse.Namespace, settings: Optional[dict[str, Any]]
     every game's scored events through ``summarize``. Tapes are fetched (or read back from
     the cache) over the game's row span plus an hour before and half an hour after."""
     from ..quant.eventstudy import event_study, format_study, load_games, summarize
-    from ..venues.trades import TradesClient, as_home_prices
+    from ..venues.trades import TapeError, TradesClient, as_home_prices
 
     games = load_games(args.rows)
     if args.limit:
@@ -168,7 +168,10 @@ def cmd_event_study(args: argparse.Namespace, settings: Optional[dict[str, Any]]
         t0, t1 = min(tss) - 3600, max(tss) + 1800
         trades: dict[str, Any] = {}
         for sp in bound:
-            tr = client.kalshi_trades(sp["market"], t0, t1) if sp["venue"] == "kalshi" else client.polymarket_trades(sp["market"], t0, t1)
+            try:
+                tr = client.kalshi_trades(sp["market"], t0, t1) if sp["venue"] == "kalshi" else client.polymarket_trades(sp["market"], t0, t1)
+            except TapeError as e:   # never score a game on a tape not known to be complete
+                raise SystemExit(f"{game_label(g)}: {e}") from e
             trades[sp["venue"]] = as_home_prices(tr, is_home=sp["is_home"])
         res = event_study(rows, trades, window=(args.window_pre, args.window_post), dwp_min=args.dwp_min, game=game_label(g))
         pooled.extend(res["events"])

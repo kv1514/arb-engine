@@ -49,12 +49,16 @@ class KalshiTradesTests(unittest.TestCase):
 
     def test_window_filter_and_bad_rows(self):
         http = FakeHttp({"cursor=abc123": load("trades/kalshi_trades_page2.json"), "/markets/trades": load("trades/kalshi_trades_page1.json")})
-        all_trades = TradesClient(http=http, cache_dir=_cache_dir("w")).kalshi_trades("T")
+        tk = "KXNFLGAME-26SEP14DETBUF-BUF"            # the fixture's ticker: another ticker's prints are rejected
+        all_trades = TradesClient(http=http, cache_dir=_cache_dir("w")).kalshi_trades(tk)
         mid = all_trades[3].ts
         cache = _cache_dir("w2")
-        some = TradesClient(http=http, cache_dir=cache).kalshi_trades("T", min_ts=mid, max_ts=all_trades[5].ts)
+        some = TradesClient(http=http, cache_dir=cache).kalshi_trades(tk, min_ts=mid, max_ts=all_trades[5].ts)
         self.assertEqual([t.trade_id for t in some], ["t003", "t004", "t005"])
-        self.assertIn(f"min_ts={int(mid)}", http.calls[-2])
+        # Whole-second API bounds widened by a second each side; the exact window is applied here.
+        import math
+        self.assertIn(f"min_ts={math.floor(mid) - 1}", http.calls[-2])
+        self.assertIn(f"max_ts={math.ceil(all_trades[5].ts) + 1}", http.calls[-2])
         self.assertIsNone(parse_kalshi_trade({"ticker": "T", "created_time": "garbage", "yes_price": 50}))
         self.assertIsNone(parse_kalshi_trade({"ticker": "T", "created_time": "2026-09-14T17:03:12Z"}))
         shutil.rmtree(cache, ignore_errors=True)
