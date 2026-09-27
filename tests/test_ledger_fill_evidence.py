@@ -164,6 +164,31 @@ class DecreasingCountTests(unittest.TestCase):
         self.assertEqual(kb.ledger.exposure(), Decimal(row["max_cost"]))                        # a resting order: its whole worst case
 
 
+class RemainingQuantityTests(unittest.TestCase):
+    def test_a_row_with_quantity_left_puts_an_ioc_back_at_its_worst_case_even_beside_a_terminal_status(self):
+        """Audit h03 case 2: a final create answer said 0 filled / 0 remaining, then a row said
+        "canceled, 0 filled, 10 remaining" - held with $0 exposure, so another 10-lot fitted a
+        $5.20 cap. A row that contradicts itself proves nothing about the order being gone."""
+        budget = Budget(per_game=Decimal("5.20"))
+        led = OrderLedger(tmp(), "demo", DEMO_URL, clock=Clock())
+        res = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=10, limit_price="0.50", event_key=KEY, game_key=KEY,
+                          fee_multiplier=1, budget=budget)
+        led.accepted(res.intent_id, {"order_id": "o1", "fill_count": "0.00", "remaining_count": "0.00"})
+        self.assertEqual(led.exposure(), Decimal("0"))
+        for status in ("canceled", "executed", "resting", None):
+            with self.subTest(status=status):
+                led.apply_row(res.intent_id, order_row(status=status, fill_count_fp="0.00", remaining_count_fp="10.00", initial_count_fp="10.00",
+                                                       taker_fill_cost_dollars="0.000000", taker_fees_dollars="0.000000"))
+                self.assertEqual(led.exposure(), Decimal("5.20"))          # the whole worst case again
+                again = led.reserve(strategy="lag", ticker=TICKER, side="yes", count=10, limit_price="0.50", event_key=KEY, game_key=KEY,
+                                    fee_multiplier=1, budget=budget)
+                self.assertFalse(again.ok)
+        # A consistent final row and its complete (empty) fills listing: nothing filled after all.
+        led.apply_row(res.intent_id, order_row(status="canceled", fill_count_fp="0.00", initial_count_fp="10.00",
+                                               taker_fill_cost_dollars="0.000000", taker_fees_dollars="0.000000"), client=Fills([]))
+        self.assertEqual((led.get(res.intent_id)["state"], led.exposure()), ("done", Decimal("0")))
+
+
 class ZeroAfterPositiveTests(unittest.TestCase):
     def test_zero_after_positive_is_a_contradiction_with_or_without_the_fill_listed(self):
         for listed in (True, False):
@@ -472,6 +497,36 @@ class LockOnResolvedEvidenceTests(unittest.TestCase):
         self.led.accept_correction(self.iid, client, "Kalshi busted 4 contracts (support ticket 123)")
         self.assertEqual(self.led.get(self.iid)["fill_state"], CORRECTED)
         self.assertEqual(self.lock().count, 6)
+
+
+class CallerLayerTests(unittest.TestCase):
+    def test_buy_lock_refuses_an_unverified_entry_before_reading_the_exchange(self):
+        """LagExecutor.buy_lock checks the entry's fill state itself (the ledger checks it
+        again): an unverified or contradicted entry costs no positions read and no reservation."""
+        from tests.test_lock_identity import FakeKalshi as LockFake
+
+        class Counting(LockFake):
+            def positions(self, **params):
+                self.position_reads = getattr(self, "position_reads", 0) + 1
+                return super().positions(**params)
+
+        clock = Clock()
+        client = Counting()
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=tmp("lag.jsonl"), ledger_path=tmp(), clock=clock)
+        entry = ex.on_signal(sig(contracts=10), {"kalshi": [kq(TICKER, "KC", 0.60, clock())]})
+        with mock.patch.object(ex.ledger, "reserve", wraps=ex.ledger.reserve) as reserve:
+            wait = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+            self.assertEqual(wait["status"], "skipped")
+            self.assertIn("the entry's fill is not verified (its order row and a complete fills listing", wait["reason"])
+            ex.ledger._write(lambda c: c.execute("UPDATE intents SET fill_state='contradicted' WHERE intent_id=?", (entry["intent_id"],)))
+            bad = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+            self.assertIn("the entry's fill evidence is contradicted", bad["reason"])
+            self.assertEqual((getattr(client, "position_reads", 0), reserve.call_count), (0, 0))
+        clock.t += 3
+        ex.ledger._write(lambda c: c.execute("UPDATE intents SET fill_state=NULL WHERE intent_id=?", (entry["intent_id"],)))
+        ex.reconcile(force=True)                                           # verified: now the caller reads the exchange
+        go = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+        self.assertEqual((go["status"], client.position_reads), ("SUBMITTED", 1))
 
 
 class CorrectionExchange:

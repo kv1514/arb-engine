@@ -1468,10 +1468,12 @@ class OrderLedger:
                 return self._hold(iid, now, f"order resting: {ev.remaining if ev.remaining is not None else '?'} resting",
                                   fill=count if booked is None or count > booked else _KEEP, fill_state=PROVISIONAL, kind="still-resting",
                                   keep_reason=True, status=ev.status, remaining=_s(ev.remaining), **evidence)
-            # A row that says contracts may still fill (no terminal status, and a remaining
-            # quantity above zero or none at all) puts an IOC back at its whole worst case,
-            # whatever its create answer said: it can buy up to its full count yet.
-            may_fill = ev.status not in TERMINAL_STATUSES and (ev.remaining is None or ev.remaining > 0)
+            # A row that says contracts may still fill - a remaining quantity above zero (even
+            # beside a terminal status: "canceled, 10 remaining" contradicts itself, and if its
+            # status is the wrong half the order is still on the book), or no terminal status and
+            # no remaining quantity at all - puts an IOC back at its whole worst case, whatever
+            # its create answer said: it can buy up to its full count yet.
+            may_fill = (ev.remaining is not None and ev.remaining > 0) or (ev.status not in TERMINAL_STATUSES and ev.remaining is None)
             return self._hold(iid, now, "order not final: " + "; ".join(ev.problems) + (" - it may still fill: the whole worst case stays reserved"
                                                                                       if ioc and may_fill else ""),
                               fill=None if (ioc and may_fill) else raise_to, fill_state=PROVISIONAL if (ioc and may_fill) else consistent,

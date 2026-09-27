@@ -118,6 +118,10 @@ legacy fields. Comparing `side` would have held every sell as contradicted.
 * **h03 and h03b:**
   * a later row showing fills raises the booked count;
   * a resting 3/7 row puts the IOC back at its whole worst case.
+  * **Case 2** ("canceled, 0 filled, 10 remaining" after a final 0/0 create answer) held at
+    $0 until the follow-up commit after `1edc7b0`. Now any remaining quantity above zero, even
+    beside a terminal status, puts an IOC back at its whole worst case until a consistent
+    final row and a complete listing arrive (`RemainingQuantityTests`).
 * **h05** (4xx under read lag) for re-sent POSTs, via `attempts`. The script's synthetic
   single-attempt 400 is still read as a refusal.
 * **h07** (row identity): market, book side and `client_order_id` are checked.
@@ -130,6 +134,9 @@ legacy fields. Comparing `side` would have held every sell as contradicted.
     refused, the rule `reconcile` already had. `kalshi release` with a key whose account
     was unreadable used to release another account's unknown order.
 * **h09** (stale release over `done`): ignored.
+* **Caller layer:** `buy_lock`'s own verified-fill check duplicates the ledger's. It is now
+  tested on its own (`CallerLayerTests`: no positions read, no reservation for an unverified
+  or contradicted entry), so removing it fails a test.
 * **s16** (terminal while unresolved): now a wait. **Residual,** re-run at `1ef5d71` with the
   auditor's `s16_verified.py`: when a lock leg's answer was lost and reconciliation later
   finds it filled, the lock book ends the watch as "closed with 0 of 10 hedged" (status
