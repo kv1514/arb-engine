@@ -30,12 +30,23 @@ data flow.
    1) are written and reserved before the request, the ledger's `client_order_id` goes on
    the order, an answer that never came back is `ambiguous` and blocks new exposure until
    reconciliation finds the order on the exchange, and actual fills and fees replace the
-   reservation - only on final evidence (`order_evidence` / `fills_evidence`): a terminal
-   status, an explicit zero remaining quantity, the fill cost, and fees stated by the order
-   row or a complete, de-duplicated fills listing. An absent fee is unknown, never zero:
-   until it is stated, an IOC's final fills count at the limit plus the fee bound. Anything
-   less - or order and fill totals that disagree - releases nothing and is read again.
-   Budgets are sums over the ledger, so they survive restarts and span
+   reservation - only on final evidence (`order_evidence` / `fills_evidence`): a final order
+   row (a terminal status, an explicit zero remaining quantity) whose count no earlier answer
+   exceeded, *and* a complete, correctly scoped fills listing agreeing with it (every page, no
+   error; only this order's rows, on its market and `book_side`; every fill with an id;
+   duplicates identical) - an order that filled nothing too - with the fill cost and fees
+   stated by the row or the listing. An absent fee is unknown, never zero: until it is
+   stated, an IOC's final fills count at the limit plus the fee bound. Fill evidence only
+   grows (`fill_seen`, restart-safe): a count below one an earlier answer showed, or row and
+   listing apart, is *contradicted* - the whole worst case stays reserved, no lock leg is
+   sized on it, the executor alerts - and a genuine exchange correction is booked only by an
+   operator (`kalshi correct` / `OrderLedger.accept_correction`: re-read, final, complete,
+   agreeing); `kalshi release` refuses an intent that showed fills. A missing, failed,
+   truncated or wrongly scoped read releases nothing and is read again. Writes are
+   compare-and-set on the state (a stale decision never overwrites what another process
+   recorded), every time handed to the ledger must be finite (a NaN passes every age check),
+   and a 4xx is a definitive refusal only when it answered the request's one and only send
+   (`refusal_hint`; `HttpClient` re-sends POSTs). Budgets are sums over the ledger, so they survive restarts and span
    processes. A ledger belongs to one Kalshi account (fingerprints of the key id and of
    `GET /communications/id`, never the identifiers): another account's client is refused,
    and an order is released as never accepted only by a client provably of the account
@@ -43,11 +54,13 @@ data flow.
    checked in two layers: the caller (`LagExecutor.buy_lock`) - a fresh Kalshi quote of the
    entry's market priced at or under its ask, the lock contract's settlement identity from the
    registry, the exchange still showing the entry's contracts; the ledger
-   (`OrderLedger._lock_check`, atomic with the reservation) - same market and Kalshi event,
-   the other outcome (no same-side additions), complementary payoffs (tie payouts known and
-   summing to $1 where the market can tie), no *related* order of unknown outcome (unrelated
-   ones do not stop a hedge), and the remaining inventory after exits and earlier lock legs,
-   at most a set number of attempts. A resting maker order is read by the process that placed it; a restarted maker
+   (`OrderLedger._lock_check`, atomic with the reservation) - the entry's fill *verified* by
+   reconciliation (a create answer alone is not inventory; a contradicted one never is), same
+   market and Kalshi event, the other outcome (no same-side additions), complementary payoffs
+   (tie payouts known and summing to $1 where the market can tie), no *related* order of
+   unknown outcome (unrelated ones do not stop a hedge), and the remaining inventory after
+   exits and earlier lock legs (unverified ones count in full, and a refusal they cause is a
+   wait, not the end of the watch), at most a set number of attempts. A resting maker order is read by the process that placed it; a restarted maker
    cancels what a dead one left resting. A sweep counts as a shutdown only when a complete
    listing shows the book empty. Tests never write to `out/` (`tests/__init__.py` points
    `ARB_ORDER_LEDGER_DIR` at a temporary directory).
@@ -104,7 +117,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1101)
+python3 -m unittest discover -s tests -t .     # Python tests (1136)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

@@ -275,6 +275,26 @@ budget, never free it.
 * If one persists, run `python3 -m arb_engine kalshi reconcile`, which also re-reads orders the
   automatic polling gave up on. Then compare with `kalshi orders --status all` and
   `kalshi fills`.
+* **After the fill-evidence round** (the handoff's *Fill evidence only grows* section), an
+  order finishes only once its fills listing is read complete and agrees with the order row.
+  A read that fails leaves it `accepted` a little longer; that is expected.
+
+**`contradicted` rows** (`kalshi ledger` → `contradicted`, an EXEC ERROR push "Kalshi's answers
+about … disagree") mean an exchange answer showed fewer fills than an earlier one, or the order
+row and its fills listing disagree. The whole worst case stays reserved and no lock leg is
+sized on the order.
+
+1. Run `python3 -m arb_engine kalshi reconcile`. A stale read clears once the answers agree
+   again at or above the highest count seen.
+2. If the exchange really did correct the fills (a busted trade), check the read-only
+   listings `kalshi orders --status all` and `kalshi fills`. `kalshi order` places an order;
+   do not use it here. Then run
+   `python3 -m arb_engine kalshi correct --intent-id <id> --reason "<what you checked>"`,
+   which is a dry run that prints what it would book.
+3. Add `--confirm` to book it. It is refused unless the order row is final, the fills listing
+   is complete, and both agree on the lower count.
+
+`kalshi release` refuses an order an exchange answer showed filled.
 
 ## 9. Recovery
 

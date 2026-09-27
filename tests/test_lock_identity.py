@@ -16,9 +16,10 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from decimal import Decimal
 
 from arb_engine.execution.kalshi import KalshiExecutor
-from arb_engine.execution.ledger import Identity, OrderLedger, settlement_identity
+from arb_engine.execution.ledger import Identity, OrderLedger, book_side, settlement_identity
 from arb_engine.models import OutcomeQuote
 from arb_engine.strategy.lagexec import LagExecutor, can_tie, settlement_of
 from arb_engine.venues.http import HttpError
@@ -48,6 +49,32 @@ def sd(outcome, side="yes", tie="0.5", event=KEY, tied=True, venue="kalshi"):
     return settlement_identity(venue, event, outcome, side, tie, tied)
 
 
+class Fills:
+    """Only GET /portfolio/fills (``apply_row`` is handed the order row itself)."""
+
+    env, base_url = "demo", DEMO_URL
+
+    def __init__(self, rows=()):
+        self.rows = list(rows)
+
+    def paged(self, path, key, params):
+        return [dict(r) for r in self.rows if r["order_id"] == params["order_id"]], False
+
+
+def settle(led, iid, oid, fill, count, price, ticker, action="buy", side="yes"):
+    """Reconcile an IOC the way the exchange shows it: a final order row and its complete fills
+    listing (only a fill confirmed so is a verified inventory - or a settled exit / lock leg)."""
+    n, bside = Decimal(fill), book_side(action, side)
+    fee = n * Decimal("0.02")
+    row = {"order_id": oid, "ticker": ticker, "book_side": bside, "status": "executed" if n == count else "canceled",
+           "fill_count_fp": f"{n:.2f}", "remaining_count_fp": "0.00", "initial_count_fp": f"{count}.00",
+           "taker_fill_cost_dollars": str(n * Decimal(str(price))), "taker_fees_dollars": str(fee),
+           "maker_fill_cost_dollars": "0.0000", "maker_fees_dollars": "0.0000"}
+    fills = [{"fill_id": f"f-{oid}", "trade_id": f"t-{oid}", "order_id": oid, "ticker": ticker, "book_side": bside,
+              "count_fp": f"{n:.2f}", "fee_cost": str(fee)}] if n > 0 else []
+    return led.apply_row(iid, row, client=Fills(fills))
+
+
 class LedgerLockProofTests(unittest.TestCase):
     """OrderLedger.reserve(parent_id=...) - everything the ledger's records can prove."""
 
@@ -63,7 +90,10 @@ class LedgerLockProofTests(unittest.TestCase):
         r = self.led.reserve(strategy="lag", ticker=ticker, side=side, count=10, limit_price="0.60", event_key=event, game_key=event,
                              fee_multiplier=1, settlement=sd(outcome, side, event=event) if settlement == "default" else settlement)
         self.assertTrue(r.ok, r.reason)
-        self.led.accepted(r.intent_id, {"order_id": f"e-{r.intent_id[:6]}", "fill_count": fill})
+        oid = f"e-{r.intent_id[:6]}"
+        self.led.accepted(r.intent_id, {"order_id": oid, "fill_count": fill})
+        settle(self.led, r.intent_id, oid, fill, 10, "0.60", ticker, side=side)          # reconciled: the fill is verified
+        self.assertEqual(self.led.get(r.intent_id)["fill_state"], "verified")
         return r.intent_id
 
     def lock(self, parent, ticker=DEN, outcome="DEN", side="yes", tie="0.5", event=KEY, count=10, quote_ts=None, settlement="default",
@@ -154,10 +184,22 @@ class LedgerLockProofTests(unittest.TestCase):
         first = self.lock(p, count=2)
         self.led.accepted(first.intent_id, {"order_id": "l1", "fill_count": "2.00"})
         # A NO of the entry's market bought by something else nets the position down too (in flight: full count).
-        self.led.reserve(strategy="manual", ticker=KC, side="no", count=1, limit_price="0.40", fee_multiplier=1)
+        no = self.led.reserve(strategy="manual", ticker=KC, side="no", count=1, limit_price="0.40", fee_multiplier=1)
         r = self.lock(p, count=10)
         self.assertTrue(r.ok, r.reason)
         self.assertEqual(r.count, 4)                                      # 10 - 3 exited - 2 hedged - 1 netted
+        # Legs whose fills are not reconciled yet count in full: no room, but not final either.
+        wait = self.lock(p, count=10)
+        self.assertFalse(wait.ok)
+        self.assertIn("waiting - 4 earlier lock leg(s) or exit(s) not reconciled yet", wait.reason)
+        self.assertNotIn("nothing left to hedge", wait.reason)            # the lock book keeps watching
+        # Once each is reconciled (every one filled in full), nothing is left - final.
+        settle(self.led, sell.intent_id, "s1", "3.00", 3, "0.70", KC, action="sell")
+        settle(self.led, first.intent_id, "l1", "2.00", 2, "0.36", DEN)
+        self.led.accepted(no.intent_id, {"order_id": "n1", "fill_count": "1.00"})
+        settle(self.led, no.intent_id, "n1", "1.00", 1, "0.40", KC, side="no")
+        self.led.accepted(r.intent_id, {"order_id": "l2", "fill_count": "4.00"})
+        settle(self.led, r.intent_id, "l2", "4.00", 4, "0.36", DEN)
         done = self.lock(p, count=10)
         self.assertFalse(done.ok)
         self.assertIn("nothing left to hedge (filled 10.00, exited 4.00, hedged or unresolved 6.00)", done.reason)
@@ -215,20 +257,40 @@ class LedgerLockProofTests(unittest.TestCase):
 
 
 class FakeKalshi:
-    """A demo account: IOC orders fill per ``fills``; positions per ``holding``."""
+    """A demo account: IOC orders fill per ``fills``; positions per ``holding``. Each order's
+    final row and fills are kept for reconciliation (``order``, ``fills_v2``), as on the
+    exchange."""
 
     env, base_url, has_credentials, api_key = "demo", DEMO_URL, True, "lock-caller-key"
 
     def __init__(self, fills=None, holding="10.00"):
         self.sent, self.fills, self.holding = [], list(fills or []), holding
         self.positions_error = None
+        self.rows, self.fill_rows = {}, []
 
     def create_order(self, payload):
         self.sent.append(payload)
         fill = self.fills.pop(0) if self.fills else payload["count"] + ".00"
         if isinstance(fill, BaseException):
             raise fill
-        return {"order_id": f"o{len(self.sent)}", "fill_count": fill, "remaining_count": "0.00"}
+        oid = f"o{len(self.sent)}"
+        n, count, yes = Decimal(fill), int(payload["count"]), Decimal(payload["price"])
+        price = yes if payload["side"] == "bid" else 1 - yes
+        fee = n * Decimal("0.02")
+        self.rows[oid] = {"order_id": oid, "ticker": payload["ticker"], "book_side": payload["side"], "status": "executed" if n == count else "canceled",
+                          "fill_count_fp": f"{n:.2f}", "remaining_count_fp": "0.00", "initial_count_fp": f"{count}.00",
+                          "taker_fill_cost_dollars": str(n * price), "taker_fees_dollars": str(fee),
+                          "maker_fill_cost_dollars": "0.0000", "maker_fees_dollars": "0.0000"}
+        if n > 0:
+            self.fill_rows.append({"fill_id": f"f{oid}", "trade_id": f"t{oid}", "order_id": oid, "ticker": payload["ticker"],
+                                   "book_side": payload["side"], "count_fp": f"{n:.2f}", "fee_cost": str(fee)})
+        return {"order_id": oid, "fill_count": fill, "remaining_count": "0.00"}
+
+    def order(self, oid):
+        return dict(self.rows[oid])
+
+    def fills_v2(self, **params):
+        return [dict(f) for f in self.fill_rows if f["order_id"] == params.get("order_id")]
 
     def positions(self, **params):
         if self.positions_error is not None:
@@ -264,6 +326,9 @@ class BuyLockCallerTests(unittest.TestCase):
         self.entry = self.ex.on_signal(sig, {"kalshi": [kq(KC, "KC", 0.60, self.clock())]})
         self.assertEqual((self.entry["status"], self.entry["fill_count"]), ("SUBMITTED", "10.00"))
         self.pid = self.entry["intent_id"]
+        self.clock.t += 3
+        self.ex.reconcile(force=True)                                     # the live loop reconciles every tick
+        self.assertEqual(self.ex.ledger.get(self.pid)["fill_state"], "verified")
         self.sent_before = len(self.client.sent)
 
     def buy_lock(self, quote, count=10, price=None, event=KEY):
@@ -339,6 +404,18 @@ class BuyLockCallerTests(unittest.TestCase):
         self.client.fills = ["2.00", "5.00"]
         first = self.buy_lock(kq(DEN, "DEN", 0.36, self.clock()), count=10)
         self.assertEqual((first["count"], first["fill_count"]), (7, "2.00"))     # 10 - 3 exited, of which 2 filled
+        # Before reconciliation the first leg counts at all 7 it could have filled: wait, don't end.
+        wait = self.buy_lock(kq(DEN, "DEN", 0.36, self.clock()), count=10)
+        self.assertEqual(wait["status"], "skipped")
+        self.assertIn("not reconciled yet", wait["reason"])
+        self.assertFalse(wait["terminal"])
+        self.client.rows["s1"] = {"order_id": "s1", "ticker": KC, "book_side": "ask", "status": "executed", "fill_count_fp": "3.00",
+                                  "remaining_count_fp": "0.00", "initial_count_fp": "3.00", "taker_fill_cost_dollars": "0.9000",
+                                  "taker_fees_dollars": "0.0600", "maker_fill_cost_dollars": "0.0000", "maker_fees_dollars": "0.0000"}
+        self.client.fill_rows.append({"fill_id": "fs1", "trade_id": "ts1", "order_id": "s1", "ticker": KC, "book_side": "ask",
+                                      "count_fp": "3.00", "fee_cost": "0.0600"})
+        self.clock.t += 3
+        self.ex.reconcile(force=True)                                     # both legs verified: 3 exited, 2 hedged
         second = self.buy_lock(kq(DEN, "DEN", 0.36, self.clock()), count=10)
         self.assertEqual(second["count"], 5)                               # 10 - 3 exited - 2 hedged
 
@@ -373,15 +450,20 @@ class NotFinalEntryTests(unittest.TestCase):
                 return super().create_order(payload)
 
             def order(self, oid):                           # what reconciliation reads: the IOC's final row
+                if oid != "e1":
+                    return super().order(oid)
                 return {"order_id": "e1", "status": "canceled", "fill_count_fp": "4.00", "remaining_count_fp": "0.00",
                         "taker_fill_cost_dollars": "2.400000", "taker_fees_dollars": "0.067200",
                         "maker_fill_cost_dollars": "0.000000", "maker_fees_dollars": "0.000000"}
 
-            def fills_v2(self, **params):
-                return []
+            def fills_v2(self, **params):                   # the fills listing trails the row at first
+                if params.get("order_id") != "e1":
+                    return super().fills_v2(**params)
+                return [{"fill_id": "fe1", "trade_id": "te1", "order_id": "e1", "count_fp": "4.00", "fee_cost": "0.067200"}] if self.listed else []
 
         clock = Clock()
         client = PartialAnswer(holding="4.00")
+        client.listed = False
         ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=tmp("lag.jsonl"), ledger_path=tmp(), clock=clock)
         sig = LagSignal(event_key=KEY, title="DEN @ KC", leader="robinhood", follower="kalshi", outcome="KC", label="Kansas City", lead_move=0.08,
                         follower_move=0.0, leader_mid=0.675, follower_ask=0.60, follower_all_in=0.617, edge=0.058, depth=300,
@@ -393,8 +475,14 @@ class NotFinalEntryTests(unittest.TestCase):
         self.assertIn("the entry's fill is not verified", wait["reason"])
         self.assertFalse(wait.get("terminal"))                                        # the lock book keeps watching
         clock.t += 3
+        ex.reconcile(force=True)                                                      # the row says 4, the listing nothing yet
+        self.assertEqual(ex.ledger.get(entry["intent_id"])["fill_state"], "provisional")
+        wait = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
+        self.assertIn("the entry's fill is not verified", wait["reason"])            # an order row alone is not inventory
+        client.listed = True
+        clock.t += 3
         ex.reconcile(force=True)
-        self.assertEqual(ex.ledger.get(entry["intent_id"])["fill_count"], "4.00")
+        self.assertEqual((ex.ledger.get(entry["intent_id"])["fill_count"], ex.ledger.get(entry["intent_id"])["fill_state"]), ("4.00", "verified"))
         go = ex.buy_lock(kq(DEN, "DEN", 0.36, clock()), 10, 0.36, KEY, clock(), parent_id=entry["intent_id"])
         self.assertEqual((go["status"], go["count"]), ("SUBMITTED", 4))               # exactly what filled
 
@@ -417,6 +505,7 @@ class LockBookTests(unittest.TestCase):
         book = LagLockBook(store=None, watch_s=600, executable={"kalshi"}, executor=ex, require_tie_safe=True)
         book.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.617, clock(), "demo", entry_tie=0.5, parent_id=entry["intent_id"])
         clock.t += 5
+        ex.reconcile(force=True)                                                         # (the live loop, every tick)
         book.observe(KEY, {"kalshi": [kq(DEN, "DEN", 0.36, clock())]}, clock())          # 4 of 10 hedged
         self.assertEqual(book.positions[0].locked_contracts, 4)
         client.positions_error = HttpError(503, DEMO_URL, "demo hiccup")
@@ -426,6 +515,7 @@ class LockBookTests(unittest.TestCase):
         self.assertIn("still watching", lines[0])
         client.positions_error = None
         clock.t += 11
+        ex.reconcile(force=True)                                                         # the first leg: 4 verified
         book.observe(KEY, {"kalshi": [kq(DEN, "DEN", 0.36, clock())]}, clock())          # the other 6
         self.assertEqual((book.positions[0].status, book.positions[0].locked_contracts), ("locked", 10))
 

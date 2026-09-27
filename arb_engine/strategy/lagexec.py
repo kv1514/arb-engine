@@ -35,7 +35,12 @@ Demo / live orders go through the environment's durable order ledger
 * if the ledger cannot be opened or written, nothing is sent (``blocked``).
 
 Lock legs (``buy_lock``, strategy/laglock.py) are exempt from the budgets - they cut
-exposure - but only once they are proven hedges of their entry. ``buy_lock`` checks what
+exposure - but only once they are proven hedges of their entry, and only of an entry whose
+fill reconciliation has *verified* (a final order row and a complete fills listing agree,
+never below an earlier answer): a create answer alone, or exchange answers that contradict
+each other, size no lock leg (the lock book keeps watching until the entry is verified).
+A contradicted order - fewer fills than an earlier answer showed, or row and fills apart -
+keeps its whole worst case and raises an EXEC ERROR alert. ``buy_lock`` checks what
 market data can show: the quote is a Kalshi quote of the entry's market, no older than
 ``lock_quote_max_age_s``, priced at or under its ask; the lock contract's settlement identity
 (the outcome it pays on, its side, its tie payout, whether the market can tie) comes from
@@ -58,7 +63,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
-from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, OrderLedger, quote_fee_multiplier, settlement_identity
+from ..execution.ledger import (ACCEPTED, CONTRADICTED, HEDGEABLE, Budget, FeeMultipliers, LedgerError, OrderLedger, quote_fee_multiplier,
+                                refusal_hint, settlement_identity)
 
 MODES = ("off", "intent", "demo", "live")
 BLOCK_ALERT_EVERY_S = 600.0
@@ -237,9 +243,19 @@ class LagExecutor:
             res = self.ledger.reconcile(self.executor.client, now)
         except Exception as e:  # noqa: BLE001
             res = [{"error": repr(e)[:300]}]
-        changed = [r for r in res if r.get("before") != r.get("after") or r.get("error") or str(r.get("note", "")).startswith("error")]
+        changed = [r for r in res if r.get("before") != r.get("after") or r.get("error") or str(r.get("note", "")).startswith("error")
+                   or r.get("fill_state") == CONTRADICTED]
         if changed:
             self._journal_note({"kind": "reconcile", "ts": now, "results": changed})
+        for r in res:
+            if r.get("fill_state") == CONTRADICTED:
+                # The exchange's answers about an order disagree (fewer fills than it showed
+                # before, or order row and fills apart): its whole worst case stays reserved,
+                # and a person decides (`kalshi reconcile`, or `kalshi correct` for a real
+                # exchange correction). Once per intent per BLOCK_ALERT_EVERY_S.
+                self._alert_once(f"contradicted:{r.get('intent_id')}",
+                                 f"LAG executor ({self.mode}): Kalshi's answers about {r.get('strategy')} {r.get('ticker')} disagree - "
+                                 f"{str(r.get('note'))[:300]}. Check the exchange, then `kalshi reconcile` or `kalshi correct`.", None)
         return res
 
     def _journal_note(self, rec: dict[str, Any]) -> None:
@@ -269,10 +285,9 @@ class LagExecutor:
         try:
             result = self.executor.execute(plan, confirm=True)
         except Exception as e:  # the request may have reached the exchange
-            hint = getattr(e, "status", None)
             reason = f"{type(e).__name__}: {e}"[:300]
             try:
-                self.ledger.ambiguous(res.intent_id, reason, req_ts=req_ts, hint=hint if isinstance(hint, int) else None)
+                self.ledger.ambiguous(res.intent_id, reason, req_ts=req_ts, hint=refusal_hint(e))
             except LedgerError as le:
                 self.blocked_reason = f"ledger write failed after an order was sent: {le}"
             return {"status": "UNKNOWN", "state": "ambiguous", "reason": reason, "req_ts": req_ts, "resp_ts": self.clock()}
@@ -390,6 +405,13 @@ class LagExecutor:
             return skip("unknown entry intent")
         if str(parent.get("event_key") or "") != str(event_key):
             return skip(f"unrelated market: the entry is in {parent.get('event_key')}, the lock quote in {event_key}")
+        # Only a verified fill is inventory (the ledger checks it again, atomically): not a
+        # create answer alone, not answers that disagree. Not terminal: reconciliation may
+        # verify it on the next read, and the lock book keeps watching.
+        if parent.get("fill_state") == CONTRADICTED:
+            return skip("the entry's fill evidence is contradicted: nothing is hedged on it until it is resolved")
+        if parent.get("fill_state") not in HEDGEABLE:
+            return skip("the entry's fill is not verified (its order row and a complete fills listing have not confirmed it yet)")
         sd, why = settlement_of(quote, event_key)
         if sd is None:
             return skip(f"unknown settlement identity ({why})")

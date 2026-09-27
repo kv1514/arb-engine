@@ -154,6 +154,9 @@ class HttpClient:
                 if e.status in (429, 500, 502, 503, 504) and attempt < self.retries:
                     time.sleep((2.0 if e.status == 429 else 0.5) * (2 ** attempt))
                     continue
+                # How many times this request was sent: a 4xx answering a re-sent POST says
+                # nothing about the first send (execution/ledger.refusal_hint).
+                e.attempts = attempt + 1
                 raise
             except (urllib.error.URLError, TimeoutError, http.client.HTTPException, subprocess.SubprocessError) as e:
                 last_err = e
@@ -162,7 +165,9 @@ class HttpClient:
                     continue
                 raise
             if status >= 400:
-                raise HttpError(status, url, body)
+                err = HttpError(status, url, body)
+                err.attempts = attempt + 1
+                raise err
             if raw:
                 return body
             return json.loads(body) if body.strip() else {}

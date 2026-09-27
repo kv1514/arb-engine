@@ -474,7 +474,7 @@ class ArbButton:
     def _send_real(self, spec: dict[str, Any], count: int, kfee: Any, now: float) -> dict[str, Any]:
         """Demo / live: reserve in the ledger, send the IOC with the ledger's id, record the
         answer. Returns the fields for the tap's record."""
-        from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError
+        from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, refusal_hint
         from ..matching.normalize import game_event_key
 
         k, token = spec["kalshi"], spec["token"]
@@ -507,9 +507,8 @@ class ArbButton:
         try:
             result = ex.execute(plan, confirm=True)
         except Exception as e:  # noqa: BLE001 - the request may have reached the exchange
-            hint = getattr(e, "status", None)
             try:
-                led.ambiguous(res.intent_id, f"{type(e).__name__}: {e}"[:300], req_ts=req_ts, hint=hint if isinstance(hint, int) else None)
+                led.ambiguous(res.intent_id, f"{type(e).__name__}: {e}"[:300], req_ts=req_ts, hint=refusal_hint(e))
             except LedgerError:
                 pass
             self._reconcile_later(3.0, 15.0, 45.0)

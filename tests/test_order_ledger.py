@@ -109,13 +109,17 @@ class FakeKalshi:
                 **({"average_fill_price": str(price)} if got else {})}
 
     def fill_resting(self, oid, k):
-        """Someone sells into our resting order: k contracts at its price, as maker."""
+        """Someone sells into our resting order: k contracts at its price, as maker (the order
+        row and the fills listing both show it, as on the exchange)."""
         row = self.rows[oid]
         filled = int(float(row["fill_count_fp"])) + k
         left = int(float(row["remaining_count_fp"])) - k
         row.update(fill_count_fp=f"{filled}.00", remaining_count_fp=f"{left}.00", status="resting" if left else "executed",
                    maker_fill_cost_dollars=str(row["_price"] * filled), maker_fees_dollars="0.0000",
                    taker_fill_cost_dollars="0.0000", taker_fees_dollars="0.0000")
+        fid = f"f{len(self.fill_rows) + 1}"
+        self.fill_rows.append({"fill_id": fid, "trade_id": "t" + fid, "order_id": oid, "count_fp": f"{k}.00", "fee_cost": "0.0000",
+                               "is_taker": False})
 
     def cancel_order(self, order_id, market_ticker=None, exchange_index=None, subaccount=None):
         row = self.rows.get(order_id)
@@ -864,7 +868,7 @@ class EvidenceTests(unittest.TestCase):
                 led.apply_row(iid, order_row(status=status or None))
                 self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND))
         led, iid = self.open_ioc()
-        led.apply_row(iid, order_row(status="Executed"))                  # a terminal status, however spelt
+        led.apply_row(iid, order_row(status="Executed"), client=Fills([fill_row()]))   # a terminal status, however spelt
         self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
 
     def test_a_missing_or_open_remaining_quantity_is_not_final(self):
@@ -875,7 +879,7 @@ class EvidenceTests(unittest.TestCase):
                 note = led.apply_row(iid, order_row(**fields))
                 self.assertEqual((led.get(iid)["state"], led.exposure()), ("accepted", self.BOUND), note)
         led, iid = self.open_ioc()                                         # the legacy spelling is read too
-        led.apply_row(iid, order_row(remaining_count_fp=None, remaining_count=0))
+        led.apply_row(iid, order_row(remaining_count_fp=None, remaining_count=0), client=Fills([fill_row()]))
         self.assertEqual(led.get(iid)["state"], "done")
 
     def test_a_create_answer_books_an_iocs_fills_only_when_nothing_can_remain(self):
@@ -903,28 +907,29 @@ class EvidenceTests(unittest.TestCase):
     def test_absent_fees_keep_the_fee_bound_until_they_are_reported(self):
         # Reported: executed, 1 filled, taker cost $0.50, no fee fields -> was "done" with $0 fees.
         led, iid = self.open_ioc(final_answer=True)
-        note = led.apply_row(iid, order_row(taker_fees_dollars=None, maker_fees_dollars=None))
+        note = led.apply_row(iid, order_row(taker_fees_dollars=None, maker_fees_dollars=None), client=Fills([fill_row(fee=None)]))
         row = led.get(iid)
         self.assertEqual((row["state"], row["fill_count"], row["fees"]), ("accepted", "1.00", None))
         self.assertIn("no taker_fees_dollars", note)
         self.assertEqual(led.exposure(), self.BOUND)                       # not $0.50: the fee is unknown, so it is bounded
         # The fees arrive on a later read: booked at what was charged.
-        self.assertTrue(led.apply_row(iid, order_row()).startswith("done"))
+        self.assertTrue(led.apply_row(iid, order_row(), client=Fills([fill_row()])).startswith("done"))
         self.assertEqual((Decimal(led.get(iid)["fees"]), led.exposure()), (Decimal("0.0175"), self.PAID))
 
     def test_explicitly_reported_zero_fees_are_final(self):
         led, iid = self.open_ioc(final_answer=True)
-        led.apply_row(iid, order_row(taker_fees_dollars="0.000000"))      # stated, not absent
+        led.apply_row(iid, order_row(taker_fees_dollars="0.000000"), client=Fills([fill_row(fee="0.000000")]))   # stated, not absent
         self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", Decimal("0.5")))
         led, iid = self.open_ioc(final_answer=True)
-        led.apply_row(iid, order_row(taker_fees_dollars=""))                # blank is absent
+        led.apply_row(iid, order_row(taker_fees_dollars=""), client=Fills([fill_row(fee=None)]))                 # blank is absent
         self.assertEqual(led.get(iid)["state"], "accepted")
         # Nothing filled: nothing paid, whether or not the row repeats the zero dollar fields.
         for fields in ({}, {k: None for k in ("taker_fill_cost_dollars", "maker_fill_cost_dollars", "taker_fees_dollars", "maker_fees_dollars")}):
             with self.subTest(fields=fields):
                 led, iid = self.open_ioc()
                 led.apply_row(iid, order_row(status="canceled", fill_count_fp="0.00", **{**{"taker_fill_cost_dollars": "0.000000",
-                                                                                             "taker_fees_dollars": "0.000000"}, **fields}))
+                                                                                             "taker_fees_dollars": "0.000000"}, **fields}),
+                              client=Fills([]))                                                  # ... and its complete fills listing is empty
                 self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", Decimal("0")))
         led, iid = self.open_ioc()                                         # ... but a row billing an order with no fills contradicts itself
         led.apply_row(iid, order_row(status="canceled", fill_count_fp="0.00", taker_fees_dollars="0.017500"))
@@ -979,15 +984,18 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("disagree", note)
         self.assertEqual((row["state"], row["fill_count"]), ("accepted", None))                    # the fill is unverified again
         self.assertEqual(led.exposure(), self.BOUND)                                               # the whole worst case counts
+        self.assertEqual(led.get(iid)["fill_state"], "contradicted")
         lock = led.reserve(strategy="lag-lock", ticker=TICKER.replace("-KC", "-DEN"), side="yes", count=1, limit_price="0.40",
                            parent_id=iid, fee_multiplier=1)
         self.assertFalse(lock.ok)
-        self.assertIn("not verified", lock.reason)                                                # no lock leg sized on it
-        # Fills that merely trail the row (fewer listed so far) do not contradict a complete row.
-        led.apply_row(iid, order_row(), client=Fills([]))
-        self.assertEqual((led.get(iid)["state"], led.exposure()), ("done", self.PAID))
-        done = json.loads([e for e in led.events(iid) if e["kind"] == "done"][0]["detail"])
-        self.assertTrue(done["fills_trail"])
+        self.assertIn("the entry's fill evidence is contradicted", lock.reason)                    # no lock leg sized on it
+        # Fills that merely trail the row (fewer listed so far) do not contradict it - nor do they
+        # confirm it: the intent waits, unverified, and the whole worst case still counts.
+        note = led.apply_row(iid, order_row(), client=Fills([]))
+        self.assertIn("trails the row", note)
+        self.assertEqual((led.get(iid)["state"], led.get(iid)["fill_state"], led.exposure()), ("accepted", "provisional", self.BOUND))
+        led.apply_row(iid, order_row(), client=Fills([fill_row()]))                                # the listing catches up
+        self.assertEqual((led.get(iid)["state"], led.get(iid)["fill_state"], led.exposure()), ("done", "verified", self.PAID))
 
     def test_incomplete_answers_never_free_budget(self):
         """A per-game budget sized so that a second order fits after a complete answer
@@ -1072,6 +1080,11 @@ class EvidenceTests(unittest.TestCase):
         res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56", fee_multiplier=1)
         led.accepted(res.intent_id, load("create_order_fill"))
         self.assertEqual(led.get(res.intent_id)["fill_count"], "1.00")      # the real create answer is final (remaining "0.00")
+        # The recorded row is of the demo run's own order: as the row of *this* order it carries
+        # this intent's client_order_id (a row naming another is not this order's evidence).
+        self.assertIn("another client_order_id", led.apply_row(res.intent_id, od, client=Fills(fills)))
+        self.assertEqual(led.get(res.intent_id)["fill_state"], "contradicted")
+        od = dict(od, client_order_id=res.client_order_id)
         led.apply_row(res.intent_id, od, client=Fills(fills))
         row = led.get(res.intent_id)
         self.assertEqual((row["state"], Decimal(row["fill_cost"]), Decimal(row["fees"])), ("done", Decimal("0.56"), Decimal("0.0173")))

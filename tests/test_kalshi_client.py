@@ -607,6 +607,9 @@ class DemoCheckOfflineTests(unittest.TestCase):
             "GET /portfolio/orders?status=resting": [{"orders": [order_row], "cursor": ""}, {"orders": [], "cursor": ""}],
             f"DELETE /portfolio/events/orders/{oid}": dict(_fx("cancel_order"), order_id=oid),
             "DELETE /portfolio/events/orders/batched": {"orders": [{"order_id": "b2", "reduced_by": "1.00"}, {"order_id": "b3", "reduced_by": "1.00"}]},
+            # The ledger finishes an order only on its own complete fills listing (the exchange
+            # filters by order_id): the three orders it tracks here filled nothing.
+            **{f"GET /portfolio/fills?order_id={o}": {"fills": [], "cursor": ""} for o in ("i5", "e6", "m7")},
             "GET /portfolio/fills": _fx("fills_v2"),
         }
 
@@ -736,7 +739,7 @@ class RecordedFillTests(unittest.TestCase):
 
         from arb_engine.execution.ledger import OrderLedger
 
-        od = _fx("order_filled")["order"]
+        od = dict(_fx("order_filled")["order"])
 
         class Exchange:
             env, base_url = "demo", "https://external-api.demo.kalshi.co/trade-api/v2"
@@ -749,6 +752,7 @@ class RecordedFillTests(unittest.TestCase):
         clock = [1000.0]
         led = OrderLedger(os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "l.sqlite3"), "demo", Exchange.base_url, clock=lambda: clock[0])
         res = led.reserve(strategy="lag", ticker=od["ticker"], side="yes", count=1, limit_price="0.56", fee_multiplier=1)
+        od["client_order_id"] = res.client_order_id          # the row of *this* order carries its client_order_id
         led.accepted(res.intent_id, _fx("create_order_fill"))
         clock[0] += 3
         led.reconcile(Exchange())

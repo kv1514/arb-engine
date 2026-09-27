@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from ..execution.kalshi import gtd_horizon_s
-from ..execution.ledger import ACCEPTED, IOC as IOC_TIFS, OPEN, FeeMultipliers, LedgerError, OrderLedger, env_host_problem
+from ..execution.ledger import ACCEPTED, IOC as IOC_TIFS, OPEN, FeeMultipliers, LedgerError, OrderLedger, env_host_problem, refusal_hint
 from ..matching.normalize import game_event_key
 from ..venues.kalshi import KalshiClient, batch_cancel_reduced, build_order_payload, order_expiration, order_side_price
 
@@ -316,8 +316,7 @@ class KalshiBroker(Broker):
         try:
             answer = self.client.create_order(payload)
         except Exception as e:  # the request may have reached the exchange
-            hint = getattr(e, "status", None)
-            self.ledger.ambiguous(res.intent_id, f"{type(e).__name__}: {e}"[:300], req_ts=req_ts, hint=hint if isinstance(hint, int) else None)
+            self.ledger.ambiguous(res.intent_id, f"{type(e).__name__}: {e}"[:300], req_ts=req_ts, hint=refusal_hint(e))
             raise OrderOutcomeUnknown(f"{ticker} {side} @ {price} x{count}: outcome unknown ({type(e).__name__}); new orders are refused "
                                       "until reconciliation finds it") from e
         state = self.ledger.accepted(res.intent_id, answer, req_ts=req_ts)

@@ -311,12 +311,17 @@ class KalshiClient:
         """(rows, truncated) of a signed cursor-paged read. ``truncated`` is True when the
         exchange still returned a cursor after ``max_pages`` pages: the rows are then *not*
         the whole answer, so an absent order proves nothing (``execution/ledger.py``) and a
-        listing printed for a person says so (``kalshi orders``)."""
+        listing printed for a person says so (``kalshi orders``). A page without its rows
+        list raises: it is a failed read, not an empty one (an empty listing is ``[]``, seen on
+        demo 2026-09-27), and read as empty it would let an absent order prove something."""
         out: list[dict] = []
         q = dict(params or {})
         for _ in range(max_pages):
             data = self.get(path, q or None, auth=True)
-            out.extend(data.get(key) or [])
+            page = data.get(key) if isinstance(data, dict) else None
+            if not isinstance(page, list):
+                raise ValueError(f"GET {path}: a page without its {key!r} list ({type(page).__name__}): the listing is not complete")
+            out.extend(page)
             cursor = data.get("cursor")
             if not cursor:
                 return out, False

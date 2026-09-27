@@ -1176,33 +1176,28 @@ class LagLockTests(unittest.TestCase):
     def test_demo_position_sends_the_lock_leg_and_only_a_fill_locks(self):
         from arb_engine.execution.kalshi import KalshiExecutor
         from arb_engine.strategy.lagexec import LagExecutor
+        from tests.test_lock_identity import FakeKalshi
 
-        fills = ["10.00", "0.00", "4.00", "6.00"]
-        sent = []
-
-        class Client:
-            env, base_url, has_credentials, api_key = "demo", DEMO_URL, True, "lock-test-key"
-
-            def create_order(self, payload):
-                sent.append(payload)
-                return {"order_id": f"o{len(sent)}", "fill_count": fills.pop(0), "remaining_count": "0.00"}
-
-            def positions(self, **params):                  # the account still holds the entry's 10 KC
-                return {"market_positions": [{"ticker": "KXNFLGAME-26SEP21DENKC-KC", "position_fp": "10.00"}]}
+        # The account still holds the entry's 10 KC; each order's final row and fills are kept.
+        client = FakeKalshi(fills=["10.00", "0.00", "4.00", "6.00"], holding="10.00")
+        sent = client.sent
         # Room for the 10-contract entry only ($6.20 worst case): the caps are then exhausted,
         # and the lock leg must still go.
-        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock.jsonl"),
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=os.path.join(tmpdir(), "lock.jsonl"),
                          ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"), max_notional_per_game=6.30, clock=lambda: 0.0)
         entry = ex.on_signal(LagExecutorTests._sig(self, contracts=10, ts=0.0), LagExecutorTests._quotes(self), 0.0)
         self.assertEqual((entry["status"], entry["fill_count"]), ("SUBMITTED", "10.00"))
         b = self._book(executor=ex)
         b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5, parent_id=entry["intent_id"])
+        ex.reconcile(5.0, force=True)                                                     # (the live loop, every tick): the entry's 10 verified
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 5.0)]}, 5.0)          # IOC found nothing
         self.assertEqual(b.positions[0].status, "watching")
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 6.0)]}, 6.0)          # 1 s later: retries are spaced
         self.assertEqual(len(sent), 2)
+        ex.reconcile(16.0, force=True)                                                    # the empty lock leg: 0 verified
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 16.0)]}, 16.0)        # 4 of 10 filled
         self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("watching", 4))
+        ex.reconcile(27.0, force=True)
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 27.0)]}, 27.0)        # the other 6: locked
         self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("locked", 10))
         # Only the unhedged remainder is ever asked for: 10, 10, then 6 - never more than the entry.
@@ -1213,34 +1208,37 @@ class LagLockTests(unittest.TestCase):
     def test_lock_legs_without_a_verified_entry_or_past_their_attempts_are_refused(self):
         from arb_engine.execution.kalshi import KalshiExecutor
         from arb_engine.strategy.lagexec import LagExecutor
+        from tests.test_lock_identity import FakeKalshi
 
-        sent = []
-
-        class Client:
-            env, base_url, has_credentials, api_key = "demo", DEMO_URL, True, "lock-test-key"
-
-            def create_order(self, payload):
-                sent.append(payload)
-                return {"order_id": f"o{len(sent)}", "fill_count": "10.00" if len(sent) == 1 else "0.00", "remaining_count": "0.00"}
-
-            def positions(self, **params):
-                return {"market_positions": [{"ticker": "KXNFLGAME-26SEP21DENKC-KC", "position_fp": "10.00"}]}
-        ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock3.jsonl"),
+        client = FakeKalshi(fills=["10.00", "0.00", "0.00", "0.00"], holding="10.00")
+        sent = client.sent
+        ex = LagExecutor(mode="demo", executor=KalshiExecutor(client), intents_path=os.path.join(tmpdir(), "lock3.jsonl"),
                          ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"), max_lock_attempts=2, clock=lambda: 0.0)
         q = self._q("kalshi", "DEN", 0.36, 5.0)
         self.assertIn("inventory cannot be verified", ex.buy_lock(q, 10, 0.36, KEY, 5.0)["reason"])
         self.assertEqual(sent, [])
         entry = ex.on_signal(LagExecutorTests._sig(self, contracts=10, ts=0.0), LagExecutorTests._quotes(self), 0.0)
+        # The create answer alone is not a verified fill: no lock leg until reconciliation confirms it.
+        early = ex.buy_lock(q, 25, 0.36, KEY, 5.0, parent_id=entry["intent_id"])
+        self.assertEqual(early["status"], "skipped")
+        self.assertIn("the entry's fill is not verified", early["reason"])
+        self.assertEqual(len(sent), 1)
+        ex.reconcile(5.0, force=True)
         # Asking for more than the entry filled is cut to the fill.
         self.assertEqual(ex.buy_lock(q, 25, 0.36, KEY, 5.0, parent_id=entry["intent_id"])["count"], 10)
-        ex.buy_lock(q, 10, 0.36, KEY, 6.0, parent_id=entry["intent_id"])
-        third = ex.buy_lock(q, 10, 0.36, KEY, 7.0, parent_id=entry["intent_id"])
+        # Until that leg is reconciled it counts at all 10 it could have filled: wait (not final).
+        waiting = ex.buy_lock(q, 10, 0.36, KEY, 6.0, parent_id=entry["intent_id"])
+        self.assertIn("not reconciled yet", waiting["reason"])
+        self.assertFalse(waiting["terminal"])
+        ex.reconcile(8.0, force=True)                                         # that leg: nothing filled (verified)
+        ex.buy_lock(q, 10, 0.36, KEY, 8.0, parent_id=entry["intent_id"])
+        third = ex.buy_lock(q, 10, 0.36, KEY, 9.0, parent_id=entry["intent_id"])
         self.assertEqual(third["status"], "skipped")
         self.assertIn("attempts", third["reason"])
         self.assertEqual(len(sent), 3)
         b = self._book(executor=ex)
         b.open("e1", KEY, "KC", "DEN", "kalshi", 10, 0.60, 0.62, 0.0, "demo", entry_tie=0.5, parent_id=entry["intent_id"])
-        lines = b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 8.0)]}, 8.0)
+        lines = b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 10.0)]}, 10.0)
         self.assertEqual(b.positions[0].status, "expired")                     # the watch ends: no more lock legs
         self.assertIn("closed with 0 of 10 hedged", lines[0])
 
