@@ -15,7 +15,53 @@ This section was written by a separate session, from 16:25 to 17:15 PDT on 2026-
 * **It added two files:** this section and `docs/DEPLOY_RUNBOOK_2026-09-26.md`. The runbook is the step-by-step procedure (stop → reconcile → fast-forward a pinned hash → start → verify → demo check) and supersedes *Exact next steps* 2–4 below.
 * **Read-only analysis scripts:** `analysis/{A,B,C}/analyze.py` and `recon/demo_recon.py` in the session scratchpad, `/private/tmp/claude-501/-Users-kv15/70832a7e-…/scratchpad/`. That directory is wiped at reboot, so the numbers are copied here.
 
-### Read this first
+### Lock legs: the budget exemption only for proven hedges (`75a17e0`)
+
+**What was wrong.** Reproduced in memory: `OrderLedger.reserve(parent_id=...)` granted a
+budget-exempt 10-contract "lock" on `KXNFLGAME-26SEP21BUFMIA-BUF` (game B) against a filled KC
+entry in game A. A direct `LagExecutor.buy_lock` sent both a same-side addition (more KC)
+and an unrelated-game order priced on a quote 900 s old. The entry's quantity bounded the
+count, but nothing checked the relationship between the two contracts.
+
+**Which layer checks what.**
+
+| layer | checks |
+|---|---|
+| caller: `LagExecutor.buy_lock` | the quote is Kalshi's, for the entry's market (quote event = position event = entry event), no older than `lock_quote_max_age_s` (10 s), priced at or under its ask; the lock contract's settlement identity comes from the registry's *verified* rule (unknown → refused); the exchange still shows the entry's contracts (`GET /portfolio/positions?ticker=`; unreadable → refused, fewer → capped) |
+| ledger: `OrderLedger._lock_check` (atomic with the reservation) | the entry is this account's verified purchase with a recorded settlement identity, and not itself a lock; same market (event key and Kalshi event ticker); no same-side addition (not the entry's own contract or outcome; outcomes named by the moneyline key); complementary payoffs (tie payouts known and summing to ≥ $1 where the market can tie; a NO of the entry's own market qualifies); the claimed quote time within 10 s; no *related* order of unknown outcome (the entry, its lock legs, anything on either ticker); remaining inventory = fill − exits since the entry (any strategy) − every earlier lock leg; attempt cap |
+
+**Unrelated unknown orders.** An unknown order in another game still blocks new exposure,
+but not a proven hedge (test
+`test_a_legitimate_hedge_goes_out_while_an_unrelated_order_is_unknown`).
+
+**Transient refusals.** The lock book now ends a watch only on terminal refusals (attempts
+used up, nothing left to hedge). A transient one, such as a stale quote or a failed read,
+keeps watching.
+
+**Validation (`75a17e0`).**
+* **Tests:** 1030 Python tests pass, 27 of them new in `tests/test_lock_identity.py`.
+* **Checks:** JS parity (3650 + 54 vectors, 0 mismatches, `ok 3769` + `ok 159`),
+  `render_results.py --check` and `git diff --check` all pass.
+* **Kalshi demo check** (`--fill --confirm-demo`): **ALL PASS** on the run after two
+  transient demo HTTP 500s. Those runs stopped before any order, or had the lock refused
+  fail-closed on the failed positions read. The passing run shows:
+  * the entry recorded its settlement identity;
+  * the exchange showed 1.00 held;
+  * the lock (5 requested) was bounded to 1 and sent;
+  * a second lock was refused with "nothing left to hedge (filled 1.00, exited 0, hedged or
+    unresolved 1.00)".
+
+**Gaps.**
+* **Inventory is attributed conservatively.**
+  * Sells or opposite-side buys on the entry's ticker count as exits of *every* entry on
+    that ticker (never under-counted).
+  * The exchange-position cap is per ticker, not per entry.
+* **Old entries are never hedged.** Entries written before this commit carry no settlement
+  identity, so the exemption refuses to hedge them.
+* **Pushes block hedges.** A market that can push but whose registry rule states no push
+  payout (e.g. Kalshi NFL spreads on integer lines) is never hedged under the exemption.
+
+## Read this first
 
 * **What is deployed.** `~/Documents/GitHub/arb-engine` runs `main` `3ca9684`; the bridge runs `b831e0d`.
   * This branch is **not deployed**. No process has `arbitradge` as its working directory, and neither checkout has an order-ledger file.
@@ -276,7 +322,8 @@ its own worktree. Not pushed, not deployed, not yet merged into `claude/exec-rea
 `strategy/maker.py`, `strategy/broker.py`, `cli.py` (one keyword), `cli_plugins/maker_flags.py`,
 `scripts/kalshi_demo_check.py` (one call), README and AGENTS test count, and the new
 `tests/test_watch_identity.py`. It does not touch `execution/ledger.py`, which two other sessions
-are editing. **1012 Python tests OK** on `91ab70d`.
+are editing. **1012 Python tests OK** on `91ab70d`; merged with `claude/exec-readiness` `14ada17`
+(the lock-identity work): **1039 OK**.
 
 **The finding.** The watch key is `f"{event_key}|kalshi:{outcome}"`, and event keys contain `|`
 themselves (`nfl:BUF|DET:2026-09-20:spread:BUF-1.5`). Both readers cut at the first `|`, which kept

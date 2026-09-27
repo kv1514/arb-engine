@@ -1125,7 +1125,7 @@ class LagLockTests(unittest.TestCase):
     """strategy/laglock.py: a filled LAG position watches the other outcome for a lock."""
 
     def _q(self, venue, outcome, ask, t, size=500, side="yes", exch=None):
-        meta = {"ticker": f"T-{outcome}", "side": side}
+        meta = {"ticker": f"KXNFLGAME-26SEP21DENKC-{outcome}", "side": side}   # the entry's Kalshi event (LagExecutorTests._quotes)
         if exch:
             meta["exchange"] = exch
         return OutcomeQuote(venue, f"{venue}-{outcome}", KEY, outcome, ask=ask, bid=round(ask - 0.01, 2), ask_size=size, ts=t,
@@ -1181,11 +1181,14 @@ class LagLockTests(unittest.TestCase):
         sent = []
 
         class Client:
-            env, base_url, has_credentials = "demo", DEMO_URL, True
+            env, base_url, has_credentials, api_key = "demo", DEMO_URL, True, "lock-test-key"
 
             def create_order(self, payload):
                 sent.append(payload)
                 return {"order_id": f"o{len(sent)}", "fill_count": fills.pop(0), "remaining_count": "0.00"}
+
+            def positions(self, **params):                  # the account still holds the entry's 10 KC
+                return {"market_positions": [{"ticker": "KXNFLGAME-26SEP21DENKC-KC", "position_fp": "10.00"}]}
         # Room for the 10-contract entry only ($6.20 worst case): the caps are then exhausted,
         # and the lock leg must still go.
         ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock.jsonl"),
@@ -1203,8 +1206,9 @@ class LagLockTests(unittest.TestCase):
         b.observe(KEY, {"kalshi": [self._q("kalshi", "DEN", 0.36, 27.0)]}, 27.0)        # the other 6: locked
         self.assertEqual((b.positions[0].status, b.positions[0].locked_contracts), ("locked", 10))
         # Only the unhedged remainder is ever asked for: 10, 10, then 6 - never more than the entry.
+        den = "KXNFLGAME-26SEP21DENKC-DEN"
         self.assertEqual([(p["ticker"], p["time_in_force"], int(float(p["count"]))) for p in sent[1:]],
-                         [("T-DEN", "immediate_or_cancel", 10), ("T-DEN", "immediate_or_cancel", 10), ("T-DEN", "immediate_or_cancel", 6)])
+                         [(den, "immediate_or_cancel", 10), (den, "immediate_or_cancel", 10), (den, "immediate_or_cancel", 6)])
 
     def test_lock_legs_without_a_verified_entry_or_past_their_attempts_are_refused(self):
         from arb_engine.execution.kalshi import KalshiExecutor
@@ -1213,11 +1217,14 @@ class LagLockTests(unittest.TestCase):
         sent = []
 
         class Client:
-            env, base_url, has_credentials = "demo", DEMO_URL, True
+            env, base_url, has_credentials, api_key = "demo", DEMO_URL, True, "lock-test-key"
 
             def create_order(self, payload):
                 sent.append(payload)
                 return {"order_id": f"o{len(sent)}", "fill_count": "10.00" if len(sent) == 1 else "0.00", "remaining_count": "0.00"}
+
+            def positions(self, **params):
+                return {"market_positions": [{"ticker": "KXNFLGAME-26SEP21DENKC-KC", "position_fp": "10.00"}]}
         ex = LagExecutor(mode="demo", executor=KalshiExecutor(Client()), intents_path=os.path.join(tmpdir(), "lock3.jsonl"),
                          ledger_path=os.path.join(tmpdir(), "ledger.sqlite3"), max_lock_attempts=2, clock=lambda: 0.0)
         q = self._q("kalshi", "DEN", 0.36, 5.0)

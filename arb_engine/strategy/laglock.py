@@ -222,16 +222,18 @@ class LagLockBook:
                 if filled:
                     p.locked_contracts += int(filled)
                 if p.locked_contracts < p.contracts:
-                    if (rec or {}).get("status") == "skipped" and p.locked_contracts == 0 and "attempts" not in str(rec.get("reason")) and "hedged" not in str(rec.get("reason")):
-                        self._save(p)     # e.g. no entry intent: nothing sent, keep watching
-                        out.append(f"LAG lock not sent ({rec.get('reason')}); still watching {p.lock_outcome}")
-                        continue
-                    if (rec or {}).get("status") == "skipped":
-                        # The executor refuses more lock legs (attempts used up / nothing left
-                        # unhedged): the watch ends with what was hedged.
+                    if (rec or {}).get("status") == "skipped" and _terminal(rec):
+                        # The executor refuses every further lock leg (attempts used up / nothing
+                        # left unhedged): the watch ends with what was hedged.
                         p.status, p.closed_at = ("partial" if p.locked_contracts else "expired"), now
                         self._save(p)
                         out.append(f"LAG lock watch closed with {p.locked_contracts} of {p.contracts} hedged: {rec.get('reason')}")
+                        continue
+                    if (rec or {}).get("status") in ("skipped", "blocked"):
+                        # Not sent this time (a stale quote, an unreadable position, a related order
+                        # still unknown, no entry intent): keep watching, whatever was hedged so far.
+                        self._save(p)
+                        out.append(f"LAG lock not sent ({rec.get('reason')}); {p.locked_contracts} of {p.contracts} hedged; still watching {p.lock_outcome}")
                         continue
                     self._save(p)
                     out.append(f"LAG lock order {(rec or {}).get('status')} (filled {filled or 0}; {p.locked_contracts} of {p.contracts} hedged); still watching {p.lock_outcome}")
@@ -272,6 +274,15 @@ class LagLockBook:
             out["mean_lock_margin"] = sum(p.lock_margin for p in locked) / len(locked)
             out["locked_dollars"] = sum(p.lock_margin * p.contracts for p in locked)
         return out
+
+
+def _terminal(rec: dict) -> bool:
+    """Does the executor refuse every further lock leg for this entry (``terminal``, else the
+    ledger's reasons: attempts used up, nothing left to hedge)?"""
+    if "terminal" in rec:
+        return bool(rec["terminal"])
+    why = str(rec.get("reason") or "")
+    return "attempts already" in why or "nothing left to hedge" in why or "already hedged" in why
 
 
 def _num(x: Any) -> Optional[float]:
