@@ -15,8 +15,197 @@ commits are listed in merge order:
 4. *Ledger evidence* (`f4b3356`).
 5. *Historical trade tapes* (`c2cd4d8`).
 6. *H4 same-timestamp ordering* (`5480dfc`).
+7. *Fill evidence only grows* (`8522074`, 2026-09-27): the ledger defects from the audit of
+   `bf7d2d5`. **Not deployed**; the GitHub clone still runs `bf7d2d5`.
 
 Deploy with `docs/DEPLOY_RUNBOOK_2026-09-26.md`.
+
+## Fill evidence only grows (`8522074`, session db5ad6, 2026-09-27)
+
+The ledger defects from the audit of `bf7d2d5`, fixed and tested offline.
+
+* **What this round did not touch.**
+  * No order was sent and nothing was enabled.
+  * The only exchange calls were GETs on the Kalshi **demo** account (fill and order
+    listings, to verify API shapes).
+  * No evaluator file was edited, and the test fold stays sealed.
+* **Integration.** It sits on the peer rounds merged as fast-forwards: `f74cb19` / `d67aef0`
+  (trade tapes, session c1ab42) and `9fb8e98` (H4, session 89f99c).
+
+### What was wrong
+
+`_apply_order` could erase fills already reported. The steps:
+
+1. Reserve a 1-contract LAG IOC.
+2. `accepted(…, {"order_id": "o1", "fill_count": "1"})`.
+3. Apply the row `{"status": "canceled", "fill_count_fp": "0", "remaining_count_fp": "0"}`,
+   with a client whose `fills_v2` lists one fill for `o1`.
+
+The result was `done: 0 filled, $0 + $0 fees`, and `fills_v2` was never called: fills were
+read only when a row reported some. The same hole let a later row reporting fewer fills
+(10 → 4) finish at the lower count. A lock leg already sized on 10 was then over-hedged.
+
+### The rules now
+
+The module docstring (6. and 7.) and AGENTS.md rule 3a state them in full.
+
+1. **Fill evidence only grows.**
+   * Every count an exchange answer shows is kept in `fill_seen`, with its source in
+     `fill_source`, and survives restarts. The sources are the create answer (even a non-final
+     one), order rows, and fills listings (a lower bound even when truncated).
+   * A count below it, or order row and fills listing apart, makes the intent `contradicted`
+     (`fill_state`).
+   * A contradicted intent releases nothing: an IOC goes back to its whole worst case, no
+     lock leg is sized on it, and the LAG executor pushes one EXEC ERROR per intent.
+   * It clears only when the answers agree again at or above the highest count seen.
+   * A row that says an IOC may still fill (no terminal status, some or no remaining
+     quantity) also puts it back at its whole worst case.
+2. **Finishing needs the fills listing.** `done` needs a final order row whose count no
+   earlier answer exceeded, plus a complete, correctly scoped fills listing that agrees with
+   it. That applies to zero-fill cancellations too (an empty complete listing).
+   * **Complete:** every page read, no error.
+   * **Correctly scoped:** only this order's rows, each on the intent's market ticker and
+     `book_side`, every fill with an id, and duplicates identical.
+   * **An order row must name the intent's market, book side and `client_order_id`.**
+   * **A listing that fails** (missing, failed, truncated, or rows of other orders) releases
+     nothing, and the intent is read again.
+   * **Trailing fills.** A listing that trails the row confirms nothing; it is no longer
+     finished at the row's count.
+3. **Lock legs only on verified fills.** `verified` means a final row and a complete listing
+   agree; `corrected` is an operator's correction.
+   * A create answer alone, an order row alone, or a trailing listing sizes no lock leg.
+   * The caller (`buy_lock`) and the ledger (`_lock_check`) both check this.
+   * Earlier lock legs and exits that are not verified count at their full size. A refusal
+     they cause says `waiting - … not reconciled yet`, which is not terminal, so the lock
+     book keeps watching instead of ending the watch.
+4. **Exchange corrections are explicit.**
+   * The ledger never takes a lower count by itself.
+   * `kalshi correct --intent-id X --reason "…"` is a dry run; add `--confirm` to book
+     (`OrderLedger.accept_correction`). It re-reads the order and books only a final row
+     and a complete listing that agree on a count below the one seen. It records the
+     evidence it overrides and the reason, and sets `fill_state = corrected`.
+   * `kalshi release` now refuses an intent that showed fills.
+5. **Compare-and-set writes.**
+   * `rejected`, `ambiguous` and `done` apply only from the states they expect. A stale
+     decision is recorded as `stale-write-ignored` and overwrites nothing.
+   * `done` and every hold re-check `fill_seen` inside the write, so another reader's newer
+     count wins.
+   * A create answer arriving after a release reopens the intent: the exchange has the order.
+6. **Finite times.** `reserve` refuses a non-finite `quote_ts` or `now`: NaN, ±inf, a
+   string or a bool. A NaN quote time used to pass the lock leg's freshness check. The
+   other entry points raise `LedgerError`.
+7. **Re-sent POSTs.**
+   * `HttpClient` records `attempts` on an `HttpError`, and `refusal_hint(e)` returns the
+     status only for a single-attempt 4xx.
+   * A 4xx answering a re-send of a POST the exchange already accepted used to release that
+     order after one listing, under read lag (audit h05). Now the full not-found window
+     applies.
+   * `KalshiClient.paged` raises on a page without its rows list. An empty listing is `[]`
+     (checked on demo), so a malformed 200 can no longer prove an order absent.
+
+**Fact checked on demo (GET only), now in `docs/VENUES.md`.** A YES sell's order row says
+`side: yes, outcome_side: no`, and its fills say `side: no, outcome_side: no`. Only
+`book_side` (`ask`) names the direction, so the scope check compares `book_side`, never the
+legacy fields. Comparing `side` would have held every sell as contradicted.
+
+### The independent audit (session c1ab42, repro scripts run against this tree)
+
+**Fixed:**
+* **h01** (zero-fill row skips fills): contradicted, not done.
+* **h02 and s03** (count decreases, over-hedge): held, and no lock is sized.
+* **h03 and h03b:**
+  * a later row showing fills raises the booked count;
+  * a resting 3/7 row puts the IOC back at its whole worst case.
+* **h05** (4xx under read lag) for re-sent POSTs, via `attempts`. The script's synthetic
+  single-attempt 400 is still read as a refusal.
+* **h07** (row identity): market, book side and `client_order_id` are checked.
+* **h08:** a release of an intent that showed fills is refused.
+* **h09** (stale release over `done`): ignored.
+* **s16** (terminal while unresolved): now a wait.
+* **r01** (NaN `quote_ts`): refused. The script pins its own checkout; run on this tree
+  through a copy.
+
+**Not addressed** (for the next round):
+* **s15:** the exchange-holding cap in `buy_lock` is per market, so two entries on one
+  ticker share one position.
+* **s17:** another entry's NO lock on the same ticker counts as this entry's exit. That is
+  conservative, so it under-hedges.
+* **h06:** `min_ts` clock skew.
+* **h10:** `KalshiBroker.poll` reads a missing fill count as 0, in memory only; the ledger
+  is unaffected.
+* **h11–h16:** no bound on a row's fill cost, and the lows.
+
+### Tests
+
+`tests/test_ledger_fill_evidence.py` has 35 adversarial tests:
+* the reported reproduction;
+* decreasing counts (final, resting, down then up);
+* zero after positive;
+* duplicate, conflicting and id-less fills;
+* fills of other orders, markets and book sides;
+* a YES sell's real fill shape;
+* a page failing mid-listing, a page without rows, a truncated listing, and an orders page
+  without rows that never releases;
+* restart with a later lower row, and restart after a lost answer;
+* non-finite times at the boundary and at the caller;
+* four legitimate zero-fill cancellations (IOC, maker, lost answer, failing listing) that
+  resolve normally;
+* locks on unverified, trailing, contradicted and corrected entries;
+* the correction and release rules, and `kalshi correct` dry-run and confirm;
+* stale writes, and a late answer after a release;
+* a re-sent POST's 400 end to end;
+* a 300-case seeded property test: evidence never shrinks, exposure never falls below the
+  highest count seen, and `done` only on agreeing complete evidence.
+
+**Existing tests changed** where the stricter rules apply:
+* Finishing tests now pass the agreeing fills listing.
+* Lock tests reconcile their entries first; the lock book's tests reconcile each tick, as
+  the live loop does.
+* The fake exchanges list resting fills, and each order's row and fills.
+* The offline demo check serves per-order fills.
+* The recorded demo row carries the intent's own `client_order_id`.
+
+### Validation (exact)
+
+Run on `8522074`, the tree combined with the peers' `d67aef0`:
+* `python3 -m unittest discover -s tests -t .`: **Ran 1136 tests in 115.344s, OK** (1101 +
+  35), about 116 s wall-clock with the Mac awake.
+* `bash scripts/test_js.sh`: fee vectors 3650 checked, 0 mismatches; arb vectors 54, 0
+  mismatches; `ok 3769 checks`; `ok 159 checks`; extension PASS (0 warnings).
+* `python3 scripts/render_results.py --check`: results blocks OK.
+* `git diff --check`: clean.
+* **Not run:** the live demo order check (`scripts/kalshi_demo_check.py`). It sends demo
+  orders, and this round sends none. It reconciles its entry to `done` before the lock leg,
+  so it should pass under the new rules; run it before deploying.
+
+### Limitations
+
+* **One extra GET per finished order** (`/portfolio/fills?order_id=`). While the fills
+  endpoint fails (demo's intermittent 500s), orders stay `accepted` longer.
+  * A zero-fill IOC keeps exposure $0 from its final create answer.
+  * An IOC with fills keeps them at the limit plus the fee bound.
+  * Lock legs wait.
+* **An order already `done` is never re-read,** so an exchange correction after it finished
+  goes unnoticed. Kalshi's correction notices are not consumed.
+* **A single-attempt 4xx is still trusted** as a refusal after one complete listing past
+  `settle_s`.
+* **Rows finished before this change** have no `fill_state`. As entries they are never
+  hedgeable, and as exits or lock legs they count in full.
+* **Cost bounds (h11) are not checked.** A row's fill cost is not compared with count ×
+  limit.
+
+### Next steps
+
+1. **Run the live demo check before deploying:**
+   `python3 scripts/kalshi_demo_check.py`, then the same with `--fill --confirm-demo`.
+   Demo play money only, with explicit demo confirmation.
+2. **Deploy** `8522074` (or later) with the runbook. Its step 8 now covers `contradicted` rows
+   and `kalshi correct`. The deployed demo ledger's rows migrate in place: new columns, no
+   rewrite.
+3. **Address s15** (a per-market holding cap shared across entries), **h10** and **h11**
+   (cost bounds).
+4. **Keep the Mac awake, lid open and on AC,** during any deploy or live slate. See the
+   corrected note under *Deployed*.
 
 ## Deployed: `bf7d2d5` on the GitHub clone (19:27 PDT, session db5ad6)
 
@@ -47,10 +236,14 @@ The runbook was followed step by step, except the power check. Execution stays o
     Render check OK.
   * No new `sunday.sh start` orphans (only the four known ones).
   * **The suite process ran 21 minutes wall-clock** (18:47:38–19:08:57).
-    * Discovery takes 0.3 s, so about 19 minutes came after the last test, at ~98 % CPU. The
-      likely cause is a non-daemon thread spinning at interpreter shutdown.
+    * **Corrected on 2026-09-27: it was sleep, not a hang.** `pmset -g log` shows the Mac in
+      *Clamshell Sleep* at 18:48:47 (lid closed, on battery at 14 %), then asleep from
+      18:50:45 to the 19:08:44 dark wake. The run finished right after that wake, and
+      unittest's timer does not count sleep.
+    * The earlier guess here, a thread spinning at shutdown, was wrong. The same suite takes
+      ~115 s wall-clock awake.
     * No demo order was created in that window.
-    * Not investigated further; it doubled this deploy's downtime.
+    * The stack started at 19:27 also ran mostly in dark wakes while the lid stayed closed.
 * **Start (step 5).**
   * `BANKROLL=500 KELLY=0.25 scripts/sunday.sh start -- --execute-lag demo`, 19:27:29–19:27:40.
   * Preflight: GO WITH WARNINGS (9 pass, 3 warn). The warnings: no NFL game today, so no ESPN
