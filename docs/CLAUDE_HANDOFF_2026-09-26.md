@@ -269,6 +269,68 @@ The windows are PT days, "since the previous audit" (after 11:54 PDT) and "curre
    * keep-awake on AC;
    * ledger seeding if deploying mid-day.
 
+## Watch-key identity audit (session c1ab42, 17:30 PDT): maker limits and ledger attribution
+
+Branch **`claude/watchkey-audit`** off `claude/exec-readiness` `3c6b232`, commit `91ab70d`, built in
+its own worktree. Not pushed, not deployed, not yet merged into `claude/exec-readiness`. It touches
+`strategy/maker.py`, `strategy/broker.py`, `cli.py` (one keyword), `cli_plugins/maker_flags.py`,
+`scripts/kalshi_demo_check.py` (one call), README and AGENTS test count, and the new
+`tests/test_watch_identity.py`. It does not touch `execution/ledger.py`, which two other sessions
+are editing. **1012 Python tests OK** on `91ab70d`.
+
+**The finding.** The watch key is `f"{event_key}|kalshi:{outcome}"`, and event keys contain `|`
+themselves (`nfl:BUF|DET:2026-09-20:spread:BUF-1.5`). Both readers cut at the first `|`, which kept
+`nfl:BUF`: no opponent, no date, no market.
+
+* **Maker limit.** `MakerRunner.reconcile` counted resting orders under `nfl:BUF`, but looked the
+  limit up under the full event key. The two never matched, so the count restarted from zero every
+  pass. `max_per_event` (default 1) held within one pass only. On the next pass, the other outcome of
+  the same market could rest beside the first.
+* **Ledger attribution.** `KalshiBroker.place` booked `event_key = game_key = "nfl:BUF"`, which put
+  every BUF game, market and date in one bucket, and `nfl:ARI|BUF` under `nfl:ARI`. The maker sets no
+  per-game budget, so this corrupted attribution and `exposure(game_key=...)`, not an enforced cap.
+
+**What changed.**
+
+* **Parsing.** `broker.watch_identity` splits on the last `|kalshi:`; a key without it is kept whole.
+  `order_identity` returns (market = the full event key, game = `game_event_key`).
+* **Explicit identity.** `place(..., event_key=, game_key=)` on every broker. `RestingOrder` carries
+  both (`.identity`), and ledger rows store the market and the game.
+* **Two limits.** `max_per_event` counts one market (a moneyline, one spread line or one total line).
+  The new `max_per_game` counts every market of one game. It is **off by default (0)**; the flag is
+  `--max-per-game`, added through the maker CLI plugin so the built-in help is unchanged.
+* **What is counted.** The runner's own resting orders, plus `KalshiBroker.untracked_open()`: maker
+  orders the ledger still holds open that this process did not place. That covers a dead
+  predecessor's order whose recovery cancel failed or is unconfirmed, a lost create answer, and
+  another live maker's orders.
+  * Their identity is read from the full watch key each row keeps in `detail.watch`, so rows written
+    before this fix, with cut columns, are read correctly. Those rows are not rewritten.
+  * If the ledger read fails, nothing new rests that pass.
+* **Demo check.** `kalshi_demo_check.py` passes its identity explicitly; the ledger value stays
+  `democheck:<ticker>`.
+
+**Tests** (`tests/test_watch_identity.py`, 9). 7 of the 8 behaviour tests fail on `3c6b232`:
+
+* both outcomes of one moneyline, a spread, a total, the same team's next game and a game where it
+  sorts second, over 3–4 reconciliation passes;
+* a whole-game limit that counts every market of that game and nothing else;
+* an order whose cancel failed still counts;
+* ledger rows keep market and game through repeated poll/reconcile, and exposure splits exactly by
+  game;
+* restart with a failed recovery cancel: the market stays blocked until the next reconcile books
+  the order's end;
+* another live maker's orders count;
+* a legacy row with cut columns;
+* the CLI wiring.
+
+**Open.**
+
+* **Whole-game limit.** Decide whether to turn it on (`--max-per-game 1` or `2`). Off matches what
+  the code intended before, but lets up to `--max-orders` rest across one game's spread and total
+  lines.
+* **Merge.** Merge into `claude/exec-readiness` next to the ledger sessions' work; conflicts are
+  expected only in the AGENTS and README counts and in this document.
+
 ## Follow-up round (same day, evening): reproduced findings fixed, ledger hardened
 
 Branch `claude/exec-readiness`, commits `5dfae25` → `a016721` on top of `2414d8b`. Still not
