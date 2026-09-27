@@ -68,9 +68,17 @@ The runbook was followed step by step, except the power check. Execution stays o
 * **Demo order check (step 7).** Not re-run from the clone. Session 89f99c ran it on a clean
   export of `bf7d2d5` at 18:44–18:45: ALL PASS, plain and `--fill`. See *Ledger evidence →
   Validation*.
+* **First orders on the deployed code (20:42 PDT).**
+  * Two LAG IOCs: 50 × `KXNCAAFGAME-26SEP26AFANEV-NEV` YES @ $0.43, both unfilled (canceled by
+    the exchange).
+  * The ledger took each one reserved → accepted (`final: true`) → done, from the order row,
+    within 25 s.
+  * `blocked` None, nothing open, `committed_today` lag $0.
 * **Watch the demo cash.**
-  * With $5.32 left, most of the stack's demo orders will be refused for lack of balance until
-    the demo account is topped up. `LagExecutor` does not read the balance before sending.
+  * **Cash recovered by 20:43.** It was $5.32 at the deploy; settlements brought it to $79.32
+    (portfolio $171.33, 3 open positions).
+  * When cash runs short, most demo orders will be refused for lack of balance.
+    `LagExecutor` does not read the balance before sending.
   * **Each refusal starts as UNKNOWN.**
     * An exception from the create call is booked as **ambiguous**, with the HTTP status as
       its `hint` (`lagexec.py` `_send`).
