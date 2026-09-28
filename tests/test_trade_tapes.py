@@ -13,14 +13,18 @@ import os
 import random
 import shutil
 import tempfile
+import threading
+import time
 import unittest
+import unittest.mock
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 
+import arb_engine.venues.trades as trades_mod
 from arb_engine.venues.http import HttpError
-from arb_engine.venues.trades import (SETTLE_S, ConflictingTrades, IncompleteTape, TapeError, Trade, TradesClient, _cache_key,
-                                      _legacy_cache_key)
+from arb_engine.venues.trades import (CLOCK_GRACE_S, SETTLE_S, ConflictingTrades, IncompleteTape, TapeError, Trade, TradesClient,
+                                      _cache_key, _legacy_cache_key)
 
 try:
     import fcntl
@@ -298,6 +302,74 @@ class OpenWindowTests(TapeCase):
                 TradesClient(http=NoNetwork(), cache_dir=self.dir, clock=lambda t=t: t).kalshi_trades(TK, None, HI)
 
 
+class ClockTrustTests(TapeCase):
+    """The settle margin is measured from a number the *writer* put in the file. A reader that
+    takes that number on faith lets a fast clock decide the rule for it."""
+
+    def test_a_tape_a_fast_clock_fetched_too_early_is_refused_by_a_correct_reader(self):
+        # The window ended 100 s ago: still inside the margin, so a fetch now can miss a print
+        # the venue has yet to publish. A writer whose clock runs 2000 s fast thinks it is long
+        # closed, fetches, and caches the tape as complete.
+        hi = NOW - 100
+        early = [row(i, 0, frac=0) for i in range(2)]
+        for i, r in enumerate(early):
+            r["created_time"] = datetime.fromtimestamp(hi - 60 + i, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        late = [dict(early[0], trade_id="t0002", created_time=datetime.fromtimestamp(hi - 30, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"))]
+        fast = TradesClient(http=Pages({None: {"trades": early, "cursor": ""}}), cache_dir=self.dir, clock=lambda: NOW + 2000)
+        self.assertEqual(len(fast.kalshi_trades(TK, None, hi)), 2)
+        self.assertEqual(self.doc(None, hi)["complete"], True)
+        # Later, with the margin truly past and the late print published, a reader whose own
+        # clock is right must not take a stamp from its own future.
+        self.now = NOW + 1000
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.client(NoNetwork(), offline=True).kalshi_trades(TK, None, hi)
+        self.assertIn("stamped", str(cm.exception))
+        self.assertIn("after the clock reading it", str(cm.exception))
+        whole = Pages({None: {"trades": early + late, "cursor": ""}})
+        self.assertEqual(self.ids(self.client(whole).kalshi_trades(TK, None, hi)), ["t0000", "t0001", "t0002"])
+
+    def test_the_grace_on_a_pass_stamped_ahead_is_exact(self):
+        self.kt(Pages(three_pages()))
+        path = Path(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+        for ahead, usable in ((0.0, True), (CLOCK_GRACE_S, True), (CLOCK_GRACE_S + 0.000001, False), (1e9, False)):
+            path.write_text(json.dumps(dict(self.doc(), pass_started_at=NOW + ahead)))
+            if usable:
+                self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30, ahead)
+            else:
+                with self.assertRaises(FileNotFoundError, msg=ahead):
+                    self.kt(NoNetwork(), offline=True)
+
+
+class ProvenanceTests(TapeCase):
+    def test_a_file_that_does_not_say_how_it_was_made_is_never_used(self):
+        self.kt(Pages(three_pages()))
+        path = Path(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+        doc = self.doc()
+        self.assertEqual(doc["source"], "fetch")
+        for bad in ({}, {"source": None}, {"source": "guessed"}, {"source": "Fetch"}, {"source": 1}):
+            d = dict(doc)
+            d.pop("source", None)
+            d.update(bad)
+            path.write_text(json.dumps(d))
+            with self.assertRaises(FileNotFoundError, msg=bad) as cm:
+                self.kt(NoNetwork(), offline=True)
+            self.assertIn("how it was produced", str(cm.exception), bad)
+
+    def test_a_tape_asserted_by_hand_is_served_but_never_silently(self):
+        c = self.client(NoNetwork())
+        c.store_complete("kalshi", TK, BASE, HI, [Trade("kalshi", TK, BASE + 1, .5, 1, "yes", "a")])
+        self.assertEqual(self.doc(BASE, HI)["source"], "asserted")
+        with self.assertLogs("arb_engine.venues.trades", "WARNING") as logs:
+            self.assertEqual(len(self.kt(NoNetwork(), BASE, HI, offline=True)), 1)
+        self.assertIn("recorded by hand", logs.output[0])
+        self.assertIn("source=asserted", logs.output[0])
+        # A tape this client paginated says so, and is served without a word.
+        self.kt(Pages(three_pages()))
+        self.assertEqual(self.doc()["source"], "fetch")
+        with self.assertNoLogs("arb_engine.venues.trades", "WARNING"):
+            self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
+
+
 class DedupeTests(TapeCase):
     def test_overlapping_pages_and_same_second_prints_keep_one_copy_each(self):
         same = [row(100, 10, frac=0.1), row(101, 10, frac=0.1, count=3.0), row(102, 10, frac=0.9)]
@@ -401,6 +473,18 @@ class WindowAndKeyTests(TapeCase):
         self.assertEqual((second[0].ts, second[-1].ts), (BASE + 101.5, BASE + 199.5))
         self.assertNotEqual(_cache_key("kalshi", "A/B", None, None), _cache_key("kalshi", "A_B", None, None))
 
+    def test_one_window_written_two_ways_is_one_key(self):
+        # The key hashes the query as JSON, where 100 and 100.0 (and -0.0 and 0.0) are different
+        # text: without normalising the window first, the same tape could be cached twice or, in
+        # the other direction, a caller could name a tape it never fetched.
+        k = _cache_key("kalshi", TK, 100.0, 200.0)
+        self.assertEqual(_cache_key("kalshi", TK, 100, 200), k)
+        self.assertEqual(_cache_key("kalshi", TK, -0.0, 200.0), _cache_key("kalshi", TK, 0.0, 200.0))
+        self.assertNotEqual(_cache_key("kalshi", TK, 1e-9, 200.0), _cache_key("kalshi", TK, 0.0, 200.0))
+        for lo, hi in ((float("nan"), 200.0), (100.0, float("inf")), (True, 200.0), (200.0, 100.0)):
+            with self.assertRaises(ValueError, msg=(lo, hi)):               # no key for a window there cannot be
+                _cache_key("kalshi", TK, lo, hi)
+
     def test_a_file_whose_stored_query_differs_is_not_used(self):
         self.kt(Pages(three_pages()), BASE, BASE + 50)
         path = os.path.join(self.dir, _cache_key("kalshi", TK, BASE, BASE + 50) + ".json")
@@ -490,7 +574,8 @@ class CacheFileTests(TapeCase):
         tape = c.store_complete("kalshi", TK, BASE, HI, list(reversed(good)))
         self.assertEqual(self.ids(tape.trades), ["a", "b"])                  # stored sorted
         self.assertEqual((tape.pass_started_at, type(tape.trades[0].size)), (NOW, float))
-        self.assertEqual(self.kt(NoNetwork(), BASE, HI, offline=True), tape.trades)
+        with self.assertLogs("arb_engine.venues.trades", "WARNING"):        # asserted, not fetched: never silent
+            self.assertEqual(self.kt(NoNetwork(), BASE, HI, offline=True), tape.trades)
 
     def test_an_incomplete_state_never_replaces_a_complete_file(self):
         c = self.client(Pages(three_pages()))
@@ -535,6 +620,58 @@ class CacheFileTests(TapeCase):
         self.assertEqual(len(self.kt(Pages(three_pages()))), 30)
         self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
+    def _late_writer_race(self):
+        """A late writer whose check-then-write straddles another writer finishing the tape.
+        ``_read`` is wrapped to pause after reading: exactly the interval the tape's lock covers.
+        Returns what the cache file holds afterwards."""
+        http = Pages(three_pages())
+        late = self.client(http)
+        gate = threading.Event()
+        real_read = late._read
+
+        def slow_read(*a, **kw):
+            out = real_read(*a, **kw)
+            gate.set()
+            time.sleep(0.15)
+            return out
+        late._read = slow_read
+
+        def finisher():
+            gate.wait(2)
+            self.kt(Pages(three_pages()))
+        t = threading.Thread(target=finisher)
+        t.start()
+        try:
+            with self.assertRaises(IncompleteTape):
+                late.kalshi_tape(TK, None, HI, max_pages=1)
+        finally:
+            t.join()
+        return self.doc()
+
+    def test_a_late_writer_never_replaces_a_complete_file_even_without_fcntl(self):
+        with_lock = self._late_writer_race()
+        self.assertEqual((with_lock["complete"], len(with_lock["trades"])), (True, 30))
+        shutil.rmtree(self.dir, ignore_errors=True)
+        with unittest.mock.patch.object(trades_mod, "fcntl", None):       # the Windows path
+            without = self._late_writer_race()
+        self.assertEqual((without["complete"], len(without["trades"])), (True, 30))
+
+    def test_without_fcntl_a_lock_file_still_holds_a_writer_off_and_is_taken_over_when_dead(self):
+        lock = os.path.join(self.dir, "." + _cache_key("kalshi", TK, None, HI) + ".json.lock")
+        with unittest.mock.patch.object(trades_mod, "fcntl", None):
+            os.makedirs(self.dir, exist_ok=True)
+            Path(lock).write_text("another writer")                        # held right now
+            c = TradesClient(http=Pages(three_pages()), cache_dir=self.dir, clock=lambda: self.now, lock_timeout_s=0.05)
+            with self.assertLogs("arb_engine.venues.trades", "WARNING") as logs:
+                self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)    # the tape, uncached
+            self.assertIn("TimeoutError", c.last_store_error)
+            self.assertIn("was not cached", logs.output[0])
+            self.assertFalse(os.path.exists(os.path.join(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")))
+            os.utime(lock, (0, 0))                                         # its writer died long ago
+            self.assertEqual(len(c.kalshi_trades(TK, None, HI)), 30)
+            self.assertEqual(self.doc()["complete"], True)
+        self.assertFalse(os.path.exists(lock))                             # released, not left behind
+
     def test_writes_are_atomic_and_leave_no_temporary_files(self):
         http = Pages(three_pages())
         with self.assertRaises(IncompleteTape):
@@ -578,21 +715,24 @@ class LegacyCacheTests(TapeCase):
         self.assertTrue(os.path.exists(p))                                    # left for the migration script
         self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
 
-    def test_a_schema_2_file_is_never_used_and_is_named(self):
-        self.kt(Pages(three_pages()))
-        current = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
-        d = self.doc()
-        d["schema"] = d["query"]["schema"] = 2                            # as the first two rounds wrote it
-        old = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI, schema=2) + ".json")
-        Path(old).write_text(json.dumps(d))
-        os.unlink(current)
-        with self.assertRaises(FileNotFoundError) as cm:
-            self.kt(NoNetwork(), offline=True)
-        self.assertIn(old, str(cm.exception))
-        self.assertIn("never used", str(cm.exception))
-        http = Pages(three_pages())
-        self.assertEqual(len(self.kt(http)), 30)
-        self.assertEqual(len(http.calls), 3)
+    def test_an_earlier_schemas_file_is_never_used_and_is_named(self):
+        for schema in (2, 3):                                             # rounds 1-2, and round 3
+            shutil.rmtree(self.dir, ignore_errors=True)
+            self.kt(Pages(three_pages()))
+            current = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+            d = self.doc()
+            d["schema"] = d["query"]["schema"] = schema
+            d.pop("source", None)                                         # no schema before 4 recorded it
+            old = os.path.join(self.dir, _cache_key("kalshi", TK, None, HI, schema=schema) + ".json")
+            Path(old).write_text(json.dumps(d))
+            os.unlink(current)
+            with self.assertRaises(FileNotFoundError, msg=schema) as cm:
+                self.kt(NoNetwork(), offline=True)
+            self.assertIn(old, str(cm.exception), schema)
+            self.assertIn("never used", str(cm.exception), schema)
+            http = Pages(three_pages())
+            self.assertEqual(len(self.kt(http)), 30, schema)
+            self.assertEqual(len(http.calls), 3, schema)
 
     def test_the_migration_script_moves_only_unusable_files_one_at_a_time(self):
         from scripts import migrate_trade_cache as mig
@@ -630,6 +770,35 @@ class LegacyCacheTests(TapeCase):
         self.assertTrue(os.path.exists(os.path.join(self.dir, "notes.txt")))
         self.assertEqual(len(os.listdir(dest)), 7)                          # six moved, one renamed beside the old one
         self.assertEqual(len(self.kt(NoNetwork(), offline=True)), 30)
+
+    def test_the_migration_script_names_a_tape_stamped_after_this_machines_clock(self):
+        from scripts import migrate_trade_cache as mig
+
+        self.kt(Pages(three_pages()))
+        path = Path(self.dir, _cache_key("kalshi", TK, None, HI) + ".json")
+        path.write_text(json.dumps(dict(self.doc(), pass_started_at=time.time() + 10_000_000)))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            mig.main(["--cache-dir", self.dir, "--to", os.path.join(self.dir, "legacy")])
+        self.assertIn("would move (fails checks", out.getvalue())
+        self.assertIn("after the clock reading it", out.getvalue())
+        self.assertNotIn("1 current", out.getvalue())
+
+    def test_the_migration_script_reports_what_a_killed_writer_left_behind(self):
+        from scripts import migrate_trade_cache as mig
+
+        self.kt(Pages(three_pages()))
+        Path(self.dir, ".tape-abcd1234.tmp").write_text("half a document")
+        os.symlink(os.path.join(self.dir, "gone.json"), os.path.join(self.dir, "dangling.json"))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(mig.main(["--cache-dir", self.dir, "--to", os.path.join(self.dir, "legacy")]), 0)
+        text = out.getvalue()
+        self.assertIn("1 current", text)                                    # the good tape is still current
+        self.assertIn(".tape-abcd1234.tmp", text)
+        self.assertIn("half-written", text)
+        self.assertIn("dangling.json", text)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".tape-abcd1234.tmp")))   # reported, never touched
 
 
 class PolymarketTests(TapeCase):
