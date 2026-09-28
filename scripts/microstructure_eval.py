@@ -521,16 +521,26 @@ class ExecCtx:
     def latency(self, venue: Any, latency_s: float) -> float:
         return float(self.venue_latency.get(str(venue), latency_s))
 
-    def fee(self, key: tuple, venue: Any = None) -> Any:
+    def fee(self, key: tuple, venue: Any = None, t: Optional[float] = None) -> Any:
         """The fee model of the venue the order is placed on: a book's series mixes the rows of
         every venue that shows it (Kalshi direct and Robinhood's KX resale share book
-        ``kalshi``), and the first row of the series may belong to the other one."""
+        ``kalshi``), and the first row of the series may belong to the other one.
+
+        Causal: a decision at ``t`` is priced by a row observed at or before ``t``. The
+        memoised row is the series' first on that venue, which is at or before every decision
+        that saw the venue it buys on; when it is not, the model is rebuilt from the latest
+        row the decision could actually see."""
         k = (key, str(venue) if venue is not None else None)
         if k not in self._fees:
             ser = self.series.get(key) or []
-            row = next((r for _, r in ser if venue is None or str(r.get("venue")) == str(venue)), None)
-            self._fees[k] = self.fee_for_row(row) if row is not None else None
-        return self._fees[k]
+            got = next(((ts, r) for ts, r in ser if venue is None or str(r.get("venue")) == str(venue)), None)
+            self._fees[k] = (self.fee_for_row(got[1]) if got is not None else None, got[0] if got is not None else None)
+        model, at = self._fees[k]
+        if t is not None and at is not None and at > t:
+            ser = self.series.get(key) or []
+            got = next(((ts, r) for ts, r in reversed(ser) if ts <= t and (venue is None or str(r.get("venue")) == str(venue))), None)
+            return self.fee_for_row(got[1]) if got is not None else model
+        return model
 
     def execute(self, key: tuple, venue: Any, t: float, ask: float, h: int, latency_s: float, haircut: float) -> dict[str, Any]:
         from arb_engine.quant.microdata import _exec_trade, exec_record, settlement_for
@@ -541,7 +551,7 @@ class ExecCtx:
             rec = exec_record(None)
             rec["status"] = "no-observations"
         else:
-            rec = exec_record(_exec_trade(ser, t, ask, h, self.fee(key, venue), self.n, settlement_for(self.settle, key), lat, self.entry_tol_s,
+            rec = exec_record(_exec_trade(ser, t, ask, h, self.fee(key, venue, t), self.n, settlement_for(self.settle, key), lat, self.entry_tol_s,
                                           haircut, times=self.times[key]))
         rec["latency_s"] = lat
         return rec
@@ -840,8 +850,12 @@ def h3_lock_trades(samples: list[dict[str, Any]], rows: list[dict[str, Any]], fe
         tries[g] += 1
         times[g].append(t)
         key = tuple(bc["key"])
-        mine = [r for r in series.get(key, []) if r["obs_ts"] > t]
-        fee = venue_fee(mine, bc["venue"])
+        ser = series.get(key, [])
+        mine = [r for r in ser if r["obs_ts"] > t]
+        # The entry is priced by the fee model of a row the decision itself could see (the
+        # latest at or before it on the venue it is placed on), never by the first row that
+        # happens to arrive after it.
+        fee = venue_fee([r for r in reversed(ser) if r["obs_ts"] <= t] or mine, bc["venue"])
         if fee is None:
             rets[g].append(None)
             continue
@@ -1122,6 +1136,7 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     samples = build(data["rows"], espn=data["espn"], prints=data["prints"], sample="all", settlement=settle, horizons=horizons,
                     latency_s=latency_s, entry_tol_s=2.0, ref_contracts=spec["ref_contracts"], venue_latency=venue_latency)
     print_counts = dict(getattr(build, "print_counts", {}) or {})
+    lead_counts = dict(getattr(build, "leader_counts", {}) or {})
     fc = momentum_forecasts(data["rows"])
     for smp in samples:
         f = fc.get((smp["event_key"], smp["book_id"], smp["outcome"], smp["side"], smp["t"]))
@@ -1133,7 +1148,7 @@ def evaluate(data: dict[str, Any], spec: dict[str, Any], latency_s: float, legac
     kinds = Counter(x["kind"] for x in samples)
     report: dict[str, Any] = {"latency_s": latency_s, "legacy_timestamps": legacy, "games": len({_game(k) for k in data["event_keys"]}),
                               "samples": len(samples), "decision_points": dict(kinds), "triggers": kinds.get("trigger", 0),
-                              "finals": len(data["finals"]), "prints": print_counts, "horizons": {},
+                              "finals": len(data["finals"]), "prints": print_counts, "leader_choice": lead_counts, "horizons": {},
                               "execution": {"latency_s": latency_s, "venue_latency": venue_latency, "cadence_s": cadence,
                                             "registered_grid": [gname(L, hc) for L, hc in grid], "robust_for_decisions": "L3_h0.5",
                                             "unsupported_latencies": [gname(L, hc) for L, hc in grid if cadence and cadence > L + 2.0]},
