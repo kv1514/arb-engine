@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from ..models import OutcomeQuote
 from ..fees.registry import fee_model_for_quote
-from .leadlag import _fresh, _mid
+from .leadlag import _fresh, _mid, _observed_at_or_after
 
 MARK_OFFSETS = (30, 60, 300)
 
@@ -114,7 +114,8 @@ class LagPaperBook:
             candidates = [x for x in quotes_by_venue.get(o.follower, [])
                           if x.event_key == event_key and x.venue == o.follower
                           and x.outcome == o.outcome and (x.meta or {}).get("side") != "no"
-                          and _mid(x) is not None and _fresh(x, now, self.fill_window_s)]
+                          and _mid(x) is not None and _fresh(x, now, self.fill_window_s)
+                          and _observed_at_or_after(x, o.opened)]
             q = max(candidates, key=lambda x: x.ts, default=None)
             if o.open:
                 if now - o.opened > self.fill_window_s:

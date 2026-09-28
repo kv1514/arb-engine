@@ -86,14 +86,20 @@ def events_from_rows(rows: Iterable[dict[str, Any]], dwp_min: float = 0.05) -> l
 # ---- prices around an event ----------------------------------------------------------------
 
 def _series(trades: Iterable[Any]) -> tuple[list[float], list[float]]:
-    """(ts[], price[]) sorted, from Trade objects or (ts, price[, size]) tuples."""
+    """(ts[], price[]) in time order, from Trade objects or (ts, price[, size]) tuples.
+
+    Sorted by timestamp **only**, and stably, so prints sharing one timestamp keep the order
+    the tape gave them. Sorting the pairs would order a sweep by price instead, which made
+    "the last print at or before t" the highest price of that sweep rather than its last
+    print - a value the tape never implied (``venues/trades.py`` already returns a tape
+    ordered by ``(ts, trade_id)``, so the input order is itself deterministic)."""
     pts = []
     for t in trades:
         if isinstance(t, (tuple, list)):
             pts.append((float(t[0]), float(t[1])))
         else:
             pts.append((float(getattr(t, "ts")), float(getattr(t, "price"))))
-    pts.sort()
+    pts.sort(key=lambda p: p[0])
     return [p[0] for p in pts], [p[1] for p in pts]
 
 

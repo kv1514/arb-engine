@@ -117,6 +117,14 @@ def _fresh(q: OutcomeQuote, now: float, fresh_s: float) -> bool:
                for t in (q.ts, q.quote_time) if t is not None)
 
 
+def _observed_at_or_after(q: OutcomeQuote, when: float) -> bool:
+    """True when every time the quote carries is at or after ``when`` (allowing the venues'
+    own clock skew). A quote observed before an order existed cannot fill it: nobody could
+    have traded on a price that had already been superseded when the order was placed."""
+    return all(t >= when - CLOCK_SKEW_S
+               for t in (q.ts, q.quote_time) if t is not None and math.isfinite(t))
+
+
 
 @dataclass
 class LeadLagTracker:

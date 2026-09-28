@@ -110,7 +110,7 @@ class Ledger:
         self.used: dict[tuple, list[tuple[float, int]]] = defaultdict(list)
 
     def available(self, key: tuple, t: float, shown: Optional[float]) -> int:
-        taken = sum(k for tt, k in self.used[key] if t - tt <= USED_WINDOW_S)
+        taken = sum(k for tt, k in self.used[key] if 0 <= t - tt <= USED_WINDOW_S)
         base = UNKNOWN_SIZE_CAP if shown is None else int(shown)
         return max(0, base - taken)
 
