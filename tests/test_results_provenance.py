@@ -45,7 +45,10 @@ UNVERIFIED_PROVENANCE = {
         "eval_log entry #7, whose run wrote to /tmp/claude-501/micro_discovery.new.json; the only "
         "logged run naming this path (#8) ran at b1238ce4d, which is not reachable from "
         "claude/exec-readiness; no logged results_sha256 matches these bytes"),
-    "arb_backtest_w2.json": "hand-written prose '_fixture' note only; no run recorded in out/eval_log.jsonl",
+    "arb_backtest_w2.json": (
+        "hand-written prose '_fixture' note only; no run recorded in out/eval_log.jsonl. ALSO STALE: "
+        "scripts/arb_backtest.Ledger.available was fixed on 2026-09-28 to stop counting liquidity taken "
+        "after the moment being priced, so a re-run no longer reproduces these numbers"),
     "arb_fixture_p09.json": "no provenance of any kind in the file; no logged run",
     "college_experiment_p04.json": "no provenance of any kind in the file; no logged run",
     "eligibility_p11.json": "no provenance of any kind in the file; no logged run",
