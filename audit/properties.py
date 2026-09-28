@@ -332,6 +332,7 @@ def p13_residual_inventory():
     check("13. an unresolved earlier lock leg counts at its full size, so nothing is left to hedge",
           not second.ok and "waiting" in second.reason,
           f"reason={second.reason[:160]!r}")
+    l.accepted(first.intent_id, {"order_id": "l1", "fill_count": "4.00"})
     settle(l, first.intent_id, "l1", "4.00", 10, "0.40", DEN)      # it filled only 4
     third = l.reserve(strategy="lock", ticker=DEN, side="yes", count=10, limit_price="0.40", event_key=KEY, parent_id=r.intent_id,
                       fee_multiplier=1, settlement=DENS, quote_ts=clock(), now=clock())
@@ -345,7 +346,7 @@ def p13_residual_inventory():
     sale = l2.reserve(strategy="manual", ticker=TICKER, side="yes", action="sell", count=7, limit_price="0.70",
                       max_cost_per_contract="0.32", settlement=KC)
     l2.accepted(sale.intent_id, {"order_id": "s1", "fill_count": "7.00"})
-    settle(l2, sale.intent_id, "s1", "7.00", 7, "0.70", TICKER, action="sell", side="yes")
+    settle(l2, sale.intent_id, "s1", "7.00", 7, "0.70", TICKER, action="sell", side="yes")  # order id on record
     hedge = l2.reserve(strategy="lock", ticker=DEN, side="yes", count=10, limit_price="0.40", event_key=KEY, parent_id=r2.intent_id,
                        fee_multiplier=1, settlement=DENS, quote_ts=1000.0, now=1000.0)
     check("13c. 7 of 10 sold leaves 3 to hedge", hedge.ok and hedge.count == 3,
