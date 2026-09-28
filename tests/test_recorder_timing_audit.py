@@ -776,6 +776,64 @@ class TickRowContractTests(unittest.TestCase):
         self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM trade_prints").fetchone()[0], 0)
 
 
+class TradePollHealthTests(unittest.TestCase):
+    """The poller's cadence was measured but nothing read it, so a tape that stopped being
+    polled could only be found afterwards by querying the database."""
+
+    def slate_with_lane(self, client):
+        store = Store(tmp_db())
+        self.addCleanup(store.close)
+        slate = build_slate(Clock(), store=store, fast=1.0)
+        slate.fastlane.kalshi, slate.fastlane.robinhood = client, None
+        slate.fastlane.seed({KEY: {"kalshi": [quote()]}})
+        return slate, store
+
+    def test_a_healthy_poller_is_silent(self):
+        class Ok:
+            def get(self, path, params=None):
+                return {"trades": [], "cursor": ""}
+
+        slate, store = self.slate_with_lane(Ok())
+        now = 1_780_000_000.0
+        for step in range(4):
+            slate.fastlane.poll_trades(store, now=now + step, cadence_s=5.0)
+            self.assertEqual(slate.report_trade_poll_health(now + step, cadence_s=5.0), [])
+
+    def test_a_tape_that_stopped_being_polled_is_journalled_once_a_minute(self):
+        class Ok:
+            def get(self, path, params=None):
+                return {"trades": [], "cursor": ""}
+
+        slate, store = self.slate_with_lane(Ok())
+        now = 1_780_000_000.0
+        slate.fastlane.poll_trades(store, now=now, cadence_s=5.0)
+        self.assertEqual(slate.report_trade_poll_health(now + 10, cadence_s=5.0), [])
+        said = slate.report_trade_poll_health(now + 400, cadence_s=5.0)
+        self.assertEqual(len(said), 1)
+        self.assertIn("no request for 400s", said[0])
+        # throttled, then said again after the interval
+        self.assertEqual(slate.report_trade_poll_health(now + 420, cadence_s=5.0), [])
+        self.assertEqual(len(slate.report_trade_poll_health(now + 500, cadence_s=5.0)), 1)
+        kinds = [kw for text, kw in slate.alerts.infos if text.startswith("trade poll gap")]
+        self.assertEqual(len(kinds), 2)
+        self.assertEqual(kinds[0]["ticker"], "T-A")
+
+    def test_a_failing_walk_is_reported_as_soon_as_it_fails(self):
+        class Broken:
+            def get(self, path, params=None):
+                return {"cursor": ""}        # no 'trades' list: a failed read
+
+        slate, store = self.slate_with_lane(Broken())
+        now = 1_780_000_000.0
+        slate.fastlane.poll_trades(store, now=now, cadence_s=5.0)
+        said = slate.report_trade_poll_health(now, cadence_s=5.0)
+        self.assertEqual(len(said), 1)
+        self.assertIn("1 failed walk(s)", said[0])
+        # a second failure is reported even inside the throttle window
+        slate.fastlane.poll_trades(store, now=now + 6, cadence_s=5.0)
+        self.assertEqual(len(slate.report_trade_poll_health(now + 6, cadence_s=5.0)), 1)
+
+
 class ShutdownTests(unittest.TestCase):
     def test_run_stops_its_workers_on_every_exit_path(self):
         clock = Clock()

@@ -130,6 +130,8 @@ class LiveSlate:
         self._counts: dict[str, dict[str, int]] = {}   # event_key -> {"lag": n, "arb": n}
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
+        # ticker -> (failures already reported, when) for report_trade_poll_health
+        self._trade_poll_reported: dict[str, tuple[int, float]] = {}
 
     # -- pieces ----------------------------------------------------------------------------
     def wanted_games(self, games: list[GameState], now: Optional[float] = None) -> list[GameState]:
@@ -397,6 +399,7 @@ class LiveSlate:
                 self.fastlane.poll_trades(self.store, now, cadence_s=5.0, background=True)
                 out.errors.extend(self.fastlane.trade_errors)
                 self.fastlane.trade_errors.clear()
+                self.report_trade_poll_health(now, cadence_s=5.0)
             except Exception as e:
                 out.errors.append(f"trade prints: {e!r}")
         if self.store is not None and (out.lags or out.arbs):
@@ -405,6 +408,51 @@ class LiveSlate:
             except Exception as e:
                 out.errors.append(f"record: update_ladder: {e!r}")
         return out
+
+    def report_trade_poll_health(self, now: float, cadence_s: float = 5.0,
+                                 every_s: float = 60.0) -> list[str]:
+        """Journal the public-print poller's own cadence, per ticker.
+
+        ``FastLane.trade_poll_status`` has always measured this, but nothing ever read it, so
+        a tape that stopped being polled or kept failing could only be found afterwards by
+        querying the database. Three faults are reported, each at most once per ``every_s``
+        per ticker so a healthy recorder stays silent:
+
+        * no request for longer than the grace period (the Mac slept, the lane stopped);
+        * no page walk *completed* in that long (polled, never finishing);
+        * the walk failed since the last report (a bad page, a repeating cursor).
+        """
+        grace = max(3.0 * float(cadence_s), 15.0)
+        reported: list[str] = []
+        for ticker, st in self.fastlane.trade_poll_status(now, cadence_s=cadence_s).items():
+            last_request = st.get("last_request_ts")
+            gap = (now - last_request) if last_request is not None else None
+            since_complete = st.get("since_complete_s")
+            failures = int(st.get("failures") or 0)
+            was, when = self._trade_poll_reported.get(ticker, (0, None))
+            faults = []
+            if gap is not None and gap > grace:
+                faults.append(f"no request for {gap:.0f}s")
+            if since_complete is not None and since_complete > grace:
+                faults.append(f"no completed walk for {since_complete:.0f}s")
+            if failures > was:
+                faults.append(f"{failures - was} failed walk(s)")
+            if not faults:
+                if failures == was and gap is not None and gap <= grace:
+                    self._trade_poll_reported.pop(ticker, None)
+                continue
+            if when is not None and now - when < float(every_s) and failures == was:
+                continue
+            self._trade_poll_reported[ticker] = (failures, now)
+            text = f"trade poll gap: {ticker} — {', '.join(faults)}"
+            reported.append(text)
+            try:
+                self.alerts.info(text, ticker=ticker, trade_poll_gap_s=None if gap is None else round(gap, 1),
+                                 since_complete_s=None if since_complete is None else round(since_complete, 1),
+                                 failures=failures, backlog=bool(st.get("backlog")), sport=self.sport)
+            except Exception:  # noqa: BLE001
+                pass
+        return reported
 
     def final_summary(self, gs: GameState, me: MergedEvent, now: float) -> None:
         """One FINAL line per game (journal + ntfy when subscribed): score, how many LAG / ARB
