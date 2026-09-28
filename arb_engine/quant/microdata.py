@@ -75,6 +75,7 @@ def effective_constants() -> dict[str, Any]:
             "fresh_s": {"fast": FRESH_FAST_S, "other": FRESH_OTHER_S}, "print_receipt_lag_s": PRINT_RECEIPT_LAG_S,
             "prints": "visible at obs_ts <= t; legacy prints without obs_ts excluded unless prints_approx",
             "cross_book_identity": "same event/market/outcome/side, equal known tie payouts, verbatim registry rules with no stated or one-sided difference",
+            "leader_choice": "largest |dmid_30|; equally large moves that disagree in sign are no leader; among equals the smallest signed gap, then |gap|, then the freshest; identity only on an exact economic tie",
             "tie_prior": dict(TIE_PRIOR), "recovery": {"drop_60": RECOVERY_DROP, "rebound": RECOVERY_REBOUND,
                                                        "cooldown_s": RECOVERY_COOLDOWN_S, "confirm": "bid and ask both up over 5 s"},
             "label_window": "first refreshed mark in [t+h, t+h+max(1, 0.2h)]"}
@@ -202,6 +203,42 @@ def _recovering(f: dict[str, Any]) -> bool:
         and (f.get("dbid_5") or 0) > 0 and (f.get("dask_5") or 0) > 0
 
 
+def _sign(x: Optional[float]) -> int:
+    return 1 if (x or 0.0) > 0 else (-1 if (x or 0.0) < 0 else 0)
+
+
+def choose_leader(items: dict[str, dict[str, Any]], gap_key: str = "gap",
+                  counts: Optional[dict[str, int]] = None) -> Optional[tuple[str, dict[str, Any]]]:
+    """Which book led at this instant - by economics, never by the books' names.
+
+    The lead itself is the size of the move (``dmid_30``). Two equally large moves that point
+    in *opposite* directions are a contradiction, not a lead: there is no leader at that
+    instant, the same way a contract whose rows disagree is void (``resolve_instant``). Among
+    equally large moves that agree, the registered one is the *weakest* signal - the smallest
+    gap in the leader's own direction, then the smallest gap either way, then the freshest
+    observation - so an exact tie can only take a decision away, never invent one. The
+    contracts' identity is consulted only on an exact economic tie.
+
+    (Before this, the leader was ``max(sorted(items.items()), key=|dmid_30|)``: ``max`` keeps
+    the first maximal element of a name-sorted list, so renaming two tied books flipped the
+    trade from "buy the follower" to "buy the follower's complement".)
+    """
+    if not items:
+        return None
+    best = max(abs(v.get("dmid_30") or 0.0) for v in items.values())
+    top = [(k, v) for k, v in items.items() if abs(v.get("dmid_30") or 0.0) >= best - 1e-12]
+    directions = {_sign(v.get("dmid_30")) for _, v in top}
+    if len(directions) > 1:
+        if counts is not None:
+            counts["leader_contradiction"] = counts.get("leader_contradiction", 0) + 1
+        return None
+    if len(top) > 1 and counts is not None:
+        counts["leader_tie"] = counts.get("leader_tie", 0) + 1
+    d = next(iter(directions))
+    return min(top, key=lambda kv: (d * (kv[1].get(gap_key) or 0.0), abs(kv[1].get(gap_key) or 0.0),
+                                    kv[1].get("age_s") if kv[1].get("age_s") is not None else math.inf, kv[0]))
+
+
 def _two_sided(f: dict[str, Any]) -> bool:
     d, db, da = f.get("dmid_30"), f.get("dbid_30"), f.get("dask_30")
     if d is None or db is None or da is None or d == 0:
@@ -258,7 +295,11 @@ class _Prints:
     """Kalshi public prints per ticker, indexed by when *we* had them: ``obs_ts``, the local
     receipt time. Exchange ``ts`` alone is not causal (an old print can arrive in a later
     page), so a print without ``obs_ts`` is excluded - unless ``approx`` is set, when it
-    counts from ts + PRINT_RECEIPT_LAG_S and every sample that used one is marked."""
+    counts from ts + PRINT_RECEIPT_LAG_S and every sample that used one is marked.
+
+    One response delivers many prints at one receipt time; they are ordered inside that
+    instant by their own content (``trade_id`` first), never by the order the page listed
+    them in, so ``last_print_minus_mid`` cannot flip with the row order a query returns."""
 
     def __init__(self, rows: Iterable[dict[str, Any]], approx: bool = False) -> None:
         by: dict[str, list] = defaultdict(list)
@@ -278,8 +319,9 @@ class _Prints:
             self.exact += not is_approx
             self.approximate += is_approx
             s = 1 if str(r.get("taker_side")).lower() == "yes" else -1 if str(r.get("taker_side")).lower() == "no" else 0
-            by[str(r.get("ticker"))].append((seen, s * n, _f(r.get("price")), is_approx))
-        self.by = {k: sorted(v, key=lambda x: x[0]) for k, v in by.items()}
+            order = json.dumps([r.get("trade_id"), ts, _f(r.get("price")), n, str(r.get("taker_side"))], default=str)
+            by[str(r.get("ticker"))].append((seen, s * n, _f(r.get("price")), is_approx, order))
+        self.by = {k: sorted(v, key=lambda x: (x[0], x[4])) for k, v in by.items()}
         self.times = {k: [x[0] for x in v] for k, v in self.by.items()}
 
     def counts(self) -> dict[str, int]:
@@ -422,6 +464,10 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
     instants = observation_instants(rows)
     espn_idx, prints_idx = _Espn(espn), _Prints(prints, approx=prints_approx)
     build.print_counts = prints_idx.counts()
+    # How often the leader had to be decided among equally large moves, and how often those
+    # moves contradicted each other (so there was no leader). Reported, never used to decide.
+    lead_counts: dict[str, int] = {"leader_tie": 0, "leader_contradiction": 0}
+    build.leader_counts = lead_counts
     books: dict[tuple, _Book] = defaultdict(_Book)
     by_contract: dict[tuple, list[tuple[float, dict[str, Any]]]] = defaultdict(list)
     for t, rows_t, _ in instants:
@@ -500,14 +546,14 @@ def build(rows: Iterable[dict[str, Any]], espn: Iterable[dict[str, Any]] = (), p
                 adj = prior * ((their_tie or 0.0) - (my_tie or 0.0)) if can_tie else 0.0
                 diag[book] = dict(entry, gap_tie_adjusted=entry["gap"] - adj)
             s["cross"], s["cross_excluded"] = cross, dict(excluded)
-            # Ties in |dmid_30| break on the book name, so a leader never depends on the order
-            # the books were first seen in.
+            # The leader is decided on economics (``choose_leader``): equally large moves that
+            # contradict each other are no leader, and the books' names decide nothing.
             def _lead(items: dict[str, dict], gap_key: str = "gap") -> Optional[dict[str, Any]]:
-                lead = max(sorted(items.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+                lead = choose_leader(items, gap_key, lead_counts)
                 return {"book": lead[0], "dmid_30": lead[1]["dmid_30"], "gap": lead[1][gap_key]} if lead else None
             s["leader_diag"] = {"tie_matched": _lead({k: v for k, v in diag.items() if v["tie_match"]}),
                                 "any_settlement": _lead(diag, "gap_tie_adjusted")}
-            leader = max(sorted(cross.items()), key=lambda kv: abs(kv[1]["dmid_30"] or 0), default=None)
+            leader = choose_leader(cross, counts=lead_counts)
             s["leader_book"] = leader[0] if leader else None
             s["leader_dmid_30"] = leader[1]["dmid_30"] if leader else None
             s["gap_leader"] = leader[1]["gap"] if leader else None

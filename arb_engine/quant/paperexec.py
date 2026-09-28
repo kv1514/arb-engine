@@ -9,11 +9,12 @@ the book, and nothing is assumed that a polling recorder cannot see:
   ``[t+L, t+L+entry_tol]``. It fills only if that ask is at or below the limit, for at most
   ``floor(displayed ask size x haircut)``; the rest is cancelled. No observation in the
   window, an ask above the limit or no size is a *missed* fill, counted, never dropped.
-* **Exit** sells to the bid at the first refreshed observation in the horizon window, at
-  most ``floor(bid size x haircut)``; what is left rolls to later observations (up to
-  ``max_rolls``), then to the settlement value when it is known (no exit fee at
-  settlement). Contracts still held after that are **unresolved**: the trade is reported
-  with ``pnl=None`` and excluded from P&L, never silently valued.
+* **Exit** sells to the bid at the first refreshed observation in the horizon window *that
+  was observed after the fill*, at most ``floor(bid size x haircut)``; what is left rolls to
+  later observations (up to ``max_rolls``), then to the settlement value when it is known
+  (no exit fee at settlement). Contracts still held after that are **unresolved**: the trade
+  is reported with ``pnl=None`` and excluded from P&L, never silently valued. The quote the
+  order met on the way in is never also the quote it is sold into.
 * **Fees** are the venue's ``FeeModel.fee(price, count, role)`` on each order at its real
   count (Kalshi rounds up per order; Rothera has a per-order floor), on entry *and* exit.
 * **Two-leg arbitrage**: each leg meets its own book after its own latency (an automated
@@ -164,13 +165,19 @@ def ioc_round_trip(rows: Iterable[dict[str, Any]], decision_ts: float, limit: fl
     if trade.missed:
         return trade
     held = trade.filled
+    # The exit, the rolls and the settlement all meet the book *after* the fill. The
+    # observation that filled the entry was already on the screen when the order was sent,
+    # so it cannot also be the one the position is sold into (the arrival and horizon
+    # windows overlap whenever horizon_s <= entry_tol_s).
+    filled_at = _t(entry)
+    after = rows if filled_at is None else [r for r in rows if (_t(r) or -math.inf) > filled_at]
     # The registered horizon is measured from the decision plus the assumed latency. A late
     # observation inside the arrival window must not silently move the label later.
     t_out = decision_ts + latency_s + horizon_s
     tol = max(1.0, 0.2 * horizon_s)
-    mark = first_obs(rows, t_out, t_out + tol)
+    mark = first_obs(after, t_out, t_out + tol)
     candidates = [mark] if mark is not None else []
-    later = sorted((r for r in rows if _refreshed(r) and (_t(r) or 0) > (t_out + tol if mark is None else _t(mark)) and (_t(r) or 0) <= t_out + roll_window_s), key=_t)
+    later = sorted((r for r in after if _refreshed(r) and (_t(r) or 0) > (t_out + tol if mark is None else _t(mark)) and (_t(r) or 0) <= t_out + roll_window_s), key=_t)
     candidates += later[:max_rolls]
     for r in candidates:
         if held <= 0:
