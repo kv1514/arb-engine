@@ -62,20 +62,22 @@ def main() -> int:
         fails.append("B) a non-finite venue timestamp is accepted as a quote time")
 
     store = Store(tmp_path("prints.db"))
-    counts = {}
+    counts, rejects = {}, {}
     for tid, ts in (("nan-1", float("nan")), ("inf-1", float("inf")),
                     ("old-1", -6795364578.0), ("ok-1", 1_780_000_000.0)):
         counts[tid] = store.record_trade_prints([{"trade_id": tid, "ticker": "KXT-KC",
                                                   "created_time": ts, "yes_price": 55,
                                                   "count": 10}])
+        rejects[tid] = store.last_trade_print_rejects
     got = [tuple(r) for r in store.conn.execute("SELECT trade_id, ts FROM trade_prints")]
     print(f"   record_trade_prints returned        : {counts}")
+    print(f"   prints reported unreadable          : {rejects}")
     print(f"   trade_prints rows                   : {got}")
-    # A NaN REAL violates the column's NOT NULL in SQLite, so 'INSERT OR IGNORE' drops the
-    # print silently: no row, no error, and the caller's count simply does not include it.
-    if counts["nan-1"] == 0:
+    # A NaN REAL violates the column's NOT NULL in SQLite, so 'INSERT OR IGNORE' used to drop
+    # the print with no row, no error and no count: unreadable looked exactly like absent.
+    if counts["nan-1"] == 0 and not rejects["nan-1"]:
         fails.append("B) a print with a NaN exchange timestamp is dropped silently "
-                     "(no row, no error)")
+                     "(no row, no error, no reject count)")
     if any(r[1] is not None and not math.isfinite(r[1]) for r in got):
         fails.append("B) a non-finite exchange timestamp was stored in trade_prints")
     try:

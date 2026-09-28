@@ -50,10 +50,12 @@ def case_timeout() -> list[str]:
 
 def case_pinned_fast_clock() -> list[str]:
     real = {"t": 1_780_000_000.0}
+    completions: list[float] = []
 
     class Client:
         def get(self, path, params=None):
             real["t"] += 0.4          # the request really takes 0.4 s
+            completions.append(real["t"])
             return {"markets": [{"ticker": "KXT-KC", "yes_bid_dollars": ".52",
                                  "yes_ask_dollars": ".54", "yes_ask_size_fp": "120",
                                  "yes_bid_size_fp": "100"}]}
@@ -65,31 +67,44 @@ def case_pinned_fast_clock() -> list[str]:
     slate.fastlane.robinhood = None
     slate.fastlane.clock = lambda: real["t"]
     slate.tick(clock.now())          # seed the fast lane
+    completions.clear()
 
+    # Drive the production fast-lane thread itself for one step, rather than calling
+    # fast_step by hand: the defect was in how _fast_loop calls it (live.py:522).
+    import threading
     s0 = real["t"]
-    slate.fast_step(s0)              # exactly what _fast_loop does (live.py:522)
-    after = real["t"]
+    slate.fast = 0.01
+    slate._stop.clear()
+    t = threading.Thread(target=slate._fast_loop, args=(lambda *_: None,), daemon=True)
+    t.start()
+    while not completions:
+        time.sleep(0.01)
+    slate._stop.set()
+    t.join(timeout=3)
+    first_response = completions[0]
 
     import json
     rows = [r for r in store.tick_rows() if r["source"] == "fast"]
-    l1 = json.loads(rows[-1]["l1_json"])["rows"]
+    l1 = json.loads(rows[0]["l1_json"])["rows"]
     kalshi_rows = [r for r in l1 if r["venue"] == "kalshi"]
     store.close()
 
     print()
-    print("B. the fast lane through the production call path")
-    print(f"   step start / real completion      : {s0} / {after}")
+    print("B. the fast lane through the production call path (_fast_loop)")
+    print(f"   step start / first response in    : {s0} / {first_response}")
     for r in kalshi_rows:
         print(f"   recorded req_ts / obs_ts          : {r['req_ts']} / {r['obs_ts']} "
               f"(approx_time={r['approx_time']}, refreshed={r['refreshed']})")
-    print(f"   recorded tick ts                  : {rows[-1]['ts']}")
+    print(f"   recorded tick ts                  : {rows[0]['ts']}")
     fails = []
     for r in kalshi_rows:
-        if r["obs_ts"] < after:
-            fails.append(f"B) obs_ts {r['obs_ts']} is earlier than the real receipt {after}: "
-                         "the recorded observation predates its own response")
+        if r["obs_ts"] < first_response:
+            fails.append(f"B) obs_ts {r['obs_ts']} is earlier than the real receipt "
+                         f"{first_response}: the recorded observation predates its own response")
         if r["req_ts"] == r["obs_ts"]:
             fails.append("B) req_ts == obs_ts: the fast lane records no request/response boundary")
+        if r["obs_ts"] > rows[0]["ts"]:
+            fails.append("B) the tick timestamp is earlier than an observation inside it")
     return fails
 
 
