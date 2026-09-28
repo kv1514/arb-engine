@@ -304,6 +304,44 @@ class RunLoopClockTests(unittest.TestCase):
         self.assertGreaterEqual(min(seen), 1_780_000_000.7)   # after both adapter fetches
 
 
+class UnpinnedTickWithRealAdaptersTests(unittest.TestCase):
+    """Unpinning the tick clock turns on the carried-quote rule for real adapters too.
+
+    Every adapter stamps ``snap.fetched_at`` (and therefore ``q.ts``) at the *start* of its
+    own fetch, a hair after ``merged_events`` reads ``req_ts``, so a genuinely refreshed
+    quote must never fall on the "older than the request" branch. Only Robinhood's
+    ``_quote_ts`` deliberately returns an older cached time."""
+
+    def test_no_venue_is_wrongly_recorded_as_carried_on_an_unpinned_tick(self):
+        from .test_scanner import _adapters
+        from .test_live import FakeFeed, _moneyline_key
+
+        adapters = _adapters()
+        key, me = _moneyline_key(adapters)
+        away, home = me.info.outcomes[0], me.info.outcomes[1]
+        game = GameState(event_id="1", event_key=key, home=home, away=away, home_score=14,
+                         away_score=10, status="live", period=3,
+                         clock_seconds_remaining_in_period=600, game_seconds_remaining=1500)
+        store = Store(tmp_db())
+        self.addCleanup(store.close)
+        slate = LiveSlate(_adapters(), feed=FakeFeed([game]), settings={}, store=store,
+                          alerter=CapturingAlerter())
+        tick = slate.tick()          # unpinned, exactly as run() now calls it
+        self.assertEqual(len(tick.views), 1, tick.errors)
+
+        import json
+        row = store.tick_rows(key)[0]
+        rows = json.loads(row["l1_json"])["rows"]
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertEqual(r["refreshed"], 1, r["venue_market_id"])
+            self.assertEqual(r["approx_time"], 0, r["venue_market_id"])
+            self.assertLessEqual(r["req_ts"], r["obs_ts"])
+            self.assertLessEqual(r["obs_ts"], row["ts"])
+        # The venues really are fetched one after another, so the boundaries differ.
+        self.assertGreater(len({r["obs_ts"] for r in rows}), 1)
+
+
 class StuckLiveGameTests(unittest.TestCase):
     def test_an_empty_scoreboard_clears_the_fast_lane(self):
         clock = Clock()
