@@ -147,7 +147,8 @@ class TapTests(unittest.TestCase):
         self.assertIn("Practice: no order was sent.", body)
         self.assertIsNone(b.fire(spec["token"], now=T0 + 9))   # single use
         self.assertIsNone(b.fire("not-a-token", now=T0 + 9))   # another process's (or nobody's) token
-        events = [json.loads(x)["event"] for x in open(path)]
+        with open(path, encoding="utf-8") as fh:
+            events = [json.loads(x)["event"] for x in fh]
         self.assertEqual(events, ["issued", "tap"])
 
     def test_a_moved_kalshi_price_is_not_bought_and_the_robinhood_leg_is_flagged(self):
@@ -204,7 +205,8 @@ class TapTests(unittest.TestCase):
         self.assertTrue(done.is_set())
         self.assertEqual(len(calls), 2)                          # one subscription at a time, reopened after the error
         self.assertEqual(calls[1], calls[0])                     # nothing was consumed before the error
-        events = [json.loads(x)["event"] for x in open(path)]
+        with open(path, encoding="utf-8") as fh:
+            events = [json.loads(x)["event"] for x in fh]
         self.assertEqual(events, ["issued", "listen-error", "tap"])
 
     def test_auto_practice_simulates_without_pushing_or_using_the_token(self):

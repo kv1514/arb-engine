@@ -376,6 +376,7 @@ class FastLaneTests(unittest.TestCase):
                     return {"trades": [], "cursor": ""}
                 return pages[1] if params.get("cursor") == pages[0]["cursor"] else pages[0]
         st = Store(":memory:")
+        self.addCleanup(st.close)
         lane = FastLane(kalshi_client=C())
         lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", "T-A", KEY, "KC", ask=0.6, bid=0.59, meta={"ticker": "T-A"}),
                                     OutcomeQuote("kalshi", "T-B", KEY, "DEN", ask=0.41, bid=0.4, meta={"ticker": "T-B"})]}})
@@ -402,6 +403,7 @@ class FastLaneTests(unittest.TestCase):
                 calls.append(dict(params or {}))
                 return pages[1] if params.get("cursor") == pages[0]["cursor"] else pages[0]
         st = Store(":memory:")
+        self.addCleanup(st.close)
         lane = FastLane(kalshi_client=C())
         lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", ticker, KEY, "KC", meta={"ticker": ticker})]}})
         self.assertEqual(lane.poll_trades(st, now=10, max_pages=1), 0)
@@ -431,6 +433,7 @@ class FastLaneTests(unittest.TestCase):
         lane.seed({KEY: {"kalshi": [OutcomeQuote("kalshi", "T-A", KEY, "KC", meta={"ticker": "T-A"}),
                                     OutcomeQuote("kalshi", "T-B", KEY, "DEN", meta={"ticker": "T-B"})]}})
         st = Store(":memory:")
+        self.addCleanup(st.close)
         lane.poll_trades(st, now=1, cadence_s=5)
         lane.poll_trades(st, now=5, cadence_s=5)
         self.assertEqual([t for t, _ in calls], ["T-A", "T-B"])
@@ -585,6 +588,7 @@ class FastLaneTests(unittest.TestCase):
         rh = self._robinhood(rh_prices)
         rh.client = None
         st = Store(":memory:")
+        self.addCleanup(st.close)
         slate = LiveSlate([], settings={"executable_venues": "kalshi,robinhood"}, store=st, alerter=Alerter(journal_path=os.path.join(os.environ.get("TMPDIR", "/tmp"), f"lock_e2e_{os.getpid()}.jsonl"), quiet=True, desktop=False, webhook="", ntfy=""), bankroll=500, fast=1.0, interval=5.0)
         slate.fastlane.kalshi, slate.fastlane.robinhood = client, rh
         view = InplayView(event_key=KEY, title="DEN @ KC", live=True, game_line="Q2", fair_line="", sides=[], actions=[], blend={}, game_state={"period": 2}, total_cost=0.0, payout_if={}, locked_pnl=None, balanced=False)
@@ -668,7 +672,9 @@ class PaperLagTests(unittest.TestCase):
         db = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"paperlag_{os.getpid()}.db")
         if os.path.exists(db):
             os.remove(db)
-        book = LagPaperBook(store=Store(db), fill_window_s=10)
+        store = Store(db)
+        self.addCleanup(store.close)
+        book = LagPaperBook(store=store, fill_window_s=10)
         o = book.open(self._sig(), 1000.0)
         self.assertIsNotNone(o)
         self.assertIsNone(book.open(self._sig(), 1001.0))                   # one open order per (event, follower, side)

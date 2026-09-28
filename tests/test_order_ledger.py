@@ -424,7 +424,10 @@ class AccountIdentityTests(unittest.TestCase):
         clock.t += 3
         ex.reconcile(force=True)
         ex.ledger.close()
-        blob = b"".join(open(f, "rb").read() for f in (path, path + "-wal") if os.path.exists(f))
+        def _read(name):
+            with open(name, "rb") as fh:
+                return fh.read()
+        blob = b"".join(_read(f) for f in (path, path + "-wal") if os.path.exists(f))
         self.assertNotIn(b"KEYID-7f3e-SECRETISH", blob)
         self.assertNotIn(b"COMMS-ID-91c2", blob)
         self.assertIn(b"account:", blob)                                 # the fingerprints are there

@@ -175,6 +175,7 @@ class WeekScanTests(unittest.TestCase):
 
     def test_only_arbs_and_watched_markets_are_recorded(self):
         st = Store(":memory:")
+        self.addCleanup(st.close)
         arb, near, far = _event("nfl:DEN|KC:2026-09-27", 0.55, 0.36), _event("nfl:BUF|MIA:2026-09-27", 0.61, 0.38), _event("nfl:NE|NYJ:2026-09-27", 0.62, 0.45)
         ws = WeekScanner(["nfl"], [], self.alerts, {}, store=st, bankroll=500, scan_fn=_Scan([arb, near, far]), fastlane=_Lane())
         ws.full_sweep(T0)

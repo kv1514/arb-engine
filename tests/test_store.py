@@ -47,7 +47,9 @@ class StoreTests(unittest.TestCase):
 
     def test_two_recorders_adding_the_same_column_do_not_crash(self):
         a = Store(self.path)
+        self.addCleanup(a.close)
         b = Store(self.path)
+        self.addCleanup(b.close)
         a.conn.execute("ALTER TABLE inplay_ticks ADD COLUMN extra_probe TEXT")
         a.conn.commit()
         b.columns = lambda table: []   # b's view is stale: it thinks every column is missing
@@ -59,13 +61,17 @@ class StoreTests(unittest.TestCase):
         # holding a read transaction must not stop the store's insert (WAL), and the store's
         # busy timeout must be long enough to ride out another process's write burst.
         st = Store(self.path)
+        self.addCleanup(st.close)
         self.assertEqual(st.conn.execute("PRAGMA journal_mode").fetchone()[0], "wal")
         reader = sqlite3.connect(self.path)
+        self.addCleanup(reader.close)
         reader.execute("BEGIN")
         reader.execute("SELECT count(*) FROM scans").fetchone()   # an open read transaction
         st.record_scan(scan("nfl", _adapters(), now=FIXTURE_NOW, settings={}))   # must not raise
         reader.rollback()
-        self.assertEqual(Store(":memory:").conn.execute("PRAGMA journal_mode").fetchone()[0], "memory")
+        mem = Store(":memory:")
+        self.addCleanup(mem.close)
+        self.assertEqual(mem.conn.execute("PRAGMA journal_mode").fetchone()[0], "memory")
 
     def test_record_scan_and_stats(self):
         res = scan("nfl", _adapters(), now=FIXTURE_NOW, settings={})
