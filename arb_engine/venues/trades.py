@@ -25,7 +25,10 @@ when, in one *pass* (a pagination from the newest page to an empty cursor):
   because the query's ``max_ts`` bounds what the venue returns, a pass over a closed window reads
   a set that can no longer change, which is what makes a resumed pass sound). The margin covers
   a print the venue publishes late and a local clock running ahead of the venue's; the rule
-  trusts the local clock to within it;
+  trusts the local clock to within it. The pass start is a number the *writer* recorded, and the
+  further ahead of the truth it is the more closed an open window looks, so a reader also refuses
+  a complete tape stamped more than ``CLOCK_GRACE_S`` (60 s) after its own clock: a fast writer
+  can still shorten the margin by up to that much, never more;
 * every page was a well-formed answer (a JSON object with a ``trades`` list and a string
   ``cursor``; anything else - an empty body, an error object - is a failed page, never the end);
 * no row was unreadable (no trade id, another ticker, a non-finite or missing time, a price
@@ -41,9 +44,10 @@ or when it ended on a repeated cursor, a conflict or unreadable rows. A fresh pa
 and is judged alone: prints of an earlier pass are neither carried into it nor compared with it
 (the venue's current answer is the tape, so a print it no longer reports, or has revised, does
 not survive). Progress is checkpointed after the first page and every ``checkpoint_every``
-pages; writes are atomic, and an incomplete state never overwrites a complete file (checked
-under a per-tape ``fcntl`` lock; without ``fcntl``, e.g. on Windows, that check is best effort).
-A complete tape that cannot be cached is still returned, with a logged warning.
+pages; writes are atomic, and an incomplete state never overwrites a complete file (checked under
+a per-tape lock: an ``fcntl`` advisory lock, or, without ``fcntl`` (Windows), an ``O_EXCL`` lock
+file taken over once nobody has touched it for ``lock_timeout_s``). A complete tape that cannot be
+cached is still returned, with a logged warning.
 
 **Kalshi prints are deduplicated by ``trade_id``** within a pass (overlapping pages, a resumed
 cursor, prints sharing a second at a page boundary); the same id with a different payload in one
@@ -55,17 +59,27 @@ cannot resume (offsets shift as prints arrive).
 **Windows.** ``min_ts`` / ``max_ts`` are exact finite seconds (not bools). Kalshi's query takes
 whole seconds, so the request is widened by a second each side and trimmed to the exact window.
 
-**Cache files** (schema 3) are keyed by a digest of the exact query (venue, market, window,
+**Cache files** (schema 4) are keyed by a digest of the exact query (venue, market, window,
 Polymarket ``condition_id``, schema); the file name keeps a sanitised prefix of
-``<venue>-<market>`` for humans (possibly shortened). Everything stored is checked again on read
-(:func:`tape_from_doc`): the query, the type and range of every field and print, and, for a
-complete tape, the closed-window rule against its ``pass_started_at`` with the reader's
-``settle_s``. A file that fails any check is not used.
+``<venue>-<market>`` for humans (possibly shortened). The window in the key goes through the same
+normalisation as the query, so ``100`` and ``100.0`` name one tape, while windows that differ by
+a fraction of a second - which Kalshi's whole-second bounds cannot tell apart - never do.
+Everything stored is checked again on read (:func:`tape_from_doc`): the query, the type and range
+of every field and print, and, for a complete tape, the closed-window rule against its
+``pass_started_at`` with the reader's ``settle_s`` **and** the reader's own clock. A file that
+fails any check is not used.
 
-**Older cache files** are never served: the pre-schema format cannot say whether its fetch ran
-out of pages, and schema 2 files (the first two rounds of this client) were never re-checked
-against the closed-window rule, and the first round's can be cut short. Online the tape is
-fetched again under the new key; offline the error names the old file.
+**Provenance.** Every file says how it was made: ``source="fetch"`` for a tape this client
+paginated to an empty cursor, ``source="asserted"`` for one handed to :meth:`store_complete` (a
+fixture, or a tape checked by hand). A file with neither is not read, and an asserted tape logs a
+warning every time it is served, so a research run can never take one for the venue's own answer.
+
+**Older cache files** are never served: the pre-schema format cannot say whether its fetch ran out
+of pages; schema 2 files (the first two rounds of this client) were never re-checked against the
+closed-window rule, and the first round's can be cut short; schema 3 files were never checked
+against the reader's clock and do not say where they came from, so a fetch made while the window
+was open by a machine whose clock ran ahead is indistinguishable from a sound one. Online the tape
+is fetched again under the new key; offline the error names the old file.
 ``scripts/migrate_trade_cache.py`` moves them, and any file that fails its checks, aside.
 """
 
@@ -98,11 +112,15 @@ KALSHI = "https://api.elections.kalshi.com/trade-api/v2"
 POLY_DATA = "https://data-api.polymarket.com"
 KALSHI_PAGE = 1000
 POLY_PAGE = 500
-TAPE_SCHEMA = 3                         # 2: files not re-checked against the closed-window rule on read
+TAPE_SCHEMA = 4                         # 2: files not re-checked against the closed-window rule on read
+                                        # 3: a complete file was never checked against the *reader's* clock, and did
+                                        #    not say whether it was fetched or asserted by hand
 SETTLE_S = 900.0                        # a window is closed once its end is this far behind the pass's start
+CLOCK_GRACE_S = 60.0                    # how far ahead of the reader's clock a pass start may be stamped
 LOCK_TIMEOUT_S = 30.0                   # how long a writer waits for another writer of the same tape
 STALE_CURSOR_STATUS = (400, 404, 410, 422)
 VENUES = ("kalshi", "polymarket")
+SOURCES = ("fetch", "asserted")         # how a tape was produced: paginated from the venue, or handed in
 
 
 @dataclass
@@ -155,6 +173,7 @@ class Tape:
     restarts: int = 0                   # passes started over because the venue no longer knew the saved cursor
     fetched_at: float = 0.0
     condition_id: Optional[str] = None  # Polymarket: the market filter the query used
+    source: str = "fetch"               # "fetch": paginated from the venue; "asserted": handed to store_complete
 
 
 def _f(x: Any) -> Optional[float]:
@@ -258,6 +277,10 @@ def _open_reason(max_ts: Optional[float], started: float, settle_s: float) -> Op
 
 def _query(venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], condition_id: Optional[str] = None,
            schema: int = TAPE_SCHEMA) -> dict[str, Any]:
+    """The exact query a tape answers, canonically: the window goes through :func:`_window`, so
+    ``100`` and ``100.0`` (and ``-0.0`` and ``0.0``) are one query with one key, and a window
+    that is not a pair of finite seconds has no key at all."""
+    min_ts, max_ts = _window(min_ts, max_ts)
     q: dict[str, Any] = {"schema": schema, "venue": venue, "market": str(market), "min_ts": min_ts, "max_ts": max_ts}
     if condition_id is not None:
         q["condition_id"] = str(condition_id)
@@ -308,12 +331,19 @@ def _check_trades(venue: str, market: str, min_ts: Optional[float], max_ts: Opti
     return sorted(out, key=lambda t: (t.ts, t.trade_id))
 
 
-def tape_from_doc(doc: Any, settle_s: float = SETTLE_S, query: Optional[dict[str, Any]] = None) -> Tape:
+def tape_from_doc(doc: Any, settle_s: float = SETTLE_S, query: Optional[dict[str, Any]] = None,
+                  now: Optional[float] = None) -> Tape:
     """The tape a cache document holds, after every check a reader makes; ValueError naming the
     first that fails. Checked: the schema; the stored query (it must equal ``query`` when given,
-    and be well formed); counts, cursors and times of the right types; every print
-    (:func:`_check_trades`); and, for a complete tape, no cursor left, no rejected rows and a
-    window that was closed when its pass began (by ``settle_s``)."""
+    and be well formed); how the tape was produced (``source``); counts, cursors and times of the
+    right types; every print (:func:`_check_trades`); and, for a complete tape, no cursor left,
+    no rejected rows, a window that was closed when its pass began (by ``settle_s``), and - when
+    ``now`` is given - a pass start that is not ahead of that clock by more than
+    ``CLOCK_GRACE_S``.
+
+    That last check is what stops a *writer's* clock from deciding the rule on its own: the pass
+    start is a number the writer recorded, and the further ahead it is, the more closed an open
+    window looks. A reader whose own clock is right must not take a stamp from its own future."""
     if not isinstance(doc, dict):
         raise ValueError("not a JSON object")
     if doc.get("schema") != TAPE_SCHEMA:
@@ -331,6 +361,9 @@ def tape_from_doc(doc: Any, settle_s: float = SETTLE_S, query: Optional[dict[str
     complete = doc.get("complete")
     if type(complete) is not bool:
         raise ValueError(f"complete is {complete!r}, not true or false")
+    source = doc.get("source")
+    if source not in SOURCES:
+        raise ValueError(f"source is {source!r}, not one of {SOURCES}: the file does not say how it was produced")
     counts = {k: doc.get(k, 0) for k in ("pages", "duplicates", "rejected", "restarts")}
     for k, v in counts.items():
         if type(v) is not int or v < 0:
@@ -355,10 +388,14 @@ def tape_from_doc(doc: Any, settle_s: float = SETTLE_S, query: Optional[dict[str
         why = _open_reason(max_ts, started, settle_s)
         if why:
             raise ValueError(f"marked complete, but {why} when its pass began")
+        if now is not None and started > now + CLOCK_GRACE_S:
+            raise ValueError(f"marked complete, but its pass is stamped {started - now:.0f} s after the clock reading it "
+                             f"({started:.0f} vs {now:.0f}, over the {CLOCK_GRACE_S:g} s allowed): a writer's clock that far "
+                             f"ahead calls a window closed while it is still open, so this tape proves nothing")
     return Tape(venue=venue, market=market, min_ts=min_ts, max_ts=max_ts, trades=trades, complete=complete,
                 reason=str(doc.get("reason") or ""), pages=counts["pages"], next_cursor=nxt, seen_cursors=list(seen),
                 pass_started_at=started, duplicates=counts["duplicates"], rejected=counts["rejected"], restarts=counts["restarts"],
-                fetched_at=fetched, condition_id=cond)
+                fetched_at=fetched, condition_id=cond, source=source)
 
 
 class TradesClient:
@@ -396,7 +433,7 @@ class TradesClient:
         except (OSError, ValueError) as e:
             return None, f"unreadable ({type(e).__name__})"
         try:
-            return tape_from_doc(doc, self.settle_s, _query(venue, market, min_ts, max_ts, condition_id)), ""
+            return tape_from_doc(doc, self.settle_s, _query(venue, market, min_ts, max_ts, condition_id), self._now()), ""
         except (TypeError, ValueError) as e:
             return None, str(e)
 
@@ -407,27 +444,70 @@ class TradesClient:
     def _load(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float], condition_id: Optional[str] = None) -> Optional[Tape]:
         return self._read(self._cache_path(_cache_key(venue, market, min_ts, max_ts, condition_id)), venue, market, min_ts, max_ts, condition_id)
 
+    def _wait_for(self, acquire: Callable[[], bool], lock: str) -> None:
+        """Retry ``acquire`` for at most ``lock_timeout_s``, then TimeoutError naming the lock."""
+        deadline = time.monotonic() + self.lock_timeout_s
+        while not acquire():
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"another writer has held {lock} for over {self.lock_timeout_s:g} s")
+            time.sleep(0.01)
+
+    def _take_exclusive(self, lock: str, token: str) -> bool:
+        """The ``fcntl``-less lock: an exclusive create. A lock file nobody has touched for
+        ``lock_timeout_s`` belonged to a writer that died, and is taken away, so one kill cannot
+        wedge a tape for good; the token in the file means only its owner removes it."""
+        try:
+            fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            try:
+                stale = time.time() - os.stat(lock).st_mtime > max(self.lock_timeout_s, 1.0)
+            except OSError:
+                return False
+            if stale:
+                with contextlib.suppress(OSError):
+                    os.unlink(lock)
+            return False
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(token)
+        return True
+
     @contextlib.contextmanager
     def _locked(self, path: str):
-        """One writer at a time per tape, across threads and processes: an advisory lock on a
-        dot-file beside it, opened read-only (so a lock file this user cannot write does not
-        block saves) and waited for at most ``lock_timeout_s`` (then TimeoutError). Without
-        ``fcntl`` there is no lock."""
-        if fcntl is None:
-            yield
-            return
+        """One writer at a time per tape, across threads and processes, waited for at most
+        ``lock_timeout_s`` (then TimeoutError): the guard around "never replace a complete file"
+        and the write itself.
+
+        With ``fcntl`` (POSIX) it is an advisory lock on a dot-file beside the tape, opened
+        read-only so a lock file this user cannot write does not block saves. Without ``fcntl``
+        (Windows) the same dot-file is created ``O_EXCL`` instead - weaker (it needs the
+        directory to be writable, and a stale file is taken over by age) but still a lock, where
+        before there was none."""
         lock = os.path.join(os.path.dirname(path), "." + os.path.basename(path) + ".lock")
-        fd = os.open(lock, os.O_RDONLY | os.O_CREAT, 0o644)
-        try:
-            deadline = time.monotonic() + self.lock_timeout_s
-            while True:
+        if fcntl is None:
+            token = f"{os.getpid()}-{os.urandom(8).hex()}"
+            self._wait_for(lambda: self._take_exclusive(lock, token), lock)
+            try:
+                yield
+            finally:
                 try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError(f"another writer has held {lock} for over {self.lock_timeout_s:g} s") from None
-                    time.sleep(0.01)
+                    with open(lock, encoding="utf-8") as f:
+                        mine = f.read() == token
+                except OSError:
+                    mine = False
+                if mine:                              # never remove a lock another writer took over
+                    with contextlib.suppress(OSError):
+                        os.unlink(lock)
+            return
+        fd = os.open(lock, os.O_RDONLY | os.O_CREAT, 0o644)
+
+        def take() -> bool:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return True
+            except BlockingIOError:
+                return False
+        try:
+            self._wait_for(take, lock)
             try:
                 yield
             finally:
@@ -487,7 +567,10 @@ class TradesClient:
                        condition_id: Optional[str] = None) -> Tape:
         """Record a tape known to be complete (a fixture, or one checked by hand) for offline
         use, as if its pass began now: the window must be closed now (by ``settle_s``), and the
-        trades are validated like a cached tape's. ValueError otherwise."""
+        trades are validated like a cached tape's. ValueError otherwise.
+
+        The file says ``source="asserted"``: nothing here paginated the venue, so the tape is
+        exactly as complete as whoever handed it in, and every read of it says so."""
         if venue not in VENUES:
             raise ValueError(f"venue {venue!r} is not one of {VENUES}")
         min_ts, max_ts = _window(min_ts, max_ts)
@@ -496,16 +579,19 @@ class TradesClient:
         if why:
             raise ValueError(f"{venue} tape of {market} not stored as complete: {why}")
         tape = Tape(venue=venue, market=str(market), min_ts=min_ts, max_ts=max_ts, trades=_check_trades(venue, market, min_ts, max_ts, trades),
-                    complete=True, pass_started_at=now, fetched_at=now, condition_id=None if condition_id is None else str(condition_id))
+                    complete=True, pass_started_at=now, fetched_at=now, condition_id=None if condition_id is None else str(condition_id),
+                    source="asserted")
         self._store(tape)
         return tape
 
     def _older_files_note(self, venue: str, market: str, min_ts: Optional[float], max_ts: Optional[float],
                           condition_id: Optional[str] = None) -> str:
-        """Names a cache file of this query written before schema 3, if one exists."""
-        names = [_legacy_cache_key(venue, market, min_ts, max_ts), _cache_key(venue, market, min_ts, max_ts, condition_id, schema=2)]
-        if condition_id is not None:                   # the first round keyed Polymarket tapes without it
-            names.append(_cache_key(venue, market, min_ts, max_ts, None, schema=2))
+        """Names a cache file of this query written before the current schema, if one exists."""
+        names = [_legacy_cache_key(venue, market, min_ts, max_ts)]
+        for schema in range(2, TAPE_SCHEMA):
+            names.append(_cache_key(venue, market, min_ts, max_ts, condition_id, schema=schema))
+            if condition_id is not None:               # the first round keyed Polymarket tapes without it
+                names.append(_cache_key(venue, market, min_ts, max_ts, None, schema=schema))
         old = [p for p in map(self._cache_path, names) if os.path.exists(p)]
         return (f"; an older cache file exists at {old[0]} but it is never used (written before the current checks, it can "
                 "be cut short or fetched while its window was open) - fetch online once to replace it "
@@ -517,6 +603,9 @@ class TradesClient:
         where = self._cache_path(_cache_key(venue, market, min_ts, max_ts, condition_id))
         tape, why = self._read_why(where, venue, market, min_ts, max_ts, condition_id)
         if tape is not None and tape.complete:
+            if tape.source != "fetch":                 # never let an asserted tape pass for the venue's own answer
+                log.warning("the %s tape of %s at %s was recorded by hand (source=%s), not paginated from the venue: "
+                            "it is complete only as far as whoever stored it checked", venue, market, where, tape.source)
             return tape, None
         if self.offline:
             if tape is not None:
