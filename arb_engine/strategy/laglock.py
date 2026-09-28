@@ -143,7 +143,7 @@ class LagLockBook:
         that is an acceptable lock: with ``require_tie_safe``, the cheapest one whose pair pays
         >= $1 on a tie - not the cheapest overall (a cheaper Rothera YES that loses on a tie must
         not hide a Kalshi contract that locks)."""
-        from .leadlag import _fresh
+        from .leadlag import _fresh, _observed_at_or_after
         from ..matching.settlement_rules import rule_for_quote
 
         sport = p.event_key.split(":", 1)[0].lower()
@@ -155,6 +155,8 @@ class LagLockBook:
             for q in qs:
                 if q.event_key != p.event_key or q.outcome != p.lock_outcome or q.ask is None or not 0 < q.ask < 1 or not _fresh(q, now, self.fresh_s):
                     continue
+                if not _observed_at_or_after(q, p.opened):
+                    continue   # a price seen before the position existed could not have hedged it
                 if q.ask_size is not None and q.ask_size < p.contracts:
                     continue   # not enough shown to lock the whole position at this price
                 try:

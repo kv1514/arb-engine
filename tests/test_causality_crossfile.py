@@ -104,6 +104,32 @@ class PaperFillCausalityTests(unittest.TestCase):
         self.assertIsNotNone(order.filled_at, "the boundary is inclusive")
 
 
+class LockHedgeCausalityTests(unittest.TestCase):
+    """A lock leg may only be priced from a quote observed after the position opened."""
+
+    def _book(self):
+        from arb_engine.strategy.laglock import LagLockBook
+        return LagLockBook(store=None, executor=None, fresh_s=10.0)
+
+    def _position(self, book, opened: float):
+        return book.open(key=f"lock-{opened}", event_key="nfl:DEN|KC:2026-09-27", outcome="KC",
+                         lock_outcome="DEN", venue="kalshi", contracts=10, entry_price=0.62,
+                         entry_all_in=0.6370, now=opened, source="lag", entry_tie=0.5)
+
+    def test_a_quote_from_before_the_position_never_hedges_it(self):
+        book = self._book()
+        p = self._position(book, 100.0)
+        stale = {"kalshi": [_quote(95.0, ask=0.36, outcome="DEN")]}
+        self.assertIsNone(book._cheapest(p, stale, now=100.5),
+                          "a price seen before the position existed cannot hedge it")
+
+    def test_a_quote_from_after_the_position_still_hedges_it(self):
+        book = self._book()
+        p = self._position(book, 100.0)
+        fresh = {"kalshi": [_quote(100.5, ask=0.36, outcome="DEN")]}
+        self.assertIsNotNone(book._cheapest(p, fresh, now=101.0))
+
+
 class ArbBacktestLedgerTests(unittest.TestCase):
     """Liquidity taken later has not been taken yet."""
 
