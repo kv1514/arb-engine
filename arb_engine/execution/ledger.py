@@ -1203,16 +1203,20 @@ class OrderLedger:
         complete fills listing agreed) or ``corrected`` (an operator accepted an exchange
         correction); the highest count ever seen stays on record in ``fill_seen``.
 
-        Checked again inside the write, against what is stored *now*: only an open intent is
-        finished, and - unless it is an operator's correction - never below a count an answer
-        showed (another reader may have recorded more fills since this decision was read); that
-        makes it contradicted instead. Returns whether it was finished."""
+        Checked again inside the write, against what is stored *now*: only an open intent the
+        exchange acknowledged (an order id on record) is finished - an intent whose request may
+        never have arrived is resolved by reconciliation or :meth:`release`, not booked as an
+        order that filled - and, unless it is an operator's correction, never below a count an
+        answer showed (another reader may have recorded more fills since this decision was
+        read); that makes it contradicted instead. Returns whether it was finished."""
         now = self._time(now, "now")
 
         def txn(c: sqlite3.Connection) -> bool:
-            row = c.execute("SELECT state, tif, fill_seen, fill_source FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
-            if row is None or row["state"] not in OPEN:
-                return self._stale(c, now, intent_id, "done", row["state"] if row else None, fill_count=str(fill_count))
+            row = c.execute("SELECT state, tif, order_id, fill_seen, fill_source FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
+            if row is None or row["state"] not in OPEN or not row["order_id"]:
+                return self._stale(c, now, intent_id, "done", row["state"] if row else None, fill_count=str(fill_count),
+                                   **({} if row is None or row["order_id"] else {"refused": "no order id on record: the exchange never "
+                                                                                 "acknowledged this intent"}))
             prior = _dec(row["fill_seen"])
             if fill_state != CORRECTED and prior is not None and D(fill_count) < prior:
                 note = (f"contradicted: {row['fill_source'] or 'an earlier answer'} showed {prior} filled, the answers read now {fill_count}"

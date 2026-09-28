@@ -105,6 +105,11 @@ REVERTS = [
             if False:""",
      ["tests.test_ledger_hardening.FailOpenTests.test_rejected_never_releases_an_intent_that_showed_fills"]),
 
+    ("done() needs an acknowledged order", "arb_engine/execution/ledger.py",
+     """            if row is None or row["state"] not in OPEN or not row["order_id"]:""",
+     """            if row is None or row["state"] not in OPEN:""",
+     ["tests.test_ledger_hardening.FailOpenTests.test_done_refuses_an_intent_the_exchange_never_acknowledged"]),
+
     ("list_orders reports a truncated fallback", "arb_engine/execution/ledger.py",
      """    rows = list(client.orders_v2(**params) or [])
     return rows, bool(getattr(client, "last_truncated", False))""",

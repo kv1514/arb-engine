@@ -497,6 +497,27 @@ class FailOpenTests(unittest.TestCase):
         self.assertTrue(led.rejected(res.intent_id, "the plan was refused: nothing sent"))
         self.assertEqual(led.exposure(), Decimal(0))
 
+    def test_done_refuses_an_intent_the_exchange_never_acknowledged(self):
+        """`done` is the low-level primitive `_apply_order` and `accept_correction` use; on
+        its own it must not book an order the exchange never gave an id for."""
+        led = ledger()
+        res = entry(led, count=10)
+        self.assertFalse(led.done(res.intent_id, Decimal(0), Decimal(0), Decimal(0)))
+        self.assertEqual(led.get(res.intent_id)["state"], "pending")
+        self.assertEqual(led.exposure(), Decimal("5.20"))
+        led.accepted(res.intent_id, {"order_id": "o1", "fill_count": "0.00", "remaining_count": "0.00"})
+        self.assertTrue(led.done(res.intent_id, Decimal(0), Decimal(0), Decimal(0)))
+        self.assertEqual(led.exposure(), Decimal(0))
+
+    def test_apply_row_without_a_client_can_never_finish_an_intent(self):
+        led = ledger()
+        res = entry(led, count=1, price="0.50")
+        led.accepted(res.intent_id, {"order_id": "o1", "fill_count": "1.00", "remaining_count": "0.00"})
+        note = led.apply_row(res.intent_id, order_row("o1"))          # no fills client at all
+        self.assertEqual(led.get(res.intent_id)["state"], ACCEPTED)
+        self.assertIn("not complete", note)
+        self.assertEqual(led.exposure(), Decimal("0.52"))
+
     def test_list_orders_reports_a_non_paging_client_s_truncation(self):
         class OldClient:
             last_truncated = True
