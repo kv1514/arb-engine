@@ -423,7 +423,16 @@ class LagExecutor:
             rec["exchange_holding"] = str(held)
             if held < 1:
                 return skip(f"the exchange shows none of the entry's {parent['ticker']} {parent['side']} held")
-            count = min(int(count), int(held))
+            # Kalshi nets a market into one position per account, so with more than one entry on
+            # a ticker the position covers them all: what this entry may hedge is what is left
+            # after the others' contracts. Short of that, none of it is provably this entry's.
+            others = self.ledger.contracts_committed_elsewhere(parent_id)
+            rec["exchange_holding_others"] = str(others)
+            mine = held - others
+            if mine < 1:
+                return skip(f"the exchange shows {held} of {parent['ticker']} {parent['side']} held and {others} belong to other order(s) "
+                            "of this account: none of the position is provably this entry's")
+            count = min(int(count), int(mine))
         mult, why = self._fee_multiplier(ticker, quote)
         if mult is None:
             return skip(why)

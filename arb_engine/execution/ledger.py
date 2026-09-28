@@ -48,8 +48,15 @@ shared by every process that trades it:
      the quote the caller priced it on is within ``lock_quote_max_age_s``; no *related*
      order (the entry, its locks, anything on either ticker) has an unknown outcome; and the
      remaining inventory - the entry's fill minus exits (sells of its contract and buys of
-     the opposite side on its market since, by any strategy) minus every earlier lock leg
-     (unresolved ones at full count) - bounds the count.
+     the opposite side on its market since, by any strategy, that are *not* a lock leg of
+     another entry: that is that entry's hedge, never this one's exit) minus every earlier
+     lock leg (unresolved ones at full count) - bounds the count.
+
+   The exchange position the caller checks is one number for the whole account, so with more
+   than one entry on a ticker it covers them all: what an entry may hedge is that position
+   less what other intents of this ledger bought there
+   (:meth:`OrderLedger.contracts_committed_elsewhere`), and a position short of that proves
+   nothing about any single entry.
 
 6. **Reconciliation** (:meth:`reconcile`) finds each unresolved intent on the exchange by
    its ``client_order_id`` (``GET /portfolio/orders?ticker=&min_ts=``, every page; Kalshi
@@ -58,7 +65,11 @@ shared by every process that trades it:
    ``taker|maker_fees_dollars``; ``GET /portfolio/fills?order_id=`` cross-checks), replacing
    the reserved worst case with what was paid. An intent that complete listings still do not
    show ``not_found_s`` after it was sent was never accepted: its reservation is released.
-   An incomplete (truncated) listing proves nothing and never releases anything.
+   An incomplete (truncated) listing proves nothing and never releases anything - and neither
+   does a filtered one: ``min_ts`` is *this* process's clock while Kalshi filters on its own,
+   so an order a filtered listing does not show is looked for again in an unfiltered listing
+   of the ticker before absence is believed (a clock a minute ahead of the exchange's used to
+   release an order that was on the book and filled).
 6. **Only evidence releases a reservation** (:func:`order_evidence`, :func:`fills_evidence`).
    An order is final only when its row shows a terminal status (executed / canceled), an
    explicit remaining quantity of zero and a fill count within what was ordered; anything
@@ -92,7 +103,18 @@ shared by every process that trades it:
    exchange answer already stated them final, else its whole worst case - and is read again.
    That holds for an order that filled nothing too: a zero-fill cancellation is done once
    the complete listing is empty. A count confirmed this way is ``verified``; only a verified
-   entry (or an operator-``corrected`` one) can be hedged by a lock leg.
+   entry (or an operator-``corrected`` one) can be hedged by a lock leg. The listing is
+   de-duplicated on the fill id *and* the trade id: one trade matches one order once, so the
+   same trade listed under two fill ids is one fill, not two (counted twice it showed more
+   fills than the order row and contradicted an order that was fine, which then could never
+   be hedged).
+
+   **What a purchase cost is bounded too.** A buy of ``n`` contracts at limit ``L`` pays
+   between a cent and ``L`` each. A row claiming more than ``n x L`` contradicts the order it
+   says it is; one claiming under a cent a contract states no cost at all, so nothing is
+   released and it is read again. Where the fills listing prices its own rows, that cost
+   cross-checks the row's and the larger of the two is booked - the rule the fees already
+   follow, so an under-reported row never buys back budget it did not free.
 7. **Exchange corrections are explicit.** The exchange can bust a trade, and then an order
    truly holds fewer contracts than it once reported. The ledger never infers that from a
    lower count: the intent stays contradicted until a person checks the exchange and calls
@@ -102,13 +124,26 @@ shared by every process that trades it:
    manual :meth:`OrderLedger.release` (never accepted) refuses an intent that showed fills.
 
 Budgets are dollars **including fees**. An open intent counts at its worst case
-(``count x limit`` + :func:`fee_bound` at the market's own fee multiplier), an accepted
-immediate-or-cancel order whose fills an exchange answer stated final at those fills (never
-fewer than any answer showed) at the limit plus that bound, a contradicted one at its whole
-worst case again, a finished one at its actual fill cost plus actual fees. A day is the
-local calendar date at reservation. Every time the ledger is handed (a decision time, a
-request time, a quote time) must be a finite number: a NaN compares false with everything
-and would pass every age and staleness check it meets.
+(``count x`` what one contract can cost it + :func:`fee_bound` at the market's own fee
+multiplier), an accepted immediate-or-cancel order whose fills an exchange answer stated
+final at those fills (never fewer than any answer showed), a contradicted one at its whole
+worst case again, a finished one at its actual fill cost plus actual fees. What one contract
+can cost is the limit for a buy and ``1 - limit`` for a sell: selling a $0.10 YES is short
+the $0.90 the other outcome pays, so a sell is counted - reserved, held and finished - on
+that side, never on its price.
+
+A day is the local calendar date at reservation, and the daily cap counts what is *open*
+whatever day it was reserved on: at local midnight the date changes but an order nobody has
+reconciled has not, and a cap that let it drop out bounded nothing across the boundary.
+
+Every time the ledger is handed (a decision time, a request time, a quote time) must be a
+finite number: a NaN compares false with everything and would pass every age and staleness
+check it meets. Sizes are checked at the same boundary: :meth:`reserve` answers a bad count
+or price with a refused :class:`Reservation` and never raises out of a live loop (an infinite
+count used to raise ``OverflowError``, which no caller catches), and one intent may not hold
+more than ``MAX_CONTRACTS``. A reservation is released by :meth:`rejected` only while nothing
+filled: an intent an exchange answer showed filled is never released by any caller, whatever
+``from_states`` it passes (an exchange correction goes through :meth:`accept_correction`).
 
 The fee multiplier is the series' ``fee_multiplier`` as the exchange the order goes to
 reports it (:class:`FeeMultipliers`), never an assumed 1: every Kalshi series today has 1,
@@ -157,6 +192,12 @@ HEDGEABLE = (VERIFIED, CORRECTED)
 ZERO = Decimal("0")
 HALF = Decimal("0.5")
 IOC = ("immediate_or_cancel", "fill_or_kill", "ioc", "fok")
+# One intent may not hold more contracts than this. Not a risk limit (the budgets are): a
+# sanity bound so an absurd count (a NaN-derived size, a units mistake) is refused at the
+# boundary instead of being reserved, or - at ``float('inf')`` - raising out of ``reserve``.
+MAX_CONTRACTS = 1_000_000
+# The cheapest a Kalshi contract can fill: prices are whole cents in (0, 1).
+MIN_FILL_PRICE = Decimal("0.01")
 # Order statuses after which nothing more can fill (Kalshi: resting | canceled | executed).
 TERMINAL_STATUSES = ("executed", "canceled", "cancelled", "expired")
 _KEEP = object()   # OrderLedger._hold: leave the booked fill count as it is
@@ -680,14 +721,32 @@ class OrderLedger:
 
     # ---- exposure ------------------------------------------------------------------------
     @staticmethod
-    def exposure_of(row: Any) -> Decimal:
+    def _exposed_price(row: Any) -> Decimal:
+        """What one contract of this intent can cost it: the limit for a buy, ``1 - limit``
+        for a sell (selling a $0.10 YES is short the $0.90 the other outcome pays). A row read
+        without its ``action`` column is treated as a buy, which is what every automated
+        strategy sends."""
+        limit = D(row["limit_price"])
+        if "action" in row.keys() and str(row["action"] or "buy").lower() == "sell":
+            return Decimal(1) - limit
+        return limit
+
+    @classmethod
+    def exposure_of(cls, row: Any) -> Decimal:
         """What one intent commits, fees included (see the module docstring)."""
         st = row["state"]
         if st == REJECTED:
             return ZERO
-        if st == DONE:
-            return (_dec(row["fill_cost"]) or ZERO) + (_dec(row["fees"]) or ZERO)
         keys = row.keys()
+        sell = "action" in keys and str(row["action"] or "buy").lower() == "sell"
+        if st == DONE:
+            fees = _dec(row["fees"]) or ZERO
+            if sell:
+                # A sell's ``fill_cost`` is what the exchange reported for the order, not what
+                # the short side can cost: bound it by the filled contracts x (1 - limit), which
+                # a sell filled at or above its limit can never exceed.
+                return (_dec(row["fill_count"]) or ZERO) * cls._exposed_price(row) + fees
+            return (_dec(row["fill_cost"]) or ZERO) + fees
         if "fill_state" in keys and row["fill_state"] == CONTRADICTED:
             return _dec(row["max_cost"]) or ZERO               # answers disagree: the whole worst case
         if st == ACCEPTED and str(row["tif"]).lower() in IOC:
@@ -697,11 +756,11 @@ class OrderLedger:
             if n is not None and m is not None:
                 if seen is not None and seen > n:
                     n = seen                                   # never fewer than an answer showed
-                return min(worst_cost(row["limit_price"], n, m), _dec(row["max_cost"]) or ZERO)
+                return min(worst_cost(cls._exposed_price(row), n, m), _dec(row["max_cost"]) or ZERO)
         return _dec(row["max_cost"]) or ZERO
 
     def _sum(self, c: sqlite3.Connection, where: str, args: tuple) -> Decimal:
-        rows = c.execute("SELECT state, tif, fill_count, fill_cost, fees, limit_price, max_cost, fee_mult, fill_seen, fill_state "
+        rows = c.execute("SELECT state, tif, action, fill_count, fill_cost, fees, limit_price, max_cost, fee_mult, fill_seen, fill_state "
                          f"FROM intents WHERE state != 'rejected' AND {where}", args).fetchall()
         return sum((self.exposure_of(r) for r in rows), ZERO)
 
@@ -788,12 +847,16 @@ class OrderLedger:
             if qts is None:
                 return Reservation(False, f"quote time {quote_ts!r} is not a finite timestamp")
         try:
+            # ``int(inf)`` raises OverflowError, which no caller of reserve() catches: every
+            # refusal must come back as a Reservation, never as an exception from a live loop.
             count = int(count)
             limit = D(limit_price)
-        except (TypeError, ValueError, InvalidOperation):
+        except (TypeError, ValueError, OverflowError, InvalidOperation):
             return Reservation(False, "count/limit not numeric")
         if count <= 0:
             return Reservation(False, "count must be positive")
+        if count > MAX_CONTRACTS:
+            return Reservation(False, f"count {count} above the {MAX_CONTRACTS} contracts one intent may hold")
         if not limit.is_finite() or not ZERO < limit < 1:
             return Reservation(False, f"limit {limit_price!r} outside (0, 1)")
         per = D(max_cost_per_contract) if max_cost_per_contract is not None else None
@@ -830,24 +893,30 @@ class OrderLedger:
                 self._event(c, now, None, "refused", strategy=strategy, ticker=ticker, dedupe_key=dedupe_key, reason="duplicate")
                 return Reservation(False, f"duplicate signal ({dedupe_key}) already has an order")
             unit = per if per is not None else None
+            # A buy is exposed to what it pays; a sell of a side is short what the other side
+            # pays (selling a $0.10 YES risks $0.90), the same mirror `kalshi order` reserves at.
+            exposed = (Decimal(1) - limit) if str(action).lower() == "sell" else limit
             room = None
             if budget is not None and parent_id is None:
                 rooms = []
                 if budget.daily is not None:
-                    rooms.append(D(budget.daily) - self._sum(c, "strategy = ? AND day = ?", (strategy, day)))
+                    # An intent still open from an earlier day counts too: at local midnight the
+                    # day changes but the exposure does not, and the cap bounds what is open.
+                    rooms.append(D(budget.daily) - self._sum(c, "strategy = ? AND (day = ? OR state IN ('pending', 'ambiguous', 'accepted'))",
+                                                             (strategy, day)))
                 if budget.per_game is not None and game_key:
                     rooms.append(D(budget.per_game) - self._sum(c, "strategy = ? AND game_key = ?", (strategy, game_key)))
                 if rooms:
                     room = min(rooms)
                     fit = n
-                    while fit > 0 and (unit * fit if unit is not None else worst_cost(limit, fit, mult)) > room:
+                    while fit > 0 and (unit * fit if unit is not None else worst_cost(exposed, fit, mult)) > room:
                         fit -= 1
                     if fit <= 0:
                         why = f"budget: ${max(room, ZERO):.2f} left of the {strategy} cap (fees included)"
                         self._event(c, now, None, "refused", strategy=strategy, ticker=ticker, count=count, reason=why)
                         return Reservation(False, why, room=room)
                     n = fit
-            max_cost = unit * n if unit is not None else worst_cost(limit, n, mult)
+            max_cost = unit * n if unit is not None else worst_cost(exposed, n, mult)
             iid, coid = uuid.uuid4().hex, str(uuid.uuid4())
             c.execute("""INSERT INTO intents (intent_id, client_order_id, dedupe_key, strategy, parent_id, env, host, owner,
                 created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail,
@@ -943,10 +1012,13 @@ class OrderLedger:
         if len(locks) >= max_attempts:
             return no(f"{len(locks)} attempts already (max {max_attempts})")
         # Remaining inventory: fill - exits since the entry (any strategy) - every lock leg.
+        # An exit is a sale of the entry's contract, or a buy of the other side that is not a
+        # hedge: a lock leg (``parent_id`` set) belongs to *its own* entry, so counting another
+        # entry's hedge here left the second entry of a ticker permanently unhedged.
         exits_rows = c.execute(
             """SELECT * FROM intents WHERE ticker = ? AND intent_id != ? AND state != 'rejected' AND created_ts >= ?
-               AND ((action = 'sell' AND side = ?) OR (action = 'buy' AND side != ? AND COALESCE(parent_id, '') != ?))""",
-            (parent["ticker"], parent_id, parent["created_ts"], parent["side"], parent["side"], parent_id)).fetchall()
+               AND ((action = 'sell' AND side = ?) OR (action = 'buy' AND side != ? AND parent_id IS NULL))""",
+            (parent["ticker"], parent_id, parent["created_ts"], parent["side"], parent["side"])).fetchall()
         exits = sum((self._contracts_committed(r) for r in exits_rows), ZERO)
         hedged = sum((self._contracts_committed(r) for r in locks), ZERO)
         info = {"fill": str(fill), "exits": str(exits), "hedged": str(hedged)}
@@ -978,6 +1050,24 @@ class OrderLedger:
         if cls._settled(r):
             return D(r["fill_count"])
         return D(r["count"])
+
+    def contracts_committed_elsewhere(self, intent_id: str) -> Decimal:
+        """Contracts of ``intent_id``'s own market and side that *other* intents of this ledger
+        bought or may have bought (unresolved ones at their full count).
+
+        Kalshi nets a market into one signed position per account, so a caller looking at
+        ``GET /portfolio/positions`` cannot tell whose contracts it sees. This is what to
+        subtract before treating that position as one entry's inventory: with two entries on a
+        ticker, a position that covers only one of them proves nothing about either."""
+        row = self.get(intent_id)
+        if row is None:
+            return ZERO
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT state, tif, count, fill_count, fill_state FROM intents
+                   WHERE ticker = ? AND side = ? AND action = 'buy' AND intent_id != ? AND state != 'rejected'""",
+                (row["ticker"], row["side"], intent_id)).fetchall()
+        return sum((self._contracts_committed(r) for r in rows), ZERO)
 
     # ---- 2. every answer recorded --------------------------------------------------------
     def accepted(self, intent_id: str, response: Any, now: Optional[float] = None, req_ts: Optional[float] = None) -> str:
@@ -1064,15 +1154,23 @@ class OrderLedger:
     def rejected(self, intent_id: str, reason: str, now: Optional[float] = None, from_states: tuple = (PENDING, AMBIGUOUS),
                  **detail: Any) -> bool:
         """Nothing was sent, or the exchange provably never took it: the reservation is
-        released. Only from ``from_states`` (a manual release also from ``accepted``): a stale
-        decision never overwrites an intent found or finished meanwhile. Returns whether it
-        was applied."""
+        released. Only from ``from_states``: a stale decision never overwrites an intent found
+        or finished meanwhile. Returns whether it was applied.
+
+        Never for an intent an exchange answer showed filled, whatever ``from_states`` says:
+        releasing it would book those contracts as never bought. An exchange correction goes
+        through :meth:`accept_correction`; the caller-facing release is :meth:`release`."""
         now = self._time(now, "now")
 
         def txn(c: sqlite3.Connection) -> bool:
-            cur = c.execute("SELECT state FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
+            cur = c.execute("SELECT state, fill_seen, fill_source FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
             if cur is None or cur["state"] not in from_states:
                 return self._stale(c, now, intent_id, "rejected", cur["state"] if cur else None, reason=str(reason)[:500])
+            seen = _dec(cur["fill_seen"])
+            if seen is not None and seen > 0:
+                return self._stale(c, now, intent_id, "rejected", cur["state"], reason=str(reason)[:500],
+                                   refused=f"{cur['fill_source'] or 'an exchange answer'} showed {seen} filled: a release would book "
+                                           "them as never bought (`kalshi correct` books an exchange correction)")
             c.execute("UPDATE intents SET state=?, reason=?, updated_ts=?, fill_count=COALESCE(fill_count, '0') WHERE intent_id=?",
                       (REJECTED, str(reason)[:500], now, intent_id))
             self._event(c, now, intent_id, "rejected", reason=str(reason)[:500], **detail)
@@ -1105,16 +1203,20 @@ class OrderLedger:
         complete fills listing agreed) or ``corrected`` (an operator accepted an exchange
         correction); the highest count ever seen stays on record in ``fill_seen``.
 
-        Checked again inside the write, against what is stored *now*: only an open intent is
-        finished, and - unless it is an operator's correction - never below a count an answer
-        showed (another reader may have recorded more fills since this decision was read); that
-        makes it contradicted instead. Returns whether it was finished."""
+        Checked again inside the write, against what is stored *now*: only an open intent the
+        exchange acknowledged (an order id on record) is finished - an intent whose request may
+        never have arrived is resolved by reconciliation or :meth:`release`, not booked as an
+        order that filled - and, unless it is an operator's correction, never below a count an
+        answer showed (another reader may have recorded more fills since this decision was
+        read); that makes it contradicted instead. Returns whether it was finished."""
         now = self._time(now, "now")
 
         def txn(c: sqlite3.Connection) -> bool:
-            row = c.execute("SELECT state, tif, fill_seen, fill_source FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
-            if row is None or row["state"] not in OPEN:
-                return self._stale(c, now, intent_id, "done", row["state"] if row else None, fill_count=str(fill_count))
+            row = c.execute("SELECT state, tif, order_id, fill_seen, fill_source FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
+            if row is None or row["state"] not in OPEN or not row["order_id"]:
+                return self._stale(c, now, intent_id, "done", row["state"] if row else None, fill_count=str(fill_count),
+                                   **({} if row is None or row["order_id"] else {"refused": "no order id on record: the exchange never "
+                                                                                 "acknowledged this intent"}))
             prior = _dec(row["fill_seen"])
             if fill_state != CORRECTED and prior is not None and D(fill_count) < prior:
                 note = (f"contradicted: {row['fill_source'] or 'an earlier answer'} showed {prior} filled, the answers read now {fill_count}"
@@ -1348,8 +1450,17 @@ class OrderLedger:
                     return "order not visible yet"
                 raise
         else:
+            def find(rows: list) -> Optional[dict]:
+                return next((o for o in rows if str(o.get("client_order_id") or "") == r["client_order_id"]), None)
+
             rows, truncated = list_orders(client, ticker=r["ticker"], min_ts=int(float(r["created_ts"])) - 60)
-            order = next((o for o in rows if str(o.get("client_order_id") or "") == r["client_order_id"]), None)
+            order = find(rows)
+            if order is None and not truncated:
+                # ``min_ts`` is *this* process's clock; Kalshi filters on its own. A local clock
+                # running ahead of the exchange's would hide the very order being looked for, and
+                # absence is what releases a reservation: prove it on an unfiltered listing.
+                rows, truncated = list_orders(client, ticker=r["ticker"])
+                order = find(rows)
             if order is None:
                 if truncated:
                     self._bump(iid, now, "listing truncated: not conclusive")
@@ -1404,10 +1515,13 @@ class OrderLedger:
 
     def _read_fills(self, client: Any, r: dict, oid: str) -> "FillsEvidence":
         """The fills listing of order ``oid``, scoped to the intent's market and book side; a
-        missing client proves nothing (like a failed read)."""
+        missing client proves nothing (like a failed read). For a purchase the listing is also
+        asked for its own prices, which cross-check the order row's fill cost."""
         if client is None:
             return FillsEvidence(ZERO, None, False, notes={"fills_error": "no client to read the fills listing with"})
-        return fills_evidence(*list_fills(client, oid), order_id=oid, ticker=r["ticker"], bside=book_side(r["action"], r["side"]))
+        price_field = f"{str(r['side']).lower()}_price_dollars" if str(r["action"]).lower() == "buy" else None
+        return fills_evidence(*list_fills(client, oid), order_id=oid, ticker=r["ticker"], bside=book_side(r["action"], r["side"]),
+                              price_field=price_field)
 
     def _apply_order(self, client: Any, r: dict, order: Optional[dict], now: float) -> str:
         """Book one order row (the module docstring, 6.). Fill evidence only grows: a row or
@@ -1496,6 +1610,22 @@ class OrderLedger:
             elif fills.fees != fees:
                 detail["fills_mismatch"] = True
                 fees = max(fees, fills.fees)       # both are the exchange's: the budget keeps the larger
+        if fills.cost is not None and count > 0:
+            # The listing prices the same fills itself: the budget keeps the larger of the two
+            # (the fees rule), so an under-reported row never buys back budget it did not free.
+            if cost is None:
+                cost = fills.cost
+                detail["source"] = str(detail.get("source") or "order") + " + fills (cost)"
+            elif fills.cost != cost:
+                detail["fills_cost_mismatch"] = str(fills.cost)
+                cost = max(cost, fills.cost)
+        problem = self._cost_problem(r, count, cost)
+        if problem is not None:
+            if problem[0] == "contradicted":
+                return self._hold(iid, now, "contradicted: " + problem[1] + (" - the whole worst case stays reserved" if ioc else ""),
+                                  fill=None if ioc else _KEEP, fill_state=CONTRADICTED, kind="contradicted", **evidence, **detail)
+            cost = None                            # implausible: what was paid is not established
+            ev.missing = [problem[1]] + list(ev.missing)
         if cost is None or fees is None:
             # The fills are final; what they cost (or their fees) is not established yet: book
             # the fills - an IOC then counts them at the limit plus the fee bound, any other
@@ -1505,6 +1635,29 @@ class OrderLedger:
                               fill=count, fill_state=VERIFIED, **evidence, **detail)
         self.done(iid, count, cost, fees, now=now, **detail)
         return f"done: {count} filled, ${cost} + ${fees} fees"
+
+    @staticmethod
+    def _cost_problem(r: dict, count: Decimal, cost: Optional[Decimal]) -> Optional[tuple[str, str]]:
+        """Why a purchase's reported fill cost cannot be what it paid, or None.
+
+        ``count`` contracts bought at prices no higher than the limit cost between a cent and
+        the limit each: the exchange's own bounds, not an estimate. Above the limit the row
+        contradicts the order it claims to be (``contradicted``); below a cent a contract it
+        is not a cost at all (``implausible``: the reservation stands and the order is read
+        again, so a late correct answer still lands). A sell is not checked here - what
+        ``taker_fill_cost_dollars`` means for a sell is not established - and its exposure is
+        bounded by ``1 - limit`` a contract in :meth:`exposure_of` instead."""
+        if cost is None or count <= 0 or str(r.get("action") or "buy").lower() != "buy":
+            return None
+        limit = _dec(r["limit_price"])
+        if limit is None:
+            return None
+        if cost > limit * count:
+            return ("contradicted", f"the order row reports a fill cost of ${cost} for {count} contracts, more than the "
+                                    f"${limit * count} a buy at its ${limit} limit could cost")
+        if cost < MIN_FILL_PRICE * count:
+            return ("implausible", f"fill cost ${cost} is under a cent a contract for {count} contracts")
+        return None
 
     def _hold(self, iid: str, now: float, note: str, fill: Any = _KEEP, fill_state: Any = _KEEP, fill_seen: Any = _KEEP,
               fill_source: Any = _KEEP, kind: str = "held", keep_reason: bool = False, **detail: Any) -> str:
@@ -1566,11 +1719,14 @@ def refusal_hint(e: BaseException) -> Optional[int]:
 
 def list_orders(client: Any, **params: Any) -> tuple[list[dict], bool]:
     """(rows, truncated) of ``GET /portfolio/orders`` for ``params``, every page the client
-    will walk. A client without :meth:`paged` (test fakes) is taken as complete."""
+    will walk. A client without :meth:`paged` (test fakes) is taken as complete unless it
+    reports ``last_truncated`` (``KalshiClient.orders_v2`` sets it): a listing that stopped
+    with a cursor pending proves nothing about an order missing from it."""
     params = {k: v for k, v in params.items() if v is not None}
     if hasattr(client, "paged"):
         return client.paged("/portfolio/orders", "orders", params)
-    return list(client.orders_v2(**params) or []), False
+    rows = list(client.orders_v2(**params) or [])
+    return rows, bool(getattr(client, "last_truncated", False))
 
 
 def list_fills(client: Any, order_id: str) -> tuple[list[dict], Optional[bool], Optional[str]]:
@@ -1687,19 +1843,22 @@ def order_evidence(order: dict, count: Any, ioc: bool) -> OrderEvidence:
 
 @dataclass
 class FillsEvidence:
-    """What a fills listing for one order proves. ``count`` / ``fees`` are de-duplicated by
-    fill id over this order's rows on the intent's market and book side; ``fees`` is None
-    when a counted fill carries no ``fee_cost``. ``conclusive``: every page read without an
-    error, every row this order's and in scope, every row with a fill id and a positive
-    count, no fill id listed twice with different contents - only then can the listing
-    confirm a count, establish fees or show that fills trail. ``count`` is a lower bound of
-    what filled even when the listing is not conclusive."""
+    """What a fills listing for one order proves. ``count`` / ``fees`` / ``cost`` are
+    de-duplicated by fill id *and* trade id over this order's rows on the intent's market and
+    book side; ``fees`` is None when a counted fill carries no ``fee_cost``, and ``cost`` -
+    the listing's own price x count, for a purchase - is None unless every counted fill states
+    the price of the contract bought. ``conclusive``: every page read without an error, every
+    row this order's and in scope, every row with an id and a positive count, no id listed
+    twice with different contents - only then can the listing confirm a count, establish fees
+    or costs, or show that fills trail. ``count`` is a lower bound of what filled even when
+    the listing is not conclusive."""
     count: Decimal
     fees: Optional[Decimal]
     conclusive: bool
     conflicts: int = 0
     out_of_scope: int = 0
     notes: dict = field(default_factory=dict)
+    cost: Optional[Decimal] = None
 
     def contradiction(self, filled: Decimal, ordered: Optional[Decimal] = None) -> Optional[str]:
         """Why the listing contradicts an order row reporting ``filled`` (of ``ordered``), or
@@ -1735,12 +1894,17 @@ def _fill_content(f: dict) -> tuple:
 
 
 def fills_evidence(rows: list[dict], truncated: Optional[bool], error: Optional[str], order_id: str,
-                   ticker: Optional[str] = None, bside: Optional[str] = None) -> FillsEvidence:
+                   ticker: Optional[str] = None, bside: Optional[str] = None,
+                   price_field: Optional[str] = None) -> FillsEvidence:
     """Summarise ``GET /portfolio/fills?order_id=`` rows (see :class:`FillsEvidence`). A row of
     another order, or one without an order id, means the listing is not the one asked for;
     a fill of this order on another market (``ticker``) or book side (``bside``) contradicts
-    the order; a fill without a fill id cannot be de-duplicated. None of those is counted,
-    and each makes the listing inconclusive."""
+    the order; a fill without a fill id *and* without a trade id cannot be de-duplicated. None
+    of those is counted, and each makes the listing inconclusive.
+
+    ``price_field`` (``yes_price_dollars`` / ``no_price_dollars``) is the price of the contract
+    the order bought: given it, the listing states its own cost, which cross-checks the order
+    row's. Left out - or absent from any counted fill - the cost is unknown, never zero."""
     mine, unattributed, foreign = [], 0, 0
     for f in rows or []:
         o = str(f.get("order_id") or "")
@@ -1758,19 +1922,27 @@ def fills_evidence(rows: list[dict], truncated: Optional[bool], error: Optional[
             scope_note = scope_note or why
         else:
             scoped.append(f)
-    seen: dict[str, dict] = {}
+    # De-duplicated on *both* identifiers. One trade matches one order once, so a repeated
+    # ``trade_id`` is the same fill listed twice even under a second ``fill_id``: counting it
+    # again would show more fills than the order row and contradict an order that is fine.
+    by_fill: dict[str, dict] = {}
+    by_trade: dict[str, dict] = {}
     unique, duplicates, conflicts, without_id = [], 0, 0, 0
     for f in scoped:
-        key = str(f.get("fill_id") or f.get("trade_id") or "")
-        if not key:
+        fid, tid = str(f.get("fill_id") or ""), str(f.get("trade_id") or "")
+        prior = (by_fill.get(fid) if fid else None) or (by_trade.get(tid) if tid else None)
+        if not fid and not tid:
             without_id += 1                        # cannot be told from a repeat: not counted
-        elif key in seen:
+        elif prior is not None:
             duplicates += 1
-            conflicts += _fill_content(seen[key]) != _fill_content(f)
+            conflicts += _fill_content(prior) != _fill_content(f)
         else:
-            seen[key] = f
+            if fid:
+                by_fill[fid] = f
+            if tid:
+                by_trade[tid] = f
             unique.append(f)
-    count, fees, fee_missing, malformed = ZERO, ZERO, 0, 0
+    count, fees, cost, fee_missing, price_missing, malformed = ZERO, ZERO, ZERO, 0, 0, 0
     for f in unique:
         n = _count_field(f, "count")[1]
         if n is None or n <= 0:
@@ -1782,7 +1954,14 @@ def fills_evidence(rows: list[dict], truncated: Optional[bool], error: Optional[
             fee_missing += 1
         else:
             fees += fee
+        px = _dec(f.get(price_field)) if price_field and f.get(price_field) not in (None, "") else None
+        if px is None or not ZERO < px < 1:
+            price_missing += 1
+        else:
+            cost += px * n
     notes: dict[str, Any] = {"fills": len(unique), "fills_count": str(count), "fills_fees": None if fee_missing else str(fees)}
+    if price_field and not price_missing:
+        notes["fills_cost"] = str(cost)
     for k, v in (("fills_truncated", truncated is not False and error is None), ("fills_error", error), ("fills_duplicates", duplicates),
                  ("fills_conflicting", conflicts), ("fills_without_id", without_id), ("fills_unattributed", unattributed),
                  ("fills_foreign", foreign), ("fills_malformed", malformed), ("fills_without_fee", fee_missing),
@@ -1790,7 +1969,8 @@ def fills_evidence(rows: list[dict], truncated: Optional[bool], error: Optional[
         if v:
             notes[k] = v
     conclusive = error is None and truncated is False and not (unattributed or foreign or conflicts or malformed or without_id or out_of_scope)
-    return FillsEvidence(count, None if fee_missing else fees, conclusive, conflicts, out_of_scope, notes)
+    return FillsEvidence(count, None if fee_missing else fees, conclusive, conflicts, out_of_scope, notes,
+                         None if (price_missing or not price_field) else cost)
 
 
 def finite_positive(x: Any) -> bool:

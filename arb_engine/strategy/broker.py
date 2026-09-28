@@ -515,6 +515,13 @@ class KalshiBroker(Broker):
         return done
 
     def poll(self, orders: list[RestingOrder], market_state: dict[str, dict[str, float]]) -> list[tuple[RestingOrder, float, float]]:
+        """Read each resting order and report its new fills, so the runner can hedge them.
+
+        A row that does not say how much filled says *nothing*, never zero: an absent fill
+        count used to read as 0 and, beside a terminal status, took the order out of the
+        tracked set - a resting maker order that had filled then reported no fills to the
+        runner and its hedge was never raised. Such an order stays ``resting`` here (the
+        ledger holds its whole worst case) and is read again on the next poll."""
         fills: list[tuple[RestingOrder, float, float]] = []
         for o in orders:
             if o.status != "resting":
@@ -523,19 +530,22 @@ class KalshiBroker(Broker):
                 od = self.client.order(o.order_id)
             except Exception:
                 continue
-            filled = _fp(od.get("fill_count_fp") or od.get("fill_count") or 0.0)
+            filled = _count(od, "fill_count")
             if filled is None:
-                remaining = _fp(od.get("remaining_count_fp") or od.get("remaining_count"))
-                filled = (o.count - remaining) if remaining is not None else 0.0
-            new = max(0.0, filled - o.filled)
-            if new > 0:
-                o.filled = filled
-                fills.append((o, new, o.price))
-            status = str(od.get("status") or "").lower()
-            if status in ("executed", "filled") or o.remaining <= 1e-9:
-                o.status = "filled"
-            elif status in ("canceled", "cancelled", "expired"):
-                o.status = "canceled"
+                remaining = _count(od, "remaining_count")
+                filled = (o.count - remaining) if remaining is not None else None
+            if filled is not None:
+                new = max(0.0, filled - o.filled)
+                if new > 0:
+                    o.filled = filled
+                    fills.append((o, new, o.price))
+                status = str(od.get("status") or "").lower()
+                if status in ("executed", "filled") or o.remaining <= 1e-9:
+                    o.status = "filled"
+                elif status in ("canceled", "cancelled", "expired"):
+                    o.status = "canceled"
+            else:
+                log.warning("kalshi order %s came back without a fill or remaining count: still tracked as resting", o.order_id)
             if o.intent_id:
                 try:
                     self.ledger.apply_row(o.intent_id, od, client=self.client)
@@ -550,3 +560,16 @@ def _fp(x: Any) -> Optional[float]:
         return float(x) if x is not None and x != "" else None
     except (TypeError, ValueError):
         return None
+
+
+def _count(od: dict[str, Any], name: str) -> Optional[float]:
+    """A Kalshi count off an order row - the fixed-point ``<name>_fp`` spelling first, then
+    ``<name>`` - or None when the row states neither. A field that is absent is *unknown*:
+    reading it as zero is how a filled order reported no fills (``execution/ledger`` keeps the
+    same rule in ``_count_field``)."""
+    for key in (f"{name}_fp", name):
+        if key in od and od[key] is not None and od[key] != "":
+            v = _fp(od[key])
+            if v is not None:
+                return v
+    return None
