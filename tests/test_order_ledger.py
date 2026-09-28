@@ -59,7 +59,9 @@ class FakeKalshi:
         self.blank_answer = False
         self.read_lag = 0.0
         self.truncated = False
-        self.cost_fields = True
+        self.cost_fields = True                      # an exchange that reports what a fill cost:
+        # False = neither the order row's ``*_fill_cost_dollars`` nor the fills listing's own
+        # price, so nothing states what was paid (the ledger holds the fills at the limit).
         self.extra_fill_fee = Decimal("0")
         self.multiplier = 1                          # the series' fee_multiplier (GET /series/{ticker})
         self.rounding = "centicent"                  # what Kalshi's demo charged on 2026-09-26
@@ -100,7 +102,8 @@ class FakeKalshi:
         if got:
             fid = f"f{len(self.fill_rows) + 1}"
             self.fill_rows.append({"fill_id": fid, "trade_id": "t" + fid, "order_id": oid, "count_fp": f"{got}.00",
-                                   "fee_cost": str(fee + self.extra_fill_fee), "yes_price_dollars": str(yes)})
+                                   "fee_cost": str(fee + self.extra_fill_fee),
+                                   **({"yes_price_dollars": str(yes)} if self.cost_fields else {})})
         if self.lose_answer is not None:
             raise self.lose_answer
         if self.blank_answer:
