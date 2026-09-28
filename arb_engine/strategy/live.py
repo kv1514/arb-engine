@@ -115,6 +115,7 @@ class LiveSlate:
         self._live_priced: dict[str, tuple[GameState, MergedEvent, InplayView]] = {}   # from the last full tick
         self._sig_lock = threading.RLock()   # market_signals / seed run from the fast thread and the tick thread
         self._stop = threading.Event()
+        self._fast_thread: Optional[threading.Thread] = None
         # Paper fills for every LAG, judged on the next quotes (strategy/paperlag.py): the
         # fill-adjusted P&L the replay cannot give. Rows in the store's lag_paper table.
         self.paper = LagPaperBook(store=self.store, alerter=self.alerts) if self.store is not None else LagPaperBook(store=None, alerter=self.alerts)
@@ -129,6 +130,8 @@ class LiveSlate:
         self._counts: dict[str, dict[str, int]] = {}   # event_key -> {"lag": n, "arb": n}
         self._fresh: dict[str, FeedFreshness] = {}                # event_key -> per-event poll memory
         self._pregame_recorded: set[str] = set()
+        # ticker -> (failures already reported, when) for report_trade_poll_health
+        self._trade_poll_reported: dict[str, tuple[int, float]] = {}
 
     # -- pieces ----------------------------------------------------------------------------
     def wanted_games(self, games: list[GameState], now: Optional[float] = None) -> list[GameState]:
@@ -244,6 +247,14 @@ class LiveSlate:
         call_store(self.store, "record_pregame_line", g.event_key, ml_h, ml_a, k_mid, now)  # (event_key, ml_home, ml_away, kalshi_mid, ts)
         self._pregame_recorded.add(g.event_key)
 
+    def _forget_live_games(self) -> None:
+        """Drop the fast lane's view of the slate: no game is live, so nothing may be
+        refreshed, signalled or recorded as live until a full tick prices one again."""
+        with self._sig_lock:
+            self._live_priced = {}
+            if self.fast:
+                self.fastlane.seed({})
+
     # -- one pass ----------------------------------------------------------------------------
     def tick(self, now: Optional[float] = None) -> SlateTick:
         pinned = now
@@ -272,6 +283,13 @@ class LiveSlate:
         except Exception as e:  # noqa: BLE001
             errors.append(f"laglock sweep: {e!r}")
         if not games:
+            # Nothing to price: the fast lane must be emptied *here*, not only at the end of a
+            # priced tick. Returning before ``_live_priced`` is rebuilt left every finished
+            # game in the lane, which then kept recording it ``live=1`` (the 2026-09-26 audit
+            # saw ATL|GB and CCU|LIB 6.1 h after their last ESPN row) and kept ``run()``'s
+            # idle test false, so the loop polled at the live cadence instead of
+            # ``inplay_idle_every_s``.
+            self._forget_live_games()
             return out
         self._fetch_pinned_now = pinned
         try:
@@ -381,6 +399,7 @@ class LiveSlate:
                 self.fastlane.poll_trades(self.store, now, cadence_s=5.0, background=True)
                 out.errors.extend(self.fastlane.trade_errors)
                 self.fastlane.trade_errors.clear()
+                self.report_trade_poll_health(now, cadence_s=5.0)
             except Exception as e:
                 out.errors.append(f"trade prints: {e!r}")
         if self.store is not None and (out.lags or out.arbs):
@@ -389,6 +408,51 @@ class LiveSlate:
             except Exception as e:
                 out.errors.append(f"record: update_ladder: {e!r}")
         return out
+
+    def report_trade_poll_health(self, now: float, cadence_s: float = 5.0,
+                                 every_s: float = 60.0) -> list[str]:
+        """Journal the public-print poller's own cadence, per ticker.
+
+        ``FastLane.trade_poll_status`` has always measured this, but nothing ever read it, so
+        a tape that stopped being polled or kept failing could only be found afterwards by
+        querying the database. Three faults are reported, each at most once per ``every_s``
+        per ticker so a healthy recorder stays silent:
+
+        * no request for longer than the grace period (the Mac slept, the lane stopped);
+        * no page walk *completed* in that long (polled, never finishing);
+        * the walk failed since the last report (a bad page, a repeating cursor).
+        """
+        grace = max(3.0 * float(cadence_s), 15.0)
+        reported: list[str] = []
+        for ticker, st in self.fastlane.trade_poll_status(now, cadence_s=cadence_s).items():
+            last_request = st.get("last_request_ts")
+            gap = (now - last_request) if last_request is not None else None
+            since_complete = st.get("since_complete_s")
+            failures = int(st.get("failures") or 0)
+            was, when = self._trade_poll_reported.get(ticker, (0, None))
+            faults = []
+            if gap is not None and gap > grace:
+                faults.append(f"no request for {gap:.0f}s")
+            if since_complete is not None and since_complete > grace:
+                faults.append(f"no completed walk for {since_complete:.0f}s")
+            if failures > was:
+                faults.append(f"{failures - was} failed walk(s)")
+            if not faults:
+                if failures == was and gap is not None and gap <= grace:
+                    self._trade_poll_reported.pop(ticker, None)
+                continue
+            if when is not None and now - when < float(every_s) and failures == was:
+                continue
+            self._trade_poll_reported[ticker] = (failures, now)
+            text = f"trade poll gap: {ticker} — {', '.join(faults)}"
+            reported.append(text)
+            try:
+                self.alerts.info(text, ticker=ticker, trade_poll_gap_s=None if gap is None else round(gap, 1),
+                                 since_complete_s=None if since_complete is None else round(since_complete, 1),
+                                 failures=failures, backlog=bool(st.get("backlog")), sport=self.sport)
+            except Exception:  # noqa: BLE001
+                pass
+        return reported
 
     def final_summary(self, gs: GameState, me: MergedEvent, now: float) -> None:
         """One FINAL line per game (journal + ntfy when subscribed): score, how many LAG / ARB
@@ -483,30 +547,59 @@ class LiveSlate:
             f.interval_s = interval
         t_end = time.time() + duration
         n = 0
-        fast_thread = None
         if self.fast:
             self._stop.clear()
-            fast_thread = threading.Thread(target=self._fast_loop, args=(printer,), name="fastlane", daemon=True)
-            fast_thread.start()
+            self._fast_thread = threading.Thread(target=self._fast_loop, args=(printer,), name="fastlane", daemon=True)
+            self._fast_thread.start()
         tick = None
-        while time.time() < t_end and (max_iterations is None or n < max_iterations):
-            t0 = time.time()
-            tick = None
-            try:
-                tick = self.tick(t0)
-                printer(format_tick(tick))
-            except Exception as e:
-                printer(f"{time.strftime('%H:%M:%S')} tick failed: {e!r}")
-            n += 1
-            idle = not self._live_priced and not (tick.views if "tick" in locals() and tick is not None else [])
-            pause = self.idle_every if idle else interval
-            time.sleep(max(1.0, pause - (time.time() - t0)))
+        try:
+            while time.time() < t_end and (max_iterations is None or n < max_iterations):
+                t0 = time.time()
+                tick = None
+                try:
+                    # Unpinned on purpose. ``tick(t0)`` pinned the clock for the whole pass,
+                    # which silently disabled every timing branch guarded by ``pinned is
+                    # None``: the polling-gap record, the request/response boundary on each
+                    # adapter fetch (req_ts and obs_ts both became the tick's start), the
+                    # guard that keeps a cached price from being stamped freshly observed,
+                    # the post-fetch clock refresh and the per-game decision time. Those
+                    # branches were only ever exercised by tests, which call ``tick()``
+                    # without an argument.
+                    tick = self.tick()
+                    printer(format_tick(tick))
+                except Exception as e:
+                    printer(f"{time.strftime('%H:%M:%S')} tick failed: {e!r}")
+                n += 1
+                idle = not self._live_priced and not (tick.views if tick is not None else [])
+                pause = self.idle_every if idle else interval
+                time.sleep(max(1.0, pause - (time.time() - t0)))
+        finally:
+            # Every exit path, including the KeyboardInterrupt the runbook's ``sunday.sh
+            # stop`` actually sends: stop the workers before the caller closes the store they
+            # are still writing to.
+            self.close(printer=printer)
+
+    def close(self, timeout: Optional[float] = None, printer=print) -> bool:
+        """Stop the workers this slate started and flush the background print walk.
+
+        Idempotent, and safe to call from a ``finally``. Returns whether everything this
+        slate owns is quiet; the caller owns the ``Store`` and must not close it while this
+        is false. The public-print request runs independently so it cannot delay L1
+        recording, so it is the one thing that can still be in flight here."""
         self._stop.set()
-        if fast_thread is not None:
-            fast_thread.join(timeout=self.fast * 3 + 5)
-        # The public-print request runs independently so it cannot delay L1 recording. Flush
-        # the final page walk before the caller closes the shared Store on normal shutdown.
-        self.fastlane.wait_for_trade_polls(timeout=max(5.0, self.fast * 3 + 5))
+        budget = float(timeout) if timeout is not None else max(5.0, self.fast * 3 + 5)
+        thread, self._fast_thread = self._fast_thread, None
+        quiet = True
+        if thread is not None:
+            thread.join(timeout=budget)
+            if thread.is_alive():
+                quiet = False
+                printer(f"{time.strftime('%H:%M:%S')} shutdown: the fast lane did not stop within {budget:.0f}s")
+        if not self.fastlane.wait_for_trade_polls(timeout=budget):
+            quiet = False
+            printer(f"{time.strftime('%H:%M:%S')} shutdown: a trade-print page walk is still running "
+                    f"after {budget:.0f}s; the store must not be closed yet")
+        return quiet
 
     def _fast_loop(self, printer=print) -> None:
         """The fast lane's own thread: a step every ``self.fast`` seconds while there are live
@@ -519,7 +612,12 @@ class LiveSlate:
                 with self._sig_lock:
                     have = bool(self._live_priced)
                 if have:
-                    ft = self.fast_step(s0)
+                    # Unpinned, like the full tick: passing ``s0`` pinned the lane's clock,
+                    # so every fast-lane row was stamped req_ts == obs_ts == the *start* of
+                    # the step even though the response arrived later. An obs_ts earlier than
+                    # its own response is a look-ahead in the recorded dataset, not a
+                    # rounding error.
+                    ft = self.fast_step()
                     for line in ft.arbs:
                         printer(f"{time.strftime('%H:%M:%S')} *** ARB *** {line}")
                     for line in ft.lags:

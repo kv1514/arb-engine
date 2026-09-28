@@ -22,6 +22,7 @@ whose refresh fails keeps its previous quotes and the failure is reported once p
 from __future__ import annotations
 
 import dataclasses
+import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -37,18 +38,39 @@ def _f(x: Any) -> Optional[float]:
         return None
 
 
+# A venue or exchange timestamp before this is not a time: it is the adapter's "never
+# quoted" sentinel. Robinhood's quotes API answers a contract it has never priced with Go's
+# zero time, which reaches us as -6,795,364,578 (1754-08-30) numerically and as
+# "0001-01-01T00:00:00Z" as a string; the 2026-09-26 recorder audit found it in 30.5 % /
+# 17.6 % of home / away fast-lane rows, recorded there as a real quote age of 272 years.
+# ``venues/robinhood._epoch`` already rejects the string form (``dt.year < 2000``); this is
+# the same floor for the numeric one, so both paths read "no timestamp" as missing.
+MIN_PLAUSIBLE_EPOCH = 946684800.0   # 2000-01-01T00:00:00Z
+
+
 def _epoch(x: Any) -> Optional[float]:
+    """Epoch seconds, or None when the value is not a usable time.
+
+    None is returned for a missing value, an unparseable one, a non-finite one (a NaN
+    timestamp passes every age comparison silently) and for anything before
+    :data:`MIN_PLAUSIBLE_EPOCH` — an absent timestamp is *unknown*, never a very old one."""
     if x is None:
         return None
-    if isinstance(x, (int, float)):
-        return float(x) / (1000.0 if x > 1e11 else 1.0)
-    try:
-        from datetime import datetime
-
-        s = str(x).replace("Z", "+00:00")
-        return datetime.fromisoformat(s).timestamp()
-    except Exception:
+    if isinstance(x, bool):
         return None
+    if isinstance(x, (int, float)):
+        t = float(x) / (1000.0 if x > 1e11 else 1.0)
+    else:
+        try:
+            from datetime import datetime
+
+            s = str(x).replace("Z", "+00:00")
+            t = datetime.fromisoformat(s).timestamp()
+        except Exception:
+            return None
+    if not math.isfinite(t) or t < MIN_PLAUSIBLE_EPOCH:
+        return None
+    return t
 
 
 def _clock_for(now: Optional[float], clock: Optional[Callable[[], float]]) -> Callable[[], float]:
@@ -142,6 +164,11 @@ class FastLane:
     ``{event_key: quotes_by_venue}`` with the refreshed lists merged over the last known ones,
     plus the per-venue errors of this step."""
 
+    # A newest-first walk that has buffered more than this without reaching the end is not
+    # converging. The buffer is dropped and the walk re-read from the durable watermark, so
+    # no print is lost and one misbehaving tape cannot grow the recorder's memory all day.
+    MAX_PENDING_TRADES = 50_000
+
     def __init__(self, kalshi_client: Any = None, robinhood: Any = None, timeout: float = 2.5, clock: Callable[[], float] = time.time) -> None:
         self.kalshi, self.robinhood = kalshi_client, robinhood
         self.timeout = timeout
@@ -155,6 +182,8 @@ class FastLane:
         self.trade_request_gaps: dict[str, float] = {}
         self.trade_poll_gaps: dict[str, float] = {}
         self.trade_errors: list[str] = []
+        self.trade_failures: dict[str, int] = {}
+        self.trade_completed: dict[str, float] = {}
         self._trade_page_cursor: dict[str, str] = {}
         self._trade_pending: dict[str, list[dict]] = {}
         self._trade_min_ts: dict[str, Optional[int]] = {}
@@ -188,13 +217,22 @@ class FastLane:
             jobs["robinhood"] = lambda: refresh_robinhood(self.robinhood, r_quotes, clock=clock)
         results: dict[str, list[OutcomeQuote]] = {}
         if jobs:
-            with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            # One budget for the whole step, not one per venue, and the pool is shut down
+            # without waiting: ``with ThreadPoolExecutor(...)`` calls shutdown(wait=True) on
+            # exit, so a venue that blew the timeout still held the lane for its full HTTP
+            # timeout (measured: a 1.5 s request took 1.51 s out of a 0.2 s budget). An
+            # abandoned request is left to its own transport timeout; its quotes are carried.
+            pool = ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="fastlane")
+            deadline = time.monotonic() + float(self.timeout)
+            try:
                 futs = {v: pool.submit(fn) for v, fn in jobs.items()}
                 for v, fut in futs.items():
                     try:
-                        results[v] = fut.result(timeout=self.timeout)
+                        results[v] = fut.result(timeout=max(0.0, deadline - time.monotonic()))
                     except Exception as e:  # a slow or failing venue keeps its previous quotes
                         errors.append(f"fastlane {v}: {e!r}")
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
         for k in keys:
             for v, qs in self.last.get(k, {}).items():
                 if v not in results:
@@ -209,6 +247,14 @@ class FastLane:
         self.errors = errors
         return {k: self.last[k] for k in keys if k in self.last}, errors
 
+    def _forget_walk(self, ticker: str) -> None:
+        """Drop a page walk that cannot finish. The durable watermark was never advanced, so
+        the next poll simply re-reads from ``min_ts``: no print is lost, and the buffered
+        pages stop growing."""
+        self._trade_pending.pop(ticker, None)
+        self._trade_page_cursor.pop(ticker, None)
+        self._trade_min_ts.pop(ticker, None)
+
     def _poll_one_ticker(self, store: Any, ticker: str, now: Optional[float], max_pages: int) -> int:
         clock = (lambda: float(now)) if now is not None else self.clock
         if ticker not in self.trade_cursor and ticker not in self._trade_min_ts and hasattr(store, "latest_trade_ts"):
@@ -222,14 +268,38 @@ class FastLane:
             self.trade_request_gaps[ticker] = req_ts - previous_request
         self.trade_last_request[ticker] = req_ts
         complete = False
+        seen_cursors: set[str] = set()
         for _ in range(max_pages):
             params = {"ticker": ticker, "limit": 1000, "min_ts": minimum, "cursor": cursor}
             page = self.kalshi.get("/markets/trades", {k: v for k, v in params.items() if v is not None}) or {}
-            trades.extend(page.get("trades") or [])
-            cursor = page.get("cursor")
-            if not cursor:
+            batch = page.get("trades") if isinstance(page, dict) else None
+            if not isinstance(batch, list):
+                # The same rule as KalshiClient.paged: a page without its rows list is a
+                # failed read, not an empty one. Read as empty it would end the walk, and a
+                # newest-first walk ended early advances the watermark past the older prints
+                # it never reached — a hole in the tape that nothing would ever refill.
+                raise ValueError(f"/markets/trades {ticker}: a page without its 'trades' list "
+                                 f"({type(batch).__name__}): a failed read, not an empty one")
+            trades.extend(batch)
+            if len(trades) > self.MAX_PENDING_TRADES:
+                self._forget_walk(ticker)
+                raise ValueError(f"/markets/trades {ticker}: {len(trades)} buffered prints exceed "
+                                 f"the {self.MAX_PENDING_TRADES} backlog bound; the walk is abandoned "
+                                 "and re-read from the stored watermark")
+            nxt = page.get("cursor")
+            if not nxt:
                 complete = True
                 break
+            if nxt == cursor or str(nxt) in seen_cursors:
+                # The exchange keeps handing back a cursor it already gave us. Left alone the
+                # walk never ends: it re-buffers max_pages of prints every poll, records
+                # nothing, and the ticker stays backlogged for the life of the process.
+                self._forget_walk(ticker)
+                raise ValueError(f"/markets/trades {ticker}: the cursor {nxt!r} repeated; the page "
+                                 "walk is not advancing, so it is abandoned and re-read from the "
+                                 "stored watermark")
+            seen_cursors.add(str(nxt))
+            cursor = nxt
         obs_ts = clock()
         previous = self.trade_last_poll.get(ticker)
         if previous is not None:
@@ -242,12 +312,16 @@ class FastLane:
             self._trade_page_cursor[ticker] = str(cursor)
             return 0
         inserted = store.record_trade_prints(trades, ticker, req_ts=req_ts, obs_ts=obs_ts)
+        rejected = int(getattr(store, "last_trade_print_rejects", 0) or 0)
+        if rejected:
+            # A print the store could not read is not "no print": say so rather than let the
+            # inserted count quietly understate the tape.
+            self.trade_errors.append(f"trade prints {ticker}: {rejected} unreadable print(s) rejected")
         stamps = [t for t in (_epoch(tr.get("created_time") or tr.get("ts")) for tr in trades) if t is not None]
         if stamps:
             self.trade_cursor[ticker] = int(max(stamps))  # inclusive: same-second late prints survive
-        self._trade_pending.pop(ticker, None)
-        self._trade_page_cursor.pop(ticker, None)
-        self._trade_min_ts.pop(ticker, None)
+        self.trade_completed[ticker] = obs_ts   # the last walk that actually reached the end
+        self._forget_walk(ticker)
         return inserted
 
     def _poll_trades_sync(self, store: Any, tickers: list[str], now: Optional[float], max_pages: int) -> int:
@@ -256,6 +330,9 @@ class FastLane:
             try:
                 inserted += self._poll_one_ticker(store, ticker, now, max_pages)
             except Exception as exc:
+                # Counted per ticker as well as reported once: a tape that keeps failing is
+                # not "no prints", and `trade_poll_status` is what says which it was.
+                self.trade_failures[ticker] = self.trade_failures.get(ticker, 0) + 1
                 self.trade_errors.append(f"trade prints {ticker}: {exc!r}")
         return inserted
 
@@ -329,5 +406,10 @@ class FastLane:
                          "last_gap_s": self.trade_request_gaps.get(ticker),
                          "receipt_gap_s": self.trade_poll_gaps.get(ticker),
                          "overdue": at - self.trade_last_request.get(ticker, -float("inf")) > cadence_s,
-                         "backlog": ticker in self._trade_page_cursor}
+                         "backlog": ticker in self._trade_page_cursor,
+                         # A request that started is not a walk that finished: a tape whose
+                         # pages keep failing looks on time by ``last_request_ts`` alone.
+                         "last_complete_ts": self.trade_completed.get(ticker),
+                         "since_complete_s": (at - self.trade_completed[ticker]) if ticker in self.trade_completed else None,
+                         "failures": self.trade_failures.get(ticker, 0)}
                 for ticker in tickers}

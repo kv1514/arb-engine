@@ -144,6 +144,36 @@ def _f(x: Any) -> Optional[float]:
         return None
 
 
+# An exchange print stamped outside this range is not a time we can use: Go's zero time
+# (-6,795,364,578 numerically; "0001-01-01T00:00:00Z" as a string), a NaN, an infinity or a
+# millisecond field read as seconds. A NaN in particular compares false against every
+# freshness bound, and SQLite stores it as NULL, which the NOT NULL column then drops with
+# no row and no error.
+MIN_PLAUSIBLE_TRADE_TS = 946684800.0        # 2000-01-01T00:00:00Z
+MAX_PLAUSIBLE_TRADE_TS = 4102444800.0       # 2100-01-01T00:00:00Z
+
+
+def _finite(x: Optional[float]) -> bool:
+    import math
+
+    return x is not None and math.isfinite(float(x))
+
+
+def _finite_or_none(x: Optional[float]) -> Optional[float]:
+    return float(x) if _finite(x) else None
+
+
+def _tick_ts_at_least_every_observation(tick_ts: float, l1: dict[str, Any]) -> float:
+    """The stored tick time is never earlier than any observation inside it.
+
+    ``docs/MICROSTRUCTURE_INTERFACES.md``: "``inplay_ticks.ts`` is the time the complete tick
+    was ready to persist and is never earlier than any exact observation in the tick." The
+    bound is taken over *every* row rather than only the exactly-timed ones, so an
+    approximate row can never be stamped after the tick that contains it either."""
+    seen = [r["obs_ts"] for r in l1.get("rows", []) if _finite(r.get("obs_ts"))]
+    return max([float(tick_ts), *seen]) if seen else float(tick_ts)
+
+
 def _locked(fn):
     """Serialise a Store method on the instance lock (SQLite connection shared across threads)."""
     import functools
@@ -161,6 +191,9 @@ class Store:
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.path = path
+        # Prints of the last ``record_trade_prints`` call that could not be read at all (see
+        # that method): unreadable is not "absent", and the inserted count alone hides them.
+        self.last_trade_print_rejects = 0
         # The live slate's fast lane records from a second thread: one connection shared under a
         # re-entrant lock (every public method takes it) instead of a connection per thread.
         self._lock = threading.RLock()
@@ -252,15 +285,17 @@ class Store:
                 meta = g("meta") or {}
                 fee_params = dict(g("fee_params") or {})
                 side = str(meta.get("side") or "yes").lower()
-                exact_obs = _f(meta.get("obs_ts"))
-                observed = exact_obs if exact_obs is not None else obs_ts
-                requested = _f(meta.get("req_ts")) if meta.get("req_ts") is not None else req_ts
+                # A non-finite time is not a time: NaN compares false against every freshness
+                # and causality bound, so it must be recorded as unknown, never carried.
+                exact_obs = _finite_or_none(_f(meta.get("obs_ts")))
+                observed = exact_obs if exact_obs is not None else _finite_or_none(obs_ts)
+                requested = _finite_or_none(_f(meta.get("req_ts"))) if meta.get("req_ts") is not None else _finite_or_none(req_ts)
                 if requested is None:
                     requested = observed
                 if requested is not None and observed is not None and requested > observed:
                     requested = observed
                 row = {
-                    "bid": _f(g("bid")), "ask": _f(g("ask")), "bid_size": _f(g("bid_size")), "ask_size": _f(g("ask_size")), "quote_time": _f(g("quote_time")),
+                    "bid": _f(g("bid")), "ask": _f(g("ask")), "bid_size": _f(g("bid_size")), "ask_size": _f(g("ask_size")), "quote_time": _finite_or_none(_f(g("quote_time"))),
                     "book_id": g("book_id") or venue, "venue_market_id": g("venue_market_id"), "fee_params": fee_params,
                     "exchange": (meta.get("exchange") if isinstance(meta, dict) else None) or fee_params.get("exchange"),
                     "venue": venue, "outcome": outcome, "side": side,
@@ -316,9 +351,7 @@ class Store:
         tick_ts = ts or time.time()
         l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts,
                                  refreshed=(source == "full"), source=source)
-        exact_obs = [r["obs_ts"] for r in l1.get("rows", []) if not r.get("approx_time") and r.get("obs_ts") is not None]
-        if exact_obs:
-            tick_ts = max(tick_ts, max(exact_obs))
+        tick_ts = _tick_ts_at_least_every_observation(tick_ts, l1)
         row = self._tick_row(tick_ts, gv("event_key"), bool(gv("live")), gs or None, l1, home, away, freshness, gated, source)
         row.update({"game_line": gv("game_line"), "model_p": side.get("model_p") if side else None, "market_p": side.get("market_p") if side else None, "espn_p": side.get("espn_p") if side else None, "blend_p": side.get("fair") if side else None, "disagreement": gv("disagreement"), "actions": "\n".join(gv("actions") or []), "view": json.dumps(asdict(view) if is_dataclass(view) else view, default=str)})
         with self.conn:
@@ -332,10 +365,7 @@ class Store:
         home, away = home or g("home"), away or g("away")
         tick_ts = float(ts)
         l1 = self.l1_from_quotes(quotes_by_venue, req_ts=tick_ts, obs_ts=tick_ts, source="full")
-        exact_obs = [r["obs_ts"] for r in l1.get("rows", [])
-                     if not r.get("approx_time") and r.get("obs_ts") is not None]
-        if exact_obs:
-            tick_ts = max(tick_ts, max(exact_obs))
+        tick_ts = _tick_ts_at_least_every_observation(tick_ts, l1)
         if home is None or away is None:
             outs = sorted({r["outcome"] for r in l1.get("rows", [])})
             home, away = home or (outs[0] if outs else None), away or (outs[1] if len(outs) > 1 else None)
@@ -348,8 +378,16 @@ class Store:
     def record_trade_prints(self, trades: Iterable[dict[str, Any]], ticker: Optional[str] = None,
                             req_ts: Optional[float] = None, obs_ts: Optional[float] = None) -> int:
         """Insert genuine Kalshi prints idempotently, including when this process received
-        them. Exchange ``ts`` alone is not a causal observation timestamp."""
+        them. Exchange ``ts`` alone is not a causal observation timestamp.
+
+        Returns the number of rows inserted; the number of prints that could not be read at
+        all is left in :attr:`last_trade_print_rejects` so a caller can say "4 prints were
+        unreadable" instead of reporting a quietly short tape. A row is rejected rather than
+        repaired: a non-finite or implausible exchange time is *unknown*, and a NaN passes
+        every later age comparison (SQLite would also store it as NULL and the NOT NULL
+        column would drop the row with no error at all)."""
         n = 0
+        rejected = 0
         with self.conn:
             for trade in trades:
                 trade_id = trade.get("trade_id") or trade.get("id")
@@ -368,16 +406,29 @@ class Store:
                 count = _f(trade.get("count_fp") or trade.get("count") or trade.get("quantity"))
                 side = trade.get("taker_side") or trade.get("side")
                 if not trade_id or not symbol or ts is None or price is None or count is None:
+                    rejected += 1
                     continue
-                cur = self.conn.execute("INSERT OR IGNORE INTO trade_prints (trade_id,ticker,ts,price,count,taker_side,req_ts,obs_ts) VALUES (?,?,?,?,?,?,?,?)", (str(trade_id), str(symbol), ts, price, count, side, req_ts, obs_ts))
+                if not (_finite(ts) and _finite(price) and _finite(count)):
+                    rejected += 1
+                    continue
+                if not (MIN_PLAUSIBLE_TRADE_TS <= ts < MAX_PLAUSIBLE_TRADE_TS):
+                    rejected += 1   # a sentinel, or a millisecond field read as seconds
+                    continue
+                cur = self.conn.execute("INSERT OR IGNORE INTO trade_prints (trade_id,ticker,ts,price,count,taker_side,req_ts,obs_ts) VALUES (?,?,?,?,?,?,?,?)", (str(trade_id), str(symbol), ts, price, count, side, _finite_or_none(req_ts), _finite_or_none(obs_ts)))
                 n += cur.rowcount
+        self.last_trade_print_rejects = rejected
         return n
 
     @_locked
     def latest_trade_ts(self, ticker: str) -> Optional[int]:
         """Inclusive restart cursor. Re-reading that second is intentional: trade_id drops
-        repeats while prints that arrived later in the same exchange second still land."""
-        row = self.conn.execute("SELECT MAX(ts) FROM trade_prints WHERE ticker=?", (ticker,)).fetchone()
+        repeats while prints that arrived later in the same exchange second still land.
+
+        Only finite, plausible stamps count: a file written before those were rejected can
+        hold an ``inf``, and ``int(inf)`` raised here — which broke that ticker's cursor for
+        good, because every later poll of it failed before recording anything."""
+        row = self.conn.execute("SELECT MAX(ts) FROM trade_prints WHERE ticker=? AND ts >= ? AND ts < ?",
+                                (ticker, MIN_PLAUSIBLE_TRADE_TS, MAX_PLAUSIBLE_TRADE_TS)).fetchone()
         return int(row[0]) if row and row[0] is not None else None
 
     @_locked

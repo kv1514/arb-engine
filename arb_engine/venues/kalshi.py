@@ -329,8 +329,23 @@ class KalshiClient:
         return out, True
 
     def trades(self, ticker: str, limit: int = 100, min_ts: Optional[int] = None) -> list[dict]:
-        """Public trade prints for a market (newest first)."""
-        return self.get("/markets/trades", {"ticker": ticker, "limit": limit, "min_ts": min_ts}).get("trades", [])
+        """One page of public trade prints for a market (newest first).
+
+        ``min_ts`` is inclusive, so the caller re-reads its newest recorded second and lets
+        ``trade_id`` drop the repeats; prints stamped in that second but published after the
+        previous read then still arrive. Like :meth:`paged`, a page without its ``trades``
+        list is a **failed** read, not an empty one: read as empty it would end a
+        newest-first walk early and hide every older print behind the cursor.
+
+        This returns one page only. The recorder pages to the end itself
+        (``strategy/fastlane.FastLane._poll_trades``) because it must hold the durable
+        watermark back until the whole walk has completed."""
+        data = self.get("/markets/trades", {"ticker": ticker, "limit": limit, "min_ts": min_ts})
+        page = data.get("trades") if isinstance(data, dict) else None
+        if not isinstance(page, list):
+            raise ValueError(f"GET /markets/trades {ticker}: a page without its 'trades' list "
+                             f"({type(page).__name__}): a failed read, not an empty one")
+        return page
 
     def create_order(self, payload: dict) -> dict:
         """V2 order endpoint: ``side`` is ``bid`` (buy YES) / ``ask`` (sell YES), ``price``
