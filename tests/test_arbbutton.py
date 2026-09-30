@@ -69,6 +69,7 @@ def _button(mode="paper", book=None, rh=None, **kw):
     if os.path.exists(path):
         os.remove(path)
     clock = kw.pop("clock", lambda: T0)
+    kw.setdefault("side_cap", "500")  # Larger historical fixtures keep their original sizing.
     b = ArbButton(mode, alerts=_Alerts(), cmd_url="https://ntfy.sh/t-cmd", fee_for=fee_model_for_quote, data_client=book or _Book([(0.55, 60), (0.56, 100)]),
                   robinhood=rh or _RH(), journal_path=path, http_get=False, clock=clock, **kw)
     b.ledger_path = os.path.join(tempfile.mkdtemp(prefix="arb_test_"), "ledger.sqlite3")   # never out/orders

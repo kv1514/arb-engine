@@ -118,7 +118,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1267)
+python3 -m unittest discover -s tests -t .     # Python tests (1271)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -229,6 +229,8 @@ When you declare a key, add its row here.
 | `maker_hedge_cash` | `MAKER_HEDGE_CASH` | `250.0` | Max dollars of hand-executed hedge legs the maker may leave resting at once (sum of size × hedge ask). |
 | `maker_hedge_venues` | `MAKER_HEDGE_VENUES` | `robinhood` | Comma list of maker hedge venues; naming `polymarket` is the explicit opt-in to a non-executable hedge. |
 | `order_ledger_dir` | `ARB_ORDER_LEDGER_DIR` | `out/orders` | Directory of the durable Kalshi order ledgers (`execution/ledger.py`): one SQLite file per environment (`kalshi_<env>_ledger.sqlite3`), shared by every process that sends orders. Tests always pass their own path. |
+
+| `arb_button_side_cap` | `ARB_BUTTON_SIDE_CAP` | `25` | Maximum dollars per leg of an arbitrage-button ticket, including conservative split-fill fees at the allowed prices. Kalshi rechecks the exchange fee multiplier before sending. Robinhood remains a manual suggested leg; this is not a daily or account-wide cap. |
 
 ## CLI plugins (`arb_engine/cli_plugins/`)
 

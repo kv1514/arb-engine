@@ -170,6 +170,7 @@ class ArbAlerter:
 
         self.button = ArbButton(self.button_mode, alerts=self.alerts, cmd_url=str(self.alerts.ntfy).rstrip("/") + "-cmd",
                                 fee_for=lambda q: fee_model_for_quote(q, self.settings),
+                                side_cap=_setting(self.settings, "arb_button_side_cap", "25"),
                                 auto_practice_s=float(_setting(self.settings, "arb_button_auto_practice_s", 10.0) or 0.0) or None)
 
     def _book_says_gone(self, spec: dict) -> Optional[str]:
@@ -293,6 +294,14 @@ class ArbAlerter:
                 if self.button is not None and kind in ("ARB", "BIG ARB"):
                     try:
                         spec = self.button.register(me.event_key, title, sized, me.quotes_by_venue, now)
+                        if spec is not None and spec.get("ticket"):
+                            sized = spec["ticket"]
+                            margin = float(sized["margin"])
+                            text = ticket.arb_ticket(title, sized, size_note="capped at $25 per side" if self.button.side_cap == 25 else f"capped at ${self.button.side_cap} per side",
+                                                     sport=rep.sport or me.event_key, header=kind,
+                                                     first=first, first_reason=why, max_prices=maxp, now=now,
+                                                     window=window_line(kind), guarantee=guarantee_line(rep, sized))
+                            out[-1] = (kind, text)
                     except Exception:
                         spec = None
                     if spec is not None and self.confirm_book:

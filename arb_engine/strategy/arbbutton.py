@@ -46,6 +46,11 @@ import time
 from decimal import Decimal
 from typing import Any, Callable, Optional
 
+from ..config import declare_setting, setting
+
+declare_setting("arb_button_side_cap", env="ARB_BUTTON_SIDE_CAP", default="25", cast=str,
+                doc="Maximum dollars per leg of an arbitrage-button ticket, including conservative fill fees; Robinhood remains manual.")
+
 MODES = ("off", "paper", "demo", "live")
 TICK = 0.01
 
@@ -105,7 +110,11 @@ class ArbButton:
                  executor: Any = None, data_client: Any = None, robinhood: Any = None, ttl_s: float = 180.0,
                  max_contracts: int = 2000, daily_notional: float = 500.0, journal_path: str = "out/orders/arb_button.jsonl",
                  http_get: Optional[Callable[[str], str]] = None, clock: Callable[[], float] = time.time,
-                 stream: Optional[Callable[[str], Any]] = None, auto_practice_s: Optional[float] = None) -> None:
+                 stream: Optional[Callable[[str], Any]] = None, auto_practice_s: Optional[float] = None,
+                 side_cap: Any = None) -> None:
+        self.side_cap = Decimal(str(setting(None, "arb_button_side_cap") if side_cap is None else side_cap))
+        if not self.side_cap.is_finite() or self.side_cap <= 0:
+            raise ValueError("arb_button_side_cap must be finite and positive")
         if mode not in MODES:
             raise ValueError(f"arb_button_mode must be one of {MODES}")
         if mode == "live" and os.environ.get("ARB_LIVE_TRADING") != "1":
@@ -210,6 +219,14 @@ class ArbButton:
                 return None                 # not a lock at the alert's own prices
             # A practice pair need not lock: rehearse buying at exactly the prices it was issued at.
             k_limit, rh_max = k_ask, r_ask
+        # Bound split-fill rounding and price-improvement fees conservatively.
+        k_unit = Decimal(str(k_limit)) + Decimal(str(kfee.fee(min(k_limit, 0.5), 1, "taker")))
+        r_unit = Decimal(str(rh_max)) + Decimal(str(rfee.fee(min(rh_max, 0.5), 1, "taker")))
+        n = min(n, int(self.side_cap // k_unit), int(self.side_cap // r_unit))
+        if n <= 0:
+            return None
+        if not practice and all_in(kfee, k_limit, n) + all_in(rfee, rh_max, n) > 1.0 + 1e-12:
+            return None
         now = self.clock() if now is None else now
         token = secrets.token_hex(8)
         meta_k = getattr(kq, "meta", None) or {}
@@ -221,6 +238,7 @@ class ArbButton:
         spec = {
             "token": token, "created": now, "expires": now + self.ttl_s, "event_key": event_key, "title": title, "count": n,
             "practice": practice, "alert_margin": sized.get("margin"), "alert_cost": sized.get("total_cost"),
+            "side_cap": str(self.side_cap),
             "kalshi": {"fee_multiplier_stated": _stated_multiplier(kq),
                        "ticker": meta_k.get("ticker") or str(kl.get("market_id")).split("#")[0], "side": kl.get("side") or meta_k.get("side") or "yes",
                        "label": label(kl, str(kl.get("side") or meta_k.get("side") or "yes").lower()), "outcome": kl.get("outcome"), "alert_ask": k_ask, "limit": k_limit,
@@ -231,6 +249,24 @@ class ArbButton:
             "action": {"action": "http", "label": "Robinhood done - buy Kalshi", "url": self.cmd_url, "method": "POST", "body": f"arb {token}", "clear": True},
         }
         spec["_fees"] = (kfee, rfee)
+        # Reprice the displayed ticket at its actual capped quantity (rounding is
+        # per order, so scaling the original dollars would be incorrect).
+        if n != sized.get("contracts"):
+            capped_legs = []
+            total = Decimal("0")
+            for leg in legs:
+                fee = kfee if leg["venue"] == "kalshi" else rfee
+                px = Decimal(str(leg["price"]))
+                charge = Decimal(str(fee.fee(px, n, "taker")))
+                cost = px * n + charge
+                capped_legs.append(dict(leg, contracts=n, fee=float(charge), cost=float(cost),
+                                        fee_detail=fee.breakdown(px, n, "taker"), vwap=None))
+                total += cost
+            spec["ticket"] = dict(sized, contracts=n, legs=capped_legs, total_cost=float(total),
+                                  payout=n, profit=float(Decimal(n) - total),
+                                  margin=float((Decimal(n) - total) / n))
+            if sized.get("tie_payout_total") is not None:
+                spec["ticket"]["tie_margin"] = float(Decimal(str(sized["tie_payout_total"])) - total / n)
         with self._lock:
             self.pending[token] = spec
             self._expire(now)
@@ -474,7 +510,7 @@ class ArbButton:
     def _send_real(self, spec: dict[str, Any], count: int, kfee: Any, now: float) -> dict[str, Any]:
         """Demo / live: reserve in the ledger, send the IOC with the ledger's id, record the
         answer. Returns the fields for the tap's record."""
-        from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, refusal_hint
+        from ..execution.ledger import ACCEPTED, Budget, FeeMultipliers, LedgerError, refusal_hint, worst_cost
         from ..matching.normalize import game_event_key
 
         k, token = spec["kalshi"], spec["token"]
@@ -485,6 +521,8 @@ class ArbButton:
             mult, why = self._fee_mults.resolve(k["ticker"], k.get("fee_multiplier_stated"))
             if mult is None:
                 return {"status": "skipped", "reason": why, "filled": 0}
+            if worst_cost(k["limit"], count, mult) > self.side_cap:
+                return {"status": "skipped", "reason": "per-side cap including fees exceeded", "filled": 0}
             res = led.reserve(strategy="button", ticker=k["ticker"], side=str(k["side"]).lower(), count=count, limit_price=k["limit"],
                               event_key=spec["event_key"], game_key=game_event_key(spec["event_key"]), dedupe_key=f"button:{token}",
                               budget=Budget(daily=Decimal(str(self.daily_notional))), fee_multiplier=mult, now=now,
