@@ -118,7 +118,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1271)
+python3 -m unittest discover -s tests -t .     # Python tests (1354)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -128,6 +128,7 @@ python -m arb_engine live --every 10           # every live game at once: fair p
 python -m arb_engine backtest --week 1         # replay a week: model vs markets, blend fit, STEAL/LOCK simulation
 python -m arb_engine record --every 300        # scheduled scans into SQLite; `stats` summarises arb frequency
 python scripts/capture_fixtures.py             # refresh offline fixtures from the live APIs
+python3 -m arb_engine us-arbs --every 10 --side-cap 25 # read-only US NFL moneyline comparisons; no alerts/orders
 ```
 
 ## The bridge (`arb_engine/bridge.py`)
@@ -233,6 +234,14 @@ When you declare a key, add its row here.
 | `arb_button_side_cap` | `ARB_BUTTON_SIDE_CAP` | `25` | Maximum dollars per leg of an arbitrage-button ticket, including conservative split-fill fees at the allowed prices. Kalshi rechecks the exchange fee multiplier before sending. Robinhood remains a manual suggested leg; this is not a daily or account-wide cap. |
 
 ## CLI plugins (`arb_engine/cli_plugins/`)
+
+`us_arbs.py` adds the **read-only** `us-arbs` command (NFL full-game moneylines):
+`--every` defaults to 0 (one scan; repeated scans require at least 5 seconds),
+`--contracts` defaults to 100 whole contracts, `--side-cap` to $25 including fees,
+`--max-quote-age` to 6 seconds, and `--min-margin` to 0; `--json` emits one report per scan.
+There are no new environment settings. Polymarket US's venue table row has
+`requires_opt_in: true`: existing live/maker defaults are unchanged. Unknown settlement
+produces conditional price candidates, never guaranteed-payoff claims or orders.
 
 `cli.build_parser` imports every public module of the package in name order (`_private`
 modules skipped) and calls its `register(subparsers, existing_parsers)`:

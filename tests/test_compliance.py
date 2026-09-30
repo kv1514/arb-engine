@@ -23,7 +23,8 @@ class TableTests(unittest.TestCase):
         self.assertTrue(rules["kalshi"]["executable_for_us"])
         self.assertTrue(rules["robinhood"]["executable_for_us"])
         self.assertTrue(rules["polymarket_us"]["executable_for_us"])
-        self.assertFalse(rules["polymarket_us"]["adapter"])
+        self.assertTrue(rules["polymarket_us"]["adapter"])
+        self.assertTrue(rules["polymarket_us"]["requires_opt_in"])
 
     def test_check_table_reports_missing_fields(self):
         bad = {"x": {"executable_for_us": "yes", "verified": "soon", "source": ""}}
@@ -48,7 +49,7 @@ class ExecutableVenuesTests(unittest.TestCase):
         self.assertEqual(compliance.executable_venues({}), {"kalshi", "robinhood"})
         self.assertTrue(compliance.is_executable("robinhood"))
         self.assertFalse(compliance.is_executable("polymarket"))
-        # polymarket_us is executable but has no adapter; only with_adapter_only=False lists it.
+        # Public US adapter is opt-in; existing live/maker routes stay unchanged.
         self.assertNotIn("polymarket_us", compliance.executable_venues())
         self.assertIn("polymarket_us", compliance.executable_venues(with_adapter_only=False))
 
@@ -85,7 +86,7 @@ class ExecutableVenuesTests(unittest.TestCase):
         r = compliance.ineligible_reason("polymarket")
         self.assertIn("not executable for US persons", r)
         self.assertIn("cftc.gov", r)
-        self.assertIn("no adapter", compliance.ineligible_reason("polymarket_us"))
+        self.assertIn("explicit opt-in", compliance.ineligible_reason("polymarket_us"))
         self.assertIn("not in venue_rules.json", compliance.ineligible_reason("betfair"))
         self.assertEqual(compliance.eligibility_note("robinhood"), "executable for US accounts")
         self.assertTrue(compliance.eligibility_note("polymarket").startswith("NOT EXECUTABLE"))

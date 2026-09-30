@@ -166,6 +166,28 @@ watcher with the gates on and off; on the synthetic 40-tick fixture the gates cu
 to 3 (8 gated) and turn −0.16 into +0.18 per contract. That is a fixture, not a result — the
 real test needs a recorded Sunday (`docs/ROADMAP.md`, "Needs you").
 
+## Read-only US three-venue comparison (`us-arbs`)
+
+`cli_plugins/us_arbs.py` concurrently discovers NFL full-game moneylines on Kalshi,
+Robinhood and Polymarket US. It requests Kalshi books only for shared pregame game keys;
+Polymarket US offers/bids supply its L1, never metadata prices. Local GET wrappers stamp
+actual request/response times for Kalshi books and Robinhood quote replies, and omitted
+or failed reads cannot retain catalogue liquidity. This does not change legacy recorder
+timing or add an execution path.
+
+`quant/us_arbitrage.py` merges exact Eastern-date keys, rejects same-book pairs and
+stale/future/carried/missing-depth observations, then sizes whole contracts at displayed
+top-of-book prices. Decimal costs include both fees and a conservative split-fill fee
+bound within each leg's cash cap. No volume rebates, maker fills or deeper-price walking
+are assumed. Verified payoff requires independently known, compatible registry terms;
+unknown/discretionary/different settlement or losing ties are **conditional**, not a
+guarantee. Polymarket US has no verified NFL settlement registry entry yet. No trading
+client, ledger mutation, account read or push is invoked.
+
+The venue table now records `adapter: true` and `requires_opt_in: true` for Polymarket US.
+Default live/maker eligibility remains Kalshi/Robinhood; the dedicated read-only command
+explicitly includes the US price feed and still respects an operator's venue restriction.
+
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 
 ```

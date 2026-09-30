@@ -1,0 +1,62 @@
+{
+  "league": {"slug": "nfl", "name": "NFL"},
+  "events": [
+    {
+      "id": "event-cle-pit",
+      "slug": "nfl-cle-pit-2026-10-01",
+      "title": "Cleveland Browns vs Pittsburgh Steelers",
+      "active": true,
+      "closed": false,
+      "archived": false,
+      "hidden": false,
+      "live": false,
+      "ended": false,
+      "startDate": "2026-09-25T12:00:00Z",
+      "startTime": "2026-10-02T00:15:00Z",
+      "resolutionSource": "https://www.nfl.com",
+      "teams": [
+        {"id": 1, "name": "Cleveland Browns", "abbreviation": "CLE", "league": "NFL"},
+        {"id": 2, "name": "Pittsburgh Steelers", "abbreviation": "PIT", "league": "NFL"}
+      ],
+      "markets": [
+        {
+          "id": "market-cle-pit",
+          "slug": "tec-nfl-cle-pit-2026-10-01-moneyline",
+          "question": "Cleveland Browns vs Pittsburgh Steelers",
+          "sportsMarketType": "moneyline",
+          "sportsMarketTypeV2": "SPORTS_MARKET_TYPE_MONEYLINE",
+          "active": true,
+          "closed": false,
+          "archived": false,
+          "hidden": false,
+          "gameStartTime": "2026-10-02T00:15:00Z",
+          "orderPriceMinTickSize": 0.005,
+          "minimumTradeQty": 0.01,
+          "feeCoefficient": 0,
+          "outcomes": "[\"Pittsburgh Steelers\",\"Cleveland Browns\"]",
+          "outcomePrices": "[\"0.01\",\"0.99\"]",
+          "bestBidQuote": {"value": "0.01", "currency": "USD"},
+          "bestAskQuote": {"value": "0.02", "currency": "USD"},
+          "description": "Schema-derived fixture. Full-game settlement terms intentionally not verified.",
+          "rulesDisclaimer": "Settlement terms must be independently verified before claiming a guaranteed hedge.",
+          "marketSides": [
+            {
+              "id": "side-short",
+              "long": false,
+              "tradable": true,
+              "team": {"id": 2, "name": "Pittsburgh Steelers", "abbreviation": "PIT", "league": "NFL"},
+              "quote": {"value": "0.01", "currency": "USD"}
+            },
+            {
+              "id": "side-long",
+              "long": true,
+              "tradable": true,
+              "team": {"id": 1, "name": "Cleveland Browns", "abbreviation": "CLE", "league": "NFL"},
+              "quote": {"value": "0.99", "currency": "USD"}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -80,7 +80,21 @@ def fee_model_for(venue: str, fee_params: Mapping[str, Any] | None = None, *, se
     if venue == VENUE_POLYMARKET:
         return PolymarketFees.from_market(fee_params)
     if venue == VENUE_POLYMARKET_US:
-        return PolymarketUSFees.for_date(volume_rebate=settings.get("polymarket_us_volume_rebate", 0) or 0)
+        # Public US adapter freezes the published coefficient at observation time.
+        # Replaying it must not silently switch to today's schedule. Global Gamma
+        # feeSchedule/feeCoefficient fields are not the US coefficient contract.
+        from .base import D
+
+        overrides = {"volume_rebate": D(settings.get("polymarket_us_volume_rebate", 0) or 0)}
+        if "taker_theta" in fee_params:
+            theta = D(fee_params["taker_theta"])
+            if not theta.is_finite() or theta < 0:
+                raise ValueError("Polymarket US taker_theta must be finite and nonnegative")
+            overrides["taker_theta"] = theta
+        rebate = overrides["volume_rebate"]
+        if not rebate.is_finite() or not 0 <= rebate <= 1:
+            raise ValueError("Polymarket US volume rebate must be in [0, 1]")
+        return PolymarketUSFees.for_date(**overrides)
     return ZeroFees()
 
 

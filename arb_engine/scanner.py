@@ -308,6 +308,23 @@ def settlement_mismatches(info: Any, quotes_by_venue: dict) -> list[str]:
     return out
 
 
+def quote_arb_ineligible(q: OutcomeQuote, sport: str, market_type: str) -> Optional[str]:
+    """Per-quote hard gates, independent of an account eligibility override.
+
+    The legacy tie-payout default must never turn an unverified new US exchange
+    into a guaranteed hedge. Keep its price/fee signal without selecting its leg.
+    """
+    if q.meta.get("arb_ineligible"):
+        return str(q.meta["arb_ineligible"])
+    if q.venue == "polymarket_us":
+        from .matching.settlement_rules import rule_for_quote
+
+        row = rule_for_quote(q, sport, market_type)
+        if row is None or row.get("status") != "verbatim" or q.meta.get("tie_payout") is None:
+            return "Polymarket US settlement terms unverified"
+    return None
+
+
 def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 100, target_margin: float = 0.0, allowed_venues: Optional[set[str]] = None, max_quote_age: float = 600.0, now: Optional[float] = None, min_size: float = 1.0, executable_venues: Optional[set[str]] = None, budget: Optional[float] = None) -> EventReport:
     """One merged event -> fee-aware report. ``allowed_venues`` drops other venues entirely;
     ``executable_venues`` (None = unrestricted) keeps the others as signal-only rows."""
@@ -339,6 +356,8 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
                 stale_ids.add(q.venue_market_id)
                 continue
             if q.venue in signal_only:
+                continue
+            if quote_arb_ineligible(q, info.sport, info.market_type):
                 continue
             fresh.append(q)
         tradable[o] = fresh
@@ -397,7 +416,9 @@ def analyze_event(me: MergedEvent, settings: dict[str, Any], contracts: float = 
             max_buy = max_price_for_leg(others, fm, contracts, target_margin, tick=tick) if hedgeable else None
             max_buy_maker = max_price_for_leg(others, fm, contracts, target_margin, tick=tick, role="maker") if hedgeable else None
             is_stale = q.venue_market_id in stale_ids
-            ineligible = "not executable" if q.venue in signal_only else None
+            ineligible = "not executable" if q.venue in signal_only else quote_arb_ineligible(q, info.sport, info.market_type)
+            if ineligible is not None:
+                max_buy = max_buy_maker = None
             tp = q.meta.get("tie_payout")
             vps.append(VenuePrice(venue=q.venue, market_id=q.venue_market_id, ask=q.ask, bid=q.bid, ask_size=q.ask_size, fee_per_contract=fee_pc, all_in=all_in, max_buy_price=max_buy, url=q.url, exchange=q.meta.get("exchange") or q.fee_params.get("exchange"), max_buy_maker=max_buy_maker, age_s=q.age, mirror_of=mirrors.get(q.venue_market_id), stale=is_stale, ineligible=ineligible, tie_payout=float(tp) if tp is not None else None, side=q.meta.get("side"), tick=tick))
             if all_in is not None and not is_stale and ineligible is None and (best_all_in is None or all_in < best_all_in):

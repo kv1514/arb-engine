@@ -1,0 +1,16 @@
+{
+  "marketData": {
+    "marketSlug": "tec-nfl-cle-pit-2026-10-01-moneyline",
+    "state": "MARKET_STATE_OPEN",
+    "transactTime": "2026-09-30T16:59:59Z",
+    "bids": [
+      {"px": {"value": "0.40", "currency": "USD"}, "qty": "20.25"},
+      {"px": {"value": "0.43", "currency": "USD"}, "qty": "10.5"}
+    ],
+    "offers": [
+      {"px": {"value": "0.48", "currency": "USD"}, "qty": "15.75"},
+      {"px": {"value": "0.45", "currency": "USD"}, "qty": "8.25"}
+    ],
+    "stats": {"lastTradePx": {"value": "0.01", "currency": "USD"}}
+  }
+}

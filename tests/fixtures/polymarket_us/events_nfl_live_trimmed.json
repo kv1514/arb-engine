@@ -1,0 +1,42 @@
+{
+  "events": [
+    {
+      "id": "115743",
+      "slug": "nfl-pit-cle-2026-10-01",
+      "title": "PIT Steelers vs. CLE Browns",
+      "active": true,
+      "closed": false,
+      "archived": false,
+      "hidden": false,
+      "startTime": "2026-10-02T00:15:00Z",
+      "teams": [
+        {"id": 74, "name": "Pittsburgh Steelers", "abbreviation": "pit", "league": "nfl"},
+        {"id": 55, "name": "Cleveland Browns", "abbreviation": "cle", "league": "nfl"}
+      ],
+      "markets": [
+        {
+          "id": "919543",
+          "slug": "aec-nfl-pit-cle-2026-10-01",
+          "question": "Who will win in the upcoming football event Pittsburgh Steelers vs Cleveland Browns scheduled for October 2, 2026 at 12:15 AM UTC?",
+          "sportsMarketType": "football_team_full_game_winner",
+          "sportsMarketTypeV2": "SPORTS_MARKET_TYPE_MONEYLINE",
+          "active": true,
+          "closed": false,
+          "archived": false,
+          "hidden": false,
+          "gameStartTime": "2026-10-02T00:15:00Z",
+          "orderPriceMinTickSize": 0.005,
+          "minimumTradeQty": 0.01,
+          "feeCoefficient": 0.0695,
+          "description": "This market will settle to the winner of the Pittsburgh Steelers vs Cleveland Browns NFL game scheduled for Oct 1, 2026. Overtime is included if played. If the game ends in a tie, the market will settle to $0.50. If the game is delayed, postponed, or suspended and not rescheduled to a date within two weeks of the originally scheduled date, the market will settle to the last fair market price. Outcome sourced from NFL.",
+          "marketSides": [
+            {"id": "1838570", "long": true, "tradable": true,
+             "team": {"id": 74, "name": "Pittsburgh Steelers", "abbreviation": "pit", "league": "nfl"}},
+            {"id": "1838571", "long": false, "tradable": true,
+             "team": {"id": 55, "name": "Cleveland Browns", "abbreviation": "cle", "league": "nfl"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

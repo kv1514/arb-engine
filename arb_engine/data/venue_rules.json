@@ -32,10 +32,11 @@
     },
     "polymarket_us": {
       "executable_for_us": true,
-      "adapter": false,
-      "verified": "2026-09-19",
+      "adapter": true,
+      "requires_opt_in": true,
+      "verified": "2026-09-30",
       "source": "https://docs.polymarket.us/",
-      "note": "CFTC-regulated separate product (QCEX DCM). Executable for US persons but this repo has no adapter for it yet, so it never appears in a scan.",
+      "note": "Separate US exchange. Public read-only NFL moneyline adapter via gateway.polymarket.us; the us-arbs command explicitly compares it with Kalshi/Robinhood. Not added to existing live/maker routes by default; account access and per-market settlement must be verified separately. No Polymarket US order integration.",
       "state_restrictions": []
     }
   }

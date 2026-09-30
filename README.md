@@ -293,6 +293,32 @@ the demo host, and its four write tools (`order_create`, `order_cancel`, `rfq_cr
 executor (`live --execute-lag`, `maker --mode`) is the path for automated orders — it is in this
 repo, capped and journalled, and a per-call confirmation cannot be answered inside a 23 s edge.
 
+### Polymarket US backend (read-only)
+
+Polymarket **US** is now a separate public-data adapter, not the international
+`polymarket.com` feed. No account key is needed for these price comparisons:
+
+```bash
+python3 -m arb_engine us-arbs                         # one NFL moneyline comparison
+python3 -m arb_engine us-arbs --every 10 --side-cap 25 # repeated automatic detection
+python3 -m arb_engine us-arbs --json                  # machine-readable candidate report
+```
+
+The watcher combines actual Polymarket US/Kalshi books and refreshed Robinhood quotes,
+deducts both legs' taker fees, caps each leg at $25 including a conservative fee bound,
+and requires displayed size. Same-book Kalshi/Robinhood routes, stale/future/failed
+quotes, mismatched dates, and in-play games do not produce candidates. Whole-game NFL
+moneylines only; no props, combos or spread/total inference yet.
+
+`conditional` means positive quoted win-case math, **not guaranteed arbitrage**: exact US
+NFL settlement terms and Robinhood's unverified terms can break the payoff, and both
+fills are never atomic. `verified-payoff` is reserved for independently known compatible
+terms, not realised profit. Existing live/maker defaults remain unchanged. This command
+does not load accounts, submit orders, or send alerts. Implementation is tested with
+offline adversarial fixtures and a trimmed live US event/book capture. Public US reads
+were validated; a full three-venue live run and account checks remain pending.
+See [venue facts](docs/VENUES.md).
+
 ## What the numbers mean
 
 * **all-in** = ask + fee per contract at the reference size (fees round up per order, so
@@ -314,9 +340,9 @@ repo, capped and journalled, and a per-call confirmation cannot be answered insi
   cancellation / postponement rules differ), `stale-quote` (snapshot older than
   `--max-quote-age`). Spread/total lines are half-points on all three venues, so they cannot push.
 
-## Status (2026-09-19)
+## Status (market research 2026-09-19; software validation 2026-09-30)
 
-Live data verified for all three venues; **1267 Python tests** and the JS suites
+Live data verified for the original three venues; **1354 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results

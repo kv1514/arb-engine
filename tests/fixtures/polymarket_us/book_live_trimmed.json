@@ -1,0 +1,15 @@
+{
+  "marketData": {
+    "marketSlug": "aec-nfl-pit-cle-2026-10-01",
+    "bids": [
+      {"px": {"value": "0.5750", "currency": "USD"}, "qty": "1903613.0500"},
+      {"px": {"value": "0.5700", "currency": "USD"}, "qty": "1632726.6400"}
+    ],
+    "offers": [
+      {"px": {"value": "0.5800", "currency": "USD"}, "qty": "1844566.5900"},
+      {"px": {"value": "0.5850", "currency": "USD"}, "qty": "1050421.6600"}
+    ],
+    "state": "MARKET_STATE_OPEN",
+    "transactTime": "2026-09-30T19:27:00.206827825Z"
+  }
+}

@@ -92,7 +92,8 @@ def executable_venues(settings: Optional[Mapping[str, Any]] = None, home_state: 
     if override is not None:
         out = set(override)
     else:
-        out = {v for v, r in load_rules().items() if r.get("executable_for_us") is True and (r.get("adapter", True) or not with_adapter_only)}
+        out = {v for v, r in load_rules().items() if r.get("executable_for_us") is True and
+               (not with_adapter_only or (r.get("adapter", True) and not r.get("requires_opt_in", False)))}
     if home_state:
         hs = home_state.strip().upper()
         out = {v for v in out if hs not in {s.upper() for s in load_rules().get(v, {}).get("state_restrictions", [])}}
@@ -121,6 +122,8 @@ def ineligible_reason(venue: str, settings: Optional[Mapping[str, Any]] = None, 
     src = r.get("source", "no source")
     if r.get("executable_for_us") is True and not r.get("adapter", True):
         return f"{v}: executable for US persons but no adapter in this repo ({src})"
+    if r.get("executable_for_us") is True and r.get("requires_opt_in"):
+        return f"{v}: read-only adapter; explicit opt-in via us-arbs for price comparisons (no order integration)"
     if r:
         return f"{v}: not executable for US persons per venue_rules.json ({src}, verified {r.get('verified', '?')})"
     return f"{v}: not in venue_rules.json"

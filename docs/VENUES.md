@@ -71,7 +71,36 @@ venue changes a schedule, update the model, this file, `tests/test_fees.py` and 
 | Fee | `θ × C × P × (1−P)`, banker's rounding to the cent; taker θ = 0.06 through 2026-09-24 ET, **0.0695 from 12:00 AM ET on 2026-09-25**; maker rebate θ = −0.0125; volume rebates 10/25/50% above $250K/$1M/$10M prior-month taker volume. The 100-lot price table and the five 1,000-contract examples on the page match `PolymarketUSFees` | docs.polymarket.us/fees, read 2026-09-26 (the 2026-09-19 reading of the same page had the theta change on 2026-09-16) |
 | Worked example (pinned) | 1,000 contracts at $0.50: taker 0.0695 × 1,000 × 0.25 = $17.375 → **$17.38**; maker rebate −0.0125 × 1,000 × 0.25 = −$3.125 → **−$3.12** (banker's rounding both ways). `POLY_US_WORKED_EXAMPLE` in `fees/polymarket.py`, checked by `tests/test_fees.py` and the JS twin | docs.polymarket.us/fees, read 2026-09-26 |
 | Public books | `GET https://gateway.polymarket.us/v1/markets/{slug}/book` (no API key; `security: []`). Response is `marketData.bids` / `offers` of `{px: {value, currency}, qty}`, plus `state`. List: `GET /v1/markets?active=true&closed=false`. Authenticated trading is a different host, `https://api.polymarket.us`. A live read on 2026-09-26 returned an open book (14 bids, 18 offers) for `tec-mlb-nlchamp-2026-09-27-atl` | docs.polymarket.us/api-reference/introduction and get-market-book, read 2026-09-26 |
-| Adapter | none yet (`venue_rules.json`: `polymarket_us` executable for US persons, `adapter: false`), so a scan still never sees these books. The public gateway above is the read path an adapter would use | — |
+| Adapter | `venues/polymarket_us.py`: read-only full-game NFL moneylines from `/v2/leagues/nfl/events` and each market's public book. `us-arbs` compares them with actual Kalshi books and refreshed Robinhood quotes. `adapter: true`, `requires_opt_in: true`: existing `scan`/`live`/`maker` defaults do not acquire a new execution route | docs.polymarket.us/api-reference/sports/get-events-by-league-slug and markets/get-market-book, read 2026-09-30; offline schema-derived fixtures |
+
+The US fee schedule was re-read on **2026-09-30**: NFL standard taker theta remains
+`0.0695`; the announced `0.10` change is **table tennis only**, and combos have a different
+curve (neither is supported by this adapter). The published cumulative taker-fee adjustment
+caps an order's collected fee at its rounded cumulative exact fee. No deferred volume
+rebate is deducted by `us-arbs`. Each quote freezes the published theta and its Eastern
+observation date for replay; the API's undocumented `feeCoefficient` is preserved for audit,
+not guessed to be theta or a fee waiver.
+
+The book is the **long/YES instrument**. A long buy consumes offers; a complementary
+purchase costs `1 - long bid`, at that bid's displayed quantity. Explicit `marketSides.long`
+maps each contract to its team; array order and metadata midpoint/last-trade prices are
+not executable offers. Require an OPEN, correctly scoped USD book, valid sizes and a
+known game kickoff. See [US order semantics](https://docs.polymarket.us/api-reference/orders/overview).
+
+**US settlement is not international Polymarket settlement.** Exact NFL product terms have
+not been verified here. The adapter retains descriptions, disclaimers and their hash, with
+unknown tie payout and `settlement_verified=False`. Positive price pairs remain
+**conditional**. The generic scanner also excludes unverified US legs from arb selection
+while retaining fee/signal rows; an eligibility override does not remove this gate. No
+guaranteed-profit or live-fill evidence is asserted by the offline fixtures.
+
+A public NFL league read on 2026-09-30 and a separately fetched
+`aec-nfl-pit-cle-2026-10-01` OPEN USD book and one event were trimmed into
+`tests/fixtures/polymarket_us/*_live_trimmed.json`; they pin the actual legacy market type
+`football_team_full_game_winner` and lowercase team abbreviations. The market's own
+description states half-dollar tie settlement, overtime inclusion, and fair-price
+settlement for sufficiently postponed games. That text is retained for verification,
+not treated as proof that every exceptional payoff matches Kalshi or Robinhood.
 
 ## Settlement registry (`arb_engine/data/settlement_rules.json`, 2026-09-19)
 
@@ -108,7 +137,7 @@ the table is re-read before every live week.
 | kalshi | yes | CFTC-designated contract market; sports contracts offered to US residents (state contests of 2025-26 to be listed in `state_restrictions` once verified) |
 | robinhood | yes | Robinhood Derivatives LLC (CFTC-registered FCM) routing to KalshiEX / Rothera / CDNA; no order API, hedges are executed by hand |
 | polymarket | **no** | the CFTC order of 2022-01-03 and Polymarket's Terms of Use bar US persons; Gamma marks the markets `restricted: true`. Prices stay in the fair value as a **signal** |
-| polymarket_us | yes, `adapter: false` | separate CFTC-regulated product; no adapter in this repo yet |
+| polymarket_us | yes, explicit opt-in | separate US product; read-only NFL adapter via `us-arbs`, not an order integration; settlement proof and account access are separate |
 
 `EXECUTABLE_VENUES=kalshi,robinhood,polymarket` (env, or settings `executable_venues`)
 overrides the table for an account that really can trade elsewhere; `--allowed-venues` on
