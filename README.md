@@ -319,6 +319,13 @@ offline adversarial fixtures and a trimmed live US event/book capture. Public US
 were validated; a full three-venue live run and account checks remain pending.
 See [venue facts](docs/VENUES.md).
 
+Optional Polymarket US account setup (not required by the watcher):
+`python3 scripts/polymarket_us_account.py setup --key-id <public-key-id>` prompts for
+the Secret Key with hidden Terminal input and stores it in git-ignored
+`secrets/polymarket_us.env` (permissions 600). Never paste the secret into chat or pass
+it as a shell argument. `python3 scripts/polymarket_us_account.py check` makes a signed
+read-only balance request and prints authentication status only. It does not enable orders.
+
 ## What the numbers mean
 
 * **all-in** = ask + fee per contract at the reference size (fees round up per order, so
@@ -342,7 +349,7 @@ See [venue facts](docs/VENUES.md).
 
 ## Status (market research 2026-09-19; software validation 2026-09-30)
 
-Live data verified for the original three venues; **1354 Python tests** and the JS suites
+Live data verified for the original three venues; **1360 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results

@@ -118,7 +118,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1354)
+python3 -m unittest discover -s tests -t .     # Python tests (1360)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -234,6 +234,14 @@ When you declare a key, add its row here.
 | `arb_button_side_cap` | `ARB_BUTTON_SIDE_CAP` | `25` | Maximum dollars per leg of an arbitrage-button ticket, including conservative split-fill fees at the allowed prices. Kalshi rechecks the exchange fee multiplier before sending. Robinhood remains a manual suggested leg; this is not a daily or account-wide cap. |
 
 ## CLI plugins (`arb_engine/cli_plugins/`)
+
+Polymarket US account credentials are optional and separate from public scanning.
+`python3 scripts/polymarket_us_account.py setup` accepts a hidden Terminal paste and saves
+`POLYMARKET_KEY_ID` / `POLYMARKET_SECRET_KEY` in git-ignored `secrets/polymarket_us.env`
+(600). These are script credentials, not engine settings. `check` signs only
+`GET https://api.polymarket.us/v1/account/balances`, refuses redirects, and prints a
+connection summary, not account details or secrets. No order endpoint or trading gate
+is added; signing uses the existing optional `cryptography` installation.
 
 `us_arbs.py` adds the **read-only** `us-arbs` command (NFL full-game moneylines):
 `--every` defaults to 0 (one scan; repeated scans require at least 5 seconds),
