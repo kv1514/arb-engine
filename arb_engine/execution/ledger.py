@@ -917,6 +917,15 @@ class OrderLedger:
                         return Reservation(False, why, room=room)
                     n = fit
             max_cost = unit * n if unit is not None else worst_cost(exposed, n, mult)
+            if self.env == "prod":
+                if mult is None:
+                    return Reservation(False, "production reservation requires the exchange fee multiplier")
+                max_cost = max(max_cost, worst_cost(exposed, n, mult))
+                from .shared_limits import problem as shared_problem
+                why = shared_problem(c, max_cost)
+                if why:
+                    self._event(c, now, None, "refused", strategy=strategy, ticker=ticker, count=n, reason=why)
+                    return Reservation(False, why)
             iid, coid = uuid.uuid4().hex, str(uuid.uuid4())
             c.execute("""INSERT INTO intents (intent_id, client_order_id, dedupe_key, strategy, parent_id, env, host, owner,
                 created_ts, updated_ts, day, event_key, game_key, ticker, action, side, tif, count, limit_price, max_cost, state, detail,

@@ -102,6 +102,30 @@ description states half-dollar tie settlement, overtime inclusion, and fair-pric
 settlement for sufficiently postponed games. That text is retained for verification,
 not treated as proof that every exceptional payoff matches Kalshi or Robinhood.
 
+The separate manual US executor (`execution/polymarket_us_ioc.py`) uses signed
+`POST https://api.polymarket.us/v1/orders` for LIMIT/IOC purchases. Requests specify
+`ORDER_INTENT_BUY_LONG` or `ORDER_INTENT_BUY_SHORT`, whole-contract `quantity`, USD
+`price.value`, `TIME_IN_FORCE_IMMEDIATE_OR_CANCEL`, synchronous execution with a
+five-second maximum block, and manual-order indication. The long-side price is always
+sent, including for NO (`1 - purchased-side limit`); `minimumTradeQty` and
+`orderPriceMinTickSize` are checked before submission. An order ID is acceptance, not
+proof of fills. [Create order](https://docs.polymarket.us/api-reference/orders/create-order),
+[order semantics](https://docs.polymarket.us/api-reference/orders/overview), read 2026-09-30.
+
+`GET /v1/order/{orderId}` returns cumulative `cumQuantity`, `leavesQuantity`, `avgPx`
+(long-side price), and `commissionNotionalTotalCollected`. Only a terminal scoped row
+with zero leaves and explicit cost/commission releases the unfilled reservation.
+`POST /v1/order/{orderId}/cancel` requires `marketSlug`; its acknowledgement never
+substitutes for that subsequent final read. The documented create body has no client
+idempotency key, and account activities do not provide an order-scoped fill listing.
+Unknown sends are not retried or inferred absent from open orders; missing fees and
+contradictions hold cash. This REST evidence is weaker than Kalshi's independently
+scoped fills-list cross-check and needs live schema verification before unattended use.
+[Get order](https://docs.polymarket.us/api-reference/orders/get-order),
+[cancel order](https://docs.polymarket.us/api-reference/orders/cancel-order),
+[activities](https://docs.polymarket.us/api-reference/portfolio/get-activities), read 2026-09-30.
+No fee formula is changed, and no live fills are asserted by the schema-derived fixtures.
+
 ## Settlement registry (`arb_engine/data/settlement_rules.json`, 2026-09-19)
 
 23 rows keyed by (venue, sport, market type, exchange) with the fields `tie`, `postponed`,
@@ -137,7 +161,7 @@ the table is re-read before every live week.
 | kalshi | yes | CFTC-designated contract market; sports contracts offered to US residents (state contests of 2025-26 to be listed in `state_restrictions` once verified) |
 | robinhood | yes | Robinhood Derivatives LLC (CFTC-registered FCM) routing to KalshiEX / Rothera / CDNA; no order API, hedges are executed by hand |
 | polymarket | **no** | the CFTC order of 2022-01-03 and Polymarket's Terms of Use bar US persons; Gamma marks the markets `restricted: true`. Prices stay in the fair value as a **signal** |
-| polymarket_us | yes, explicit opt-in | separate US product; read-only NFL adapter via `us-arbs`, not an order integration; settlement proof and account access are separate |
+| polymarket_us | yes, explicit opt-in | separate US product; read-only `us-arbs` plus separately gated manual `us-ioc`; settlement proof and account access are separate |
 
 `EXECUTABLE_VENUES=kalshi,robinhood,polymarket` (env, or settings `executable_venues`)
 overrides the table for an account that really can trade elsewhere; `--allowed-venues` on

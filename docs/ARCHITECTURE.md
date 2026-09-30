@@ -190,6 +190,34 @@ explicitly includes the US price feed and still respects an operator's venue res
 
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 
+### Separate US manual execution path
+
+`cli_plugins/us_ioc_ops.py` registers `us-ioc`, independent of `us-arbs` and the
+overlay. `execution/polymarket_us_ioc.py` builds an immutable decision-limit plan.
+Dry-run stops there, without credentials or network. Confirmation requires both live
+flags, the exact US host, fresh validated NFL pre-game identity/book/grid and buying power.
+`venues/polymarket_us_trading.py` signs Ed25519 requests with the existing optional
+cryptography package, refuses redirects, and never retries POSTs. Secrets stay outside Git.
+
+`USOrderLedger` creates `pm_us_*` tables in the existing production Kalshi SQLite file.
+Both venues reserve under `BEGIN IMMEDIATE`; `execution/shared_limits.py` sums unfinished
+reservations at full worst cost and finished fills at paid cost, enforcing hard $25/$50
+cash ceilings even for Kalshi lock-leg exemptions. Key fingerprints pin US recovery to
+the sending key (automatic key-rotation/account equivalence is not inferred).
+Production `KalshiExecutor.execute` verifies a matching pending reservation bound to the
+same key/account, checks cash ceilings, and claims one send atomically. Direct calls
+without that proof, or repeat calls of an already claimed intent, cannot send; existing
+ledgered strategies/manual CLI use that path, while demo behavior stays unchanged.
+No daily reset or inferred settlement/exit release restores room. All processes must
+use this version and the same ledger directory; external/manual trading is outside scope.
+
+US IOC remainder is cancelled through the gates and reread; only terminal scoped
+cumulative quantities/average long price/commission release the unfilled part. Unknown
+sends without exchange IDs are permanently held for investigation, never guessed from
+activities or resent. Cumulative-count/cost regressions are sticky contradictions.
+There is no automatic hedge, two-leg atomicity, unwind, settlement proof or live-fill
+evidence; `us-arbs` remains read-only and unverified-settlement candidates remain conditional.
+
 ```
 ESPN summary (drives/plays with wallclock) ─► espn_timeline() ─► PlayRow[] (state before AND after each play, ts,
                                                                   play class, scoring flag, per-team timeouts,

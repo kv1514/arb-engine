@@ -1,0 +1,30 @@
+{
+  "provenance": "Schema-derived offline US REST order vectors, 2026-09-30. Not live fills.",
+  "source": "https://docs.polymarket.us/api-reference/orders/get-order",
+  "partial": {
+    "id": "us-order-1", "marketSlug": "aec-nfl-pit-cle-2026-10-01",
+    "intent": "ORDER_INTENT_BUY_LONG", "type": "ORDER_TYPE_LIMIT",
+    "price": {"value": "0.40", "currency": "USD"}, "quantity": 5,
+    "cumQuantity": 2, "leavesQuantity": 3, "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
+    "state": "ORDER_STATE_PARTIALLY_FILLED",
+    "avgPx": {"value": "0.38", "currency": "USD"},
+    "commissionNotionalTotalCollected": {"value": "0.03", "currency": "USD"}
+  },
+  "partial_final": {
+    "id": "us-order-1", "marketSlug": "aec-nfl-pit-cle-2026-10-01",
+    "intent": "ORDER_INTENT_BUY_LONG", "type": "ORDER_TYPE_LIMIT",
+    "price": {"value": "0.40", "currency": "USD"}, "quantity": 5,
+    "cumQuantity": 2, "leavesQuantity": 0, "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
+    "state": "ORDER_STATE_CANCELED",
+    "avgPx": {"value": "0.38", "currency": "USD"},
+    "commissionNotionalTotalCollected": {"value": "0.03", "currency": "USD"}
+  },
+  "missed": {
+    "id": "us-order-1", "marketSlug": "aec-nfl-pit-cle-2026-10-01",
+    "intent": "ORDER_INTENT_BUY_LONG", "type": "ORDER_TYPE_LIMIT",
+    "price": {"value": "0.40", "currency": "USD"}, "quantity": 5,
+    "cumQuantity": 0, "leavesQuantity": 0, "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
+    "state": "ORDER_STATE_EXPIRED",
+    "commissionNotionalTotalCollected": {"value": "0.00", "currency": "USD"}
+  }
+}

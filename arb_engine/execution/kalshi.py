@@ -146,9 +146,50 @@ class KalshiExecutor:
         preview = self._mutation_preview("create_order", plan=asdict(plan), payload=payload)
         if not self._mutation_allowed(preview, confirm):
             return preview
+        if self.client.env == "prod":
+            # A direct call (or the built-in CLI if its ledger plugin failed to
+            # load) must not bypass the shared cash ceilings. Claim one send
+            # atomically; the normal caller still records its final answer.
+            problem = self._production_reservation_problem(plan)
+            if problem:
+                preview["status"] = f"BLOCKED: {problem}"
+                return preview
         preview["response"] = self.client.create_order(payload)
         preview["status"] = "SUBMITTED"
         return preview
+
+    def _production_reservation_problem(self, plan: OrderPlan) -> Optional[str]:
+        from decimal import Decimal
+        from .ledger import OrderLedger
+        from .shared_limits import LEG_CAP, TOTAL_CAP, exposure
+
+        led = None
+        try:
+            led = OrderLedger.for_client(self.client)
+            with led._tx() as connection:
+                row = connection.execute("SELECT * FROM intents WHERE client_order_id=?", (plan.client_order_id,)).fetchone()
+                if (row is None or row["state"] != "pending" or row["ticker"] != plan.ticker or
+                        row["key_fp"] != led.identity.key_fp or row["account_fp"] != led.identity.account_fp or
+                        row["action"] != plan.action or row["side"] != plan.side or row["tif"] != plan.time_in_force or
+                        Decimal(str(row["count"])) != Decimal(str(plan.count)) or
+                        Decimal(row["limit_price"]) != Decimal(str(plan.price))):
+                    return "production order needs its matching pending reservation in the shared ledger"
+                if Decimal(row["max_cost"]) > LEG_CAP or exposure(connection) > TOTAL_CAP:
+                    return "shared production cash ceiling exceeded"
+                have = connection.execute("SELECT 1 FROM sqlite_master WHERE name='pm_us_intents'").fetchone()
+                if have and connection.execute("SELECT 1 FROM pm_us_intents WHERE state NOT IN ('done','missed') LIMIT 1").fetchone():
+                    return "Polymarket US order unresolved; new sends blocked"
+                connection.execute("CREATE TABLE IF NOT EXISTS production_sends (client_order_id TEXT PRIMARY KEY)")
+                if connection.execute("SELECT 1 FROM production_sends WHERE client_order_id=?", (plan.client_order_id,)).fetchone():
+                    return "production intent already attempted; reconcile, never resend"
+                connection.execute("INSERT INTO production_sends VALUES (?)", (plan.client_order_id,))
+                led._event(connection, led.clock(), row["intent_id"], "production-send-claimed")
+        except Exception:
+            return "production ledger unavailable or account identity unverified"
+        finally:
+            if led is not None:
+                led.close()
+        return None
 
     def cancel(self, order_id: str, confirm: bool = False, *, market_ticker: Optional[str] = None,
                exchange_index: Optional[int] = None, subaccount: Optional[int] = None) -> dict[str, Any]:

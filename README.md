@@ -63,7 +63,7 @@ Python ≥ 3.10, no third-party packages needed for scanning.
 
 ```bash
 git clone https://github.com/kv1514/arb-engine && cd arb-engine
-pip install cryptography          # only for authenticated Kalshi calls
+pip install cryptography          # only for Kalshi RSA / Polymarket US Ed25519 signing
 cp .env.example .env              # optional: Kalshi keys, Gold flag
 python -m unittest discover -s tests -t .
 ```
@@ -325,6 +325,46 @@ the Secret Key with hidden Terminal input and stores it in git-ignored
 `secrets/polymarket_us.env` (permissions 600). Never paste the secret into chat or pass
 it as a shell argument. `python3 scripts/polymarket_us_account.py check` makes a signed
 read-only balance request and prints authentication status only. It does not enable orders.
+
+### Gated Polymarket US IOC purchases
+
+The separate US executor supports explicit manual NFL pre-game moneyline purchases
+alongside the existing Kalshi executor. Preview first (no credentials/network needed):
+
+```bash
+python3 -m arb_engine us-ioc order --market-slug <market-slug> --side yes --count 1 --limit 0.40
+python3 -m arb_engine us-ioc ledger
+python3 -m arb_engine us-ioc reconcile --intent-id <intent-id>
+```
+
+`--limit` is the maximum dollar cost of the purchased side, including NO mapping;
+fees are added separately within the cap. Submission requires **all three**:
+`--confirm`, `ARB_LIVE_TRADING=1`, and `POLYMARKET_US_LIVE_TRADING=1`. Setup/scanning
+enables none of them. Polymarket US is production-only here, not a demo sandbox.
+Every confirmed order rechecks the OPEN book, grid, NFL identity/kickoff and buying power.
+
+Both production venues share hard **$25 per leg fees included / $50 total** ceilings
+in `ARB_ORDER_LEDGER_DIR/kalshi_prod_ledger.sqlite3`, with atomic reservations before
+sends. Pending orders count at their whole worst case; completed purchases still count
+as inventory. Existing historical Kalshi purchases count too and can block new orders.
+This version does **not** infer settlement/exit cash release, so the conservative cap
+may stop trading even after older inventory actually settled. This is an engine-managed
+cash cap, not an account-wide loss guarantee: outside/manual trades, other ledger
+directories and old running processes are not controlled. Restart all trading processes
+on this version and the same directory; never delete the ledger to regain room.
+
+Partial IOC remainder is cancelled when confirmed, then read again. Only a final scoped
+row with explicit cumulative fills, average price and commission releases its unfilled
+part. Missing fees, wrong-side rows and regressing fills do not free cash. Timeouts
+never trigger a resend; `--request-id` deduplicates locally. Use `reconcile` after a
+restart; `reconcile --confirm` may cancel remaining quantity through the same gates.
+A lost exchange ID, pre-send crash or contradictory evidence requires investigation
+and stays blocked; no force-release command is offered.
+
+**Not an automatic cross-venue arb runner.** Inventory is held, not silently hedged or
+unwound. Robinhood still has no public order integration. Unverified US settlement stays
+conditional; the watcher never orders. Offline schema-derived order tests are not
+live-fill/profitability evidence. No live orders were sent during development.
 
 ## What the numbers mean
 

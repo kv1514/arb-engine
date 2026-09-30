@@ -14,7 +14,7 @@ data flow.
    `tests/fixtures/fee_vectors.json` (`python scripts/gen_fee_vectors.py`) so the
    extension's `arb-core.js` stays in parity (`scripts/test_js.sh`).
 2. **Standard library only** in `arb_engine/` (the `cryptography` package is the one
-   optional dependency, for Kalshi request signing). No pandas/requests/pydantic.
+   optional dependency, for Kalshi RSA and Polymarket US Ed25519 signing). No pandas/requests/pydantic.
 3. **Never place orders by default.** Anything that can submit an order must be dry-run
    unless `confirm=True` *and* the environment is demo, or `KALSHI_ENV=prod` with
    `ARB_LIVE_TRADING=1`. Keep the gates in `arb_engine/execution/kalshi.py` and
@@ -65,6 +65,24 @@ data flow.
    cancels what a dead one left resting. A sweep counts as a shutdown only when a complete
    listing shows the book empty. Tests never write to `out/` (`tests/__init__.py` points
    `ARB_ORDER_LEDGER_DIR` at a temporary directory).
+3b. **Hard production cash ceilings are shared.** `execution/shared_limits.py` enforces
+   $25 per reservation including fees and $50 total across production Kalshi and
+   Polymarket US, inside one SQLite transaction/file (`kalshi_prod_ledger.sqlite3`).
+   No hedge, strategy or daily-budget exemption bypasses these ceilings. US orders
+   use `execution/polymarket_us_ioc.py` and `pm_us_*` tables. Only explicit confirmation
+   plus `ARB_LIVE_TRADING=1` and `POLYMARKET_US_LIVE_TRADING=1` enables US mutations,
+   on the exact `api.polymarket.us` host, without redirects or retries. Unknown sends,
+   incomplete reads and contradictory cumulative fills retain their reservation;
+   unresolved US orders also block new Kalshi exposure. Partial IOC remainder is cancelled
+   only through those gates; only a subsequent final scoped row releases the unfilled
+   part. Filled inventory remains charged: no inferred settlement, exit or outside-trade
+   cash release. Never reset/delete ledgers to restore room. Restart all production
+   processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
+   cannot participate in the shared cap.
+   Production `KalshiExecutor.execute` additionally verifies the sending key/account,
+   exact pending plan and cash ceilings in that shared ledger, then atomically claims
+   one executor send. A raw executor call cannot bypass the ledger or resend a claimed
+   intent; demo behavior and the venue fee formulas are unchanged.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
    Those quotes carry `book_id="kalshi"` and must never be arbed against Kalshi direct;
@@ -178,6 +196,7 @@ When you declare a key, add its row here.
 | `robinhood_gold` | `ROBINHOOD_GOLD` | `False` | Price Robinhood's commission at the Gold rate ($0.005 per contract instead of $0.01). |
 | `kalshi_rounding` | `KALSHI_FEE_ROUNDING` | `cent` | Kalshi per-order fee rounding: `cent` (up to the cent, conservative) or `centicent`. |
 | `polymarket_us_volume_rebate` | `POLYMARKET_US_VOLUME_REBATE` | `0.0` | Polymarket US taker-fee volume rebate as a fraction (0 = none). |
+| `polymarket_us_live_trading` | `POLYMARKET_US_LIVE_TRADING` | `0` | US mutations require exactly `1`, `ARB_LIVE_TRADING=1` and explicit confirmation; off by default. No automatic scanner integration. |
 | `venue_weights` | — | `None` | `{venue: weight}` override for the consensus fair value; `None` = `quant.fairvalue.DEFAULT_VENUE_WEIGHTS`. Settings dict only. |
 | `odds_api_key` | `ODDS_API_KEY` | `None` | The Odds API key for sportsbook consensus (pre-game only); `None` disables it. |
 | `rothera_fee_model` | `ROBINHOOD_ROTHERA_FEE_MODEL` | `flat_001` | Rothera exchange fee on Robinhood NFL contracts: `flat_001` ($0.01/contract) or `quadratic` (per order `max(round(0.02·P·(1−P)·C, 2), $0.01)`, Rothera schedule 2026-05-20). |
@@ -240,8 +259,23 @@ Polymarket US account credentials are optional and separate from public scanning
 `POLYMARKET_KEY_ID` / `POLYMARKET_SECRET_KEY` in git-ignored `secrets/polymarket_us.env`
 (600). These are script credentials, not engine settings. `check` signs only
 `GET https://api.polymarket.us/v1/account/balances`, refuses redirects, and prints a
-connection summary, not account details or secrets. No order endpoint or trading gate
-is added; signing uses the existing optional `cryptography` installation.
+connection summary, not account details or secrets. The separate `us-ioc` plugin reads
+the same credentials (or both exported credential variables); signing uses the existing
+optional `cryptography` installation.
+
+`us-ioc order --market-slug SLUG --side yes|no --count N --limit P` previews a US IOC
+without an account read, ledger write or submission. `--limit` is the purchased side's
+cost; the API payload always expresses the long/YES instrument's price. Confirmed orders
+re-read NFL identity, kickoff, OPEN book/grid and buying power, then reserve before
+sending. `--request-id` is local deduplication, not exchange idempotency: keep it for
+recovery, never replace it to retry an unknown send. `ledger` reports both venues' cash
+total; `reconcile [--intent-id ID]` reads known US order IDs and updates accounting;
+adding `--confirm` permits cancellation of remaining IOC quantity through the gates.
+Final REST rows must explicitly state quantities, average long price and commission.
+Missing fees are unknown, not zero. A lost exchange ID, crash between reservation and
+send, or sticky contradiction requires operator investigation; no automatic activity
+matching or unsafe force-release exists. This is a manual buy executor, not automatic
+two-venue buying or unwind; unknown settlement still excludes guaranteed-arbitrage claims.
 
 `us_arbs.py` adds the **read-only** `us-arbs` command (NFL full-game moneylines):
 `--every` defaults to 0 (one scan; repeated scans require at least 5 seconds),
