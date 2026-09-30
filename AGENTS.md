@@ -75,7 +75,9 @@ data flow.
    incomplete reads and contradictory cumulative fills retain their reservation;
    unresolved US orders also block new Kalshi exposure. Partial IOC remainder is cancelled
    only through those gates; only a subsequent final scoped row releases the unfilled
-   part. Filled inventory remains charged: no inferred settlement, exit or outside-trade
+   part. US sends are claimed once, and quote expiry is checked after reservation and
+   after that claim. Only a provably unclaimed, never-sent local expiry frees cash;
+   claimed or unknown intents stay held. Filled inventory remains charged: no inferred settlement, exit or outside-trade
    cash release. Never reset/delete ledgers to restore room. Restart all production
    processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
    cannot participate in the shared cap.
@@ -136,7 +138,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1360)
+python3 -m unittest discover -s tests -t .     # Python tests (1403)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

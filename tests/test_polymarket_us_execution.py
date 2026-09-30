@@ -311,6 +311,40 @@ class USExecutionTests(unittest.TestCase):
         self.assertEqual(self.ex.execute(self.plan, confirm=True)["status"], "BLOCKED")
         self.assertEqual(self.client.sent, [])
 
+    def test_slow_reservation_expires_book_before_send_and_releases_only_unsent(self):
+        reserve = self.ledger.reserve
+        def delayed(*args):
+            iid = reserve(*args)
+            self.now = NOW+7
+            return iid
+        with mock.patch.object(self.ledger, "reserve", side_effect=delayed):
+            result = self.ex.execute(self.plan, confirm=True)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(self.client.sent, [])
+        self.assertEqual(D(self.ledger.status()["shared_exposure"]), 0)
+
+    def test_claimed_us_intent_cannot_be_claimed_twice_or_abandoned(self):
+        iid = self.ledger.reserve(self.plan, KEY)
+        self.ledger.claim_send(iid, KEY)
+        with self.assertRaises(LedgerError):
+            self.ledger.claim_send(iid, KEY)
+        with self.assertRaises(LedgerError):
+            self.ledger._abandon_unsent(iid)
+        self.assertEqual(self.ledger.get(iid)["charge"], "2.08")
+
+    def test_slow_send_claim_expires_book_without_sending_or_freeing_claimed_cash(self):
+        claim = self.ledger.claim_send
+        def delayed(*args):
+            claim(*args)
+            self.now = NOW+7
+        with mock.patch.object(self.ledger, "claim_send", side_effect=delayed):
+            result = self.ex.execute(self.plan, confirm=True)
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertEqual(self.client.sent, [])
+        self.assertEqual(D(self.ledger.status()["shared_exposure"]), D("2.08"))
+        with self.assertRaises(LedgerError):
+            self.ledger._abandon_unsent(result["intent_id"])
+
     def test_inplay_or_insufficient_buying_power_blocks(self):
         self.info.in_play = True
         self.assertEqual(self.ex.execute(self.plan, confirm=True)["status"], "BLOCKED")

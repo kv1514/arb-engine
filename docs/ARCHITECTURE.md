@@ -188,9 +188,7 @@ The venue table now records `adapter: true` and `requires_opt_in: true` for Poly
 Default live/maker eligibility remains Kalshi/Robinhood; the dedicated read-only command
 explicitly includes the US price feed and still respects an operator's venue restriction.
 
-## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
-
-### Separate US manual execution path
+## Separate US manual execution path
 
 `cli_plugins/us_ioc_ops.py` registers `us-ioc`, independent of `us-arbs` and the
 overlay. `execution/polymarket_us_ioc.py` builds an immutable decision-limit plan.
@@ -215,8 +213,14 @@ US IOC remainder is cancelled through the gates and reread; only terminal scoped
 cumulative quantities/average long price/commission release the unfilled part. Unknown
 sends without exchange IDs are permanently held for investigation, never guessed from
 activities or resent. Cumulative-count/cost regressions are sticky contradictions.
+US sends are claimed once. Freshness is rechecked after both reservation and send-claim
+transactions, since either can wait on another process. A local expiry releases cash
+only before the send claim; once claimed, accounting remains conservative even if no
+request was sent.
 There is no automatic hedge, two-leg atomicity, unwind, settlement proof or live-fill
 evidence; `us-arbs` remains read-only and unverified-settlement candidates remain conditional.
+
+## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 
 ```
 ESPN summary (drives/plays with wallclock) ─► espn_timeline() ─► PlayRow[] (state before AND after each play, ts,

@@ -106,11 +106,13 @@ class USOrderLedger:
                 created_ts REAL NOT NULL, state TEXT NOT NULL, order_id TEXT UNIQUE,
                 max_cost TEXT NOT NULL, charge TEXT NOT NULL, fill_seen TEXT NOT NULL DEFAULT '0',
                 fill_cost TEXT, fees TEXT, cost_seen TEXT NOT NULL DEFAULT '0', fee_seen TEXT NOT NULL DEFAULT '0',
-                reason TEXT NOT NULL DEFAULT '')""")
+                send_started INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '')""")
             columns = {r[1] for r in c.execute("PRAGMA table_info(pm_us_intents)")}
             for name in ("cost_seen", "fee_seen"):
                 if name not in columns:
                     c.execute(f"ALTER TABLE pm_us_intents ADD COLUMN {name} TEXT NOT NULL DEFAULT '0'")
+            if "send_started" not in columns:
+                c.execute("ALTER TABLE pm_us_intents ADD COLUMN send_started INTEGER NOT NULL DEFAULT 0")
             c.execute("""CREATE TABLE IF NOT EXISTS pm_us_events (
                 id INTEGER PRIMARY KEY, intent_id TEXT, ts REAL NOT NULL, kind TEXT NOT NULL, reason TEXT NOT NULL)""")
 
@@ -171,6 +173,25 @@ class USOrderLedger:
             if row is not None and row["state"] not in ("done", "missed", "contradicted"):
                 c.execute("UPDATE pm_us_intents SET state='unknown', reason=? WHERE intent_id=?", (reason, iid))
             self._event(c, iid, "unknown", reason)
+
+    def claim_send(self, iid, fingerprint):
+        with self.store._tx() as c:
+            row = c.execute("SELECT * FROM pm_us_intents WHERE intent_id=?", (iid,)).fetchone()
+            if (row is None or row["key_fp"] != fingerprint or row["state"] != "pending" or row["send_started"] or
+                    decimal(row["max_cost"]) > LEG_CAP or exposure(c) > TOTAL_CAP):
+                raise LedgerError("send is not a fresh account-bound reservation within the shared cap")
+            c.execute("UPDATE pm_us_intents SET send_started=1 WHERE intent_id=?", (iid,))
+            self._event(c, iid, "send-claimed")
+
+    def _abandon_unsent(self, iid):
+        # Only a local pre-send refusal. Never a public release of an unknown or
+        # attempted order, including a crash just after claim_send.
+        with self.store._tx() as c:
+            changed = c.execute("UPDATE pm_us_intents SET state='missed',charge='0',reason='book expired before send' "
+                                "WHERE intent_id=? AND state='pending' AND send_started=0 AND order_id IS NULL AND fill_seen='0'", (iid,)).rowcount
+            if changed != 1:
+                raise LedgerError("cannot abandon an attempted or observed order")
+            self._event(c, iid, "never-sent", "book expired before send")
 
     def accepted(self, iid, response):
         oid = response.get("id") if isinstance(response, dict) else None
@@ -379,6 +400,7 @@ class PolymarketUSExecutor:
             raise ValueError("unknown/insufficient USD buying power")
         if not observed <= now <= observed+6 or info.start_time.timestamp() <= now:
             raise ValueError("book expired during account preflight")
+        return min(observed+6, info.start_time.timestamp())
 
     def execute(self, plan, *, confirm=False):
         payload, cost = plan.payload(), plan.worst_cost(timestamp(self.clock()))
@@ -389,7 +411,7 @@ class PolymarketUSExecutor:
         if confirm is not True:
             return {**preview, "status": "DRY_RUN", "note": "no account read, ledger write or order sent"}
         try:
-            self._preflight(plan)
+            deadline = self._preflight(plan)
             if self.ledger is None:
                 self.ledger = USOrderLedger(clock=self.clock)
             iid = self.ledger.reserve(plan, self.client.fingerprint)
@@ -398,6 +420,14 @@ class PolymarketUSExecutor:
             return {**preview, "status": "BLOCKED", "reason": "gate, book, balance or durable reservation refused; nothing sent"}
         try:
             self._check_gate()
+            if timestamp(self.clock()) >= deadline:
+                self.ledger._abandon_unsent(iid)
+                return {**preview, "status": "BLOCKED", "intent_id": iid, "reason": "book expired while reserving; no order sent and cash released"}
+            self.ledger.claim_send(iid, self.client.fingerprint)
+            # BEGIN IMMEDIATE may itself wait for another process. Never let a
+            # successful send claim make an expired decision executable.
+            if timestamp(self.clock()) >= deadline:
+                raise LedgerError("book expired while claiming send; reservation retained")
             response = self.client._create(payload, confirm=True)
             self.ledger.accepted(iid, response)
             return self.recover(iid, confirm=True)
