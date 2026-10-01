@@ -102,6 +102,15 @@ nor a price guaranteed to match an independent exchange's determination. This ge
 FAQ is not a replacement for market-specific binding product terms. It explains why
 normal win/tie arithmetic alone cannot unlock guaranteed-payoff automatic trading.
 
+The 2026-09-30 recovery audit also read the production
+[PIT–CLE Kalshi market](https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26OCT01PITCLE-PIT)
+without credentials: its own secondary rules confirmed the 48-hour postponement
+window and fair-price exception. Fresh US metadata reads were unavailable during
+that check; the captured US description remains evidence of its two-week clause,
+not a newly verified binding matched-market certification. The offline
+`scripts/check_pair_settlement.py` diagnostic keeps all such pairs blocked and
+does not infer missing cancellation or overtime clauses from another product.
+
 A public NFL league read on 2026-09-30 and a separately fetched
 `aec-nfl-pit-cle-2026-10-01` OPEN USD book and one event were trimmed into
 `tests/fixtures/polymarket_us/*_live_trimmed.json`; they pin the actual legacy market type

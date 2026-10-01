@@ -336,6 +336,29 @@ authorization. Tests are schema-shaped synthetic evidence, not observed live fil
 
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 
+`execution/pair_recovery.py` adds a **non-sending production recovery outbox** to
+the same shared ledger. A permanent entry claim is made under the standing-policy
+dispatch guard. A restart only reconciles that command; it cannot claim it again.
+Final verified US fills size a fixed-limit Kalshi hedge, bounded by the original
+receipt deadline. Kalshi verification requires native order identity/book-side
+scope and a complete agreeing fills listing. Missing evidence is not a zero fill;
+counts/costs/fees remain lower bounds and contradictory evidence is sticky.
+
+Only verified unhedged US inventory may get a sell command. A missing hedge
+claim can be abandoned only after its deadline; an unknown attempted hedge cannot.
+Fresh post-fill account inventory and bid receipts, half displayed depth, a
+fee-inclusive $1 loss bound, two-attempt maximum and durable liquidity consumption
+bound recovery. Partial-contract residuals remain unresolved, never rounded up.
+All original parent cash remains charged, including after sales. Commands include
+`send_authorized=False`; they are not real child-intent transfer or an enabled
+production sender. Existing unresolved-order guards stay unchanged.
+
+`execution/settlement_audit.py` and `scripts/check_pair_settlement.py` explain
+captured NFL product-family terms offline. The examples are different games, not
+a matched-game certification. Matching half-dollar ties does not eliminate
+independent fair-price exceptions or different postponement windows. Text hashes
+prove integrity only; no registry promotion or execution authorization is made.
+
 ```
 ESPN summary (drives/plays with wallclock) ─► espn_timeline() ─► PlayRow[] (state before AND after each play, ts,
                                                                   play class, scoring flag, per-team timeouts,

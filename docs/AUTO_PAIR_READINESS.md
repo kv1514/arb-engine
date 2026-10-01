@@ -5,6 +5,10 @@ Kalshi/US cash ceilings. The new `auto-arb` command is **paper-only**, default o
 Neither its `live` mode nor manual live flags enable a paired production transport.
 No account credentials, running worker configuration or live orders were changed.
 
+Recovery decision/accounting now has a durable non-sending outbox, described below.
+This checkpoint does not connect a production sender or certify compatible real
+settlement; `auto-arb --mode live` still fails closed before account access.
+
 `trade-approval` now supplies one-time, revocable standing permission: default dry-run,
 authenticated production account/key binding, 6-hour default / 24-hour maximum lifetime,
 spec/evidence hash, exact single-use causal pair permits and restart-safe cash holds.
@@ -54,6 +58,34 @@ unclaimed; later revocation still blocks submission. Do not wire an order callba
 directly after admission or call these accounting records verified inventory.
 
 ## Published recovery interfaces
+
+The 2026-09-30 recovery checkpoint adds `PairRecovery(PairReservationLedger)`.
+`claim_entry(pair_id, approval, binding)` commits an outbox claim under the policy
+dispatch guard; `accepted(command_id, order_id, binding)` records acceptance;
+`observe(command_id, native_row, binding, final_read=..., fills=...,
+truncated=..., error=...)` records cumulative evidence. US final REST money is
+required; Kalshi additionally requires a complete scoped agreeing fills listing.
+`claim_hedge` uses only final verified US quantities and the original receipt
+deadline. `claim_unwind` requires post-fill `InventoryEvidence` plus exact scoped
+bid receipt/depth, reserves displayed liquidity once, never sells more than this
+pair's verified excess, and enforces the frozen two-attempt/$1 fee-inclusive loss
+rule. `status` exposes commands requiring reconciliation. All calls are non-sending;
+commands explicitly contain `send_authorized=False`. Full parent cash remains
+charged without any sale-proceeds/settlement credit. Lost IDs, crash claims and
+sticky contradictions require investigation, not retry or force release.
+
+This is a recovery decision/accounting implementation, NOT production child
+transport integration. Do not pass its commands directly to a raw order client.
+Before a send, implement exact child ownership/transfer, account/host/spec/deadline
+checks and a permanent claim consumption at the transport boundary. Existing
+manual executors deliberately cannot consume these children. Outbox claims do not
+prove an actual send or inventory; tests use native-schema-shaped synthetic rows.
+
+`python3 scripts/check_pair_settlement.py` reports the captured product-family
+48-hour versus two-week postponement mismatch and independent fair-price
+exceptions. Expected exit 3 means BLOCKED, not an execution failure. These are
+different captured games and are not binding matched-market certification. The
+diagnostic changes no registry and never treats matching tie text as approval.
 
 * `USPairOrder(USOrderPlan, action='buy'|'sell')`: whole-contract automatic LIMIT/IOC;
   `payload()` uses long-price mapping for either side; `worst_cost(now)` includes
@@ -157,6 +189,15 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 > exact validation commands below, update the test count, commit coherent changes and
 > push the owned branch. Do not describe paper execution or standing permission as
 > enabled live autotrading.
+> Reuse `execution/pair_recovery.py` rather than creating a second recovery ledger:
+> its entry/hedge/unwind claims, monotonic native evidence, final Kalshi fills checks,
+> post-fill inventory guard and duplicate-liquidity accounting are now implemented
+> and tested offline. They intentionally return non-sendable outbox commands.
+> Implement an independently audited, exact-child production transport-consumption
+> boundary before connecting them; never simply POST a status payload or remove
+> existing unresolved-order guards. Keep original parent holds until a proven atomic
+> transfer, never count sale proceeds as new budget, and never retry a claim after
+> a crash. `scripts/check_pair_settlement.py` exposes exception-rule gaps, not approval.
 > Robinhood event-contract automated order capability is unverified: block any
 > such pair before its first leg, preserve quotes/manual support, and do not invent
 > endpoints or automate an unsupported browser order flow. Public documentation
@@ -211,3 +252,32 @@ guard. JS counts and renderer/whitespace checks remain as stated above. Default
 to DRY_RUN, and status is UNARMED. No accounts, policies, workers or orders were
 activated. Production pair transfer/reconciliation/recovery and settlement/schema
 verification remain open requirements, not a completed production executor.
+
+Recovery-outbox checkpoint, 2026-09-30: the following focused command ran 218
+tests in 6.359s, OK:
+
+```bash
+python3 -m unittest tests.test_pair_recovery tests.test_pair_settlement_audit tests.test_pair_reservations tests.test_us_pair_primitives tests.test_standing_approval tests.test_shared_cash_integrity tests.test_kalshi_once
+```
+
+`python3 -m unittest discover -s tests -t .` ran 1659 tests in 125.222s, OK,
+with code frozen throughout the final run. Fifty-one new regressions exercise
+permanent/restarted/concurrent outbox claims, policy rollback after production
+commit, fixed hedge deadlines, partial/missing/conflicting native evidence,
+post-fill inventory receipts, bounded partial unwinds, individual Kalshi fill
+limits/scope, receipt/price-alias liquidity reuse, and incomplete settlement text.
+The earlier broader focused run exposed UUID ordering of equal-time commands;
+role/attempt ordering was corrected and final tests passed. No guard was relaxed.
+
+`bash scripts/test_js.sh`: 3650 fee vectors / 54 arb vectors, zero mismatches;
+3769 core checks / 159 background checks; syntax PASS, zero warnings.
+`python3 scripts/render_results.py --check`: results blocks OK.
+`git diff --check`: clean. `python3 -m unittest tests.test_settings_doc`: 5 tests,
+0.142s, OK. `python3 scripts/check_pair_settlement.py`: BLOCKED, expected exit 3;
+no inferred cancellation or overtime text, registry promotions, or order access.
+`python3 -m arb_engine auto-arb`: OFF; `--mode live`: BLOCKED, exit 3;
+`python3 -m arb_engine trade-approval status`: UNARMED. New recovery methods send
+nothing; production transport integration still remains. Schema-shaped offline
+tests and one public Kalshi rules GET do not verify real paired fills or profits.
+No account policy, credentials, worker configuration, live orders, evaluator folds,
+manifest, MODEL tables or result fixtures were changed.

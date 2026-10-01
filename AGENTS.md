@@ -107,6 +107,17 @@ data flow.
    path does not make staged pair children sendable. Other legacy mutation paths
    are unchanged and are not safe substitutes for an autonomous pair transport.
    The US transport also rejects host/key/seed/fingerprint changes during signing.
+   `execution/pair_recovery.py` now adds a non-sending durable command outbox in
+   the same production file. Entry claims use the policy dispatch guard; hedge
+   quantities require final verified US fills; Kalshi verification also requires
+   a complete scoped fills list. Counts/money only grow and contradictions stick.
+   Unknown claims/IDs block recovery; no resend or absence-based cash release.
+   At most two fee/loss-bounded US exit claims use refreshed bid depth at haircut
+   0.5 and post-fill account inventory evidence. Duplicate receipt liquidity is
+   charged once. Parent cash remains fully held after sales; no proceeds credit.
+   Outbox commands explicitly say `send_authorized=False`: production child
+   transport/ownership integration is still required. No automatic sender is
+   connected, and descriptions/FAQs never become settlement approval.
 3c. **Standing permission is not order execution.** `execution/standing_approval.py`
    grants a bounded, expiring policy once, using authenticated Kalshi account/key and US
    sending-key fingerprints. The default `trade-approval arm` is inert; `--confirm` only
@@ -184,7 +195,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1608)
+python3 -m unittest discover -s tests -t .     # Python tests (1659)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
