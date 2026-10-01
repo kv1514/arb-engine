@@ -94,6 +94,14 @@ unknown tie payout and `settlement_verified=False`. Positive price pairs remain
 while retaining fee/signal rows; an eligibility override does not remove this gate. No
 guaranteed-profit or live-fill evidence is asserted by the offline fixtures.
 
+The [US sports FAQ](https://docs.polymarket.us/faqs/sports-faqs), read 2026-09-30,
+states half-dollar settlement for an NFL winner-without-ties contract ending in a tie,
+but **exchange last fair market price** for cancellations and unresolved outcomes at
+expiry. Postponements beyond expiry use that price as well. It is not the last trade,
+nor a price guaranteed to match an independent exchange's determination. This general
+FAQ is not a replacement for market-specific binding product terms. It explains why
+normal win/tie arithmetic alone cannot unlock guaranteed-payoff automatic trading.
+
 A public NFL league read on 2026-09-30 and a separately fetched
 `aec-nfl-pit-cle-2026-10-01` OPEN USD book and one event were trimmed into
 `tests/fixtures/polymarket_us/*_live_trimmed.json`; they pin the actual legacy market type

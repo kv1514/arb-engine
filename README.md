@@ -326,6 +326,30 @@ the Secret Key with hidden Terminal input and stores it in git-ignored
 it as a shell argument. `python3 scripts/polymarket_us_account.py check` makes a signed
 read-only balance request and prints authentication status only. It does not enable orders.
 
+### Automatic two-venue paper pairs
+
+`auto-arb` is a separate automatic **paper** runner for Kalshi + Polymarket US NFL
+pregame moneylines. It defaults to off; it cannot send orders or load account keys.
+
+```bash
+python3 -m arb_engine auto-arb --mode paper --every 5
+python3 -m arb_engine auto-arb --status
+python3 -m arb_engine auto-arb --mode live # reports BLOCKED; never activates trading
+```
+
+`ARB_AUTO_PAIR_MODE=paper` selects paper mode for this command only. Existing
+live/maker/overlay behavior is unchanged. Compatible settlement proof is required
+even in paper mode, so the currently unverified US registry admits no real pairs.
+This is not a bypass for conditional/speculative price gaps.
+
+Paper execution persists $25/leg fee-inclusive and $50 aggregate cash reservations,
+first-leg fills, size-limited hedges and bounded failed-leg unwinds in a **separate**
+`auto_pair_paper.sqlite3`. Simulated inventory never becomes real ledger evidence.
+Missing exits halt new paper exposure; no settlement payout or sale-cash release is
+invented. Tests use synthetic compatible rules, not demonstrated live profits.
+Live paired submission remains unavailable pending verified market-specific
+settlement compatibility, atomic production pair accounting and US inventory exits.
+
 ### Gated Polymarket US IOC purchases
 
 The separate US executor supports explicit manual NFL pre-game moneyline purchases
@@ -389,7 +413,7 @@ live-fill/profitability evidence. No live orders were sent during development.
 
 ## Status (market research 2026-09-19; software validation 2026-09-30)
 
-Live data verified for the original three venues; **1403 Python tests** and the JS suites
+Live data verified for the original three venues; **1441 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results

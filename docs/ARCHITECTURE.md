@@ -220,6 +220,36 @@ request was sent.
 There is no automatic hedge, two-leg atomicity, unwind, settlement proof or live-fill
 evidence; `us-arbs` remains read-only and unverified-settlement candidates remain conditional.
 
+## Automatic paired paper execution
+
+`cli_plugins/auto_arb.py` adds a separate off-by-default public-book runner.
+`execution/pairpaper.py` has no account transport. `live` returns a capability-blocked
+report before credentials, network or ledger access. Manual live flags do not unlock it.
+
+The planner rechecks raw identity, settlement registry, two-sided receipt provenance,
+venue eligibility, price/quantity grids and Decimal fees. Both venue game identities
+must agree. Latest decision quotes cannot be replaced by cheaper older rows; conflicting
+equal-time rows invalidate the observation. Future rows are invisible. Unknown US
+settlement and Kalshi fair-price exceptions block current production pairs.
+
+The frozen paper rule buys US first, buys Kalshi only for the first fill, and sells
+US excess if the hedge misses/partially fills. Each dispatch has 3s latency and a 2s
+arrival window, consuming the first usable refreshed observation; displayed liquidity
+is halved. IOC remainder is cancelled, not rolled. At most two unwind windows are
+allowed with a $1 fee-inclusive loss cap; unsold excess is unresolved and halts new
+paper pairs. Neither observation delay nor a later better quote changes an IOC limit.
+Actual simulated counts determine each existing FeeModel's entry/exit commission.
+Fee parameters are frozen; changed or incomplete evidence cannot support a fill.
+
+`auto_pair_paper.sqlite3` uses FULL synchronous SQLite transactions: state, fills,
+cash and underlying-book liquidity consumption commit together. US NO purchases and
+YES sales share the underlying long bid resource. Duplicate observations cannot add
+size. Both fees and two unwind-fee bounds are reserved before admission. One pair is
+active at a time and each game is tried once. Completed purchases and exit fees remain
+charged without inferred settlements or sale-proceeds credits. Restart does not reset
+the $50 paper cap. This isolated simulator does not strengthen guarantees of older
+workers or establish profitable, leakage-free empirical performance.
+
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 
 ```
