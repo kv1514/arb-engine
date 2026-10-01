@@ -353,6 +353,16 @@ All original parent cash remains charged, including after sales. Commands includ
 `send_authorized=False`; they are not real child-intent transfer or an enabled
 production sender. Existing unresolved-order guards stay unchanged.
 
+An incomplete receipt that changes final verified counts or money removes that
+verification and records a sticky contradiction. Incomplete evidence also advances
+the receipt clock fence. Shared cash is the larger of each venue's parent hold and
+its observed purchase/fee lower bounds, including all exit commissions and
+contradicted overruns. Sale proceeds never create new capacity. Actual charges
+over $50 block new claims while leaving reporting and reconciliation usable.
+Unwind commands expire at the earlier of their book and inventory deadlines;
+if an exchange quote timestamp is available it must be no more than 10 seconds
+before receipt, never after it.
+
 `execution/settlement_audit.py` and `scripts/check_pair_settlement.py` explain
 captured NFL product-family terms offline. The examples are different games, not
 a matched-game certification. Matching half-dollar ties does not eliminate

@@ -118,6 +118,14 @@ data flow.
    Outbox commands explicitly say `send_authorized=False`: production child
    transport/ownership integration is still required. No automatic sender is
    connected, and descriptions/FAQs never become settlement approval.
+   Incomplete receipts cannot change a previously verified count or money while
+   retaining inventory verification; any such change is a sticky contradiction.
+   Every incomplete receipt is clock-fenced in the event log. Shared exposure
+   takes the greater of each parent hold and its observed purchase/fee lower
+   bounds, including contradicted overruns; sale proceeds never subtract cash.
+   An over-cap actual charge blocks new claims, not reporting/reconciliation.
+   Unwind commands expire at the earlier of book and inventory deadlines; an
+   available exchange quote timestamp must be within 10 seconds of receipt.
 3c. **Standing permission is not order execution.** `execution/standing_approval.py`
    grants a bounded, expiring policy once, using authenticated Kalshi account/key and US
    sending-key fingerprints. The default `trade-approval arm` is inert; `--confirm` only
@@ -195,7 +203,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1659)
+python3 -m unittest discover -s tests -t .     # Python tests (1675)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

@@ -50,7 +50,7 @@ class PairRecovery:
             c.execute('''CREATE TABLE IF NOT EXISTS pair_recovery_liquidity (
                 resource TEXT PRIMARY KEY, used TEXT NOT NULL, capacity TEXT NOT NULL, price TEXT NOT NULL)''')
 
-    def _parent(self, c, pair_id, binding):
+    def _parent(self, c, pair_id, binding, *, claim=False):
         binding = self.pairs._binding(binding)
         row = c.execute('SELECT * FROM pair_reservations WHERE pair_id=?', (pair_id,)).fetchone()
         if row is None or json.loads(row['binding']) != accounts(binding):
@@ -68,7 +68,9 @@ class PairRecovery:
         events = c.execute('SELECT max(ts) FROM pair_reservation_events WHERE pair_id=?', (pair_id,)).fetchone()[0]
         if now < timestamp(row['created_ts']) or (events is not None and now < timestamp(events)):
             raise LedgerError('pair recovery clock regressed')
-        if exposure(c) > TOTAL_CAP:
+        # An actual fee overrun blocks new claims, not the reads needed to
+        # investigate it. Reporting/reconciliation must remain possible.
+        if claim and exposure(c) > TOTAL_CAP:
             raise LedgerError('shared pair cash ceiling exceeded')
         return row, plan, now
 
@@ -112,7 +114,7 @@ class PairRecovery:
         parent = self.pairs.get(pair_id)
         with approval.dispatch_guard(parent['permit_id'], binding, parent['plan_digest']) as proof:
             with self.store._tx() as c:
-                parent, plan, now = self._parent(c, pair_id, binding)
+                parent, plan, now = self._parent(c, pair_id, binding, claim=True)
                 if (parent['state'] != 'staged' or self._orders(c, pair_id) or
                         proof['plan_digest'] != parent['plan_digest']):
                     raise LedgerError('entry already claimed; reconcile, never retry')
@@ -127,7 +129,7 @@ class PairRecovery:
 
     def claim_hedge(self, pair_id, binding):
         with self.store._tx() as c:
-            parent, plan, now = self._parent(c, pair_id, binding)
+            parent, plan, now = self._parent(c, pair_id, binding, claim=True)
             rows = self._orders(c, pair_id)
             entry = self._verified(rows, 'entry')
             if len(entry) != 1 or any(r['role'] != 'entry' for r in rows):
@@ -191,18 +193,17 @@ class PairRecovery:
                     native = USPairOrder(**terms).payload()
                     scoped = raw.get('id') == row['order_id'] and all(raw.get(k) == native[k] for k in ('marketSlug', 'intent', 'type', 'tif'))
                     observed_qty = raw.get('cumQuantity')
-                if scoped and observed_qty is not None:
+                if scoped:
                     try:
-                        lower = decimal(observed_qty)
-                        if lower < decimal(row['seen']) or lower > decimal(terms['count']) or lower < 0:
-                            raise ValueError('quantity lower bound conflicts')
-                    except ValueError:
-                        c.execute("UPDATE pair_recovery_orders SET state='contradicted',reason='cumulative quantity conflict' WHERE id=?", (command_id,))
-                        c.execute("UPDATE pair_reservations SET state='unresolved',reason='quantity conflict' WHERE pair_id=?", (row['pair_id'],))
-                        self._event(c, row['pair_id'], now, row['role']+'-contradicted')
-                        return False
-                    c.execute('UPDATE pair_recovery_orders SET seen=? WHERE id=?', (str(lower), command_id))
-                    try:
+                        conflict = False
+                        lower = None if observed_qty is None else decimal(observed_qty)
+                        if lower is not None:
+                            if lower < 0:
+                                raise ValueError('negative fill quantity')
+                            conflict = (lower < decimal(row['seen']) or lower > decimal(terms['count']) or
+                                        row['state'] == 'verified' and lower != decimal(row['seen']))
+                            c.execute('UPDATE pair_recovery_orders SET seen=? WHERE id=?',
+                                      (str(max(lower, decimal(row['seen']))), command_id))
                         money = {}
                         if row['role'] == 'hedge':
                             for field, native_field, optional in (
@@ -212,20 +213,35 @@ class PairRecovery:
                                     money[field] = decimal(raw[native_field])+decimal(raw.get(optional, '0'))
                         else:
                             if lower and raw.get('avgPx') is not None:
-                                px = USOrderLedger._money(raw['avgPx'])
-                                if not D_MIN <= px <= D_MAX:
-                                    raise ValueError('invalid average fill price')
-                                side_price = px if terms['side'] == 'yes' else 1-px
-                                limit = decimal(terms['limit_price'])
-                                if (terms['action'] == 'buy' and side_price > limit) or (terms['action'] == 'sell' and side_price < limit):
-                                    raise ValueError('fill price outside limit')
-                                money['cash_seen'] = lower*side_price
+                                try:
+                                    px = USOrderLedger._money(raw['avgPx'])
+                                except MissingEvidence:
+                                    px = None
+                                if px is None:
+                                    pass  # missing value never erases prior money
+                                else:
+                                    if not D_MIN <= px <= D_MAX:
+                                        raise ValueError('invalid average fill price')
+                                    side_price = px if terms['side'] == 'yes' else 1-px
+                                    limit = decimal(terms['limit_price'])
+                                    if (terms['action'] == 'buy' and side_price > limit) or (terms['action'] == 'sell' and side_price < limit):
+                                        conflict = True
+                                    money['cash_seen'] = lower*side_price
                             if raw.get('commissionNotionalTotalCollected') is not None:
-                                money['fee_seen'] = USOrderLedger._money(raw['commissionNotionalTotalCollected'])
+                                try:
+                                    money['fee_seen'] = USOrderLedger._money(raw['commissionNotionalTotalCollected'])
+                                except MissingEvidence:
+                                    pass
                         for field, amount in money.items():
-                            if amount < 0 or amount < decimal(row[field]) or (not lower and amount != 0):
-                                raise ValueError('cumulative monetary lower bound conflicts')
-                            c.execute('UPDATE pair_recovery_orders SET '+field+'=? WHERE id=?', (str(amount), command_id))
+                            if amount < 0:
+                                raise ValueError('negative cumulative money')
+                            conflict |= (amount < decimal(row[field]) or lower == 0 and amount != 0 or
+                                         row['state'] == 'verified' and amount != decimal(row[field]))
+                            c.execute('UPDATE pair_recovery_orders SET '+field+'=? WHERE id=?',
+                                      (str(max(amount, decimal(row[field]))), command_id))
+                        if conflict:
+                            raise ValueError('final or cumulative lower bound conflicts')
+                        self._refresh(c, parent, plan)
                     except (ValueError, ArithmeticError):
                         c.execute("UPDATE pair_recovery_orders SET state='contradicted',reason='cumulative money conflict' WHERE id=?", (command_id,))
                         c.execute("UPDATE pair_reservations SET state='unresolved',reason='money conflict' WHERE pair_id=?", (row['pair_id'],))
@@ -259,6 +275,7 @@ class PairRecovery:
                 self._event(c, row['pair_id'], now, row['role']+'-evidence')
                 return verified
             except MissingEvidence:
+                self._event(c, row['pair_id'], now, row['role']+'-incomplete-evidence')
                 return False
             except (ValueError, TypeError, ArithmeticError):
                 c.execute("UPDATE pair_recovery_orders SET state='contradicted',reason='identity/count/money evidence conflict' WHERE id=?", (command_id,))
@@ -334,7 +351,7 @@ class PairRecovery:
         account GET inventory evidence; it is necessary, never ownership proof.
         """
         with self.store._tx() as c:
-            parent, plan, now = self._parent(c, pair_id, binding)
+            parent, plan, now = self._parent(c, pair_id, binding, claim=True)
             rows = self._orders(c, pair_id)
             if not rows or any(r['state'] != 'verified' for r in rows):
                 raise LedgerError('all attempted orders must be final verified before selling')
@@ -364,6 +381,8 @@ class PairRecovery:
                     not timestamp(quote['req_ts']) <= timestamp(quote['obs_ts']) <= now < timestamp(quote['obs_ts'])+6 or
                     timestamp(quote['obs_ts']) < max(timestamp(r['verified_at']) for r in rows)):
                 raise LedgerError('unwind needs exact fresh scoped bid receipt')
+            if quote.get('quote_time') is not None and not 0 <= timestamp(quote['obs_ts'])-timestamp(quote['quote_time']) <= 10:
+                raise LedgerError('stale or future exchange bid timestamp')
             bid, size = decimal(quote['bid']), decimal(quote['size'])
             if not Decimal('.01') <= bid <= Decimal('.99') or size <= 0 or (bid if leg['side'] == 'yes' else 1-bid) % decimal(leg['tick']):
                 raise LedgerError('unwind bid/depth/grid invalid')
@@ -386,7 +405,8 @@ class PairRecovery:
             if decimal(entry[0]['cash'])+decimal(entry[0]['fees'])+total_exit_fees > decimal(parent['us_cash']):
                 raise LedgerError('unwind cash fees not covered by original parent')
             terms = {'market_slug': slug, 'side': leg['side'], 'count': int(n), 'limit_price': str(bid), 'action': 'sell'}
-            result = self._insert(c, parent, 'unwind', len(exits), terms, order.payload(), now, timestamp(quote['obs_ts'])+6)
+            deadline = min(timestamp(quote['obs_ts'])+6, timestamp(inventory.deadline))
+            result = self._insert(c, parent, 'unwind', len(exits), terms, order.payload(), now, deadline)
             c.execute('INSERT INTO pair_recovery_liquidity VALUES (?,?,?,?) ON CONFLICT(resource) DO UPDATE SET used=excluded.used',
                       (resource, str(used+n), str(size*HAIRCUT), str(bid)))
             return result

@@ -480,7 +480,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(self.recovery.observe(u['id'], raw, BINDING))
         self.assertEqual(self.status()['commands'][-1]['state'], 'contradicted')
         self.assertEqual(self.status()['state'], 'unresolved')
-        self.assertEqual(self.status()['shared_exposure'], '9.71')
+        self.assertEqual(self.status()['shared_exposure'], '9.87')
 
     def test_slow_payload_creation_cannot_shift_hedge_deadline(self):
         e = self.entry()

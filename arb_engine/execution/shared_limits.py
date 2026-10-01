@@ -46,8 +46,23 @@ def exposure(connection):
             total += _cash(row["charge"])
     pairs = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pair_reservations'").fetchone()
     if pairs:
-        for row in connection.execute("SELECT us_cash,kalshi_cash FROM pair_reservations"):
+        recovery = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pair_recovery_orders'").fetchone()
+        for row in connection.execute("SELECT pair_id,us_cash,kalshi_cash FROM pair_reservations"):
             us, kal = _cash(row['us_cash']), _cash(row['kalshi_cash'])
+            if recovery:
+                us_paid = kal_paid = Decimal(0)
+                for order in connection.execute("SELECT role,cash_seen,fee_seen FROM pair_recovery_orders WHERE pair_id=?", (row['pair_id'],)):
+                    cash, fee = _cash(order['cash_seen']), _cash(order['fee_seen'])
+                    if order['role'] == 'hedge':
+                        kal_paid += cash+fee
+                    elif order['role'] in ('entry', 'unwind'):
+                        # Sale proceeds are not new capacity. Count ALL exit
+                        # commissions and preserve actual overrun lower bounds,
+                        # including incomplete/contradicted order evidence.
+                        us_paid += fee+(cash if order['role'] == 'entry' else 0)
+                    else:
+                        raise ValueError('invalid pair recovery accounting role')
+                us, kal = max(us, us_paid), max(kal, kal_paid)
             total += us+kal
     if not total.is_finite() or total < 0:
         raise ValueError("invalid shared exposure accounting")

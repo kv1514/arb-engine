@@ -98,17 +98,23 @@ def _settlement_gates(a: OutcomeQuote, b: OutcomeQuote) -> tuple[list[str], Opti
 
 
 def _quotes(quotes: list[OutcomeQuote], now: float, max_age_s: float) -> list[OutcomeQuote]:
-    # Repeated rows are not additional liquidity. Preserve real NO contracts but
-    # collapse repeated observations of the exact same contract and book side.
-    unique: dict[tuple[str, str, str, str], OutcomeQuote] = {}
+    # Select the latest causal receipt BEFORE validating liquidity. A failed
+    # newer response invalidates the older book; equal-time conflicting rows
+    # cannot be resolved by choosing the cheaper price or the larger size.
+    grouped = {}
     for q in quotes:
-        if not _quote_ok(q, now, max_age_s):
+        at = _finite(q.ts)
+        if at is None or at < 0 or at > D(now):
             continue
-        key = (q.book_id, q.venue_market_id, str(q.meta.get("side", "")), q.outcome)
-        previous = unique.get(key)
-        if previous is None or (q.ts, -float(q.ask), q.venue) > (previous.ts, -float(previous.ask), previous.venue):
-            unique[key] = q
-    return sorted(unique.values(), key=lambda q: (q.book_id, q.venue_market_id, str(q.meta.get("side", ""))))
+        key = (q.venue, q.book_id, q.venue_market_id, str(q.meta.get("side", "")), q.outcome)
+        grouped.setdefault(key, []).append(q)
+    selected = []
+    for rows in grouped.values():
+        latest = max(D(q.ts) for q in rows)
+        current = [q for q in rows if D(q.ts) == latest]
+        if all(q == current[0] for q in current) and _quote_ok(current[0], now, max_age_s):
+            selected.append(current[0])
+    return sorted(selected, key=lambda q: (q.venue, q.book_id, q.venue_market_id, str(q.meta.get("side", "")), q.outcome))
 
 
 def find_candidates(snapshots: list[VenueSnapshot], settings: Optional[Mapping[str, Any]] = None, *,
@@ -137,7 +143,11 @@ def find_candidates(snapshots: list[VenueSnapshot], settings: Optional[Mapping[s
     eligible = executable_venues(settings, with_adapter_only=False) & US_VENUES
     errors = {s.venue: list(s.errors) for s in snapshots if s.errors}
     scoped = deepcopy(snapshots)
+    identities = {}
     for snap in scoped:
+        for key, info in snap.events.items():
+            identities.setdefault(key, set()).add((info.sport, info.market_type, tuple(sorted(info.outcomes)),
+                                                  info.start_time, bool(info.in_play)))
         valid = [q for q in snap.quotes if q.venue == snap.venue and q.event_key in snap.events and
                  q.outcome in snap.events[q.event_key].outcomes]
         if len(valid) != len(snap.quotes):
@@ -148,6 +158,9 @@ def find_candidates(snapshots: list[VenueSnapshot], settings: Optional[Mapping[s
     candidates: list[dict[str, Any]] = []
     for me in merged.values():
         info = me.info
+        if len(identities.get(me.event_key, set())) != 1:
+            errors.setdefault('identity', []).append(f'{me.event_key}: conflicting venue game identity or kickoff')
+            continue
         if info.sport != "nfl" or info.market_type != "moneyline" or len(set(info.outcomes)) != 2 or len(info.outcomes) != 2:
             continue
         if info.in_play or info.start_time is None or info.start_time.timestamp() <= now:
