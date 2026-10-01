@@ -31,8 +31,8 @@ PROFILE = {'version': 1, 'venues': ['kalshi', 'polymarket_us'], 'environment': '
            'total_cap_fees_included': '50', 'entry': 'ioc', 'expiry_required': True}
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_FILES = ['execution/standing_approval.py', 'execution/pairpaper.py',
-              'execution/us_pair_orders.py',
-              'execution/polymarket_us_ioc.py', 'execution/shared_limits.py', 'execution/ledger.py',
+              'execution/us_pair_orders.py', 'execution/pair_reservations.py',
+              'execution/polymarket_us_ioc.py', 'execution/shared_limits.py', 'execution/ledger.py', 'execution/kalshi.py',
               'venues/polymarket_us.py', 'venues/polymarket_us_trading.py', 'venues/kalshi.py',
               'venues/http.py', 'cli_plugins/us_arbs.py', 'cli_plugins/trade_approval.py',
               'quant/us_arbitrage.py', 'matching/settlement_rules.py',
@@ -326,7 +326,6 @@ class ApprovalStore:
                     'plan_digest': row['digest'], 'deadline': row['deadline'], 'plan': plan, 'orders_submitted': 0,
                     'note': 'permission is not an order reservation or proof that both legs can execute'}
 
-    @contextmanager
     def dispatch_guard(self, iid, binding, plan_digest):
         """Fence revocation/re-arming at a NEW-entry durable dispatch claim.
 
@@ -338,6 +337,18 @@ class ApprovalStore:
         are NOT one transaction: the production parent must uniquely bind permit_id,
         and claimed sends must never be retried, including on guard failure/crash.
         """
+        return self._permit_guard(iid, binding, plan_digest, dispatch=True)
+
+    def reservation_guard(self, iid, binding, plan_digest):
+        """Serialize parent accounting admission, without claiming a transport.
+
+        The parent must bind this unique permit durably. A later actual dispatch
+        still needs dispatch_guard: staging never bypasses a subsequent revoke.
+        """
+        return self._permit_guard(iid, binding, plan_digest, dispatch=False)
+
+    @contextmanager
+    def _permit_guard(self, iid, binding, plan_digest, *, dispatch):
         with self._tx():
             now = timestamp(self.clock())
             grant, policy = self._check(binding, now)
@@ -354,7 +365,8 @@ class ApprovalStore:
             checked = timestamp(self.clock())
             if checked < now or checked >= deadline:
                 raise ValueError('dispatch permission expired during verification')
-            self.conn.execute('UPDATE permits SET dispatch_claimed=1 WHERE id=? AND dispatch_claimed=0', (iid,))
+            if dispatch:
+                self.conn.execute('UPDATE permits SET dispatch_claimed=1 WHERE id=? AND dispatch_claimed=0', (iid,))
             yield {'permit_id': iid, 'generation': grant['generation'], 'plan_digest': plan_digest,
                    'deadline': deadline, 'plan': plan, 'accounts': accounts(binding)}
             final = timestamp(self.clock())

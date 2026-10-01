@@ -36,7 +36,7 @@ def live_readiness():
     """Capability gates, not flags that imply a production paired executor exists."""
     return {'status': 'BLOCKED', 'live_enabled': False, 'orders_submitted': 0,
             'blockers': ['market-specific compatible US settlement proof is missing',
-                         'atomic production pair reservations and reconciliation are not implemented',
+                         'production pair child transfer/sends and reconciliation are not implemented',
                          'production US inventory exits/failed-leg recovery are not implemented'],
             'available_mode': 'paper'}
 

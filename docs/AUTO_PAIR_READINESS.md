@@ -28,6 +28,15 @@ guard, and transport-boundary expiry checks after signing. None of these alone
 implements paired production submission. Robinhood event-contract order support
 is unverified and its automated pairs remain blocked before either leg sends.
 
+`PairReservationLedger` now supplies atomic parent/both-child accounting staging
+in the shared production file, including contingency fee cash and conservative
+production bounds. Concurrent/restarted callers count those holds. It adds no
+same-pair exemption to existing senders: staged children are not sendable. Only
+expired, wholly unclaimed staging can release its local cash without deleting
+game/permit IDs. Staging uses a reservation guard, leaving the dispatch guard
+unclaimed; later revocation still blocks submission. Do not wire an order callback
+directly after admission or call these accounting records verified inventory.
+
 ## Published recovery interfaces
 
 * `USPairOrder(USOrderPlan, action='buy'|'sell')`: whole-contract automatic LIMIT/IOC;
@@ -45,6 +54,11 @@ is unverified and its automated pairs remain blocked before either leg sends.
   serializes one initial durable claim against policy revocation/re-arming. Hold
   policy before production-ledger lock, not over network. Production permit IDs
   must be unique; guard rollback cannot undo a production claim in another database.
+* `PairReservationLedger(USOrderLedger).admit(approval_store, consumed, binding)`:
+  stages both child terms/cash from the policy's exact stored plan, with policy
+  before production locks. The shared ledger must be authenticated/bound first.
+  `get`/`status` report accounting-only state. `abandon_staged(pair_id)` releases
+  only expired, provably unclaimed staging; there is no send/hedge/exit API yet.
 * `PolymarketUSTradingClient._create(..., not_after=deadline)` checks deadline,
   clock and live gates immediately before transport, including slow signer time.
   `positions_page(slug, cursor=...)` preserves the whole response and signs the
@@ -56,8 +70,8 @@ is unverified and its automated pairs remain blocked before either leg sends.
    expiry, ties and official-result exceptions. Record their provenance/hash in
    the settlement registry; incompatible exceptional payoffs remain conditional.
    Do not replace this requirement with an operator `verified=True` boolean.
-2. Add atomic reservations for both child intents and contingency exits to the
-   existing shared production SQLite transaction. Today each executor deliberately
+2. Extend the implemented atomic parent/both-child staging to real child-intent
+   transfer and send claims in that same production transaction. Each executor deliberately
    blocks unfinished exposure from the other venue; do not remove that safeguard
    globally. Any same-pair exemption must prove parent/child ownership, account,
    contract identity, fill evidence and available cash under the transaction lock.
@@ -81,6 +95,17 @@ account binding and ledger path before enabling any production automation.
    changes, partial fills, fee changes, concurrent admission, cancellation races and
    worst-case fees/cash caps. Run the complete validation set below. A passing suite
    does not establish live fill quality, profitability or universal settlement safety.
+7. Build and verify a dedicated single-attempt Kalshi mutation transport before
+   connecting staged children. Setting `HttpClient(retries=0)` is NOT sufficient:
+   `KalshiClient._request` can retry a connection failure on its legacy host, and
+   `HttpClient._request_retrying` can retry an `IncompleteRead` through curl inside
+   the same attempt. The existing urllib/curl paths also follow redirects (curl
+   uses `-L`) and curl headers appear in argv. Do not count one executor call as one
+   HTTP send, forward signed headers through redirects, or infer refusal from a
+   later duplicate-key 4xx. The dedicated path needs a post-signing deadline gate,
+   exact production host, secret-safe headers and crash-safe non-retryable claims.
+   These legacy transports were inspected, not changed by this checkpoint; they
+   remain another reason not to connect the automatic paired sender yet.
 
 ## Integration ownership
 
@@ -100,7 +125,8 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 > or remove unresolved-order safeguards to make a pair submit. The standing-approval
 > primitive is committed, but no policy or trading worker was activated. Finish the
 > remaining production requirements above: verified market-specific settlement,
-> atomic shared pair/contingency reservations, account-bound US inventory/exits,
+> transfer the existing shared pair/contingency staging to exact real child intents
+> and independently validated send claims, account-bound US inventory/exits,
 > partial-fill/crash recovery, and a revocation/expiry fence at the durable send claim.
 > Keep $25 per leg and $50 aggregate including fees, dry-run by default, stdlib-only
 > engine code and offline tests. Never infer an unknown order absent or resend it.
@@ -110,11 +136,15 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 > exact validation commands below, update the test count, commit coherent changes and
 > push the owned branch. Do not describe paper execution or standing permission as
 > enabled live autotrading.
+> Robinhood event-contract automated order capability is unverified: block any
+> such pair before its first leg, preserve quotes/manual support, and do not invent
+> endpoints or automate an unsupported browser order flow. Public documentation
+> evidence and backend interfaces are recorded in VENUES/ARCHITECTURE above.
 
 ## Validation commands
 
 ```bash
-python3 -m unittest tests.test_us_pair_primitives tests.test_polymarket_us_execution tests.test_standing_approval
+python3 -m unittest tests.test_pair_reservations tests.test_us_pair_primitives tests.test_polymarket_us_execution tests.test_standing_approval
 python3 -m unittest discover -s tests -t .
 bash scripts/test_js.sh
 python3 scripts/render_results.py --check
@@ -130,8 +160,12 @@ with `OFF`. Default permission arming is `DRY_RUN`; a missing store's status is 
 These diagnostics do not authenticate accounts, fetch prices, create stores or send
 orders. Only confirmed permission arming makes authenticated account GETs.
 
-Validation on 2026-09-30: focused suite 143 tests in 2.312s, OK; full suite 1541 tests in
-121.491s, OK. Forty new primitive regressions cover buy/sell complement mapping,
+Validation on 2026-09-30: focused suite 167 tests in 4.644s, OK; full suite 1565 tests in
+127.498s, OK. Twenty-four pair-reservation regressions cover atomic both-child
+staging, shared cash accounting, restart/concurrent admission, account changes,
+fee/cap conflicts, local expiry, partial transaction failures and policy rollback
+after production commit. They do not submit or reconcile real paired children.
+Forty primitive regressions cover buy/sell complement mapping,
 hand-calculated fees, missing and contradictory evidence, complete positions pagination,
 slow signatures, removed live gates and consumed-permit dispatch/revocation races.
 Sixty earlier standing-permission regression tests cover lifetime/account binding,

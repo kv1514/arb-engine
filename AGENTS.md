@@ -83,6 +83,11 @@ data flow.
    cash release. Never reset/delete ledgers to restore room. Restart all production
    processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
    cannot participate in the shared cap.
+   `PairReservationLedger` stages both child terms and entry/contingency cash in
+   this same file atomically. Staged children are NOT sendable; no unresolved-order
+   exemption is added. Existing executors count parent holds and block new exposure
+   while a parent is staged/unresolved. Only expired staging with both children
+   still provably unclaimed may release local cash; IDs/one-game fences remain.
    Production `KalshiExecutor.execute` additionally verifies the sending key/account,
    exact pending plan and cash ceilings in that shared ledger, then atomically claims
    one executor send. A raw executor call cannot bypass the ledger or resend a claimed
@@ -107,6 +112,9 @@ data flow.
    production send remain mandatory after guard rollback/crash. A later revoke
    does not cancel an already committed claim. Pure `us_pair_orders` helpers send
    nothing; complete account inventory alone does not prove pair-owned excess.
+   `reservation_guard` is separate: accounting admission leaves dispatch unclaimed
+   so a later revoke still blocks actual submission. Never treat staging as consent
+   to dispatch an expired/revoked permit.
    revocation cannot cancel an order already sent. Do not delete either ledger to reset caps.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
@@ -161,7 +169,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1541)
+python3 -m unittest discover -s tests -t .     # Python tests (1565)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

@@ -293,6 +293,21 @@ even if the guard rolls back after an external claim or crashes before committin
 The transport must still enforce the guard's deadline after signing. Until that
 coordinator and verified recovery exist, `auto-arb --mode live` is always blocked.
 
+`execution/pair_reservations.py` now stages the exact consumed permit's parent and
+both immutable child terms inside the existing production ledger transaction.
+`ApprovalStore.reservation_guard` holds policy before production but does not claim
+dispatch; later submission must still use `dispatch_guard`, so revocation after
+staging stops it. US entry/two exit fee bounds and Kalshi's conservative split-fill
+bound count in shared exposure with all manual/strategy intents. The US published
+date schedule and production Kalshi multiplier floor cannot be weakened by quote
+fee parameters. One staged/unresolved parent blocks new admissions and manual
+exposure; no child is a matching pending Kalshi or manual US intent yet. Child
+transfer/executor ownership proofs and production recovery are still unfinished.
+Expired local staging can release cash only when both children remain unclaimed;
+parent/permit/game IDs remain. A policy transaction failure after production commit
+does not undo those production holds. Tests exercise concurrency, restart, partial
+transaction failures, expiration and account/fee/cap conflicts with temporary stores.
+
 `execution/us_pair_orders.py` provides pure, non-sending recovery building blocks:
 `USPairOrder` maps buy/sell YES/NO onto the always-long API price and automatic order
 indicator; sale reservations count exit fees but never anticipated proceeds. Exact

@@ -625,7 +625,8 @@ class PrivateStoreTests(unittest.TestCase):
 
     def test_spec_pins_quote_producers_and_identity_helpers(self):
         required = {'venues/polymarket_us.py', 'venues/kalshi.py', 'cli_plugins/us_arbs.py',
-                    'matching/normalize.py', 'matching/teams.py', 'data/nfl_teams.json'}
+                    'matching/normalize.py', 'matching/teams.py', 'data/nfl_teams.json',
+                    'execution/kalshi.py', 'execution/us_pair_orders.py', 'execution/pair_reservations.py'}
         self.assertTrue(required <= set(approval.SPEC_FILES))
 
 
