@@ -28,6 +28,22 @@ guard, and transport-boundary expiry checks after signing. None of these alone
 implements paired production submission. Robinhood event-contract order support
 is unverified and its automated pairs remain blocked before either leg sends.
 
+The dedicated Kalshi single-attempt IOC/FOK path is now implemented and tested:
+`KalshiExecutor.execute(..., one_send=True, not_after=deadline)`, with optional
+constructor `ledger_path` / `clock` / test transport. It requires literal confirmation
+and the exact account-bound pending ledger reservation even on demo. Signing happens
+after a permanent send claim; host, key, plan, ledger path, gates and deadline are
+fenced, and one stdlib POST cannot redirect, retry, invoke curl or switch hosts.
+The executor durably records acceptance/ambiguity; failures and crashes keep cash
+and cannot be resent. Final fills still require existing reconciliation. This is
+an opt-in internal interface, not a connected automatic paired sender. Existing
+legacy manual/strategy mutation transports are unchanged. US requests likewise
+refuse host/key/seed/fingerprint changes during signing.
+Shared cash sums also reject each negative/nonfinite component independently.
+Legacy finished Kalshi rows missing explicit cost/fees retain their original
+reservation; contradictions do not release it. These are budget-safety fixes,
+not evidence of real fills or a completed paired coordinator.
+
 `PairReservationLedger` now supplies atomic parent/both-child accounting staging
 in the shared production file, including contingency fee cash and conservative
 production bounds. Concurrent/restarted callers count those holds. It adds no
@@ -95,8 +111,8 @@ account binding and ledger path before enabling any production automation.
    changes, partial fills, fee changes, concurrent admission, cancellation races and
    worst-case fees/cash caps. Run the complete validation set below. A passing suite
    does not establish live fill quality, profitability or universal settlement safety.
-7. Build and verify a dedicated single-attempt Kalshi mutation transport before
-   connecting staged children. Setting `HttpClient(retries=0)` is NOT sufficient:
+7. Connect only the new dedicated single-attempt Kalshi interface after the child
+   ownership/transfer proof above is implemented. `HttpClient(retries=0)` is NOT sufficient:
    `KalshiClient._request` can retry a connection failure on its legacy host, and
    `HttpClient._request_retrying` can retry an `IncompleteRead` through curl inside
    the same attempt. The existing urllib/curl paths also follow redirects (curl
@@ -104,8 +120,9 @@ account binding and ledger path before enabling any production automation.
    HTTP send, forward signed headers through redirects, or infer refusal from a
    later duplicate-key 4xx. The dedicated path needs a post-signing deadline gate,
    exact production host, secret-safe headers and crash-safe non-retryable claims.
-   These legacy transports were inspected, not changed by this checkpoint; they
-   remain another reason not to connect the automatic paired sender yet.
+   Those legacy transports remain unchanged. The new opt-in interface implements
+   these transport requirements; it does not implement child transfer or paired
+   recovery, and no automatic sender is connected yet.
 
 ## Integration ownership
 
@@ -128,6 +145,10 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 > transfer the existing shared pair/contingency staging to exact real child intents
 > and independently validated send claims, account-bound US inventory/exits,
 > partial-fill/crash recovery, and a revocation/expiry fence at the durable send claim.
+> Reuse the tested Kalshi `one_send=True, not_after=deadline` interface with the
+> same ledger path, never the retrying legacy client. It claims once and records
+> acceptance/ambiguity; it does not itself validate paired-child ownership or
+> verified hedge inventory. Those proofs must precede connecting the sender.
 > Keep $25 per leg and $50 aggregate including fees, dry-run by default, stdlib-only
 > engine code and offline tests. Never infer an unknown order absent or resend it.
 > Do not submit live orders, expose credentials, edit cli.py/config.py, overwrite
@@ -144,7 +165,7 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 ## Validation commands
 
 ```bash
-python3 -m unittest tests.test_pair_reservations tests.test_us_pair_primitives tests.test_polymarket_us_execution tests.test_standing_approval
+python3 -m unittest tests.test_shared_cash_integrity tests.test_kalshi_once tests.test_pair_reservations tests.test_us_pair_primitives tests.test_polymarket_us_execution tests.test_standing_approval tests.test_order_ledger
 python3 -m unittest discover -s tests -t .
 bash scripts/test_js.sh
 python3 scripts/render_results.py --check
@@ -175,3 +196,18 @@ private stores and account-only mocked CLI calls. JS: 3650 fee vectors and 54 ar
 3769 core checks, 159 background checks, syntax check without warnings. Renderer
 and whitespace checks pass. All new execution tests are synthetic/offline; there
 is no empirical live-fill or profitability result and no test-fold evaluation.
+
+Single-attempt/cash-integrity checkpoint, 2026-09-30: the focused command above
+ran 272 tests in 4.586s, OK. The final full suite, with code frozen throughout,
+ran 1608 tests in 122.631s, OK. Twenty-nine new Kalshi transport tests and thirteen
+cash-integrity tests cover durable/restarted/concurrent claims, no retries after
+timeouts/incomplete reads, redirect refusal, missing order IDs, signing/account
+callback races, immutable paths/terms, conservative legacy fees and corrupt cash.
+One additional US regression checks signing-time account/host changes. An earlier
+full run was invalidated by edits to hash-pinned code while it ran; the approval
+hash correctly refused it. The fresh final run above passed without relaxing that
+guard. JS counts and renderer/whitespace checks remain as stated above. Default
+`auto-arb` is OFF, live mode remains BLOCKED (exit 3), permission arming defaults
+to DRY_RUN, and status is UNARMED. No accounts, policies, workers or orders were
+activated. Production pair transfer/reconciliation/recovery and settlement/schema
+verification remain open requirements, not a completed production executor.

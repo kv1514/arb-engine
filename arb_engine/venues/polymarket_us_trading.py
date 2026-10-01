@@ -123,6 +123,7 @@ class PolymarketUSTradingClient:
                     not math.isfinite(not_after) or now >= not_after):
                 raise USAPIError("request deadline expired or invalid")
         stamp = str(int(now * 1000))
+        identity_at_signing = (self.base_url, self._key, self._seed, self.fingerprint)
         signature = self._signer(self._seed, f"{stamp}{method}{path}".encode())
         headers = {"X-PM-Access-Key": self._key, "X-PM-Timestamp": stamp,
                    "X-PM-Signature": base64.b64encode(signature).decode(), "Accept": "application/json"}
@@ -138,6 +139,8 @@ class PolymarketUSTradingClient:
         if (not math.isfinite(before_send) or before_send < now or
                 (not_after is not None and before_send >= not_after)):
             raise USAPIError("request expired or clock regressed before transport")
+        if identity_at_signing != (self.base_url, self._key, self._seed, self.fingerprint):
+            raise USAPIError("US client identity changed before transport")
         if method == "POST" and (confirm is not True or gate_problem()):
             raise USAPIError("US mutations disabled before transport")
         try:

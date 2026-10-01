@@ -31,7 +31,7 @@ PROFILE = {'version': 1, 'venues': ['kalshi', 'polymarket_us'], 'environment': '
            'total_cap_fees_included': '50', 'entry': 'ioc', 'expiry_required': True}
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_FILES = ['execution/standing_approval.py', 'execution/pairpaper.py',
-              'execution/us_pair_orders.py', 'execution/pair_reservations.py',
+              'execution/us_pair_orders.py', 'execution/pair_reservations.py', 'execution/kalshi_once.py',
               'execution/polymarket_us_ioc.py', 'execution/shared_limits.py', 'execution/ledger.py', 'execution/kalshi.py',
               'venues/polymarket_us.py', 'venues/polymarket_us_trading.py', 'venues/kalshi.py',
               'venues/http.py', 'cli_plugins/us_arbs.py', 'cli_plugins/trade_approval.py',

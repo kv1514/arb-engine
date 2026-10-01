@@ -4,10 +4,20 @@ All callers use the same production SQLite file and BEGIN IMMEDIATE transaction.
 Filled purchases keep counting: this conservative v1 does not infer that old
 inventory settled, or that a hedge/external sale returned cash. Never reset at midnight.
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 LEG_CAP = Decimal("25")
 TOTAL_CAP = Decimal("50")
+
+
+def _cash(raw):
+    try:
+        amount = Decimal(raw)
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError('invalid shared cash accounting') from None
+    if not amount.is_finite() or amount < 0:
+        raise ValueError('invalid shared cash accounting')
+    return amount
 
 
 def exposure(connection):
@@ -15,17 +25,29 @@ def exposure(connection):
     from .ledger import OrderLedger
     total = Decimal("0")
     for row in connection.execute("SELECT * FROM intents WHERE state != 'rejected'"):
-        total += OrderLedger.exposure_of(row) if row["state"] == "done" else Decimal(row["max_cost"])
+        bound = _cash(row['max_cost'])
+        amount = bound
+        if row['state'] == 'done':
+            # Older ledgers may mark done without explicit paid money. Missing
+            # fees/costs are unknown, not zero: retain the original hold. Validate
+            # each component independently so a negative one cannot offset cash.
+            needed = ('fees', 'fill_count') if row['action'] == 'sell' else ('fees', 'fill_cost')
+            for field in needed:
+                if row[field] is not None:
+                    _cash(row[field])
+            if all(row[field] is not None for field in needed):
+                amount = _cash(OrderLedger.exposure_of(row))
+            if row['fill_state'] == 'contradicted':
+                amount = max(amount, bound)
+        total += amount
     have = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_us_intents'").fetchone()
     if have:
         for row in connection.execute("SELECT charge FROM pm_us_intents"):
-            total += Decimal(row["charge"])
+            total += _cash(row["charge"])
     pairs = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pair_reservations'").fetchone()
     if pairs:
         for row in connection.execute("SELECT us_cash,kalshi_cash FROM pair_reservations"):
-            us, kal = Decimal(row['us_cash']), Decimal(row['kalshi_cash'])
-            if not us.is_finite() or not kal.is_finite() or min(us, kal) < 0:
-                raise ValueError('invalid production pair cash accounting')
+            us, kal = _cash(row['us_cash']), _cash(row['kalshi_cash'])
             total += us+kal
     if not total.is_finite() or total < 0:
         raise ValueError("invalid shared exposure accounting")
@@ -42,6 +64,10 @@ def problem(connection, cost):
     pairs = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pair_reservations'").fetchone()
     if pairs and connection.execute("SELECT 1 FROM pair_reservations WHERE state NOT IN ('held','missed') LIMIT 1").fetchone():
         return 'production pair staged or unresolved; new exposure blocked'
-    if exposure(connection) + cost > TOTAL_CAP:
+    try:
+        current = exposure(connection)
+    except ValueError:
+        return 'invalid shared cash accounting; new exposure blocked'
+    if current + cost > TOTAL_CAP:
         return "$50 shared production exposure cap exceeded (fees included)"
     return None

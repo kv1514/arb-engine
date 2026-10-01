@@ -267,6 +267,19 @@ class TransportDeadlineTests(unittest.TestCase):
         self.signer.assert_not_called()
         self.assertEqual(self.requests, [])
 
+    def test_identity_changed_during_signing_prevents_transport(self):
+        for attr, value in [('base_url', 'https://example.com'), ('_key', 'different'),
+                             ('_seed', b'changed'), ('fingerprint', 'd'*64)]:
+            original = getattr(self.client, attr)
+            def sign(seed, message):
+                setattr(self.client, attr, value)
+                return message
+            self.signer.side_effect = sign
+            with self.subTest(attr=attr), self.assertRaises(USAPIError):
+                self.client._create({}, confirm=True, not_after=NOW+6)
+            self.assertEqual(self.requests, [])
+            setattr(self.client, attr, original)
+
     def test_method_path_confusion_refused(self):
         for method, path in [('POST', '/v1/account/balances'), ('GET', '/v1/orders'),
                               ('GET', '/v1/order/id/cancel'), ('POST', '/v1/portfolio/positions')]:

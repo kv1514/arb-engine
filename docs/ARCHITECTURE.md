@@ -202,10 +202,24 @@ Both venues reserve under `BEGIN IMMEDIATE`; `execution/shared_limits.py` sums u
 reservations at full worst cost and finished fills at paid cost, enforcing hard $25/$50
 cash ceilings even for Kalshi lock-leg exemptions. Key fingerprints pin US recovery to
 the sending key (automatic key-rotation/account equivalence is not inferred).
+Each cash component is validated separately: negative/nonfinite ledger charges
+cannot cancel valid exposure, legacy finished rows with missing cost/fees retain
+their original bound, and contradictions do not free cash.
 Production `KalshiExecutor.execute` verifies a matching pending reservation bound to the
 same key/account, checks cash ceilings, and claims one send atomically. Direct calls
 without that proof, or repeat calls of an already claimed intent, cannot send; existing
 ledgered strategies/manual CLI use that path, while demo behavior stays unchanged.
+The dedicated opt-in `execute(..., one_send=True, not_after=deadline)` path in
+`execution/kalshi_once.py` bypasses the legacy HTTP client's retries, host fallback
+and curl entirely. It requires a matching account-bound reservation on either
+environment, literal confirmation and an unexpired finite IOC/FOK deadline. It
+freezes the sending ledger path, client and plan, rechecks time/gates/identity
+after signing, and makes one POST with no redirects. Acceptance or ambiguity is
+written back to the original ledger; missing/failed answers keep a permanent send
+claim and conservative hold. There is no absence-based release hint, no automatic
+retry and no inference that a create answer verifies inventory. Staged pair
+children remain unsendable. Legacy manual/strategy transports are not switched
+over by this internal API and must not be wired into autonomous pair execution.
 No daily reset or inferred settlement/exit release restores room. All processes must
 use this version and the same ledger directory; external/manual trading is outside scope.
 
@@ -221,6 +235,7 @@ The signed US transport now receives the decision deadline and checks it again
 after signing/serialization, immediately before its single network attempt. A
 clock regression or removed live gate at that boundary refuses the send; a claimed
 intent remains conservatively held. GET/POST paths are separately allowlisted.
+The US signing boundary also rejects a changed host, key, seed or fingerprint.
 There is no automatic hedge, two-leg atomicity, unwind, settlement proof or live-fill
 evidence; `us-arbs` remains read-only and unverified-settlement candidates remain conditional.
 

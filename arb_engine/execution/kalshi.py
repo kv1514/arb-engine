@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
@@ -85,8 +86,10 @@ class KalshiExecutor:
     4. On prod, ``ARB_LIVE_TRADING=1`` must also be set.
     """
 
-    def __init__(self, client: Optional[KalshiClient] = None):
+    def __init__(self, client: Optional[KalshiClient] = None, *, ledger_path=None,
+                 clock=time.time, transport=None):
         self.client = client or KalshiClient()
+        self.ledger_path, self.clock, self._once_transport = ledger_path, clock, transport
 
     def _mutation_preview(self, operation: str, **fields: Any) -> dict[str, Any]:
         return {"env": self.client.env, "base_url": self.client.base_url, "operation": operation, **fields}
@@ -101,7 +104,7 @@ class KalshiExecutor:
         return None
 
     def _mutation_allowed(self, preview: dict[str, Any], confirm: bool) -> bool:
-        if not confirm:
+        if confirm is not True:
             preview["status"] = DRY_RUN
             return False
         problem = self.gate_problem()
@@ -141,31 +144,96 @@ class KalshiExecutor:
             plan.client_order_id = str(client_order_id)   # the ledger's id: reconciliation finds the order by it
         return plan
 
-    def execute(self, plan: OrderPlan, confirm: bool = False) -> dict[str, Any]:
+    def execute(self, plan: OrderPlan, confirm: bool = False, *, one_send=False,
+                not_after=None) -> dict[str, Any]:
         payload = plan.payload()
         preview = self._mutation_preview("create_order", plan=asdict(plan), payload=payload)
+        client_at_decision = (self.client.env, self.client.base_url, self.client.api_key,
+                              getattr(self.client, "private_key_path", None)) if one_send else None
+        send_path = self.ledger_path
+        if one_send and send_path is None:
+            from .ledger import default_path
+            send_path = default_path(client_at_decision[0])
         if not self._mutation_allowed(preview, confirm):
             return preview
-        if self.client.env == "prod":
+        if one_send:
+            now = self.clock()
+            if (isinstance(not_after, bool) or not isinstance(not_after, (int, float)) or
+                    not math.isfinite(not_after) or isinstance(now, bool) or
+                    not isinstance(now, (int, float)) or not math.isfinite(now) or
+                    now < 0 or now >= not_after or plan.time_in_force.lower() not in IOC_TIFS):
+                preview["status"] = "BLOCKED: single-attempt dispatch requires an unexpired finite IOC deadline"
+                return preview
+        if self.client.env == "prod" or one_send:
             # A direct call (or the built-in CLI if its ledger plugin failed to
             # load) must not bypass the shared cash ceilings. Claim one send
             # atomically; the normal caller still records its final answer.
-            problem = self._production_reservation_problem(plan)
+            problem = self._production_reservation_problem(plan, path=send_path)
             if problem:
                 preview["status"] = f"BLOCKED: {problem}"
                 return preview
-        preview["response"] = self.client.create_order(payload)
+        if one_send:
+            from .kalshi_once import KalshiOnceError, _create_once
+            try:
+                # Authenticated account reads may block or invoke client callbacks.
+                # The claimed reservation must still belong to the same exact
+                # client and immutable plan that produced this payload.
+                if (client_at_decision != (self.client.env, self.client.base_url, self.client.api_key,
+                                          getattr(self.client, "private_key_path", None)) or
+                        preview["plan"] != asdict(plan)):
+                    raise KalshiOnceError("client or order terms changed during reservation; reconcile the claimed intent")
+                preview["response"] = _create_once(self.client, payload, confirm=confirm,
+                                                   not_after=not_after, clock=self.clock,
+                                                   transport=self._once_transport)
+                state = self._once_answer(payload["client_order_id"], client_at_decision, send_path, preview["response"])
+                preview["ledger_state"] = state
+                if state == "ambiguous":
+                    preview["status"] = "UNKNOWN: exchange acceptance not established; reconcile, never resend"
+                    return preview
+            except Exception:
+                # A crash before this write still leaves the permanent send claim
+                # and full pending hold. No failure authorizes another attempt.
+                self._once_answer(payload["client_order_id"], client_at_decision, send_path, None)
+                raise KalshiOnceError("single-attempt submission not verified; reconcile the claimed intent") from None
+        else:
+            preview["response"] = self.client.create_order(payload)
         preview["status"] = "SUBMITTED"
         return preview
 
-    def _production_reservation_problem(self, plan: OrderPlan) -> Optional[str]:
+    def _once_answer(self, client_order_id, original, path, response):
+        from .ledger import OrderLedger
+        led = None
+        try:
+            # Use the sending ledger, even if this client's environment/key was
+            # changed by a callback. Opening this file makes no account read.
+            led = OrderLedger(path, original[0],
+                              original[1], clock=self.clock)
+            row = led.conn.execute("SELECT intent_id FROM intents WHERE client_order_id=?",
+                                   (client_order_id,)).fetchone()
+            if row is None:
+                raise RuntimeError("claimed intent missing")
+            if response is None:
+                led.ambiguous(row["intent_id"], "single-attempt send/preparation failed; never resend")
+                return "ambiguous"
+            else:
+                return led.accepted(row["intent_id"], response)
+        except Exception:
+            # Keep the original claim/hold. A subsequent reconciliation may find
+            # the order by its durable client id; never invent a refusal here.
+            if response is not None:
+                raise
+        finally:
+            if led is not None:
+                led.close()
+
+    def _production_reservation_problem(self, plan: OrderPlan, *, path=None) -> Optional[str]:
         from decimal import Decimal
         from .ledger import OrderLedger
         from .shared_limits import LEG_CAP, TOTAL_CAP, exposure
 
         led = None
         try:
-            led = OrderLedger.for_client(self.client)
+            led = OrderLedger.for_client(self.client, path=path or self.ledger_path, clock=self.clock)
             with led._tx() as connection:
                 row = connection.execute("SELECT * FROM intents WHERE client_order_id=?", (plan.client_order_id,)).fetchone()
                 if (row is None or row["state"] != "pending" or row["ticker"] != plan.ticker or
@@ -174,7 +242,8 @@ class KalshiExecutor:
                         Decimal(str(row["count"])) != Decimal(str(plan.count)) or
                         Decimal(row["limit_price"]) != Decimal(str(plan.price))):
                     return "production order needs its matching pending reservation in the shared ledger"
-                if Decimal(row["max_cost"]) > LEG_CAP or exposure(connection) > TOTAL_CAP:
+                cost = Decimal(row["max_cost"])
+                if not cost.is_finite() or cost <= 0 or cost > LEG_CAP or exposure(connection) > TOTAL_CAP:
                     return "shared production cash ceiling exceeded"
                 have = connection.execute("SELECT 1 FROM sqlite_master WHERE name='pm_us_intents'").fetchone()
                 if have and connection.execute("SELECT 1 FROM pm_us_intents WHERE state NOT IN ('done','missed') LIMIT 1").fetchone():

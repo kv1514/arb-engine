@@ -80,8 +80,11 @@ data flow.
    US transport also checks that deadline after signing, immediately before its
    single send, and rechecks live gates; a pre-sign check alone is insufficient.
    claimed or unknown intents stay held. Filled inventory remains charged: no inferred settlement, exit or outside-trade
-   cash release. Never reset/delete ledgers to restore room. Restart all production
-   processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
+   cash release. Never reset/delete ledgers to restore room.
+   Shared sums validate each cash component independently; negative/nonfinite
+   amounts never offset other exposure. Legacy `done` rows without explicit cost
+   or fees retain their original hold, and contradicted rows cannot release it.
+   Restart all production processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
    cannot participate in the shared cap.
    `PairReservationLedger` stages both child terms and entry/contingency cash in
    this same file atomically. Staged children are NOT sendable; no unresolved-order
@@ -92,6 +95,18 @@ data flow.
    exact pending plan and cash ceilings in that shared ledger, then atomically claims
    one executor send. A raw executor call cannot bypass the ledger or resend a claimed
    intent; demo behavior and the venue fee formulas are unchanged.
+   The dedicated `KalshiExecutor.execute(..., one_send=True, not_after=deadline)`
+   path additionally requires literal `confirm=True`, a finite unexpired IOC/FOK
+   deadline and an account-bound pending reservation even on demo. It bypasses
+   the legacy retry/fallback client completely: one stdlib POST, no redirects,
+   curl or host fallback, deadline/gates/identity rechecked after signing. It
+   durably records acceptance or ambiguity itself; either a crash or a failed
+   preparation leaves the send claim/hold and cannot be retried. Its constructor
+   accepts `ledger_path`, `clock` and a test-only transport injection. Callers
+   remain responsible for quote/settlement proof and final reconciliation; this
+   path does not make staged pair children sendable. Other legacy mutation paths
+   are unchanged and are not safe substitutes for an autonomous pair transport.
+   The US transport also rejects host/key/seed/fingerprint changes during signing.
 3c. **Standing permission is not order execution.** `execution/standing_approval.py`
    grants a bounded, expiring policy once, using authenticated Kalshi account/key and US
    sending-key fingerprints. The default `trade-approval arm` is inert; `--confirm` only
@@ -169,7 +184,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1565)
+python3 -m unittest discover -s tests -t .     # Python tests (1608)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
