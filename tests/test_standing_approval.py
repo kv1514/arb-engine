@@ -371,6 +371,67 @@ class StandingApprovalTests(unittest.TestCase):
             self.grant()
         self.assertEqual(self.store.conn.execute('SELECT count(*) FROM permits').fetchone()[0], 0)
 
+    def test_slow_consume_digest_cannot_claim_an_expired_permission(self):
+        self.arm()
+        grant = self.grant()
+        original = approval.digest
+
+        def slow_digest(value):
+            self.now += 7
+            return original(value)
+
+        with mock.patch.object(approval, 'digest', side_effect=slow_digest), self.assertRaises(ValueError):
+            self.store.consume(grant['permit_id'], BINDING, grant['plan_digest'])
+        self.assertEqual(self.store.conn.execute('SELECT claimed FROM permits').fetchone()[0], 0)
+
+    def test_slow_storage_serialization_cannot_create_late_permission(self):
+        self.arm()
+        original = approval._json
+        calls = 0
+
+        def slow_json(value):
+            nonlocal calls
+            if isinstance(value, dict) and 'legs' in value:
+                calls += 1
+                if calls == 2:  # digest first, then the exact body to be stored
+                    self.now += 7
+            return original(value)
+
+        with mock.patch.object(approval, '_json', side_effect=slow_json), self.assertRaises(ValueError):
+            self.grant()
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM permits').fetchone()[0], 0)
+
+    def test_slow_final_spec_check_cannot_create_or_claim_late_permission(self):
+        self.arm()
+        original = self.store._check
+        calls = 0
+
+        def slow_check(*args):
+            nonlocal calls
+            calls += 1
+            result = original(*args)
+            if calls == 2:
+                self.now += 7
+            return result
+
+        with mock.patch.object(self.store, '_check', side_effect=slow_check), self.assertRaises(ValueError):
+            self.grant()
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM permits').fetchone()[0], 0)
+        self.now = NOW
+        grant = self.grant()
+        calls = 0
+        with mock.patch.object(self.store, '_check', side_effect=slow_check), self.assertRaises(ValueError):
+            self.store.consume(grant['permit_id'], BINDING, grant['plan_digest'])
+        self.assertEqual(self.store.conn.execute('SELECT claimed FROM permits').fetchone()[0], 0)
+
+    def test_invalid_rule_evidence_cannot_arm_or_issue_permission(self):
+        with mock.patch.object(approval, 'verify_settlements', return_value=['fixture SHA mismatch']), self.assertRaises(ValueError):
+            self.arm()
+        self.arm()
+        with mock.patch.object(approval, 'verify_settlements', return_value=['fixture SHA mismatch']), self.assertRaises(ValueError):
+            self.grant()
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM permits').fetchone()[0], 0)
+
     def test_concurrent_approval_can_hold_same_event_only_once(self):
         self.arm()
 
@@ -530,6 +591,43 @@ class PrivateStoreTests(unittest.TestCase):
         after = {p.name: p.read_bytes() for p in self.root.iterdir()}
         self.assertEqual(after, before)
 
+    def test_spec_hash_includes_referenced_rule_text(self):
+        engine = self.root/'arb_engine'
+        (engine/'data').mkdir(parents=True)
+        fixtures = self.root/'tests'/'fixtures'/'rules'
+        fixtures.mkdir(parents=True)
+        registry = engine/'data'/'settlement_rules.json'
+        registry.write_text(json.dumps({'rules': [{'source': {'fixture': 'rule.txt'}}]}))
+        evidence = fixtures/'rule.txt'
+        evidence.write_text('first captured rule text')
+        with mock.patch.object(approval, 'ROOT', engine), \
+                mock.patch.object(approval, 'SPEC_FILES', ['data/settlement_rules.json']):
+            before = approval.spec_hash()
+            evidence.write_text('changed captured rule text')
+            self.assertNotEqual(approval.spec_hash(), before)
+
+    def test_spec_hash_refuses_external_or_symlink_rule_evidence(self):
+        engine = self.root/'arb_engine'
+        (engine/'data').mkdir(parents=True)
+        fixtures = self.root/'tests'/'fixtures'/'rules'
+        fixtures.mkdir(parents=True)
+        registry = engine/'data'/'settlement_rules.json'
+        target = self.root/'private.txt'
+        target.write_text('untouched private evidence')
+        (fixtures/'rule.txt').symlink_to(target)
+        with mock.patch.object(approval, 'ROOT', engine), \
+                mock.patch.object(approval, 'SPEC_FILES', ['data/settlement_rules.json']):
+            for name in ('../private.txt', str(target), 'rule.txt'):
+                registry.write_text(json.dumps({'rules': [{'source': {'fixture': name}}]}))
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    approval.spec_hash()
+        self.assertEqual(target.read_text(), 'untouched private evidence')
+
+    def test_spec_pins_quote_producers_and_identity_helpers(self):
+        required = {'venues/polymarket_us.py', 'venues/kalshi.py', 'cli_plugins/us_arbs.py',
+                    'matching/normalize.py', 'matching/teams.py', 'data/nfl_teams.json'}
+        self.assertTrue(required <= set(approval.SPEC_FILES))
+
 
 class ApprovalCliTests(unittest.TestCase):
     def setUp(self):
@@ -638,12 +736,32 @@ class ApprovalCliTests(unittest.TestCase):
         bad = ['https://external-api.kalshi.com/trade-api/v2/portfolio/events/orders',
                'https://external-api.demo.kalshi.co/trade-api/v2/portfolio/balance',
                'https://attacker.test/trade-api/v2/portfolio/balance',
-               'http://external-api.kalshi.com/trade-api/v2/portfolio/balance']
+               'http://external-api.kalshi.com/trade-api/v2/portfolio/balance',
+               'https://external-api.kalshi.com:444/trade-api/v2/portfolio/balance',
+               'https://user:password@external-api.kalshi.com/trade-api/v2/portfolio/balance',
+               'https://external-api.kalshi.com/trade-api/v2/portfolio/balance?unexpected=1',
+               'https://external-api.kalshi.com/trade-api/v2/portfolio/balance#fragment']
         for url in bad:
             with self.subTest(url=url), self.assertRaises(ValueError):
                 transport.get(url)
         with self.assertRaises(ValueError):
             transport.get('https://external-api.kalshi.com/trade-api/v2/portfolio/balance', params={'any': 1})
+
+    def test_auto_live_readiness_shows_permission_without_loading_accounts_or_enabling_orders(self):
+        from arb_engine.cli_plugins import auto_arb
+        with mock.patch.object(cli, '_binding', return_value=BINDING):
+            self.assertEqual(self.run_cli('arm', confirm=True)[0], 0)
+        args = SimpleNamespace(mode='live', every=0, contracts=10, status=False)
+        output = io.StringIO()
+        with mock.patch.object(cli, '_binding', side_effect=AssertionError('account read forbidden')), \
+                mock.patch.object(auto_arb, 'PaperPairs', side_effect=AssertionError('paper ledger forbidden')), \
+                redirect_stdout(output):
+            self.assertEqual(auto_arb.run(args, {}), 3)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result['status'], 'BLOCKED')
+        self.assertFalse(result['live_enabled'])
+        self.assertTrue(result['standing_approval']['approval_active'])
+        self.assertFalse(result['standing_approval']['execution_enabled'])
 
 
 if __name__ == '__main__':

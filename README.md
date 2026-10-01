@@ -350,6 +350,37 @@ invented. Tests use synthetic compatible rules, not demonstrated live profits.
 Live paired submission remains unavailable pending verified market-specific
 settlement compatibility, atomic production pair accounting and US inventory exits.
 
+### One-time standing approval
+
+`trade-approval` implements the "approve once" policy for a future paired coordinator.
+It is permission, **not an operational live trading switch**:
+
+```bash
+python3 -m arb_engine trade-approval arm                   # dry-run; no account reads
+python3 -m arb_engine trade-approval arm --confirm --hours 6
+python3 -m arb_engine trade-approval status                # read-only, no account reads
+python3 -m arb_engine trade-approval revoke --confirm
+```
+
+Confirmed arming authenticates the saved production Kalshi account/key and Polymarket US
+key using GETs only; no secret needs to be pasted into chat. An isolated worktree needs
+`--us-env-file /absolute/path/to/secrets/polymarket_us.env` if that ignored file lives in
+another checkout. The private policy lives beside the order ledger, so use the same
+`ARB_ORDER_LEDGER_DIR` consistently.
+
+A trusted coordinator can obtain exact, single-use pair permission without another
+human prompt. Permission expires after six hours by default (maximum 24), rejects stale
+or conditional quotes, and stops on code/rule/account changes or revocation. The policy
+holds a conservative lifetime budget of $25 on each venue, $50 combined including fees;
+expired unused permits and re-arming do not restore capacity. This is additional policy
+accounting, not an atomic real-order reservation or an account-wide loss guarantee.
+
+`auto-arb --mode live` shows whether the policy is armed but **still refuses live pairs**.
+No production coordinator consumes it yet. Revocation blocks new/unconsumed permission,
+not already submitted orders; a future dispatcher must recheck revocation atomically at
+its send claim. These commands do not set live flags, switch demo workers to production,
+or weaken executor checks. See [the production handoff](docs/AUTO_PAIR_READINESS.md).
+
 ### Gated Polymarket US IOC purchases
 
 The separate US executor supports explicit manual NFL pre-game moneyline purchases
@@ -413,7 +444,7 @@ live-fill/profitability evidence. No live orders were sent during development.
 
 ## Status (market research 2026-09-19; software validation 2026-09-30)
 
-Live data verified for the original three venues; **1441 Python tests** and the JS suites
+Live data verified for the original three venues; **1501 Python tests** and the JS suites
 (**3,769 `arb-core` checks** — 3,650 fee vectors + 54 arb vectors in parity with Python — and
 **159 background-worker checks** incl. totals, category pages and signal-only rows) pass;
 CI runs them on Python 3.10–3.13 and `scripts/render_results.py --check` keeps every results

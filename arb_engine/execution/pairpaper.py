@@ -79,6 +79,7 @@ def _leg(q, settings):
         raise ValueError('unverified US fee schedule')
     return {'venue': q.venue, 'market': q.venue_market_id, 'book': q.book_id,
             'event': q.event_key, 'outcome': q.outcome, 'side': side, 'limit': str(price),
+            'observed_at': q.ts, 'requested_at': q.meta['req_ts'],
             'tick': str(tick), 'minimum': str(minimum), 'increment': str(increment),
             'fee_params': params, 'settings': {'kalshi_rounding': settings.get('kalshi_rounding', 'cent'),
                                              'polymarket_us_volume_rebate': 0}}

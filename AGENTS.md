@@ -85,6 +85,21 @@ data flow.
    exact pending plan and cash ceilings in that shared ledger, then atomically claims
    one executor send. A raw executor call cannot bypass the ledger or resend a claimed
    intent; demo behavior and the venue fee formulas are unchanged.
+3c. **Standing permission is not order execution.** `execution/standing_approval.py`
+   grants a bounded, expiring policy once, using authenticated Kalshi account/key and US
+   sending-key fingerprints. The default `trade-approval arm` is inert; `--confirm` only
+   arms permission, never a trading flag or order transport. Exact fresh pairs may be
+   approved and consumed once without another prompt; errors never grant permission.
+   The spec hash pins planner, quote producers, identity/fee code, venue/settlement
+   tables and referenced local rule evidence. Changed files require process restart
+   and deliberate re-arming. Receipt deadlines, account changes, revocation and clock
+   regressions fail closed. Permission cash is a separate conservative lifetime budget:
+   at most $25 on each venue, $50 combined including entry and contingency fees;
+   expired/unconsumed permits and re-arming never restore room. It is NOT production
+   inventory evidence or a replacement for the shared order ledger. A future paired
+   dispatcher must atomically fence generation/revocation/expiry and reserve real cash
+   before sending. Already consumed permission is not a revocation-safe dispatch fence;
+   revocation cannot cancel an order already sent. Do not delete either ledger to reset caps.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
    Those quotes carry `book_id="kalshi"` and must never be arbed against Kalshi direct;
@@ -138,7 +153,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1441)
+python3 -m unittest discover -s tests -t .     # Python tests (1501)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>
@@ -279,6 +294,19 @@ Missing fees are unknown, not zero. A lost exchange ID, crash between reservatio
 send, or sticky contradiction requires operator investigation; no automatic activity
 matching or unsafe force-release exists. This is a manual buy executor, not automatic
 two-venue buying or unwind; unknown settlement still excludes guaranteed-arbitrage claims.
+
+`trade_approval.py` registers `trade-approval arm|status|revoke`. `arm` and `revoke`
+are dry-run unless `--confirm`; `status` is read-only and creates no store or account
+client. Confirmed arming uses only signed GETs on the fixed production Kalshi account
+identity endpoint and Polymarket US balances. Private credential files are never sourced
+as shell code. `--hours` defaults to 6 and must be in (0,24]; file overrides are
+`--kalshi-env-file` (default `~/.kalshi/prod.env`) and `--us-env-file` (default
+`secrets/polymarket_us.env`). Permission is stored privately in
+`ARB_ORDER_LEDGER_DIR/standing_approval.sqlite3`, with FULL synchronous DELETE-mode
+SQLite transactions. The resolved scope is frozen to Kalshi + Polymarket US; no settings
+keys are added. `auto-arb --mode live` reports its read-only permission status but remains
+`BLOCKED` even when permission is `ARMED` or manual live flags are enabled. This command
+does not switch the default Kalshi demo environment or reconfigure running workers.
 
 `us_arbs.py` adds the **read-only** `us-arbs` command (NFL full-game moneylines):
 `--every` defaults to 0 (one scan; repeated scans require at least 5 seconds),

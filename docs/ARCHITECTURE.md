@@ -224,7 +224,9 @@ evidence; `us-arbs` remains read-only and unverified-settlement candidates remai
 
 `cli_plugins/auto_arb.py` adds a separate off-by-default public-book runner.
 `execution/pairpaper.py` has no account transport. `live` returns a capability-blocked
-report before credentials, network or ledger access. Manual live flags do not unlock it.
+report before credentials, network or production-order ledger access. It may read an
+existing standing-permission store without creating files; manual live flags or an
+armed permission do not unlock it.
 
 The planner rechecks raw identity, settlement registry, two-sided receipt provenance,
 venue eligibility, price/quantity grids and Decimal fees. Both venue game identities
@@ -249,6 +251,36 @@ active at a time and each game is tried once. Completed purchases and exit fees 
 charged without inferred settlements or sale-proceeds credits. Restart does not reset
 the $50 paper cap. This isolated simulator does not strengthen guarantees of older
 workers or establish profitable, leakage-free empirical performance.
+
+## Standing permission boundary
+
+`cli_plugins/trade_approval.py` authenticates the production Kalshi account/key through
+`GET /communications/id` and the US sending key through `GET /v1/account/balances`.
+No order/cancel transport is called. Default arming/revocation is dry-run; confirmed
+arming freezes a six-hour (at most 24-hour) policy. Account identifiers are fingerprints,
+not secrets or printed identifiers. US account equivalence across key rotations is not
+inferred. Existing demo settings and workers remain unchanged.
+
+`execution/standing_approval.py` stores the policy and exact-plan permits in private
+`standing_approval.sqlite3`. FULL synchronous DELETE-mode transactions serialize arming,
+approval, revocation and single-use consumption. Clock checks happen after lock waits
+and after final verification. A permit deadline is the earliest of policy expiry,
+kickoff and either original quote receipt plus six seconds, never a later decision time.
+It holds entry and bounded contingency fee cash; all earlier permits still count toward
+the lifetime $25-per-venue/$50 policy ceiling, including expired unused permission.
+No settlement, sale proceeds or re-arming resets those holds.
+
+The spec fingerprint includes quote producers/normalizers, planning/fee/identity code,
+eligibility/settlement tables and referenced local rule-text fixtures. Registry caches
+are refreshed under the transaction, fixture hashes checked, and an in-process disk
+change requires restart before re-arming. Evidence integrity does not establish that
+exceptional payoff interpretations are correct. Unknown US settlement still blocks pairs.
+
+This policy performs no production reservation, reconciliation or submission. The future
+coordinator must atomically fence policy generation, revocation, deadline and account
+binding with its durable production send claim and cash reservation. `consume` does not
+provide that dispatch fence; revocation cannot cancel an already sent order. Until that
+coordinator and verified recovery exist, `auto-arb --mode live` is always blocked.
 
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 

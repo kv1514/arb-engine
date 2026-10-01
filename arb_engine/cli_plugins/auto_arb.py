@@ -36,7 +36,15 @@ def _path(settings):
 def run(args, settings=None):
     mode = args.mode or setting(settings, 'auto_pair_mode')
     if mode == 'live':
-        print(json.dumps(live_readiness()))
+        readiness = live_readiness()
+        try:
+            from .trade_approval import _path as approval_path
+            from ..execution.standing_approval import read_status
+            readiness['standing_approval'] = read_status(approval_path(settings))
+        except Exception:
+            readiness['standing_approval'] = {'status': 'UNAVAILABLE', 'approval_active': False,
+                                              'execution_enabled': False}
+        print(json.dumps(readiness))
         return 3
     if mode not in ('off', 'paper'):
         print(json.dumps({'status': 'BLOCKED', 'reason': 'invalid auto pair mode'}))
