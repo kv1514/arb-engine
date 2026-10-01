@@ -31,6 +31,7 @@ PROFILE = {'version': 1, 'venues': ['kalshi', 'polymarket_us'], 'environment': '
            'total_cap_fees_included': '50', 'entry': 'ioc', 'expiry_required': True}
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_FILES = ['execution/standing_approval.py', 'execution/pairpaper.py',
+              'execution/us_pair_orders.py',
               'execution/polymarket_us_ioc.py', 'execution/shared_limits.py', 'execution/ledger.py',
               'venues/polymarket_us.py', 'venues/polymarket_us_trading.py', 'venues/kalshi.py',
               'venues/http.py', 'cli_plugins/us_arbs.py', 'cli_plugins/trade_approval.py',
@@ -159,6 +160,9 @@ class ApprovalStore:
         self.conn.execute('PRAGMA synchronous=FULL')
         self.conn.execute('CREATE TABLE IF NOT EXISTS approval (id INTEGER PRIMARY KEY CHECK(id=1),active INTEGER NOT NULL,generation TEXT NOT NULL,last_ts REAL NOT NULL,body TEXT NOT NULL)')
         self.conn.execute('CREATE TABLE IF NOT EXISTS permits (id TEXT PRIMARY KEY,event TEXT UNIQUE NOT NULL,generation TEXT NOT NULL,deadline REAL NOT NULL,claimed INTEGER NOT NULL DEFAULT 0,us_cash TEXT NOT NULL,kalshi_cash TEXT NOT NULL,digest TEXT NOT NULL,body TEXT NOT NULL)')
+        columns = {row[1] for row in self.conn.execute('PRAGMA table_info(permits)')}
+        if 'dispatch_claimed' not in columns:
+            self.conn.execute('ALTER TABLE permits ADD COLUMN dispatch_claimed INTEGER NOT NULL DEFAULT 0')
 
     def close(self):
         self.conn.close()
@@ -321,3 +325,39 @@ class ApprovalStore:
             return {'status': 'PERMISSION_CONSUMED', 'permit_id': iid, 'generation': grant['generation'],
                     'plan_digest': row['digest'], 'deadline': row['deadline'], 'plan': plan, 'orders_submitted': 0,
                     'note': 'permission is not an order reservation or proof that both legs can execute'}
+
+    @contextmanager
+    def dispatch_guard(self, iid, binding, plan_digest):
+        """Fence revocation/re-arming at a NEW-entry durable dispatch claim.
+
+        Trusted coordinator lock order MUST be policy -> production ledger. Hold
+        this guard while atomically reserving both legs and claiming the US send;
+        NEVER across network I/O. A committed claim precedes a later revoke; revoke
+        does not cancel an already claimed order. Transport must separately enforce
+        the returned deadline after signing. Permission and production databases
+        are NOT one transaction: the production parent must uniquely bind permit_id,
+        and claimed sends must never be retried, including on guard failure/crash.
+        """
+        with self._tx():
+            now = timestamp(self.clock())
+            grant, policy = self._check(binding, now)
+            row = self.conn.execute('SELECT * FROM permits WHERE id=?', (iid,)).fetchone()
+            if (row is None or row['claimed'] != 1 or row['dispatch_claimed'] or
+                    row['generation'] != grant['generation'] or row['digest'] != plan_digest or
+                    now >= timestamp(row['deadline'])):
+                raise ValueError('dispatch permission unconsumed, reused, revoked or expired')
+            plan = json.loads(row['body'])
+            if digest(plan) != plan_digest:
+                raise ValueError('dispatch plan changed')
+            self._check(binding, timestamp(self.clock()))
+            deadline = min(timestamp(row['deadline']), timestamp(policy['expires']))
+            checked = timestamp(self.clock())
+            if checked < now or checked >= deadline:
+                raise ValueError('dispatch permission expired during verification')
+            self.conn.execute('UPDATE permits SET dispatch_claimed=1 WHERE id=? AND dispatch_claimed=0', (iid,))
+            yield {'permit_id': iid, 'generation': grant['generation'], 'plan_digest': plan_digest,
+                   'deadline': deadline, 'plan': plan, 'accounts': accounts(binding)}
+            final = timestamp(self.clock())
+            if final < checked or final >= deadline:
+                raise ValueError('dispatch claim expired; any production claim stays held, never retry')
+            self.conn.execute('UPDATE approval SET last_ts=? WHERE id=1', (final,))

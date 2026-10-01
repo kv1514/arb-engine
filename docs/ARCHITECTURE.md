@@ -217,6 +217,10 @@ US sends are claimed once. Freshness is rechecked after both reservation and sen
 transactions, since either can wait on another process. A local expiry releases cash
 only before the send claim; once claimed, accounting remains conservative even if no
 request was sent.
+The signed US transport now receives the decision deadline and checks it again
+after signing/serialization, immediately before its single network attempt. A
+clock regression or removed live gate at that boundary refuses the send; a claimed
+intent remains conservatively held. GET/POST paths are separately allowlisted.
 There is no automatic hedge, two-leg atomicity, unwind, settlement proof or live-fill
 evidence; `us-arbs` remains read-only and unverified-settlement candidates remain conditional.
 
@@ -279,8 +283,26 @@ exceptional payoff interpretations are correct. Unknown US settlement still bloc
 This policy performs no production reservation, reconciliation or submission. The future
 coordinator must atomically fence policy generation, revocation, deadline and account
 binding with its durable production send claim and cash reservation. `consume` does not
-provide that dispatch fence; revocation cannot cancel an already sent order. Until that
+provide that dispatch fence. `ApprovalStore.dispatch_guard` now serializes a consumed
+permit's generation, account, digest, expiry and single dispatch claim against revocation.
+The coordinator must acquire policy before production-ledger locks, reserve both legs
+and claim the first send inside the guard, then release it before network I/O. A later
+revoke stops new claims, not an already committed claim. The two databases are NOT one
+transaction: a unique production permit ID and non-retryable send claim remain mandatory
+even if the guard rolls back after an external claim or crashes before committing.
+The transport must still enforce the guard's deadline after signing. Until that
 coordinator and verified recovery exist, `auto-arb --mode live` is always blocked.
+
+`execution/us_pair_orders.py` provides pure, non-sending recovery building blocks:
+`USPairOrder` maps buy/sell YES/NO onto the always-long API price and automatic order
+indicator; sale reservations count exit fees but never anticipated proceeds. Exact
+`order_evidence` checks ID, market, action/side, IOC terms, counts, decision limits and
+explicit money. Create snapshots never establish final inventory. `read_inventory`
+requires complete, market-scoped positions pagination with explicit EOF, matching
+account/host, decimal quantities and fresh request/receipt timing. Rounded deprecated
+fields, partial listings and missing availability are not inventory proof. The parent
+ledger must separately prove pair-owned excess; an account position is not a reduce-only
+authorization. Tests are schema-shaped synthetic evidence, not observed live fills.
 
 ## History, replay and recording (`venues/history.py`, `backtest.py`, `store.py`)
 

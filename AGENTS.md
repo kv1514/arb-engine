@@ -77,6 +77,8 @@ data flow.
    only through those gates; only a subsequent final scoped row releases the unfilled
    part. US sends are claimed once, and quote expiry is checked after reservation and
    after that claim. Only a provably unclaimed, never-sent local expiry frees cash;
+   US transport also checks that deadline after signing, immediately before its
+   single send, and rechecks live gates; a pre-sign check alone is insufficient.
    claimed or unknown intents stay held. Filled inventory remains charged: no inferred settlement, exit or outside-trade
    cash release. Never reset/delete ledgers to restore room. Restart all production
    processes on this code and the same `ARB_ORDER_LEDGER_DIR`; old code/separate files
@@ -99,6 +101,12 @@ data flow.
    inventory evidence or a replacement for the shared order ledger. A future paired
    dispatcher must atomically fence generation/revocation/expiry and reserve real cash
    before sending. Already consumed permission is not a revocation-safe dispatch fence;
+   `dispatch_guard` serializes the durable NEW-entry claim against revocation;
+   lock policy before production, never hold a policy transaction during network I/O.
+   Since the stores are separate, a unique parent permit ID and non-retryable
+   production send remain mandatory after guard rollback/crash. A later revoke
+   does not cancel an already committed claim. Pure `us_pair_orders` helpers send
+   nothing; complete account inventory alone does not prove pair-owned excess.
    revocation cannot cancel an order already sent. Do not delete either ledger to reset caps.
 4. **No secrets in the repo.** Keys live in `.env` (git-ignored) or the shell.
 5. **Same-book awareness.** Robinhood re-sells Kalshi's order book for `KX*` contracts.
@@ -153,7 +161,7 @@ docs/          VENUES.md (fee facts + sources), SPORTS.md, ARCHITECTURE.md, MODE
 ## Commands
 
 ```bash
-python3 -m unittest discover -s tests -t .     # Python tests (1501)
+python3 -m unittest discover -s tests -t .     # Python tests (1541)
 bash scripts/test_js.sh                        # JS parity + background integration (node or jsc)
 python -m arb_engine scan --sport nfl          # live scan (add --books for depth sizing); --sport ncaaf for college football
 python -m arb_engine rh-event <robinhood event url>

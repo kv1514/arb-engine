@@ -22,6 +22,34 @@ unwinds; unresolved inventory blocks new admissions. Paper accounting is a separ
 SQLite file, never real inventory evidence. Synthetic regression tests exercise
 compatible terms; the current real US settlement registry does not admit pairs.
 
+The next production checkpoint adds non-sending `USPairOrder`, strict final order
+evidence, complete receipt-timed inventory pagination, a standing-policy dispatch
+guard, and transport-boundary expiry checks after signing. None of these alone
+implements paired production submission. Robinhood event-contract order support
+is unverified and its automated pairs remain blocked before either leg sends.
+
+## Published recovery interfaces
+
+* `USPairOrder(USOrderPlan, action='buy'|'sell')`: whole-contract automatic LIMIT/IOC;
+  `payload()` uses long-price mapping for either side; `worst_cost(now)` includes
+  entry cash/fees or sale fees only, never anticipated proceeds.
+* `order_evidence(plan, raw_order, expected_id, final_read=True)`: exact immutable
+  terms, count, price-limit and money checks. Returns quantity, remaining, cash,
+  fees, final and verified; absent money is None, create evidence never verified.
+  The parent ledger must enforce monotonic evidence and sticky contradictions.
+* `read_inventory(client, slug, side, clock=..., max_pages=20)`: complete scoped
+  positions pages only; returns key fingerprint, signed net, available quantity,
+  request/receipt/deadline. Missing or stale evidence raises. It does not prove
+  this pair owns inventory; reserve sales only against independently verified excess.
+* `ApprovalStore.dispatch_guard(permit_id, binding, plan_digest)`: after `consume`,
+  serializes one initial durable claim against policy revocation/re-arming. Hold
+  policy before production-ledger lock, not over network. Production permit IDs
+  must be unique; guard rollback cannot undo a production claim in another database.
+* `PolymarketUSTradingClient._create(..., not_after=deadline)` checks deadline,
+  clock and live gates immediately before transport, including slow signer time.
+  `positions_page(slug, cursor=...)` preserves the whole response and signs the
+  bare path while encoding query parameters. Neither method retries.
+
 ## Remaining production requirements
 
 1. Capture each product's binding rules, including cancellation, postponement,
@@ -86,7 +114,7 @@ tables or metrics fixtures. Existing workers do not pick up these commits automa
 ## Validation commands
 
 ```bash
-python3 -m unittest tests.test_standing_approval tests.test_auto_arb tests.test_settings_doc tests.test_us_arbitrage tests.test_polymarket_us_execution
+python3 -m unittest tests.test_us_pair_primitives tests.test_polymarket_us_execution tests.test_standing_approval
 python3 -m unittest discover -s tests -t .
 bash scripts/test_js.sh
 python3 scripts/render_results.py --check
@@ -102,8 +130,11 @@ with `OFF`. Default permission arming is `DRY_RUN`; a missing store's status is 
 These diagnostics do not authenticate accounts, fetch prices, create stores or send
 orders. Only confirmed permission arming makes authenticated account GETs.
 
-Validation on 2026-09-30: focused suite 170 tests in 2.450s, OK; full suite 1501 tests in
-118.253s, OK. Sixty standing-permission regression tests cover lifetime/account binding,
+Validation on 2026-09-30: focused suite 143 tests in 2.312s, OK; full suite 1541 tests in
+121.491s, OK. Forty new primitive regressions cover buy/sell complement mapping,
+hand-calculated fees, missing and contradictory evidence, complete positions pagination,
+slow signatures, removed live gates and consumed-permit dispatch/revocation races.
+Sixty earlier standing-permission regression tests cover lifetime/account binding,
 expiry during lock waits/verification/serialization, receipt deadlines, concurrent
 single use, cumulative fees/caps, restart/re-arm persistence, code/evidence changes,
 private stores and account-only mocked CLI calls. JS: 3650 fee vectors and 54 arbitrage vectors without mismatches,

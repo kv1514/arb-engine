@@ -50,7 +50,7 @@ class FakeUS:
         self.clock_hook()
         return {"balances": [{"currency": "USD", "buyingPower": self.power}]}
 
-    def _create(self, payload, confirm=False):
+    def _create(self, payload, confirm=False, not_after=None):
         assert confirm
         self.check_reservation()
         self.sent.append(payload)

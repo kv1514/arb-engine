@@ -134,6 +134,24 @@ scoped fills-list cross-check and needs live schema verification before unattend
 [activities](https://docs.polymarket.us/api-reference/portfolio/get-activities), read 2026-09-30.
 No fee formula is changed, and no live fills are asserted by the schema-derived fixtures.
 
+Paired-order helpers use `ORDER_INTENT_SELL_LONG` / `SELL_SHORT` for actual inventory
+sales and `MANUAL_ORDER_INDICATOR_AUTOMATIC`. NO prices remain complemented for both
+buys and sells. The positions endpoint returns a market-slug map, signed
+`netPositionDecimal` (positive long, negative short), `qtyAvailableDecimal`, and cursor
+pagination ending only at explicit `eof=true`. Deprecated rounded quantities are not
+used. Missing availability is unknown, not zero; account inventory is not proof of
+pair ownership or an exchange reduce-only guarantee. These helpers are not yet wired
+to autonomous production sends. [Orders overview](https://docs.polymarket.us/api-reference/orders/overview),
+[positions](https://docs.polymarket.us/api-reference/portfolio/get-user-positions),
+[portfolio overview](https://docs.polymarket.us/api-reference/portfolio/overview), verified 2026-09-30.
+
+Robinhood's documented agent trading tools list equities, options and crypto, not
+event contracts. Its event-contract help describes mobile-app trading and view-only
+web access. No verified event-contract order API is integrated here, so automatic
+pairs containing Robinhood must be refused before any other leg is sent; its quotes
+and manual workflow remain supported. [Agent trading](https://robinhood.com/us/en/support/articles/trading-with-your-agent/),
+[event-contract trading](https://robinhood.com/us/en/support/articles/trading-event-contracts/), verified 2026-09-30.
+
 ## Settlement registry (`arb_engine/data/settlement_rules.json`, 2026-09-19)
 
 23 rows keyed by (venue, sport, market type, exchange) with the fields `tie`, `postponed`,

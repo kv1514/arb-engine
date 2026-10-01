@@ -428,7 +428,7 @@ class PolymarketUSExecutor:
             # successful send claim make an expired decision executable.
             if timestamp(self.clock()) >= deadline:
                 raise LedgerError("book expired while claiming send; reservation retained")
-            response = self.client._create(payload, confirm=True)
+            response = self.client._create(payload, confirm=True, not_after=deadline)
             self.ledger.accepted(iid, response)
             return self.recover(iid, confirm=True)
         except Exception:
